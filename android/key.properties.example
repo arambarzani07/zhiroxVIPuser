@@ -1,0 +1,6 @@
+# Copy this file to android/key.properties when you want a real Play Store signed build.
+# Never commit the real key.properties or .jks file.
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=upload
+storeFile=../upload-keystore.jks
