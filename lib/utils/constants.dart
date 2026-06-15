@@ -118,5 +118,5 @@ class AppStrings {
 // PocketBase سێرڤەر
 class PBConfig {
   // ✅ سێرڤەری ئۆنلاین بە HTTPS
-  static const String baseUrl = 'https://pocketbase-production-e0ff.up.railway.app';
+  static const String baseUrl = 'https://pocketbase-production-18bc.up.railway.app';
 }
