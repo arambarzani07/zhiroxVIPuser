@@ -267,10 +267,9 @@ class _UserListScreenState extends State<UserListScreen> {
                                       color: Colors.grey[400],
                                     ),
                                     onPressed: () {
-                                   _searchDebounce?.cancel();
-                                   _searchController.clear();
-                                   _loadUsers();
-                                  },
+                                      _searchController.clear();
+                                      _loadUsers();
+                                    },
                                   )
                                 : null,
                             border: InputBorder.none,
@@ -279,16 +278,7 @@ class _UserListScreenState extends State<UserListScreen> {
                               vertical: 14,
                             ),
                           ),
-                          ),
-onChanged: (value) {
-  _searchDebounce?.cancel();
-  _searchDebounce = Timer(const Duration(milliseconds: 450), () {
-    if (mounted) {
-      _loadUsers(search: value.trim());
-    }
-  });
-},
-),
+                          onChanged: (value) => _loadUsers(search: value),
                         ),
                       ),
                     ],
