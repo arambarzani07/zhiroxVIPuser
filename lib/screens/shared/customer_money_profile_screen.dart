@@ -176,20 +176,14 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                     const SizedBox(height: 14),
                     TextField(
                       controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'ناوی کڕیار',
-                        border: OutlineInputBorder(),
-                      ),
+                      decoration: const InputDecoration(labelText: 'ناوی کڕیار', border: OutlineInputBorder()),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: phoneController,
                       keyboardType: TextInputType.phone,
                       textDirection: TextDirection.ltr,
-                      decoration: const InputDecoration(
-                        labelText: 'ژمارەی مۆبایل',
-                        border: OutlineInputBorder(),
-                      ),
+                      decoration: const InputDecoration(labelText: 'ژمارەی مۆبایل', border: OutlineInputBorder()),
                     ),
                     const SizedBox(height: 16),
                     SizedBox(
@@ -209,16 +203,11 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                                 try {
                                   await PBService.pb.collection('users').update(
                                     widget.userId,
-                                    body: {
-                                      'name': name,
-                                      'phone': phone,
-                                    },
+                                    body: {'name': name, 'phone': phone},
                                   );
                                   saved = true;
                                 } catch (e) {
-                                  if (mounted) {
-                                    AppHelpers.showSnackBar(context, 'هەڵە لە نوێکردنەوە: $e', isError: true);
-                                  }
+                                  if (mounted) AppHelpers.showSnackBar(context, 'هەڵە لە نوێکردنەوە: $e', isError: true);
                                 }
                                 if (!mounted) return;
                                 if (saved) {
@@ -249,9 +238,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
   }
 
   Future<void> _showDebtLimitSheet() async {
-    final limitController = TextEditingController(
-      text: _debtLimit > 0 ? _debtLimit.toStringAsFixed(0) : '',
-    );
+    final limitController = TextEditingController(text: _debtLimit > 0 ? _debtLimit.toStringAsFixed(0) : '');
     bool isSaving = false;
 
     await showModalBottomSheet(
@@ -324,9 +311,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                                   );
                                   saved = true;
                                 } catch (e) {
-                                  if (mounted) {
-                                    AppHelpers.showSnackBar(context, 'هەڵە لە نوێکردنەوەی سنوور: $e', isError: true);
-                                  }
+                                  if (mounted) AppHelpers.showSnackBar(context, 'هەڵە لە نوێکردنەوەی سنوور: $e', isError: true);
                                 }
                                 if (!mounted) return;
                                 if (saved) {
@@ -383,10 +368,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                       DropdownButtonFormField<RecordModel>(
                         value: selectedDebt,
                         isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'قەرزی ماوە هەڵبژێرە',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: const InputDecoration(labelText: 'قەرزی ماوە هەڵبژێرە', border: OutlineInputBorder()),
                         items: openDebts.map((debt) {
                           final title = debt.getStringValue('description').isEmpty ? 'قەرز' : debt.getStringValue('description');
                           final rem = AppHelpers.formatCurrency(debt.getDoubleValue('remaining'));
@@ -586,15 +568,28 @@ class _MoneyChatCard extends StatelessWidget {
   const _MoneyChatCard({required this.debts, required this.payments});
 
   List<_ChatItem> _items() {
-    final items = <_ChatItem>[];
+    final rawItems = <_ChatItem>[];
     for (final debt in debts) {
-      items.add(_ChatItem.debt(debt));
+      rawItems.add(_ChatItem.debt(debt));
     }
     for (final payment in payments) {
-      items.add(_ChatItem.payment(payment));
+      rawItems.add(_ChatItem.payment(payment));
     }
-    items.sort((a, b) => b.created.compareTo(a.created));
-    return items;
+
+    rawItems.sort((a, b) => a.created.compareTo(b.created));
+
+    var balance = 0.0;
+    final withBalance = <_ChatItem>[];
+    for (final item in rawItems) {
+      if (item.isDebt) {
+        balance += item.amount;
+      } else {
+        balance = (balance - item.amount).clamp(0.0, double.infinity).toDouble();
+      }
+      withBalance.add(item.copyWith(balanceAfter: balance));
+    }
+
+    return withBalance.reversed.toList();
   }
 
   @override
@@ -612,7 +607,7 @@ class _MoneyChatCard extends StatelessWidget {
             Expanded(child: Text('چاتی قەرز و پارەدانەوە', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold))),
           ]),
           const SizedBox(height: 4),
-          Text('زانیاری دارایی بە شێوەی چات و بە ڕیزبەندی کات.', style: Theme.of(context).textTheme.bodySmall),
+          Text('قەرز پێدان و پارە وەرگرتنەوە بە شێوەی چات و بە ڕیزبەندی کات.', style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 12),
           if (items.isEmpty) const _EmptyLine(text: 'هێشتا هیچ مامەڵەیەک نییە.') else ...items.map((item) => _ChatBubble(item: item)),
         ]),
@@ -630,19 +625,48 @@ class _ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDebt = item.isDebt;
     final color = isDebt ? Colors.orange : Colors.green;
+    final icon = isDebt ? Icons.north_east_rounded : Icons.south_west_rounded;
+    final title = isDebt ? 'قەرز پێدرا' : 'پارە وەرگیرا';
+
     return Align(
       alignment: isDebt ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.80),
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: color.withOpacity(0.09), borderRadius: BorderRadius.circular(18), border: Border.all(color: color.withOpacity(0.18))),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.10),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isDebt ? 18 : 5),
+            bottomRight: Radius.circular(isDebt ? 5 : 18),
+          ),
+          border: Border.all(color: color.withOpacity(0.20)),
+        ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(isDebt ? 'قەرز زیادکرا' : 'پارەدانەوە تۆمارکرا', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 6),
+            Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+          ]),
           const SizedBox(height: 8),
           Text(AppHelpers.formatCurrency(item.amount), textDirection: TextDirection.ltr, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
           if (item.description.isNotEmpty) ...[const SizedBox(height: 5), Text(item.description, style: Theme.of(context).textTheme.bodySmall)],
-          if (isDebt) ...[const SizedBox(height: 5), Text('ماوە: ${AppHelpers.formatCurrency(item.remaining)}', textDirection: TextDirection.ltr, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold))],
+          const SizedBox(height: 7),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+            child: Text(
+              'ماوە دوای مامەڵە: ${AppHelpers.formatCurrency(item.balanceAfter)}',
+              textDirection: TextDirection.ltr,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, color: color),
+            ),
+          ),
+          if (isDebt) ...[
+            const SizedBox(height: 5),
+            Text('ماوەی ئەم قەرزە: ${AppHelpers.formatCurrency(item.remaining)}', textDirection: TextDirection.ltr, style: Theme.of(context).textTheme.bodySmall),
+          ],
           const SizedBox(height: 6),
           Text(AppHelpers.formatDateTime(item.created), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600)),
         ]),
@@ -655,18 +679,23 @@ class _ChatItem {
   final bool isDebt;
   final double amount;
   final double remaining;
+  final double balanceAfter;
   final String description;
   final String created;
 
-  const _ChatItem({required this.isDebt, required this.amount, required this.remaining, required this.description, required this.created});
+  const _ChatItem({required this.isDebt, required this.amount, required this.remaining, required this.balanceAfter, required this.description, required this.created});
 
   factory _ChatItem.debt(RecordModel debt) {
     final description = debt.getStringValue('description');
-    return _ChatItem(isDebt: true, amount: debt.getDoubleValue('amount'), remaining: debt.getDoubleValue('remaining'), description: description.isEmpty ? 'قەرز' : description, created: debt.created);
+    return _ChatItem(isDebt: true, amount: debt.getDoubleValue('amount'), remaining: debt.getDoubleValue('remaining'), balanceAfter: 0, description: description.isEmpty ? 'قەرز' : description, created: debt.created);
   }
 
   factory _ChatItem.payment(RecordModel payment) {
-    return _ChatItem(isDebt: false, amount: payment.getDoubleValue('amount'), remaining: 0, description: payment.getStringValue('note'), created: payment.created);
+    return _ChatItem(isDebt: false, amount: payment.getDoubleValue('amount'), remaining: 0, balanceAfter: 0, description: payment.getStringValue('note'), created: payment.created);
+  }
+
+  _ChatItem copyWith({double? balanceAfter}) {
+    return _ChatItem(isDebt: isDebt, amount: amount, remaining: remaining, balanceAfter: balanceAfter ?? this.balanceAfter, description: description, created: created);
   }
 }
 
