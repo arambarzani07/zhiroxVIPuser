@@ -85,6 +85,8 @@ class AppStrings {
   static const String paid = 'تەواوە';
   static const String totalDebt = 'کۆی قەرز';
   static const String remainingDebt = 'قەرزی ماوە';
+  static const String debtLimit = 'سنووری قەرز';
+  static const String noDebtLimit = 'بێ سنوور';
 
   // دراو
   static const String currency = 'دراو';
