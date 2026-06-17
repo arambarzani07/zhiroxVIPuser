@@ -106,6 +106,9 @@ class AppStrings {
   static const String payments = 'پارە وەرگرتنەوەکان';
   static const String addPayment = 'پارە وەرگرتنەوەی نوێ';
   static const String paymentAmount = 'بڕی پارەی وەرگیراو';
+  static const String paymentSaved = 'پارە وەرگرتنەوە تۆمار کرا ✅';
+  static const String noPayments = 'هیچ پارە وەرگرتنەوەیەک نییە';
+  static const String receivedPercent = 'وەرگیراوە';
   static const String note = 'تێبینی';
 
   // داشبۆرد
