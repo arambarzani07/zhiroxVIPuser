@@ -106,8 +106,8 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                         ),
                         _MoneyChatCard(debts: _debts, payments: _payments),
                         _ProfileToolsCard(
-                          onEditInfo: _showComingSoon,
-                          onChangeLimit: _showComingSoon,
+                          onEditInfo: _showEditCustomerInfoSheet,
+                          onChangeLimit: _showDebtLimitSheet,
                         ),
                       ],
                     ),
@@ -142,8 +142,209 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
     }
   }
 
-  void _showComingSoon() {
-    AppHelpers.showSnackBar(context, 'ئەم بەشە لە هەنگاوی داهاتوودا ڕێک دەخرێت.');
+  Future<void> _showEditCustomerInfoSheet() async {
+    final nameController = TextEditingController(text: _customerName);
+    final phoneController = TextEditingController(text: _customerPhone);
+    bool isSaving = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Directionality(
+              textDirection: TextDirection.rtl,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'دەستکاری زانیاری کڕیار',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'ناوی کڕیار',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      textDirection: TextDirection.ltr,
+                      decoration: const InputDecoration(
+                        labelText: 'ژمارەی مۆبایل',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isSaving
+                            ? null
+                            : () async {
+                                final name = nameController.text.trim();
+                                final phone = phoneController.text.trim();
+                                if (name.isEmpty) {
+                                  AppHelpers.showSnackBar(context, 'ناوی کڕیار بنووسە', isError: true);
+                                  return;
+                                }
+                                setSheetState(() => isSaving = true);
+                                try {
+                                  await PBService.pb.collection('users').update(
+                                    widget.userId,
+                                    body: {
+                                      'name': name,
+                                      'phone': phone,
+                                    },
+                                  );
+                                  if (!mounted) return;
+                                  Navigator.pop(sheetContext);
+                                  AppHelpers.showSnackBar(context, 'زانیاری کڕیار نوێ کرایەوە ✅');
+                                  await _loadData();
+                                } catch (e) {
+                                  if (mounted) {
+                                    AppHelpers.showSnackBar(context, 'هەڵە لە نوێکردنەوە: $e', isError: true);
+                                  }
+                                } finally {
+                                  if (mounted) setSheetState(() => isSaving = false);
+                                }
+                              },
+                        icon: isSaving
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.save_rounded),
+                        label: const Text('پاشەکەوتکردن'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    nameController.dispose();
+    phoneController.dispose();
+  }
+
+  Future<void> _showDebtLimitSheet() async {
+    final limitController = TextEditingController(
+      text: _debtLimit > 0 ? _debtLimit.toStringAsFixed(0) : '',
+    );
+    bool isSaving = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Directionality(
+              textDirection: TextDirection.rtl,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ڕێکخستنی سنووری قەرز',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'سنووری قەرز بۆ ئەوەیە کڕیار زیاتر لە ڕێژەی دیاریکراو قەرز وەرنەگرێت.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: limitController,
+                      keyboardType: TextInputType.number,
+                      textDirection: TextDirection.ltr,
+                      decoration: const InputDecoration(
+                        labelText: 'سنووری قەرز',
+                        hintText: 'نموونە: 100000',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'قەرزی ئێستا: ${AppHelpers.formatCurrency(_totalRemaining)}',
+                      textDirection: TextDirection.ltr,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isSaving
+                            ? null
+                            : () async {
+                                final raw = limitController.text.trim().replaceAll(',', '');
+                                final limit = raw.isEmpty ? 0.0 : double.tryParse(raw);
+                                if (limit == null || limit < 0) {
+                                  AppHelpers.showSnackBar(context, 'سنووری قەرز بە دروستی بنووسە', isError: true);
+                                  return;
+                                }
+                                setSheetState(() => isSaving = true);
+                                try {
+                                  await PBService.pb.collection('users').update(
+                                    widget.userId,
+                                    body: {'debt_limit': limit},
+                                  );
+                                  if (!mounted) return;
+                                  Navigator.pop(sheetContext);
+                                  AppHelpers.showSnackBar(context, 'سنووری قەرز نوێ کرایەوە ✅');
+                                  await _loadData();
+                                } catch (e) {
+                                  if (mounted) {
+                                    AppHelpers.showSnackBar(context, 'هەڵە لە نوێکردنەوەی سنوور: $e', isError: true);
+                                  }
+                                } finally {
+                                  if (mounted) setSheetState(() => isSaving = false);
+                                }
+                              },
+                        icon: isSaving
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.save_rounded),
+                        label: const Text('پاشەکەوتکردن'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    limitController.dispose();
   }
 
   Future<void> _showPaymentDialog() async {
