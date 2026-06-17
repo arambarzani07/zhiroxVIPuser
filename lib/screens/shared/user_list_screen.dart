@@ -34,7 +34,9 @@ class _UserListScreenState extends State<UserListScreen> {
   bool get _isEmployee => widget.role == 'employee';
 
   String get _adminId {
-    if (widget.adminId != null && widget.adminId!.isNotEmpty) return widget.adminId!;
+    if (widget.adminId != null && widget.adminId!.isNotEmpty) {
+      return widget.adminId!;
+    }
     return context.read<AuthProvider>().adminId;
   }
 
@@ -129,20 +131,27 @@ class _UserListScreenState extends State<UserListScreen> {
               if (_isLoading)
                 const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
               else if (_users.isEmpty)
-                SliverFillRemaining(child: _EmptyState(isEmployee: _isEmployee, onRefresh: () => _loadUsers()))
+                SliverFillRemaining(
+                  child: _EmptyState(
+                    isEmployee: _isEmployee,
+                    onRefresh: () => _loadUsers(),
+                  ),
+                )
               else
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
-                  sliver: SliverList.builder(
-                    itemCount: _users.length,
-                    itemBuilder: (context, index) => _UserCard(
-                      user: _users[index],
-                      isEmployee: _isEmployee,
-                      balance: _balances[_users[index].id],
-                      canQuickAddDebt: widget.role == 'customer' &&
-                          (auth.userRole == 'admin' || auth.userRole == 'employee'),
-                      onOpen: () => _openUser(_users[index]),
-                      onAddDebt: () => _openAddDebt(_users[index]),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _UserCard(
+                        user: _users[index],
+                        isEmployee: _isEmployee,
+                        balance: _balances[_users[index].id],
+                        canQuickAddDebt: widget.role == 'customer' &&
+                            (auth.userRole == 'admin' || auth.userRole == 'employee'),
+                        onOpen: () => _openUser(_users[index]),
+                        onAddDebt: () => _openAddDebt(_users[index]),
+                      ),
+                      childCount: _users.length,
                     ),
                   ),
                 ),
@@ -240,20 +249,36 @@ class _Header extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(99)),
-                    child: Text('$count', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
                   ),
                   if (canAdd) ...[
                     const SizedBox(width: 8),
-                    IconButton.filledTonal(
-                      onPressed: onAdd,
-                      icon: const Icon(Icons.add_rounded, color: Colors.white),
-                      style: IconButton.styleFrom(backgroundColor: Colors.white.withOpacity(0.18)),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        onPressed: onAdd,
+                        icon: const Icon(Icons.add_rounded, color: Colors.white),
+                        tooltip: isEmployee ? 'زیادکردنی کارمەند' : 'زیادکردنی کڕیار',
+                      ),
                     ),
                   ],
                 ],
@@ -309,6 +334,7 @@ class _UserCard extends StatelessWidget {
     final currentBalance = balance ?? 0;
     final hasDebt = currentBalance > 0;
     final accent = isEmployee ? const Color(0xFF4A6CF7) : AppColors.primary;
+    final avatarLetter = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -325,7 +351,7 @@ class _UserCard extends StatelessWidget {
                 radius: 26,
                 backgroundColor: accent.withOpacity(0.12),
                 child: Text(
-                  name.isNotEmpty ? name.characters.first.toUpperCase() : '?',
+                  avatarLetter,
                   style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 20),
                 ),
               ),
@@ -364,16 +390,20 @@ class _UserCard extends StatelessWidget {
                             color: hasDebt ? Colors.redAccent : Colors.green,
                           ),
                           const SizedBox(width: 5),
-                          Text(
-                            balance == null
-                                ? 'ماوە: ...'
-                                : hasDebt
-                                    ? 'ماوە: ${AppHelpers.formatCurrency(currentBalance)}'
-                                    : 'هیچ قەرزێکی ماوە نییە',
-                            style: TextStyle(
-                              color: hasDebt ? Colors.redAccent : Colors.green,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
+                          Expanded(
+                            child: Text(
+                              balance == null
+                                  ? 'ماوە: ...'
+                                  : hasDebt
+                                      ? 'ماوە: ${AppHelpers.formatCurrency(currentBalance)}'
+                                      : 'هیچ قەرزێکی ماوە نییە',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: hasDebt ? Colors.redAccent : Colors.green,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ],
