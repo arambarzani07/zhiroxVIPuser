@@ -66,9 +66,9 @@ class AppHelpers {
       case 'pending':
         return 'چاوەڕوانە';
       case 'partial':
-        return 'بەشێکی دراوە';
+        return 'بەشێکی ماوە';
       case 'paid':
-        return 'دراوە';
+        return 'تەواوە';
       default:
         return status;
     }
