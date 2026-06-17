@@ -311,6 +311,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           ),
                           const Spacer(),
                           IconButton(
+  icon: Icon(
+    Icons.health_and_safety_rounded,
+    color: Colors.white.withOpacity(0.7),
+    size: 22,
+  ),
+  tooltip: 'پشکنینی ژیرانەی داتا',
+  onPressed: () {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const DataQualityScreen(),
+      ),
+    );
+  },
+),
+                          IconButton(
                             icon: Icon(
                               Icons.print_rounded,
                               color: Colors.white.withOpacity(0.7),
