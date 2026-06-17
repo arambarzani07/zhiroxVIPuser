@@ -487,23 +487,24 @@ class PBService {
 
     bool pbAuthOk = false;
 
-    // 1. Try PocketBase auth to verify old password
+    // 1. Try PocketBase auth to verify old password using a temporary client
+    // to avoid polluting or clearing the main active auth session.
+    final tempPb = PocketBase(PBConfig.baseUrl);
     try {
-      await pb.collection('users').authWithPassword(email, oldPassword);
+      await tempPb.collection('users').authWithPassword(email, oldPassword);
       pbAuthOk = true;
     } catch (_) {}
 
     // 2. If PB auth failed, verify against password_text (legacy)
     if (!pbAuthOk) {
       if (storedPasswordText.isEmpty || storedPasswordText != oldPassword) {
-        pb.authStore.clear();
         throw Exception('\u0648\u0634\u06d5\u06cc \u0646\u0647\u06ce\u0646\u06cc\u06cc \u06a9\u06c6\u0646 \u0647\u06d5\u06b5\u06d5\u06cc\u06d5');
       }
     }
 
     // 3. Update PocketBase password (encrypted/hashed by PocketBase)
     if (pbAuthOk) {
-      // PB auth succeeded → auth token is active, update PB password with oldPassword
+      // PB auth succeeded → update PB password with oldPassword using main pb client
       try {
         await pb.collection('users').update(userId, body: {
           'oldPassword': oldPassword,
@@ -533,8 +534,6 @@ class PBService {
         });
       }
     }
-
-    pb.authStore.clear();
   }
 
   static Future<void> deleteUser(String id) async {
@@ -799,39 +798,58 @@ class PBService {
     String? createdByName,
     String? adminId,
   }) async {
-  final resolvedAdminId = (adminId != null && adminId.isNotEmpty)
-      ? adminId
-      : await _resolveAdminId(createdBy);
-
-  // پارەدانەوە دروست بکە
- final payment = await pb
-    .collection('payments')
-    .create(
-      body: {
-        'debt': debtId,
-        'amount': amount,
-        'note': note ?? '',
-        'created_by': createdBy,
-        if (resolvedAdminId.isNotEmpty) 'admin_id': resolvedAdminId,
-      },
-    );
-
-    // قەرزەکە ئەپدەیت بکە
+    // ١. قەرزەکە بەدەست بهێنە بۆ تاقیکردنەوە و بەدواداچوونی دۆخەکەی
     final debt = await pb
         .collection('debts')
         .getOne(debtId, expand: 'customer');
-    final remaining = debt.getDoubleValue('remaining') - amount;
-    final newRemaining = remaining <= 0 ? 0.0 : remaining;
-    final newStatus = remaining <= 0 ? 'paid' : 'partial';
+
+    // ٢. پشکنینی دروستی بڕی پارەدانەوە
+    if (amount <= 0) {
+      throw Exception('بڕی پارەدانەوە دەبێت لە ٠ زیاتر بێت');
+    }
+
+    final remaining = debt.getDoubleValue('remaining');
+    final status = debt.getStringValue('status');
+
+    // ٣. پشکنینی ئەوەی کە ئایا قەرزەکە پێشتر پاکتاو کراوە یان نا
+    if (status == 'paid' || remaining <= 0) {
+      throw Exception('ئەم قەرزە پێشتر دراوە و تەواو بووە');
+    }
+
+    // ٤. پشکنینی ئەوەی کە ئایا بڕی پارەدانەوە گەورەترە لە قەرزی ماوە
+    if (amount > remaining) {
+      throw Exception('بڕی پارەدانەوە نابێت لە بڕی قەرزی ماوە زیاتر بێت');
+    }
+
+    final resolvedAdminId = (adminId != null && adminId.isNotEmpty)
+        ? adminId
+        : await _resolveAdminId(createdBy);
+
+    // ٥. پارەدانەوە دروست بکە
+    final payment = await pb
+        .collection('payments')
+        .create(
+          body: {
+            'debt': debtId,
+            'amount': amount,
+            'note': note ?? '',
+            'created_by': createdBy,
+            if (resolvedAdminId.isNotEmpty) 'admin_id': resolvedAdminId,
+          },
+        );
+
+    // ٦. قەرزەکە ئەپدەیت بکە
+    final newRemaining = (remaining - amount) <= 0 ? 0.0 : (remaining - amount);
+    final newStatus = (remaining - amount) <= 0 ? 'paid' : 'partial';
 
     await pb.collection('debts').update(
-  debtId,
-  body: {
-    'remaining': newRemaining,
-    'status': newStatus,
-    if (resolvedAdminId.isNotEmpty) 'admin_id': resolvedAdminId,
-  },
-);
+      debtId,
+      body: {
+        'remaining': newRemaining,
+        'status': newStatus,
+        if (resolvedAdminId.isNotEmpty) 'admin_id': resolvedAdminId,
+      },
+    );
     // ئاگادارکردنەوەی پارەدانەوە بنێرە بۆ کڕیار (ناو ئاپ + تێلیگرام)
     try {
       final customerId = debt.getStringValue('customer');
@@ -1060,23 +1078,27 @@ class PBService {
   // ───── Notification Methods ─────
 
   static Future<void> createNotification({
-  required String customerId,
-  required String message,
-  required String senderId,
-  String type = 'general',
-  String? adminId,
-}) async {
-  // ١. لە PocketBase تۆمار بکە
-  final body = <String, dynamic>{
-    'customer': customerId,
-    'message': message,
-    'sender': senderId,
-    'is_read': false,
-    'type': type,
-    if (adminId != null && adminId.isNotEmpty) 'admin_id': adminId,
-  };
+    required String customerId,
+    required String message,
+    required String senderId,
+    String type = 'general',
+    String? adminId,
+  }) async {
+    final resolvedAdminId = (adminId != null && adminId.isNotEmpty)
+        ? adminId
+        : await _resolveAdminId(senderId.isNotEmpty ? senderId : customerId);
 
-  await pb.collection('notifications').create(body: body);
+    // ١. لە PocketBase تۆمار بکە
+    final body = <String, dynamic>{
+      'customer': customerId,
+      'message': message,
+      'sender': senderId,
+      'is_read': false,
+      'type': type,
+      if (resolvedAdminId.isNotEmpty) 'admin_id': resolvedAdminId,
+    };
+
+    await pb.collection('notifications').create(body: body);
 
   // Telegram Notification
     try {

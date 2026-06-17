@@ -10,6 +10,7 @@ import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
 import 'package:zhirox/screens/shared/debt_list_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
+import 'package:zhirox/features/ai_quality/data_quality_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/pdf_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -320,7 +321,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   onPressed: () {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const DataQualityScreen(),
+        builder: (_) => DataQualityScreen(),
       ),
     );
   },
