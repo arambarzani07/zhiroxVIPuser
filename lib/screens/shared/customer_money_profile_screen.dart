@@ -360,7 +360,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
             return Directionality(
               textDirection: TextDirection.rtl,
               child: AlertDialog(
-                title: const Text('پارەدانەوە'),
+                title: const Text('پارە وەرگرتنەوە'),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -384,7 +384,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                         keyboardType: TextInputType.number,
                         textDirection: TextDirection.ltr,
                         decoration: InputDecoration(
-                          labelText: 'بڕی پارەدانەوە',
+                          labelText: 'بڕی پارەی وەرگیراو',
                           helperText: 'ماوەی ئەم قەرزە: ${AppHelpers.formatCurrency(remaining)}',
                           border: const OutlineInputBorder(),
                         ),
@@ -409,7 +409,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                               return;
                             }
                             if (amount > selectedDebt.getDoubleValue('remaining')) {
-                              AppHelpers.showSnackBar(context, 'بڕی پارەدانەوە زیاترە لە ماوەی قەرز', isError: true);
+                              AppHelpers.showSnackBar(context, 'بڕی پارەی وەرگیراو زیاترە لە ماوەی قەرز', isError: true);
                               return;
                             }
                             setDialogState(() => _isSavingPayment = true);
@@ -445,11 +445,11 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
         adminId: auth.adminId.isNotEmpty ? auth.adminId : auth.userId,
       );
       if (mounted) {
-        AppHelpers.showSnackBar(context, 'پارەدانەوە تۆمار کرا ✅');
+        AppHelpers.showSnackBar(context, 'پارە وەرگرتنەوە تۆمار کرا ✅');
         await _loadData();
       }
     } catch (e) {
-      if (mounted) AppHelpers.showSnackBar(context, 'هەڵە لە تۆمارکردنی پارەدانەوە: $e', isError: true);
+      if (mounted) AppHelpers.showSnackBar(context, 'هەڵە لە تۆمارکردنی پارە وەرگرتنەوە: $e', isError: true);
     }
   }
 }
@@ -501,7 +501,7 @@ class _CustomerInfoCard extends StatelessWidget {
           ]),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(child: _MoneyTile(label: 'دراوە', value: totalPaid, icon: Icons.payments_rounded, color: Colors.green)),
+            Expanded(child: _MoneyTile(label: 'پارەی وەرگیراو', value: totalPaid, icon: Icons.payments_rounded, color: Colors.green)),
             const SizedBox(width: 8),
             Expanded(child: _MoneyTile(label: debtLimit > 0 ? 'بەردەستە' : 'سنوور نییە', value: debtLimit > 0 ? availableLimit : 0, icon: Icons.verified_user_rounded, color: Colors.blue)),
           ]),
@@ -551,9 +551,9 @@ class _MainActionsCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(children: [
-          Expanded(child: ElevatedButton.icon(onPressed: onAddDebt, icon: const Icon(Icons.add), label: const Text('قەرزی نوێ'))),
+          Expanded(child: ElevatedButton.icon(onPressed: onAddDebt, icon: const Icon(Icons.add), label: const Text('قەرز پێدان'))),
           const SizedBox(width: 8),
-          Expanded(child: OutlinedButton.icon(onPressed: hasOpenDebt ? onAddPayment : null, icon: const Icon(Icons.payments_rounded), label: const Text('پارەدانەوە'))),
+          Expanded(child: OutlinedButton.icon(onPressed: hasOpenDebt ? onAddPayment : null, icon: const Icon(Icons.payments_rounded), label: const Text('پارە وەرگرتنەوە'))),
           IconButton(onPressed: onStatement, icon: const Icon(Icons.print_rounded), tooltip: 'کەشف حساب'),
         ]),
       ),
@@ -604,7 +604,7 @@ class _MoneyChatCard extends StatelessWidget {
           Row(children: [
             Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
             const SizedBox(width: 8),
-            Expanded(child: Text('چاتی قەرز و پارەدانەوە', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold))),
+            Expanded(child: Text('چاتی قەرز پێدان و پارە وەرگرتنەوە', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold))),
           ]),
           const SizedBox(height: 4),
           Text('قەرز پێدان و پارە وەرگرتنەوە بە شێوەی چات و بە ڕیزبەندی کات.', style: Theme.of(context).textTheme.bodySmall),
