@@ -5,11 +5,13 @@ import 'data_quality_issue.dart';
 class DataQualityCard extends StatelessWidget {
   final DataQualityIssue issue;
   final VoidCallback? onTap;
+  final bool showSupportDetails;
 
   const DataQualityCard({
     super.key,
     required this.issue,
     this.onTap,
+    this.showSupportDetails = false,
   });
 
   @override
@@ -19,15 +21,16 @@ class DataQualityCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      elevation: 1,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         side: BorderSide(
-          color: color.withOpacity(0.35),
+          color: color.withOpacity(0.22),
           width: 1,
         ),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -39,17 +42,30 @@ class DataQualityCard extends StatelessWidget {
                 Row(
                   children: [
                     CircleAvatar(
-                      radius: 18,
+                      radius: 19,
                       backgroundColor: color.withOpacity(0.12),
-                      child: Icon(icon, color: color, size: 20),
+                      child: Icon(icon, color: color, size: 21),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        issue.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            issue.title,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            issue.collectionLabel,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
                       ),
                     ),
                     _SeverityBadge(
@@ -58,24 +74,40 @@ class DataQualityCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Text(
                   issue.message,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        height: 1.55,
+                      ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
+                    color: color.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Text(
-                    'پێشنیار: ${issue.suggestion}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.lightbulb_outline_rounded,
+                        color: color,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          issue.suggestion,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                height: 1.45,
+                              ),
                         ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -83,13 +115,18 @@ class DataQualityCard extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _InfoChip(label: issue.collection),
                     _InfoChip(label: issue.typeLabel),
-                    if (issue.recordId != null && issue.recordId!.isNotEmpty)
-                      _InfoChip(label: 'ID: ${issue.recordId}'),
-                    if (issue.canAutoFix) const _InfoChip(label: 'Auto-fix later'),
+                    _InfoChip(label: issue.safeActionLabel),
+                    if (issue.isLikelyOldDataIssue)
+                      const _InfoChip(label: 'زۆرجار داتای کۆنە'),
+                    if (issue.canAutoFix)
+                      const _InfoChip(label: 'دەتوانرێت بە سەلامەتی ڕێکبخرێت'),
                   ],
                 ),
+                if (showSupportDetails) ...[
+                  const SizedBox(height: 10),
+                  _SupportDetails(issue: issue),
+                ],
               ],
             ),
           ),
@@ -112,12 +149,68 @@ class DataQualityCard extends StatelessWidget {
   IconData _severityIcon(DataQualitySeverity severity) {
     switch (severity) {
       case DataQualitySeverity.critical:
-        return Icons.error_rounded;
+        return Icons.priority_high_rounded;
       case DataQualitySeverity.warning:
         return Icons.warning_amber_rounded;
       case DataQualitySeverity.info:
         return Icons.info_rounded;
     }
+  }
+}
+
+class _SupportDetails extends StatelessWidget {
+  final DataQualityIssue issue;
+
+  const _SupportDetails({required this.issue});
+
+  @override
+  Widget build(BuildContext context) {
+    final details = <String>[
+      'بەش: ${issue.collection}',
+      if (issue.recordId != null && issue.recordId!.isNotEmpty)
+        'ژمارەی ناوخۆی داتا: ${issue.recordId}',
+      if (issue.customerId != null && issue.customerId!.isNotEmpty)
+        'کڕیار: ${issue.customerId}',
+      if (issue.debtId != null && issue.debtId!.isNotEmpty)
+        'قەرز: ${issue.debtId}',
+      if (issue.paymentId != null && issue.paymentId!.isNotEmpty)
+        'پارەدانەوە: ${issue.paymentId}',
+      if (issue.notificationId != null && issue.notificationId!.isNotEmpty)
+        'ئاگادارکردنەوە: ${issue.notificationId}',
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'وردەکاری بۆ پشتیوانی',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 6),
+          ...details.map(
+            (detail) => Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Text(
+                detail,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey.shade700,
+                    ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
