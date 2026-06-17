@@ -14,7 +14,8 @@ class CustomerMoneyProfileScreen extends StatefulWidget {
   const CustomerMoneyProfileScreen({super.key, required this.userId});
 
   @override
-  State<CustomerMoneyProfileScreen> createState() => _CustomerMoneyProfileScreenState();
+  State<CustomerMoneyProfileScreen> createState() =>
+      _CustomerMoneyProfileScreenState();
 }
 
 class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen> {
@@ -51,14 +52,12 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
     }
   }
 
-  double get _totalDebt => _debts.fold(0.0, (sum, debt) => sum + debt.getDoubleValue('amount'));
-  double get _totalRemaining => _debts.fold(0.0, (sum, debt) => sum + debt.getDoubleValue('remaining'));
+  double get _totalDebt => _debts.fold(0.0, (sum, d) => sum + d.getDoubleValue('amount'));
+  double get _totalRemaining => _debts.fold(0.0, (sum, d) => sum + d.getDoubleValue('remaining'));
   double get _totalPaid => _totalDebt - _totalRemaining;
   double get _debtLimit => _customer?.getDoubleValue('debt_limit') ?? 0;
   double get _availableLimit => _debtLimit > 0 ? _debtLimit - _totalRemaining : 0;
-
-  List<RecordModel> get _openDebts => _debts.where((debt) => debt.getDoubleValue('remaining') > 0).toList();
-
+  List<RecordModel> get _openDebts => _debts.where((d) => d.getDoubleValue('remaining') > 0).toList();
   String get _customerName => _customer?.getStringValue('name') ?? 'کڕیار';
   String get _customerPhone => _customer?.getStringValue('phone') ?? '';
 
@@ -90,13 +89,9 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                     child: ListView(
                       padding: const EdgeInsets.only(bottom: 28),
                       children: [
-                        _CustomerHeaderCard(
+                        _CustomerInfoCard(
                           name: _customerName,
                           phone: _customerPhone,
-                          totalRemaining: _totalRemaining,
-                          debtLimit: _debtLimit,
-                        ),
-                        _FinancialSummaryCard(
                           totalDebt: _totalDebt,
                           totalRemaining: _totalRemaining,
                           totalPaid: _totalPaid,
@@ -109,8 +104,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                           onStatement: _generateStatement,
                           hasOpenDebt: _openDebts.isNotEmpty,
                         ),
-                        _DebtSection(debts: _debts),
-                        _PaymentSection(payments: _payments),
+                        _MoneyChatCard(debts: _debts, payments: _payments),
                         _ProfileToolsCard(
                           onEditInfo: _showComingSoon,
                           onChangeLimit: _showComingSoon,
@@ -144,9 +138,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
         totalPaid: _totalPaid,
       );
     } catch (e) {
-      if (mounted) {
-        AppHelpers.showSnackBar(context, 'هەڵە لە دروستکردنی کەشف حساب: $e', isError: true);
-      }
+      if (mounted) AppHelpers.showSnackBar(context, 'هەڵە لە دروستکردنی کەشف حساب: $e', isError: true);
     }
   }
 
@@ -174,7 +166,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
             return Directionality(
               textDirection: TextDirection.rtl,
               child: AlertDialog(
-                title: const Text('تۆمارکردنی پارەدانەوە'),
+                title: const Text('پارەدانەوە'),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -183,13 +175,11 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                         value: selectedDebt,
                         isExpanded: true,
                         decoration: const InputDecoration(
-                          labelText: 'قەرز هەڵبژێرە',
+                          labelText: 'قەرزی ماوە هەڵبژێرە',
                           border: OutlineInputBorder(),
                         ),
                         items: openDebts.map((debt) {
-                          final title = debt.getStringValue('description').isEmpty
-                              ? 'قەرز'
-                              : debt.getStringValue('description');
+                          final title = debt.getStringValue('description').isEmpty ? 'قەرز' : debt.getStringValue('description');
                           final rem = AppHelpers.formatCurrency(debt.getDoubleValue('remaining'));
                           return DropdownMenuItem<RecordModel>(value: debt, child: Text('$title — ماوە: $rem'));
                         }).toList(),
@@ -211,25 +201,18 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                       const SizedBox(height: 12),
                       TextField(
                         controller: noteController,
-                        decoration: const InputDecoration(
-                          labelText: 'تێبینی — ئارەزوومەندانە',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: const InputDecoration(labelText: 'تێبینی', border: OutlineInputBorder()),
                       ),
                     ],
                   ),
                 ),
                 actions: [
-                  TextButton(
-                    onPressed: _isSavingPayment ? null : () => Navigator.pop(dialogContext),
-                    child: const Text('پاشگەزبوونەوە'),
-                  ),
+                  TextButton(onPressed: _isSavingPayment ? null : () => Navigator.pop(dialogContext), child: const Text('پاشگەزبوونەوە')),
                   ElevatedButton(
                     onPressed: _isSavingPayment
                         ? null
                         : () async {
-                            final rawAmount = amountController.text.trim().replaceAll(',', '');
-                            final amount = double.tryParse(rawAmount);
+                            final amount = double.tryParse(amountController.text.trim().replaceAll(',', ''));
                             if (amount == null || amount <= 0) {
                               AppHelpers.showSnackBar(context, 'بڕی دروست بنووسە', isError: true);
                               return;
@@ -239,14 +222,8 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                               return;
                             }
                             setDialogState(() => _isSavingPayment = true);
-                            await _savePayment(
-                              debt: selectedDebt,
-                              amount: amount,
-                              note: noteController.text.trim(),
-                            );
-                            if (mounted && Navigator.canPop(dialogContext)) {
-                              Navigator.pop(dialogContext);
-                            }
+                            await _savePayment(debt: selectedDebt, amount: amount, note: noteController.text.trim());
+                            if (mounted && Navigator.canPop(dialogContext)) Navigator.pop(dialogContext);
                           },
                     child: _isSavingPayment
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -265,11 +242,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
     if (mounted) setState(() => _isSavingPayment = false);
   }
 
-  Future<void> _savePayment({
-    required RecordModel debt,
-    required double amount,
-    required String note,
-  }) async {
+  Future<void> _savePayment({required RecordModel debt, required double amount, required String note}) async {
     final auth = context.read<AuthProvider>();
     try {
       await PBService.createPayment(
@@ -285,134 +258,63 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
         await _loadData();
       }
     } catch (e) {
-      if (mounted) {
-        AppHelpers.showSnackBar(context, 'هەڵە لە تۆمارکردنی پارەدانەوە: $e', isError: true);
-      }
+      if (mounted) AppHelpers.showSnackBar(context, 'هەڵە لە تۆمارکردنی پارەدانەوە: $e', isError: true);
     }
   }
 }
 
-class _CustomerHeaderCard extends StatelessWidget {
+class _CustomerInfoCard extends StatelessWidget {
   final String name;
   final String phone;
-  final double totalRemaining;
-  final double debtLimit;
-
-  const _CustomerHeaderCard({
-    required this.name,
-    required this.phone,
-    required this.totalRemaining,
-    required this.debtLimit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isGood = totalRemaining <= 0;
-    final isOverLimit = debtLimit > 0 && totalRemaining > debtLimit;
-    final statusColor = isGood ? Colors.green : (isOverLimit ? Colors.red : Colors.orange);
-    final statusText = isGood
-        ? 'باش — هیچ قەرزێکی ماوە نییە'
-        : isOverLimit
-            ? 'مەترسیدار — سنووری قەرز تێپەڕیوە'
-            : 'ئاگاداری — قەرزی ماوە هەیە';
-    final avatarLetter = name.isNotEmpty ? name[0].toUpperCase() : '?';
-
-    return Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          colors: [AppColors.primary, AppColors.primary.withOpacity(0.72)],
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: Colors.white.withOpacity(0.18),
-                child: Text(
-                  avatarLetter,
-                  style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(phone.isEmpty ? 'ژمارەی مۆبایل نەدراوە' : phone, style: TextStyle(color: Colors.white.withOpacity(0.82)), textDirection: TextDirection.ltr),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.16), borderRadius: BorderRadius.circular(16)),
-            child: Row(
-              children: [
-                Icon(Icons.health_and_safety_rounded, color: statusColor, size: 22),
-                const SizedBox(width: 8),
-                Expanded(child: Text(statusText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FinancialSummaryCard extends StatelessWidget {
   final double totalDebt;
   final double totalRemaining;
   final double totalPaid;
   final double debtLimit;
   final double availableLimit;
 
-  const _FinancialSummaryCard({
-    required this.totalDebt,
-    required this.totalRemaining,
-    required this.totalPaid,
-    required this.debtLimit,
-    required this.availableLimit,
-  });
+  const _CustomerInfoCard({required this.name, required this.phone, required this.totalDebt, required this.totalRemaining, required this.totalPaid, required this.debtLimit, required this.availableLimit});
 
   @override
   Widget build(BuildContext context) {
+    final avatarLetter = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final hasDebt = totalRemaining > 0;
+    final statusColor = hasDebt ? Colors.orange : Colors.green;
+
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      margin: const EdgeInsets.all(12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('دۆخی دارایی', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(child: _MoneyTile(label: 'کۆی قەرز', value: totalDebt, icon: Icons.receipt_long_rounded, color: Colors.orange)),
-              const SizedBox(width: 8),
-              Expanded(child: _MoneyTile(label: 'ماوە', value: totalRemaining, icon: Icons.pending_actions_rounded, color: Colors.red)),
-            ]),
-            const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: _MoneyTile(label: 'دراوە', value: totalPaid, icon: Icons.payments_rounded, color: Colors.green)),
-              const SizedBox(width: 8),
-              Expanded(child: _MoneyTile(label: debtLimit > 0 ? 'بەردەستە' : 'سنوور نییە', value: debtLimit > 0 ? availableLimit : 0, icon: Icons.verified_user_rounded, color: Colors.blue)),
-            ]),
-          ],
-        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            CircleAvatar(radius: 28, backgroundColor: AppColors.primary.withOpacity(0.12), child: Text(avatarLetter, style: TextStyle(color: AppColors.primary, fontSize: 23, fontWeight: FontWeight.bold))),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('زانیاری کڕیار', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text(phone.isEmpty ? 'ژمارەی مۆبایل نەدراوە' : phone, textDirection: TextDirection.ltr, style: TextStyle(color: Colors.grey.shade600)),
+            ])),
+          ]),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: statusColor.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
+            child: Text(hasDebt ? 'ئەم کڕیارە قەرزی ماوە هەیە' : 'هیچ قەرزێکی ماوە نییە ✅', style: TextStyle(color: statusColor, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: _MoneyTile(label: 'کۆی قەرز', value: totalDebt, icon: Icons.receipt_long_rounded, color: Colors.orange)),
+            const SizedBox(width: 8),
+            Expanded(child: _MoneyTile(label: 'ماوە', value: totalRemaining, icon: Icons.pending_actions_rounded, color: Colors.red)),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: _MoneyTile(label: 'دراوە', value: totalPaid, icon: Icons.payments_rounded, color: Colors.green)),
+            const SizedBox(width: 8),
+            Expanded(child: _MoneyTile(label: debtLimit > 0 ? 'بەردەستە' : 'سنوور نییە', value: debtLimit > 0 ? availableLimit : 0, icon: Icons.verified_user_rounded, color: Colors.blue)),
+          ]),
+        ]),
       ),
     );
   }
@@ -431,16 +333,13 @@ class _MoneyTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 8),
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 3),
-          Text(AppHelpers.formatCurrency(value), style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14), textDirection: TextDirection.ltr),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(height: 8),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 3),
+        Text(AppHelpers.formatCurrency(value), style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14), textDirection: TextDirection.ltr),
+      ]),
     );
   }
 }
@@ -460,109 +359,105 @@ class _MainActionsCard extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Expanded(child: ElevatedButton.icon(onPressed: onAddDebt, icon: const Icon(Icons.add), label: const Text('قەرزی نوێ'))),
-            const SizedBox(width: 8),
-            Expanded(child: OutlinedButton.icon(onPressed: hasOpenDebt ? onAddPayment : null, icon: const Icon(Icons.payments_rounded), label: const Text('پارەدانەوە'))),
-            IconButton(onPressed: onStatement, icon: const Icon(Icons.print_rounded), tooltip: 'کەشف حساب'),
-          ],
-        ),
+        child: Row(children: [
+          Expanded(child: ElevatedButton.icon(onPressed: onAddDebt, icon: const Icon(Icons.add), label: const Text('قەرزی نوێ'))),
+          const SizedBox(width: 8),
+          Expanded(child: OutlinedButton.icon(onPressed: hasOpenDebt ? onAddPayment : null, icon: const Icon(Icons.payments_rounded), label: const Text('پارەدانەوە'))),
+          IconButton(onPressed: onStatement, icon: const Icon(Icons.print_rounded), tooltip: 'کەشف حساب'),
+        ]),
       ),
     );
   }
 }
 
-class _DebtSection extends StatelessWidget {
+class _MoneyChatCard extends StatelessWidget {
   final List<RecordModel> debts;
-
-  const _DebtSection({required this.debts});
-
-  @override
-  Widget build(BuildContext context) {
-    final openDebts = debts.where((d) => d.getDoubleValue('remaining') > 0).toList();
-    return _SectionCard(
-      title: 'قەرزەکان',
-      subtitle: openDebts.isEmpty ? 'هیچ قەرزێکی ماوە نییە' : '${openDebts.length} قەرزی ماوە هەیە',
-      icon: Icons.receipt_long_rounded,
-      children: openDebts.isEmpty
-          ? [const _EmptyLine(text: 'هەموو قەرزەکان تەواو دراون یان قەرز نییە ✅')]
-          : openDebts.map((debt) => _DebtItem(debt: debt)).toList(),
-    );
-  }
-}
-
-class _DebtItem extends StatelessWidget {
-  final RecordModel debt;
-
-  const _DebtItem({required this.debt});
-
-  @override
-  Widget build(BuildContext context) {
-    final amount = debt.getDoubleValue('amount');
-    final remaining = debt.getDoubleValue('remaining');
-    final paid = amount - remaining;
-    final progress = amount <= 0 ? 0.0 : (paid / amount).clamp(0.0, 1.0);
-    final description = debt.getStringValue('description').isEmpty ? 'قەرز' : debt.getStringValue('description');
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.06), borderRadius: BorderRadius.circular(16)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Expanded(child: Text(description, style: const TextStyle(fontWeight: FontWeight.bold))),
-            Text(AppHelpers.statusName(debt.getStringValue('status')), style: const TextStyle(fontSize: 12)),
-          ]),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(value: progress),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(child: Text('قەرز: ${AppHelpers.formatCurrency(amount)}', textDirection: TextDirection.ltr)),
-            Expanded(child: Text('ماوە: ${AppHelpers.formatCurrency(remaining)}', textDirection: TextDirection.ltr)),
-          ]),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentSection extends StatelessWidget {
   final List<RecordModel> payments;
 
-  const _PaymentSection({required this.payments});
+  const _MoneyChatCard({required this.debts, required this.payments});
+
+  List<_ChatItem> _items() {
+    final items = <_ChatItem>[];
+    for (final debt in debts) {
+      items.add(_ChatItem.debt(debt));
+    }
+    for (final payment in payments) {
+      items.add(_ChatItem.payment(payment));
+    }
+    items.sort((a, b) => b.created.compareTo(a.created));
+    return items;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final sorted = [...payments]..sort((a, b) => b.created.compareTo(a.created));
-    return _SectionCard(
-      title: 'پارەدانەوەکان',
-      subtitle: sorted.isEmpty ? 'هێشتا پارەدانەوە نییە' : '${sorted.length} پارەدانەوە تۆمارکراوە',
-      icon: Icons.payments_rounded,
-      children: sorted.isEmpty
-          ? [const _EmptyLine(text: 'کاتێک پارەدانەوە تۆمار بکرێت، لێرە دەردەکەوێت.')]
-          : sorted.map((payment) => _PaymentItem(payment: payment)).toList(),
+    final items = _items();
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Expanded(child: Text('چاتی قەرز و پارەدانەوە', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold))),
+          ]),
+          const SizedBox(height: 4),
+          Text('زانیاری دارایی بە شێوەی چات و بە ڕیزبەندی کات.', style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 12),
+          if (items.isEmpty) const _EmptyLine(text: 'هێشتا هیچ مامەڵەیەک نییە.') else ...items.map((item) => _ChatBubble(item: item)),
+        ]),
+      ),
     );
   }
 }
 
-class _PaymentItem extends StatelessWidget {
-  final RecordModel payment;
+class _ChatBubble extends StatelessWidget {
+  final _ChatItem item;
 
-  const _PaymentItem({required this.payment});
+  const _ChatBubble({required this.item});
 
   @override
   Widget build(BuildContext context) {
-    final amount = payment.getDoubleValue('amount');
-    final note = payment.getStringValue('note');
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: const CircleAvatar(child: Icon(Icons.south_west_rounded)),
-      title: Text(AppHelpers.formatCurrency(amount), textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(note.isEmpty ? AppHelpers.formatDateTime(payment.created) : '$note\n${AppHelpers.formatDateTime(payment.created)}'),
+    final isDebt = item.isDebt;
+    final color = isDebt ? Colors.orange : Colors.green;
+    return Align(
+      alignment: isDebt ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: color.withOpacity(0.09), borderRadius: BorderRadius.circular(18), border: Border.all(color: color.withOpacity(0.18))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(isDebt ? 'قەرز زیادکرا' : 'پارەدانەوە تۆمارکرا', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(AppHelpers.formatCurrency(item.amount), textDirection: TextDirection.ltr, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
+          if (item.description.isNotEmpty) ...[const SizedBox(height: 5), Text(item.description, style: Theme.of(context).textTheme.bodySmall)],
+          if (isDebt) ...[const SizedBox(height: 5), Text('ماوە: ${AppHelpers.formatCurrency(item.remaining)}', textDirection: TextDirection.ltr, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold))],
+          const SizedBox(height: 6),
+          Text(AppHelpers.formatDateTime(item.created), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600)),
+        ]),
+      ),
     );
+  }
+}
+
+class _ChatItem {
+  final bool isDebt;
+  final double amount;
+  final double remaining;
+  final String description;
+  final String created;
+
+  const _ChatItem({required this.isDebt, required this.amount, required this.remaining, required this.description, required this.created});
+
+  factory _ChatItem.debt(RecordModel debt) {
+    final description = debt.getStringValue('description');
+    return _ChatItem(isDebt: true, amount: debt.getDoubleValue('amount'), remaining: debt.getDoubleValue('remaining'), description: description.isEmpty ? 'قەرز' : description, created: debt.created);
+  }
+
+  factory _ChatItem.payment(RecordModel payment) {
+    return _ChatItem(isDebt: false, amount: payment.getDoubleValue('amount'), remaining: 0, description: payment.getStringValue('note'), created: payment.created);
   }
 }
 
@@ -574,59 +469,17 @@ class _ProfileToolsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SectionCard(
-      title: 'ڕێکخستنەکانی کڕیار',
-      subtitle: 'دەستکاری زانیاری و سنووری قەرز لە هەنگاوی داهاتوودا لێرە پاکتر دەکرێت.',
-      icon: Icons.settings_rounded,
-      children: [
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.person_outline),
-          title: const Text('دەستکاری زانیاری کڕیار'),
-          trailing: const Icon(Icons.chevron_left),
-          onTap: onEditInfo,
-        ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.verified_user_outlined),
-          title: const Text('ڕێکخستنی سنووری قەرز'),
-          trailing: const Icon(Icons.chevron_left),
-          onTap: onChangeLimit,
-        ),
-      ],
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final List<Widget> children;
-
-  const _SectionCard({required this.title, required this.subtitle, required this.icon, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Icon(icon, color: AppColors.primary),
-              const SizedBox(width: 8),
-              Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold))),
-            ]),
-            const SizedBox(height: 4),
-            Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 12),
-            ...children,
-          ],
-        ),
+      child: ExpansionTile(
+        leading: Icon(Icons.settings_rounded, color: AppColors.primary),
+        title: const Text('ڕێکخستنەکانی کڕیار'),
+        subtitle: const Text('زانیاری و سنووری قەرز لە بەشی جیا دەستکاری دەکرێن.'),
+        children: [
+          ListTile(leading: const Icon(Icons.person_outline), title: const Text('دەستکاری زانیاری کڕیار'), trailing: const Icon(Icons.chevron_left), onTap: onEditInfo),
+          ListTile(leading: const Icon(Icons.verified_user_outlined), title: const Text('ڕێکخستنی سنووری قەرز'), trailing: const Icon(Icons.chevron_left), onTap: onChangeLimit),
+        ],
       ),
     );
   }
@@ -639,10 +492,7 @@ class _EmptyLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Text(text, textAlign: TextAlign.center),
-    );
+    return Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text(text, textAlign: TextAlign.center));
   }
 }
 
@@ -653,8 +503,6 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ElevatedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('دووبارە هەوڵ بدەوە')),
-    );
+    return Center(child: ElevatedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('دووبارە هەوڵ بدەوە')));
   }
 }
