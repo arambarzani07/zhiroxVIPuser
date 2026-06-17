@@ -205,6 +205,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                                   return;
                                 }
                                 setSheetState(() => isSaving = true);
+                                var saved = false;
                                 try {
                                   await PBService.pb.collection('users').update(
                                     widget.userId,
@@ -213,17 +214,20 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                                       'phone': phone,
                                     },
                                   );
-                                  if (!mounted) return;
-                                  Navigator.pop(sheetContext);
-                                  AppHelpers.showSnackBar(context, 'زانیاری کڕیار نوێ کرایەوە ✅');
-                                  await _loadData();
+                                  saved = true;
                                 } catch (e) {
                                   if (mounted) {
                                     AppHelpers.showSnackBar(context, 'هەڵە لە نوێکردنەوە: $e', isError: true);
                                   }
-                                } finally {
-                                  if (mounted) setSheetState(() => isSaving = false);
                                 }
+                                if (!mounted) return;
+                                if (saved) {
+                                  Navigator.pop(sheetContext);
+                                  AppHelpers.showSnackBar(context, 'زانیاری کڕیار نوێ کرایەوە ✅');
+                                  await _loadData();
+                                  return;
+                                }
+                                setSheetState(() => isSaving = false);
                               },
                         icon: isSaving
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
@@ -312,22 +316,26 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                                   return;
                                 }
                                 setSheetState(() => isSaving = true);
+                                var saved = false;
                                 try {
                                   await PBService.pb.collection('users').update(
                                     widget.userId,
                                     body: {'debt_limit': limit},
                                   );
-                                  if (!mounted) return;
-                                  Navigator.pop(sheetContext);
-                                  AppHelpers.showSnackBar(context, 'سنووری قەرز نوێ کرایەوە ✅');
-                                  await _loadData();
+                                  saved = true;
                                 } catch (e) {
                                   if (mounted) {
                                     AppHelpers.showSnackBar(context, 'هەڵە لە نوێکردنەوەی سنوور: $e', isError: true);
                                   }
-                                } finally {
-                                  if (mounted) setSheetState(() => isSaving = false);
                                 }
+                                if (!mounted) return;
+                                if (saved) {
+                                  Navigator.pop(sheetContext);
+                                  AppHelpers.showSnackBar(context, 'سنووری قەرز نوێ کرایەوە ✅');
+                                  await _loadData();
+                                  return;
+                                }
+                                setSheetState(() => isSaving = false);
                               },
                         icon: isSaving
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
