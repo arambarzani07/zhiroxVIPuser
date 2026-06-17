@@ -82,7 +82,7 @@ class AppStrings {
   static const String status = 'بارودۆخ';
   static const String pending = 'چاوەڕوانە';
   static const String partial = 'بەشێکی ماوە';
-  static const String paid = 'دراوە';
+  static const String paid = 'تەواوە';
   static const String totalDebt = 'کۆی قەرز';
   static const String remainingDebt = 'قەرزی ماوە';
 
