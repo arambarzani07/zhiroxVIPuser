@@ -32,7 +32,8 @@ class AppDarkColors {
 
 class AppStrings {
   // عمومی
-  static const String appName = 'ژیرۆکس';
+  static const String appName = 'Zhirox AI Debt';
+  static const String appNameKurdish = 'ژیرۆکس ئەی ئای قەرز';
   static const String login = 'چوونەژوورەوە';
   static const String logout = 'چوونەدەرەوە';
   static const String phone = 'ژمارە مۆبایل';
