@@ -13,7 +13,31 @@ class PBService {
   static String _sanitize(String value) {
     return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
   }
+  /// Resolve the real admin/market owner for any action.
+  /// If actor is admin => admin_id = actor id.
+  /// If actor is employee/customer => admin_id = actor.admin_id.
+  static Future<String> _resolveAdminId(String userId) async {
+    if (userId.isEmpty) return '';
 
+    try {
+      final user = await pb.collection('users').getOne(userId);
+      final role = user.getStringValue('role');
+
+      if (role == 'admin') {
+        return userId;
+      }
+
+      final adminId = user.getStringValue('admin_id');
+      if (adminId.isNotEmpty) {
+        return adminId;
+      }
+
+      return userId;
+    } catch (e) {
+      debugPrint('resolveAdminId failed: $e');
+      return '';
+    }
+  }
   // ==================== Auth ====================
 
   static Future<RecordModel> login(String phone, String password) async {
@@ -574,6 +598,7 @@ class PBService {
     required double amount,
     required String dueDate,
     required String createdBy,
+    String? adminId,
     String currency = 'IQD',
     double dollarRate = 0,
     double amountUsd = 0,
@@ -583,15 +608,20 @@ class PBService {
     String? customCreatedDate,
     String? receiptImagePath,
   }) async {
-    final body = <String, dynamic>{
-      'customer': customerId,
-      'description': description,
-      'amount': amount,
-      'remaining': amount,
-      'due_date': dueDate,
-      'status': 'pending',
-      'created_by': createdBy,
-      'currency': currency,
+  final resolvedAdminId = (adminId != null && adminId.isNotEmpty)
+      ? adminId
+      : await _resolveAdminId(createdBy);
+
+  final body = <String, dynamic>{
+    'customer': customerId,
+    'description': description,
+    'amount': amount,
+    'remaining': amount,
+    'due_date': dueDate,
+    'status': 'pending',
+    'created_by': createdBy,
+    if (resolvedAdminId.isNotEmpty) 'admin_id': resolvedAdminId,
+    'currency': currency,
       'dollar_rate': dollarRate,
       'amount_usd': amountUsd,
       'items': items != null ? jsonEncode(items) : '[]',
@@ -658,6 +688,7 @@ class PBService {
             '$marketLineقەرزی $formattedAmount لەلایەن $senderName زیادکرا.$dueDateLine',
         senderId: createdBy,
         type: 'debt_created',
+        adminId: resolvedAdminId, 
       );
     } catch (_) {
       // Ignore notification failures
@@ -766,18 +797,24 @@ class PBService {
     String? note,
     required String createdBy,
     String? createdByName,
+    String? adminId,
   }) async {
-    // پارەدانەوە دروست بکە
-    final payment = await pb
-        .collection('payments')
-        .create(
-          body: {
-            'debt': debtId,
-            'amount': amount,
-            'note': note ?? '',
-            'created_by': createdBy,
-          },
-        );
+  final resolvedAdminId = (adminId != null && adminId.isNotEmpty)
+      ? adminId
+      : await _resolveAdminId(createdBy);
+
+  // پارەدانەوە دروست بکە
+ final payment = await pb
+    .collection('payments')
+    .create(
+      body: {
+        'debt': debtId,
+        'amount': amount,
+        'note': note ?? '',
+        'created_by': createdBy,
+        if (resolvedAdminId.isNotEmpty) 'admin_id': resolvedAdminId,
+      },
+    );
 
     // قەرزەکە ئەپدەیت بکە
     final debt = await pb
@@ -1018,25 +1055,25 @@ class PBService {
   // ───── Notification Methods ─────
 
   static Future<void> createNotification({
-    required String customerId,
-    required String message,
-    required String senderId,
-    String type = 'general',
-  }) async {
-    // ١. لە PocketBase تۆمار بکە
-    await pb
-        .collection('notifications')
-        .create(
-          body: {
-            'customer': customerId,
-            'message': message,
-            'sender': senderId,
-            'is_read': false,
-            'type': type,
-          },
-        );
+  required String customerId,
+  required String message,
+  required String senderId,
+  String type = 'general',
+  String? adminId,
+}) async {
+  // ١. لە PocketBase تۆمار بکە
+  final body = <String, dynamic>{
+    'customer': customerId,
+    'message': message,
+    'sender': senderId,
+    'is_read': false,
+    'type': type,
+    if (adminId != null && adminId.isNotEmpty) 'admin_id': adminId,
+  };
 
-    // Telegram Notification
+  await pb.collection('notifications').create(body: body);
+
+  // Telegram Notification
     try {
       RecordModel? user;
       try {
