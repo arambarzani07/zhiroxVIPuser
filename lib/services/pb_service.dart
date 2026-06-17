@@ -824,10 +824,14 @@ class PBService {
     final newRemaining = remaining <= 0 ? 0.0 : remaining;
     final newStatus = remaining <= 0 ? 'paid' : 'partial';
 
-    await pb
-        .collection('debts')
-        .update(debtId, body: {'remaining': newRemaining, 'status': newStatus});
-
+    await pb.collection('debts').update(
+  debtId,
+  body: {
+    'remaining': newRemaining,
+    'status': newStatus,
+    if (resolvedAdminId.isNotEmpty) 'admin_id': resolvedAdminId,
+  },
+);
     // ئاگادارکردنەوەی پارەدانەوە بنێرە بۆ کڕیار (ناو ئاپ + تێلیگرام)
     try {
       final customerId = debt.getStringValue('customer');
@@ -874,6 +878,7 @@ class PBService {
           message: message,
           senderId: createdBy,
           type: 'payment',
+          adminId: resolvedAdminId,
         );
       }
     } catch (_) {
