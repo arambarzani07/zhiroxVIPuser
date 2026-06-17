@@ -75,7 +75,7 @@ class AppStrings {
   // قەرز
   static const String debt = 'قەرز';
   static const String debts = 'قەرزەکان';
-  static const String addDebt = 'قەرزی نوێ';
+  static const String addDebt = 'قەرز پێدان';
   static const String amount = 'بڕی پارە';
   static const String description = 'تێچوون';
   static const String dueDate = 'بەرواری دوایین';
