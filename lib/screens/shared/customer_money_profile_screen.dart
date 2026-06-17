@@ -123,13 +123,11 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
   }
 
   Future<void> _openAddDebt() async {
-    final changed = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => AddDebtScreen(customerId: widget.userId)),
     );
-    if (changed != null || mounted) {
-      await _loadData();
-    }
+    if (mounted) await _loadData();
   }
 
   Future<void> _generateStatement() async {
@@ -193,7 +191,7 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                               ? 'قەرز'
                               : debt.getStringValue('description');
                           final rem = AppHelpers.formatCurrency(debt.getDoubleValue('remaining'));
-                          return DropdownMenuItem(value: debt, child: Text('$title — ماوە: $rem'));
+                          return DropdownMenuItem<RecordModel>(value: debt, child: Text('$title — ماوە: $rem'));
                         }).toList(),
                         onChanged: (debt) {
                           if (debt != null) setDialogState(() => selectedDebt = debt);
@@ -246,7 +244,9 @@ class _CustomerMoneyProfileScreenState extends State<CustomerMoneyProfileScreen>
                               amount: amount,
                               note: noteController.text.trim(),
                             );
-                            if (mounted) Navigator.pop(dialogContext);
+                            if (mounted && Navigator.canPop(dialogContext)) {
+                              Navigator.pop(dialogContext);
+                            }
                           },
                     child: _isSavingPayment
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -315,6 +315,7 @@ class _CustomerHeaderCard extends StatelessWidget {
         : isOverLimit
             ? 'مەترسیدار — سنووری قەرز تێپەڕیوە'
             : 'ئاگاداری — قەرزی ماوە هەیە';
+    final avatarLetter = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
     return Container(
       margin: const EdgeInsets.all(12),
@@ -336,7 +337,7 @@ class _CustomerHeaderCard extends StatelessWidget {
                 radius: 30,
                 backgroundColor: Colors.white.withOpacity(0.18),
                 child: Text(
-                  name.isNotEmpty ? name.characters.first.toUpperCase() : '?',
+                  avatarLetter,
                   style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                 ),
               ),
