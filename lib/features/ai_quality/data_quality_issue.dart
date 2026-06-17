@@ -25,35 +25,30 @@ class DataQualityIssue {
   final DataQualityIssueType type;
   final DataQualitySeverity severity;
 
-  /// PocketBase collection name, for example: users, debts, payments, notifications.
+  /// Internal collection name from PocketBase.
+  /// Keep this technical value for code only.
+  /// Do not show it directly to the manager UI.
   final String collection;
 
-  /// Related PocketBase record id.
+  /// Internal record id for support/debug only.
+  /// Should stay hidden from normal manager UI.
   final String? recordId;
 
-  /// Human-readable title shown in the UI.
+  /// Manager-friendly title shown in the UI.
   final String title;
 
-  /// Detailed explanation shown in the UI.
+  /// Manager-friendly explanation shown in the UI.
   final String message;
 
-  /// Suggested safe action for the manager/admin.
+  /// Safe suggested action for the manager.
   final String suggestion;
 
-  /// Optional related customer id.
   final String? customerId;
-
-  /// Optional related debt id.
   final String? debtId;
-
-  /// Optional related payment id.
   final String? paymentId;
-
-  /// Optional related notification id.
   final String? notificationId;
 
-  /// Whether this issue can be auto-fixed later.
-  /// For now we keep everything read-only and manual.
+  /// Whether this issue may be safely fixed later by a controlled repair flow.
   final bool canAutoFix;
 
   const DataQualityIssue({
@@ -76,10 +71,11 @@ class DataQualityIssue {
   bool get isWarning => severity == DataQualitySeverity.warning;
   bool get isInfo => severity == DataQualitySeverity.info;
 
+  /// Label suitable for market managers.
   String get severityLabel {
     switch (severity) {
       case DataQualitySeverity.critical:
-        return 'مەترسیدار';
+        return 'گرنگ';
       case DataQualitySeverity.warning:
         return 'ئاگاداری';
       case DataQualitySeverity.info:
@@ -87,34 +83,111 @@ class DataQualityIssue {
     }
   }
 
+  /// Manager-friendly issue label.
+  /// No technical database field names should appear here.
   String get typeLabel {
     switch (type) {
       case DataQualityIssueType.missingAdminId:
-        return 'admin_id نییە';
+        return 'پەیوەندی مارکێت نییە';
       case DataQualityIssueType.missingCustomer:
-        return 'کڕیار نییە';
+        return 'کڕیار دیار نییە';
       case DataQualityIssueType.missingDebt:
-        return 'قەرز نییە';
+        return 'قەرز دیار نییە';
       case DataQualityIssueType.missingCreator:
-        return 'دروستکەر نییە';
+        return 'تۆمارکەر دیار نییە';
       case DataQualityIssueType.missingPhone:
-        return 'ژمارەی مۆبایل نییە';
+        return 'ژمارەی مۆبایل تەواو نییە';
       case DataQualityIssueType.invalidDebtStatus:
-        return 'دۆخی قەرز نادروستە';
+        return 'دۆخی قەرز پێویستی بە ڕێکخستنەوە هەیە';
       case DataQualityIssueType.invalidRemainingAmount:
-        return 'بڕی ماوە نادروستە';
+        return 'بڕی پارە پێویستی بە پشکنین هەیە';
       case DataQualityIssueType.paidDebtHasRemaining:
-        return 'قەرزی paid ماوەی هەیە';
+        return 'قەرزی تەواوکراو هێشتا ماوەی هەیە';
       case DataQualityIssueType.unpaidDebtHasNoRemaining:
-        return 'قەرزی نەدراو ماوەی نییە';
+        return 'قەرزەکە تەواوە بەڵام دۆخەکە نەگۆڕاوە';
       case DataQualityIssueType.orphanPayment:
-        return 'پارەدانەوە بێ قەرز';
+        return 'پارەدانەوە بە قەرزەکەوە نەبەستراوەتەوە';
       case DataQualityIssueType.orphanNotification:
-        return 'ئاگادارکردنەوە بێ پەیوەندی';
+        return 'ئاگادارکردنەوە بە کڕیارەکەوە نەبەستراوەتەوە';
       case DataQualityIssueType.duplicateSuspicion:
         return 'گومانی دووبارەبوونەوە';
       case DataQualityIssueType.dataMismatch:
-        return 'داتا یەکناگرێتەوە';
+        return 'داتا پێویستی بە پشکنین هەیە';
+    }
+  }
+
+  /// Manager-friendly collection label.
+  /// Use this instead of showing users/debts/payments/notifications.
+  String get collectionLabel {
+    switch (collection) {
+      case 'users':
+        return 'کڕیار و بەکارهێنەر';
+      case 'debts':
+        return 'قەرزەکان';
+      case 'payments':
+        return 'پارەدانەوەکان';
+      case 'notifications':
+        return 'ئاگادارکردنەوەکان';
+      default:
+        return 'داتای مارکێت';
+    }
+  }
+
+  /// Short manager-friendly repair wording.
+  String get safeActionLabel {
+    switch (type) {
+      case DataQualityIssueType.missingAdminId:
+        return 'ڕێکخستنەوەی پەیوەندی مارکێت';
+      case DataQualityIssueType.missingCustomer:
+        return 'بەستنەوەی کڕیار';
+      case DataQualityIssueType.missingDebt:
+      case DataQualityIssueType.orphanPayment:
+        return 'بەستنەوەی قەرز';
+      case DataQualityIssueType.missingCreator:
+        return 'دیاریکردنی تۆمارکەر';
+      case DataQualityIssueType.missingPhone:
+        return 'تەواوکردنی ژمارەی مۆبایل';
+      case DataQualityIssueType.invalidDebtStatus:
+      case DataQualityIssueType.paidDebtHasRemaining:
+      case DataQualityIssueType.unpaidDebtHasNoRemaining:
+        return 'ڕێکخستنەوەی دۆخی قەرز';
+      case DataQualityIssueType.invalidRemainingAmount:
+        return 'پشکنینی بڕی پارە';
+      case DataQualityIssueType.orphanNotification:
+        return 'بەستنەوەی ئاگادارکردنەوە';
+      case DataQualityIssueType.duplicateSuspicion:
+        return 'پشکنینی دووبارەبوونەوە';
+      case DataQualityIssueType.dataMismatch:
+        return 'پشکنینی داتا';
+    }
+  }
+
+  /// Whether this issue is usually related to old imported/legacy data.
+  bool get isLikelyOldDataIssue {
+    switch (type) {
+      case DataQualityIssueType.missingAdminId:
+      case DataQualityIssueType.missingCreator:
+      case DataQualityIssueType.orphanPayment:
+      case DataQualityIssueType.orphanNotification:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /// Main manager message for grouped/summary screens.
+  String get managerSummary {
+    if (isLikelyOldDataIssue) {
+      return 'ئەمە زۆرجار لە داتای کۆن ڕوودەدات و بە پلانی ڕێکخستنەوەی سەلامەت چارەسەر دەکرێت.';
+    }
+
+    switch (severity) {
+      case DataQualitySeverity.critical:
+        return 'ئەم خاڵە پێویستی بە پشکنینی خێرا هەیە بۆ ئەوەی داتا ڕێک بمێنێت.';
+      case DataQualitySeverity.warning:
+        return 'ئەم خاڵە پێویستی بە ئاگاداری و ڕێکخستنەوە هەیە.';
+      case DataQualitySeverity.info:
+        return 'ئەم خاڵە تەنها زانیارییە و بۆ باشترکردنی ڕێکخستنی داتایە.';
     }
   }
 
