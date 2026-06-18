@@ -12,6 +12,7 @@ import 'package:zhirox/services/market_action_queue.dart';
 import 'package:zhirox/services/notification_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
+import 'package:zhirox/utils/rtl_policy.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,14 +51,11 @@ class ZhiroxApp extends StatelessWidget {
           return MaterialApp(
             title: AppStrings.appName,
             debugShowCheckedModeBanner: false,
-            locale: const Locale('ckb'),
+            locale: ZhiroxRtlPolicy.locale,
             themeMode: themeProvider.themeMode,
             theme: _buildLightTheme(),
             darkTheme: _buildDarkTheme(),
-            builder: (context, child) => Directionality(
-              textDirection: TextDirection.rtl,
-              child: _ConnectivityBanner(child: child ?? const SizedBox()),
-            ),
+            builder: (context, child) => ZhiroxRtlPolicy.wrap(_ConnectivityBanner(child: child ?? const SizedBox())),
             home: const AuthWrapper(),
           );
         },
@@ -72,7 +70,7 @@ ThemeData _buildLightTheme() {
       seedColor: AppColors.primary,
       brightness: Brightness.light,
     ),
-    fontFamily: 'NotoKufiArabic',
+    fontFamily: ZhiroxRtlPolicy.fontFamily,
     useMaterial3: true,
     scaffoldBackgroundColor: AppColors.scaffoldBackground,
     appBarTheme: const AppBarTheme(
@@ -94,10 +92,10 @@ ThemeData _buildLightTheme() {
       filled: true,
       fillColor: Colors.grey.shade50,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      labelStyle: const TextStyle(fontFamily: 'NotoKufiArabic'),
-      hintStyle: const TextStyle(fontFamily: 'NotoKufiArabic'),
+      labelStyle: const TextStyle(fontFamily: ZhiroxRtlPolicy.fontFamily),
+      hintStyle: const TextStyle(fontFamily: ZhiroxRtlPolicy.fontFamily),
     ),
-    textTheme: Typography.material2021().black.apply(fontFamily: 'NotoKufiArabic'),
+    textTheme: Typography.material2021().black.apply(fontFamily: ZhiroxRtlPolicy.fontFamily),
     cardTheme: CardThemeData(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -113,7 +111,7 @@ ThemeData _buildDarkTheme() {
       surface: AppDarkColors.surface,
     ),
     scaffoldBackgroundColor: AppDarkColors.background,
-    fontFamily: 'NotoKufiArabic',
+    fontFamily: ZhiroxRtlPolicy.fontFamily,
     useMaterial3: true,
     appBarTheme: AppBarTheme(
       centerTitle: true,
@@ -135,15 +133,15 @@ ThemeData _buildDarkTheme() {
       fillColor: AppDarkColors.inputFill,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       labelStyle: TextStyle(
-        fontFamily: 'NotoKufiArabic',
+        fontFamily: ZhiroxRtlPolicy.fontFamily,
         color: AppDarkColors.textSecondary,
       ),
       hintStyle: TextStyle(
-        fontFamily: 'NotoKufiArabic',
+        fontFamily: ZhiroxRtlPolicy.fontFamily,
         color: AppDarkColors.textSecondary,
       ),
     ),
-    textTheme: Typography.material2021().white.apply(fontFamily: 'NotoKufiArabic'),
+    textTheme: Typography.material2021().white.apply(fontFamily: ZhiroxRtlPolicy.fontFamily),
     cardTheme: CardThemeData(
       elevation: 0,
       color: AppDarkColors.card,
@@ -256,7 +254,7 @@ class _ConnectivityBannerState extends State<_ConnectivityBanner> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 16),
                 child: const Row(
-                  textDirection: TextDirection.rtl,
+                  textDirection: ZhiroxRtlPolicy.appDirection,
                   children: [
                     Icon(Icons.shield_rounded, color: Colors.white, size: 16),
                     SizedBox(width: 8),
@@ -266,7 +264,7 @@ class _ConnectivityBannerState extends State<_ConnectivityBanner> {
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 12,
-                          fontFamily: 'NotoKufiArabic',
+                          fontFamily: ZhiroxRtlPolicy.fontFamily,
                         ),
                       ),
                     ),
