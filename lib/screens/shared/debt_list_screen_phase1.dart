@@ -3,6 +3,7 @@ import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/add_debt_screen_clean.dart';
+import 'package:zhirox/screens/shared/add_payment_screen_clean.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen_clean.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -55,6 +56,16 @@ class _DebtListScreenPhase1State extends State<DebtListScreenPhase1> {
     }
     final created = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const AddDebtScreenClean()));
     if (created == true) await _loadDebts();
+  }
+
+  Future<void> _openReceivePayment() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isManager && !auth.canReceivePayment) {
+      AppHelpers.showSnackBar(context, AppUserMessages.needsManagerApproval, isError: true);
+      return;
+    }
+    final saved = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const AddPaymentScreenClean()));
+    if (saved == true) await _loadDebts();
   }
 
   List<_CustomerDebtGroup> _buildGroups(List<RecordModel> debts) {
@@ -119,13 +130,30 @@ class _DebtListScreenPhase1State extends State<DebtListScreenPhase1> {
               ),
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              height: 48,
-              child: FilledButton.icon(
-                onPressed: _openAddDebt,
-                icon: const Icon(Icons.add_card_rounded),
-                label: const Text('قەرز پێدان'),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: FilledButton.icon(
+                      onPressed: _openAddDebt,
+                      icon: const Icon(Icons.add_card_rounded),
+                      label: const Text('قەرز پێدان'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: FilledButton.icon(
+                      onPressed: _openReceivePayment,
+                      icon: const Icon(Icons.payments_rounded),
+                      label: const Text('پارە وەرگرتنەوە'),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             Container(
