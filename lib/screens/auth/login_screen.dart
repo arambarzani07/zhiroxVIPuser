@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
-import 'package:zhirox/screens/auth/admin_management_screen.dart';
 import 'package:zhirox/screens/auth/register_customer_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -90,7 +89,6 @@ class _LoginScreenState extends State<LoginScreen>
         resizeToAvoidBottomInset: true,
         body: Stack(
           children: [
-            // Background Shapes
             Positioned(
               top: -100,
               right: -100,
@@ -115,16 +113,12 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
               ),
             ),
-
-            // Content
             SafeArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   children: [
                     const SizedBox(height: 60),
-
-                    // Logo & Title Animation
                     FadeTransition(
                       opacity: _fadeAnimation,
                       child: Column(
@@ -159,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           const SizedBox(height: 24),
                           Text(
-                            'ژیرۆکس',
+                            AppStrings.appName,
                             style: TextStyle(
                               fontSize: 36,
                               fontWeight: FontWeight.bold,
@@ -171,22 +165,31 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'سیستەمی بەڕێوەبردنی قەرز',
+                            AppStrings.appTagline,
+                            textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 15,
                               color: isDark
                                   ? AppDarkColors.textSecondary
                                   : Colors.grey[500],
-                              letterSpacing: 0.5,
+                              height: 1.6,
                             ),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: const [
+                              _RoleChip(label: 'بەڕێوەبەر'),
+                              _RoleChip(label: 'کارمەند'),
+                              _RoleChip(label: 'کڕیار'),
+                            ],
                           ),
                         ],
                       ),
                     ),
-
-                    const SizedBox(height: 48),
-
-                    // Form Animation
+                    const SizedBox(height: 40),
                     SlideTransition(
                       position: _slideAnimation,
                       child: FadeTransition(
@@ -198,26 +201,24 @@ class _LoginScreenState extends State<LoginScreen>
                               _buildTextField(
                                 controller: _phoneController,
                                 focusNode: _phoneFocusNode,
-                                label: 'ژمارە مۆبایل',
+                                label: AppStrings.phone,
                                 icon: Icons.phone_iphone_rounded,
                                 hint: '07xxxxxxxxx',
                                 keyboardType: TextInputType.phone,
                                 textInputAction: TextInputAction.next,
                                 onFieldSubmitted: (_) {
-                                  FocusScope.of(
-                                    context,
-                                  ).requestFocus(_passwordFocusNode);
+                                  FocusScope.of(context).requestFocus(_passwordFocusNode);
                                 },
                                 validator: (value) =>
                                     (value == null || value.isEmpty)
-                                    ? 'ژمارە مۆبایل بنووسە'
+                                    ? 'تکایە ژمارە مۆبایل بنووسە'
                                     : null,
                               ),
                               const SizedBox(height: 16),
                               _buildTextField(
                                 controller: _passwordController,
                                 focusNode: _passwordFocusNode,
-                                label: 'وشەی نهێنی',
+                                label: AppStrings.password,
                                 icon: Icons.lock_outline_rounded,
                                 obscureText: _obscurePassword,
                                 isPassword: true,
@@ -230,12 +231,10 @@ class _LoginScreenState extends State<LoginScreen>
                                 },
                                 validator: (value) =>
                                     (value == null || value.isEmpty)
-                                    ? 'وشەی نهێنی بنووسە'
+                                    ? 'تکایە وشەی نهێنی بنووسە'
                                     : null,
                               ),
                               const SizedBox(height: 32),
-
-                              // Login Button
                               Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(16),
@@ -252,10 +251,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primary,
                                     foregroundColor: Colors.white,
-                                    minimumSize: const Size(
-                                      double.infinity,
-                                      56,
-                                    ),
+                                    minimumSize: const Size(double.infinity, 56),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16),
                                     ),
@@ -285,8 +281,6 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
                     const SizedBox(height: 40),
-
-                    // Links Animation
                     FadeTransition(
                       opacity: _fadeAnimation,
                       child: Column(
@@ -296,41 +290,32 @@ class _LoginScreenState extends State<LoginScreen>
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      const RegisterCustomerScreen(),
+                                  builder: (_) => const RegisterCustomerScreen(),
                                 ),
                               );
                             },
                             style: TextButton.styleFrom(
                               foregroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                             child: const Text(
-                              'خۆتۆمارکردن وەکو کڕیار (قەرزدار)',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              'خۆتۆمارکردن وەکو کڕیار',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                             ),
                           ),
                           const SizedBox(height: 8),
                           TextButton(
-                            onPressed: () {
-                              _showContactDeveloperDialog();
-                            },
+                            onPressed: _showManagerAccountDialog,
                             style: TextButton.styleFrom(
                               foregroundColor: isDark
                                   ? AppDarkColors.textSecondary
                                   : Colors.grey[600],
                             ),
                             child: const Text(
-                              'دروستکردنی ئەکاونتی بەڕێوەبەر',
+                              'دروستکردنی هەژماری بەڕێوەبەر',
                               style: TextStyle(fontSize: 13),
                             ),
                           ),
@@ -342,8 +327,6 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
               ),
             ),
-
-            // Dark Mode Toggle (on top of content)
             Positioned(
               top: MediaQuery.of(context).padding.top + 8,
               left: 16,
@@ -371,16 +354,14 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  void _showContactDeveloperDialog() {
+  void _showManagerAccountDialog() {
     showDialog(
       context: context,
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return AlertDialog(
           backgroundColor: isDark ? AppDarkColors.card : null,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Row(
             children: [
               Container(
@@ -389,15 +370,12 @@ class _LoginScreenState extends State<LoginScreen>
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
-                  Icons.admin_panel_settings_rounded,
-                  color: AppColors.primary,
-                ),
+                child: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.primary),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'دروستکردنی ئەکاونتی بەڕێوەبەر',
+                  'دروستکردنی هەژماری بەڕێوەبەر',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -419,16 +397,14 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, color: Colors.orange, size: 20),
-                    SizedBox(width: 8),
+                    const Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'بۆ دروستکردنی ئەکاونتی بەڕێوەبەر تکایە پەیوەندی بکە:',
+                        'بۆ دروستکردنی هەژماری بەڕێوەبەر تکایە پەیوەندی بکە:',
                         style: TextStyle(
                           fontSize: 13,
-                          color: isDark
-                              ? AppDarkColors.textPrimary
-                              : Colors.black87,
+                          color: isDark ? AppDarkColors.textPrimary : Colors.black87,
                         ),
                       ),
                     ),
@@ -436,13 +412,8 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
               ),
               const SizedBox(height: 16),
-              // TikTok
               _buildContactTile(
-                iconWidget: Image.asset(
-                  'assets/images/tiktok.png',
-                  width: 22,
-                  height: 22,
-                ),
+                iconWidget: Image.asset('assets/images/tiktok.png', width: 22, height: 22),
                 color: Colors.black87,
                 title: 'تیکتۆک',
                 subtitle: '@zhiroxdebt',
@@ -454,20 +425,13 @@ class _LoginScreenState extends State<LoginScreen>
                       mode: LaunchMode.externalApplication,
                     );
                   } catch (_) {
-                    if (mounted) {
-                      AppHelpers.showSnackBar(context, 'TikTok: @zhiroxdebt');
-                    }
+                    if (mounted) AppHelpers.showSnackBar(context, 'TikTok: @zhiroxdebt');
                   }
                 },
               ),
               const SizedBox(height: 8),
-              // Snapchat
               _buildContactTile(
-                iconWidget: Image.asset(
-                  'assets/images/snapchat.png',
-                  width: 22,
-                  height: 22,
-                ),
+                iconWidget: Image.asset('assets/images/snapchat.png', width: 22, height: 22),
                 color: Colors.amber[700]!,
                 title: 'سناپ چات',
                 subtitle: '@aram.barzani00',
@@ -479,23 +443,13 @@ class _LoginScreenState extends State<LoginScreen>
                       mode: LaunchMode.externalApplication,
                     );
                   } catch (_) {
-                    if (mounted) {
-                      AppHelpers.showSnackBar(
-                        context,
-                        'Snapchat: @aram.barzani00',
-                      );
-                    }
+                    if (mounted) AppHelpers.showSnackBar(context, 'Snapchat: @aram.barzani00');
                   }
                 },
               ),
               const SizedBox(height: 8),
-              // WhatsApp
               _buildContactTile(
-                iconWidget: Image.asset(
-                  'assets/images/whatsapp.png',
-                  width: 22,
-                  height: 22,
-                ),
+                iconWidget: Image.asset('assets/images/whatsapp.png', width: 22, height: 22),
                 color: const Color(0xFF25D366),
                 title: 'واتس ئەپ',
                 subtitle: '750 371 3171',
@@ -507,31 +461,13 @@ class _LoginScreenState extends State<LoginScreen>
                       mode: LaunchMode.externalApplication,
                     );
                   } catch (_) {
-                    if (mounted) {
-                      AppHelpers.showSnackBar(
-                        context,
-                        'WhatsApp: 750 371 3171',
-                      );
-                    }
+                    if (mounted) AppHelpers.showSnackBar(context, 'WhatsApp: 750 371 3171');
                   }
                 },
               ),
             ],
           ),
           actions: [
-          /*  TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AdminManagementScreen(),
-                  ),
-                );
-              },
-              child: const Text('بەڕێوبردنی بەڕێوبەرەکان'),
-            ), */
-            
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('داخستن'),
@@ -560,10 +496,7 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           child: iconWidget,
         ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text(
           subtitle,
           style: TextStyle(color: Colors.grey[600], fontSize: 12),
@@ -643,24 +576,15 @@ class _LoginScreenState extends State<LoginScreen>
             ),
             decoration: InputDecoration(
               labelText: label,
-              labelStyle: TextStyle(
-                color: isDark ? AppDarkColors.textSecondary : null,
-              ),
+              labelStyle: TextStyle(color: isDark ? AppDarkColors.textSecondary : null),
               hintText: hint,
-              hintStyle: TextStyle(
-                color: isDark ? AppDarkColors.textSecondary : null,
-              ),
+              hintStyle: TextStyle(color: isDark ? AppDarkColors.textSecondary : null),
               floatingLabelBehavior: FloatingLabelBehavior.auto,
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 18,
-              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
               prefixIcon: Icon(
                 icon,
-                color: isFocused
-                    ? AppColors.primary
-                    : AppColors.primary.withOpacity(0.5),
+                color: isFocused ? AppColors.primary : AppColors.primary.withOpacity(0.5),
               ),
               suffixIcon: isPassword
                   ? IconButton(
@@ -668,9 +592,7 @@ class _LoginScreenState extends State<LoginScreen>
                         obscureText ? Icons.visibility_off : Icons.visibility,
                         color: isFocused
                             ? AppColors.primary.withOpacity(0.7)
-                            : (isDark
-                                  ? AppDarkColors.textSecondary
-                                  : Colors.grey[400]),
+                            : (isDark ? AppDarkColors.textSecondary : Colors.grey[400]),
                       ),
                       onPressed: onVisibilityChanged,
                     )
@@ -680,6 +602,35 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         );
       },
+    );
+  }
+}
+
+class _RoleChip extends StatelessWidget {
+  final String label;
+
+  const _RoleChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.card : AppColors.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: isDark ? AppDarkColors.cardBorder : AppColors.primary.withOpacity(0.16),
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isDark ? AppDarkColors.textSecondary : AppColors.primary,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
