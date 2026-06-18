@@ -220,6 +220,16 @@ class _ManagerHome extends StatelessWidget {
               onOpenApprovals: () => onOpenTab(4),
             ),
             const SizedBox(height: 14),
+            _ManagerAuthorityCard(
+              cardColor: cardColor,
+              textColor: textColor,
+              subColor: subColor,
+              onCustomers: () => onOpenTab(1),
+              onEmployees: () => onOpenTab(2),
+              onDebts: () => onOpenTab(3),
+              onApprovals: () => onOpenTab(4),
+            ),
+            const SizedBox(height: 14),
             _QuickActionsCard(
               cardColor: cardColor,
               textColor: textColor,
@@ -384,6 +394,81 @@ class _DecisionLine extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(child: Text(text, style: TextStyle(color: subColor, height: 1.5))),
       ],
+    );
+  }
+}
+
+class _ManagerAuthorityCard extends StatelessWidget {
+  final Color cardColor;
+  final Color textColor;
+  final Color subColor;
+  final VoidCallback onCustomers;
+  final VoidCallback onEmployees;
+  final VoidCallback onDebts;
+  final VoidCallback onApprovals;
+
+  const _ManagerAuthorityCard({required this.cardColor, required this.textColor, required this.subColor, required this.onCustomers, required this.onEmployees, required this.onDebts, required this.onApprovals});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _AuthorityItem('کڕیار', Icons.people_rounded, onCustomers),
+      _AuthorityItem('کارمەند', Icons.badge_rounded, onEmployees),
+      _AuthorityItem('قەرز', Icons.receipt_long_rounded, onDebts),
+      _AuthorityItem('ڕێگەپێدان', Icons.verified_rounded, onApprovals),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [const Icon(Icons.admin_panel_settings_rounded, color: AppColors.primary), const SizedBox(width: 8), Text('دەسەڵاتی بەڕێوەبەر', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))]),
+          const SizedBox(height: 10),
+          Text('بەڕێوەبەر کۆنترۆڵی پاراستنی پارە، کڕیار، کارمەند، قەرز و کردارە گرنگەکانی مارکێت دەکات.', style: TextStyle(color: subColor, height: 1.6)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: items.map((item) => _AuthorityChip(item: item)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthorityItem {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _AuthorityItem(this.label, this.icon, this.onTap);
+}
+
+class _AuthorityChip extends StatelessWidget {
+  final _AuthorityItem item;
+
+  const _AuthorityChip({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: item.onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.08), borderRadius: BorderRadius.circular(999), border: Border.all(color: AppColors.primary.withOpacity(0.16))),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(item.icon, color: AppColors.primary, size: 16),
+            const SizedBox(width: 5),
+            Text(item.label, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 11)),
+          ],
+        ),
+      ),
     );
   }
 }
