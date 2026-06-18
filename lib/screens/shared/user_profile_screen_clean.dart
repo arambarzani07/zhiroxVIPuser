@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/screens/shared/debt_detail_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -18,22 +19,30 @@ class UserProfileScreenClean extends StatefulWidget {
 
 class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
   RecordModel? _user;
+  List<RecordModel> _debts = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadUser());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProfile());
   }
 
-  Future<void> _loadUser() async {
+  Future<void> _loadProfile() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final user = await PBService.getUser(widget.userId);
-      if (mounted) _user = user;
+      var debts = <RecordModel>[];
+      if (user.getStringValue('role') == 'customer') {
+        debts = await PBService.getDebts(customerId: widget.userId);
+      }
+      if (mounted) {
+        _user = user;
+        _debts = debts;
+      }
     } catch (_) {
-      // No internal wording in user-facing UI.
+      // Keep the profile calm and preserve the last visible state.
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -55,67 +64,18 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
     final marketName = user?.getStringValue('market_name') ?? auth.marketName;
     final debtLimit = user?.getDoubleValue('debt_limit') ?? 0;
     final canManageEmployeeAccess = auth.isManager && role == 'employee' && user != null;
+    final isCustomer = role == 'customer';
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: isDark ? AppDarkColors.background : const Color(0xFFF5F7FA),
         body: RefreshIndicator(
-          onRefresh: _loadUser,
+          onRefresh: _loadProfile,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.primary, AppColors.primary.withOpacity(0.72)],
-                    begin: Alignment.topRight,
-                    end: Alignment.bottomLeft,
-                  ),
-                  borderRadius: BorderRadius.circular(26),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.22),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  bottom: false,
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(18)),
-                        child: Center(
-                          child: Text(
-                            name.isNotEmpty ? name[0] : 'ز',
-                            style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('هەژمار', style: TextStyle(color: Colors.white.withOpacity(0.78), fontSize: 14)),
-                            const SizedBox(height: 4),
-                            Text(name.isEmpty ? 'بەکارهێنەر' : name, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                            if (role.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(AppHelpers.roleName(role), style: TextStyle(color: Colors.white.withOpacity(0.76))),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _ProfileHero(name: name, role: role),
               const SizedBox(height: 16),
               if (_isLoading)
                 const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
@@ -125,8 +85,14 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
                   _InfoRow(label: 'ڕۆڵ', value: role.isEmpty ? '—' : AppHelpers.roleName(role), subColor: subColor),
                   if (phone.isNotEmpty) _InfoRow(label: 'ژمارە مۆبایل', value: phone, subColor: subColor, ltr: true),
                   if (marketName.isNotEmpty) _InfoRow(label: 'مارکێت', value: marketName, subColor: subColor),
-                  if (role == 'customer') _InfoRow(label: 'سنووری قەرز', value: debtLimit <= 0 ? 'بێ سنوور' : AppHelpers.formatCurrency(debtLimit), subColor: subColor, ltr: true),
+                  if (isCustomer) _InfoRow(label: 'سنووری قەرز', value: debtLimit <= 0 ? 'بێ سنوور' : AppHelpers.formatCurrency(debtLimit), subColor: subColor, ltr: true),
                 ]),
+                if (isCustomer) ...[
+                  const SizedBox(height: 16),
+                  _CustomerMoneySummaryCard(debts: _debts, debtLimit: debtLimit, cardColor: cardColor, textColor: textColor, subColor: subColor),
+                  const SizedBox(height: 16),
+                  _CustomerDebtHistoryCard(debts: _debts, cardColor: cardColor, textColor: textColor, subColor: subColor),
+                ],
                 if (canManageEmployeeAccess) ...[
                   const SizedBox(height: 16),
                   EmployeeAccessSettingsCard(
@@ -134,7 +100,7 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
                     cardColor: cardColor,
                     textColor: textColor,
                     subColor: subColor,
-                    onSaved: _loadUser,
+                    onSaved: _loadProfile,
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -165,6 +131,171 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
   }
 }
 
+class _ProfileHero extends StatelessWidget {
+  final String name;
+  final String role;
+
+  const _ProfileHero({required this.name, required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [AppColors.primary, AppColors.primary.withOpacity(0.72)], begin: Alignment.topRight, end: Alignment.bottomLeft),
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.22), blurRadius: 20, offset: const Offset(0, 10))],
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(18)),
+              child: Center(
+                child: Text(name.isNotEmpty ? name[0] : 'ز', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(role == 'customer' ? 'پڕۆفایلی کڕیار' : 'هەژمار', style: TextStyle(color: Colors.white.withOpacity(0.78), fontSize: 14)),
+                const SizedBox(height: 4),
+                Text(name.isEmpty ? 'بەکارهێنەر' : name, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                if (role.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(AppHelpers.roleName(role), style: TextStyle(color: Colors.white.withOpacity(0.76))),
+                ],
+              ]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomerMoneySummaryCard extends StatelessWidget {
+  final List<RecordModel> debts;
+  final double debtLimit;
+  final Color cardColor;
+  final Color textColor;
+  final Color subColor;
+
+  const _CustomerMoneySummaryCard({required this.debts, required this.debtLimit, required this.cardColor, required this.textColor, required this.subColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final totalDebt = debts.fold<double>(0, (sum, d) => sum + d.getDoubleValue('amount'));
+    final totalRemaining = debts.fold<double>(0, (sum, d) => sum + d.getDoubleValue('remaining'));
+    final paid = (totalDebt - totalRemaining).clamp(0, double.infinity).toDouble();
+    final activeCount = debts.where((d) => d.getDoubleValue('remaining') > 0 && d.getStringValue('status') != 'paid').length;
+    final remainingLimit = debtLimit <= 0 ? 0 : (debtLimit - totalRemaining).clamp(0, double.infinity).toDouble();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [const Icon(Icons.account_balance_wallet_rounded, color: AppColors.primary), const SizedBox(width: 8), Text('کورتەی قەرزی کڕیار', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: _MoneyTile(label: 'قەرزی ماوە', value: AppHelpers.formatCurrency(totalRemaining), color: AppColors.danger, textColor: textColor, subColor: subColor)),
+          const SizedBox(width: 10),
+          Expanded(child: _MoneyTile(label: 'پارەی دراو', value: AppHelpers.formatCurrency(paid), color: AppColors.secondary, textColor: textColor, subColor: subColor)),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: _MoneyTile(label: 'قەرزی چالاک', value: '$activeCount', color: AppColors.warning, textColor: textColor, subColor: subColor)),
+          const SizedBox(width: 10),
+          Expanded(child: _MoneyTile(label: 'سنووری ماوە', value: debtLimit <= 0 ? 'بێ سنوور' : AppHelpers.formatCurrency(remainingLimit), color: AppColors.primary, textColor: textColor, subColor: subColor)),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _CustomerDebtHistoryCard extends StatelessWidget {
+  final List<RecordModel> debts;
+  final Color cardColor;
+  final Color textColor;
+  final Color subColor;
+
+  const _CustomerDebtHistoryCard({required this.debts, required this.cardColor, required this.textColor, required this.subColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = debts.take(6).toList();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [const Icon(Icons.receipt_long_rounded, color: AppColors.primary), const SizedBox(width: 8), Text('مێژووی قەرز و وەصڵ', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))]),
+        const SizedBox(height: 12),
+        if (shown.isEmpty)
+          Text('هێشتا قەرزێک بۆ ئەم کڕیارە تۆمار نەکراوە.', style: TextStyle(color: subColor, height: 1.6))
+        else
+          ...shown.map((debt) => _DebtHistoryTile(debt: debt, textColor: textColor, subColor: subColor)),
+      ]),
+    );
+  }
+}
+
+class _DebtHistoryTile extends StatelessWidget {
+  final RecordModel debt;
+  final Color textColor;
+  final Color subColor;
+
+  const _DebtHistoryTile({required this.debt, required this.textColor, required this.subColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = debt.getDoubleValue('remaining');
+    final amount = debt.getDoubleValue('amount');
+    final paid = remaining <= 0 || debt.getStringValue('status') == 'paid';
+    return InkWell(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DebtDetailScreen(debtId: debt.id))),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(children: [
+          Icon(paid ? Icons.check_circle_rounded : Icons.schedule_rounded, color: paid ? AppColors.secondary : AppColors.warning, size: 22),
+          const SizedBox(width: 8),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(paid ? 'قەرز تەواوە' : 'قەرزی ماوە', style: TextStyle(color: textColor, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Text('کۆی قەرز: ${AppHelpers.formatCurrency(amount)}', style: TextStyle(color: subColor, fontSize: 11), textDirection: TextDirection.ltr),
+          ])),
+          Text(AppHelpers.formatCurrency(remaining), style: TextStyle(color: paid ? AppColors.secondary : AppColors.danger, fontWeight: FontWeight.bold), textDirection: TextDirection.ltr),
+        ]),
+      ),
+    );
+  }
+}
+
+class _MoneyTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final Color textColor;
+  final Color subColor;
+
+  const _MoneyTile({required this.label, required this.value, required this.color, required this.textColor, required this.subColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.12))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(color: subColor, fontSize: 11)),
+        const SizedBox(height: 6),
+        Text(value, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 13), textDirection: TextDirection.ltr),
+      ]),
+    );
+  }
+}
+
 class _InfoCard extends StatelessWidget {
   final String title;
   final Color cardColor;
@@ -178,14 +309,11 @@ class _InfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 12),
+        ...children,
+      ]),
     );
   }
 }
@@ -202,21 +330,13 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Text(label, style: TextStyle(color: subColor, fontSize: 13)),
-          const Spacer(),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.left,
-              textDirection: ltr ? TextDirection.ltr : TextDirection.rtl,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
+      child: Row(children: [
+        Text(label, style: TextStyle(color: subColor, fontSize: 13)),
+        const Spacer(),
+        Flexible(
+          child: Text(value, textAlign: TextAlign.left, textDirection: ltr ? TextDirection.ltr : TextDirection.rtl, style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
+        ),
+      ]),
     );
   }
 }
