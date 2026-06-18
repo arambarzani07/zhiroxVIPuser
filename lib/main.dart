@@ -8,6 +8,7 @@ import 'package:zhirox/screens/auth/login_screen.dart';
 import 'package:zhirox/screens/customer/customer_dashboard_phase1_final.dart';
 import 'package:zhirox/screens/employee/employee_dashboard_phase1_final.dart';
 import 'package:zhirox/services/connectivity_service.dart';
+import 'package:zhirox/services/market_action_queue.dart';
 import 'package:zhirox/services/notification_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -26,6 +27,10 @@ Future<void> _startCoreServices() async {
 
   try {
     await ConnectivityService.instance.init();
+  } catch (_) {}
+
+  try {
+    await MarketActionQueue.instance.init();
   } catch (_) {}
 }
 
