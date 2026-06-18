@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/debt_list_screen_clean.dart';
-import 'package:zhirox/screens/shared/user_list_screen.dart';
-import 'package:zhirox/screens/shared/user_profile_screen.dart';
+import 'package:zhirox/screens/shared/user_list_screen_clean.dart';
+import 'package:zhirox/screens/shared/user_profile_screen_clean.dart';
 import 'package:zhirox/utils/constants.dart';
 
 class EmployeeDashboardClean extends StatefulWidget {
@@ -29,13 +29,13 @@ class _EmployeeDashboardCleanState extends State<EmployeeDashboardClean> {
     final auth = context.read<AuthProvider>();
     final screens = [
       _EmployeeHome(onOpenTab: (index) => setState(() => _currentIndex = index)),
-      UserListScreen(
-        key: const ValueKey('customers'),
+      UserListScreenClean(
+        key: const ValueKey('customers_clean'),
         role: 'customer',
         adminId: auth.adminId,
       ),
       const DebtListScreen(key: ValueKey('debts_clean')),
-      UserProfileScreen(key: const ValueKey('profile'), userId: auth.userId),
+      UserProfileScreenClean(key: const ValueKey('profile_clean'), userId: auth.userId),
     ];
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
