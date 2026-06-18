@@ -4,7 +4,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
 import 'package:zhirox/screens/shared/debt_list_screen_clean.dart';
-import 'package:zhirox/screens/shared/user_list_screen.dart';
+import 'package:zhirox/screens/shared/user_list_screen_clean.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -46,8 +46,8 @@ class _ManagerDashboardPhase1State extends State<ManagerDashboardPhase1> {
     final auth = context.read<AuthProvider>();
     final screens = [
       _ManagerHome(stats: _stats, isLoading: _isLoading, onRefresh: _loadStats, onOpenTab: (i) => setState(() => _currentIndex = i)),
-      UserListScreen(key: const ValueKey('customers'), role: 'customer', adminId: auth.userId),
-      UserListScreen(key: const ValueKey('employees'), role: 'employee', adminId: auth.userId),
+      UserListScreenClean(key: const ValueKey('customers_clean'), role: 'customer', adminId: auth.userId),
+      UserListScreenClean(key: const ValueKey('employees_clean'), role: 'employee', adminId: auth.userId),
       const DebtListScreen(key: ValueKey('clean_debts')),
       PendingRequestsScreen(key: ValueKey('pending_${auth.userId}'), adminId: auth.userId),
     ];
