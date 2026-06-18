@@ -7,6 +7,7 @@ import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/debt_balance.dart';
 import 'package:zhirox/utils/helpers.dart';
+import 'package:zhirox/utils/partial_payment.dart';
 
 class AddPaymentScreenClean extends StatefulWidget {
   final String? debtId;
@@ -69,7 +70,7 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
   }
 
   double _amount() {
-    return double.tryParse(_amountController.text.replaceAll(',', '').trim()) ?? 0;
+    return PartialPayment.paymentAmount(_amountController.text);
   }
 
   Future<void> _savePayment() async {
@@ -135,8 +136,9 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
     final textColor = isDark ? AppDarkColors.textPrimary : AppColors.textPrimary;
     final subColor = isDark ? AppDarkColors.textSecondary : AppColors.textSecondary;
     final debt = _selectedDebt();
-    final remaining = debt == null ? 0 : DebtBalance.remaining(debt);
-    final afterPayment = debt == null ? 0 : DebtBalance.afterPayment(debt, _amount());
+    final amount = _amount();
+    final remaining = debt == null ? 0 : PartialPayment.beforePayment(debt);
+    final afterPayment = debt == null ? 0 : PartialPayment.afterPayment(debt, amount);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -183,10 +185,6 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
                         onChanged: (_) => setState(() {}),
                         decoration: const InputDecoration(labelText: 'بڕی پارە', prefixIcon: Icon(Icons.payments_rounded), suffixText: 'د.ع'),
                       ),
-                      if (debt != null) ...[
-                        const SizedBox(height: 10),
-                        _BalanceRow(label: 'دوای وەرگرتنەوە', value: AppHelpers.formatCurrency(afterPayment), color: afterPayment <= 0 ? AppColors.secondary : AppColors.warning, subColor: subColor),
-                      ],
                       const SizedBox(height: 10),
                       TextField(
                         controller: _noteController,
@@ -196,6 +194,18 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
                       ),
                     ]),
                   ),
+                  if (debt != null) ...[
+                    const SizedBox(height: 14),
+                    _SmartPartialPaymentCard(
+                      debt: debt,
+                      amount: amount,
+                      before: remaining,
+                      after: afterPayment,
+                      cardColor: cardColor,
+                      textColor: textColor,
+                      subColor: subColor,
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -222,6 +232,46 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
   }
 }
 
+class _SmartPartialPaymentCard extends StatelessWidget {
+  final RecordModel debt;
+  final double amount;
+  final double before;
+  final double after;
+  final Color cardColor;
+  final Color textColor;
+  final Color subColor;
+
+  const _SmartPartialPaymentCard({required this.debt, required this.amount, required this.before, required this.after, required this.cardColor, required this.textColor, required this.subColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final fullPayment = PartialPayment.isFullPayment(debt, amount);
+    final color = amount <= 0 ? AppColors.primary : (fullPayment ? AppColors.secondary : AppColors.warning);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(fullPayment ? Icons.verified_rounded : Icons.auto_awesome_rounded, color: color),
+          const SizedBox(width: 8),
+          Expanded(child: Text('پارەدانەوەی بەشێکی زیرەک', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))),
+        ]),
+        const SizedBox(height: 12),
+        _BalanceRow(label: 'قەرزی پێش وەرگرتن', value: AppHelpers.formatCurrency(before), color: textColor, subColor: subColor),
+        _BalanceRow(label: 'پارەی وەرگیراو', value: AppHelpers.formatCurrency(amount), color: amount <= 0 ? textColor : AppColors.secondary, subColor: subColor),
+        _BalanceRow(label: 'قەرزی دوای وەرگرتنەوە', value: AppHelpers.formatCurrency(after), color: after <= 0 ? AppColors.secondary : AppColors.warning, subColor: subColor),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: color.withOpacity(0.09), borderRadius: BorderRadius.circular(16)),
+          child: Text(PartialPayment.statusLabel(debt, amount), style: TextStyle(color: color, fontWeight: FontWeight.bold, height: 1.5)),
+        ),
+      ]),
+    );
+  }
+}
+
 class _BalanceRow extends StatelessWidget {
   final String label;
   final String value;
@@ -232,9 +282,12 @@ class _BalanceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(child: Text(label, style: TextStyle(color: subColor))),
-      Text(value, textDirection: TextDirection.ltr, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-    ]);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(children: [
+        Expanded(child: Text(label, style: TextStyle(color: subColor))),
+        Text(value, textDirection: TextDirection.ltr, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+      ]),
+    );
   }
 }
