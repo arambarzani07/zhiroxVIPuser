@@ -40,7 +40,7 @@ class _CustomerDashboardCleanState extends State<CustomerDashboardClean> {
       final debts = await PBService.getDebts(customerId: auth.userId);
       if (mounted) _debts = debts;
     } catch (_) {
-      // Customer view remains calm and keeps the last visible state.
+      // Customer view stays calm and keeps the last visible state.
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -50,7 +50,7 @@ class _CustomerDashboardCleanState extends State<CustomerDashboardClean> {
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
     final screens = [
-      _CustomerHome(debts: _debts, isLoading: _isLoading, onRefresh: _loadDebts, onOpenWallet: () => setState(() => _currentIndex = 1)),
+      _CustomerHome(debts: _debts, isLoading: _isLoading, onRefresh: _loadDebts, onOpenReceipts: () => setState(() => _currentIndex = 1)),
       _ReceiptWallet(debts: _debts, isLoading: _isLoading, onRefresh: _loadDebts),
       UserProfileScreen(key: const ValueKey('profile'), userId: auth.userId),
     ];
@@ -114,9 +114,22 @@ class _CustomerHome extends StatelessWidget {
   final List<RecordModel> debts;
   final bool isLoading;
   final Future<void> Function() onRefresh;
-  final VoidCallback onOpenWallet;
+  final VoidCallback onOpenReceipts;
 
-  const _CustomerHome({required this.debts, required this.isLoading, required this.onRefresh, required this.onOpenWallet});
+  const _CustomerHome({required this.debts, required this.isLoading, required this.onRefresh, required this.onOpenReceipts});
+
+  int _trustScore(double totalDebt, double totalRemaining, int activeCount) {
+    if (totalDebt <= 0 || totalRemaining <= 0) return 100;
+    final remainingRatio = (totalRemaining / totalDebt).clamp(0.0, 1.0);
+    return (100 - (remainingRatio * 38) - (activeCount * 3)).clamp(45, 100).round();
+  }
+
+  String _trustText(int score, double totalRemaining) {
+    if (totalRemaining <= 0) return 'هیچ قەرزێکی ماوەت نییە؛ هەژمارت پاکە ✅';
+    if (score >= 80) return 'متمانەی تۆ باشە؛ بەردەوام بە پابەندبوونت 🌿';
+    if (score >= 65) return 'متمانەی تۆ باشە، بەڵام باشترە بەشێک لە قەرزەکەت بدەیت.';
+    return 'ئەگەر ئەم هەفتەیە پارەیەک بدەیت، بارەکەت باشتر دەبێت.';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -131,36 +144,21 @@ class _CustomerHome extends StatelessWidget {
     final totalDebt = debts.fold<double>(0, (sum, d) => sum + d.getDoubleValue('amount'));
     final totalRemaining = debts.fold<double>(0, (sum, d) => sum + d.getDoubleValue('remaining'));
     final totalPaid = (totalDebt - totalRemaining).clamp(0, double.infinity).toDouble();
-    final trustScore = _trustScore(totalDebt, totalRemaining, paidDebts.length, activeDebts.length);
+    final trustScore = _trustScore(totalDebt, totalRemaining, activeDebts.length);
 
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _CustomerHero(name: auth.userName.isEmpty ? 'کڕیار' : auth.userName),
+          _CustomerHero(customerName: auth.userName.isEmpty ? 'کڕیار' : auth.userName, trustScore: trustScore, trustText: _trustText(trustScore, totalRemaining), onToggleTheme: () => context.read<ThemeProvider>().toggleTheme()),
           const SizedBox(height: 16),
           if (isLoading)
             const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
           else ...[
-            _TrustCard(score: trustScore, remaining: totalRemaining, cardColor: cardColor, textColor: textColor, subColor: subColor),
+            _BalanceStoryCard(cardColor: cardColor, textColor: textColor, subColor: subColor, totalRemaining: totalRemaining, totalPaid: totalPaid, activeCount: activeDebts.length, paidCount: paidDebts.length),
             const SizedBox(height: 14),
-            GridView.count(
-              crossAxisCount: 2,
-              childAspectRatio: 1.22,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              children: [
-                _MiniStat(title: 'قەرزی ماوە', value: AppHelpers.formatCurrency(totalRemaining), icon: Icons.account_balance_wallet, color: AppColors.danger, cardColor: cardColor, textColor: textColor, subColor: subColor),
-                _MiniStat(title: 'پارەی دراو', value: AppHelpers.formatCurrency(totalPaid), icon: Icons.payments, color: AppColors.secondary, cardColor: cardColor, textColor: textColor, subColor: subColor),
-                _MiniStat(title: 'قەرزی چالاک', value: activeDebts.length.toString(), icon: Icons.receipt_long, color: AppColors.warning, cardColor: cardColor, textColor: textColor, subColor: subColor),
-                _MiniStat(title: 'قەرزی تەواو', value: paidDebts.length.toString(), icon: Icons.verified, color: AppColors.primary, cardColor: cardColor, textColor: textColor, subColor: subColor),
-              ],
-            ),
-            const SizedBox(height: 14),
-            _StatementCard(cardColor: cardColor, textColor: textColor, subColor: subColor, totalDebt: totalDebt, totalPaid: totalPaid, totalRemaining: totalRemaining, onOpenWallet: onOpenWallet),
+            _QuickCustomerActions(cardColor: cardColor, textColor: textColor, subColor: subColor, onOpenReceipts: onOpenReceipts),
             const SizedBox(height: 16),
             Text('قەرزە چالاکەکان', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
@@ -173,20 +171,15 @@ class _CustomerHome extends StatelessWidget {
       ),
     );
   }
-
-  int _trustScore(double totalDebt, double totalRemaining, int paidCount, int activeCount) {
-    if (totalDebt <= 0) return 100;
-    final remainingRatio = (totalRemaining / totalDebt).clamp(0.0, 1.0);
-    final paidBoost = (paidCount * 4).clamp(0, 18);
-    final activePenalty = (activeCount * 3).clamp(0, 18);
-    return (95 - (remainingRatio * 35) + paidBoost - activePenalty).clamp(45, 100).round();
-  }
 }
 
 class _CustomerHero extends StatelessWidget {
-  final String name;
+  final String customerName;
+  final int trustScore;
+  final String trustText;
+  final VoidCallback onToggleTheme;
 
-  const _CustomerHero({required this.name});
+  const _CustomerHero({required this.customerName, required this.trustScore, required this.trustText, required this.onToggleTheme});
 
   @override
   Widget build(BuildContext context) {
@@ -199,28 +192,41 @@ class _CustomerHero extends StatelessWidget {
       ),
       child: SafeArea(
         bottom: false,
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(18)),
-              child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 30),
+            Row(
+              children: [
+                Container(width: 58, height: 58, decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(18)), child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 30)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('قەرزی من', style: TextStyle(color: Colors.white.withOpacity(0.78), fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Text(customerName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  ]),
+                ),
+                IconButton(onPressed: onToggleTheme, icon: const Icon(Icons.contrast_rounded, color: Colors.white)),
+              ],
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.16), borderRadius: BorderRadius.circular(20)),
+              child: Row(
                 children: [
-                  Text('قەرزی من', style: TextStyle(color: Colors.white.withOpacity(0.78), fontSize: 14)),
-                  const SizedBox(height: 4),
-                  Text(name, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 5),
-                  Text('کەشف حساب و وەصڵەکانت بە ڕوونی لێرەن', style: TextStyle(color: Colors.white.withOpacity(0.74), fontSize: 12)),
+                  Container(width: 58, height: 58, decoration: const BoxDecoration(color: AppColors.secondary, shape: BoxShape.circle), child: Center(child: Text('$trustScore', style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.bold)))),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('متمانەی من', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 4),
+                      Text(trustText, style: TextStyle(color: Colors.white.withOpacity(0.82), height: 1.45)),
+                    ]),
+                  ),
                 ],
               ),
             ),
-            IconButton(onPressed: () => context.read<ThemeProvider>().toggleTheme(), icon: const Icon(Icons.contrast_rounded, color: Colors.white)),
           ],
         ),
       ),
@@ -228,95 +234,86 @@ class _CustomerHero extends StatelessWidget {
   }
 }
 
-class _TrustCard extends StatelessWidget {
-  final int score;
-  final double remaining;
+class _BalanceStoryCard extends StatelessWidget {
   final Color cardColor;
   final Color textColor;
   final Color subColor;
-
-  const _TrustCard({required this.score, required this.remaining, required this.cardColor, required this.textColor, required this.subColor});
-
-  @override
-  Widget build(BuildContext context) {
-    final label = score >= 85 ? 'متمانەی تۆ باشە' : score >= 65 ? 'متمانەی تۆ پێویستی بە بەردەوامی هەیە' : 'بە پارەدانەوەی بەشێک، بارەکەت باشتر دەبێت';
-    final hint = remaining <= 0 ? 'هیچ قەرزێکی ماوەت نییە ✅' : 'ئەگەر بەشێک لە قەرزەکەت بدەیت، متمانەکەت زیاتر دەبێت.';
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
-      child: Row(
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: const BoxDecoration(color: AppColors.secondary, shape: BoxShape.circle),
-            child: Center(child: Text('$score', style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.bold))),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 5),
-                Text(hint, style: TextStyle(color: subColor, height: 1.5)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatementCard extends StatelessWidget {
-  final Color cardColor;
-  final Color textColor;
-  final Color subColor;
-  final double totalDebt;
-  final double totalPaid;
   final double totalRemaining;
-  final VoidCallback onOpenWallet;
+  final double totalPaid;
+  final int activeCount;
+  final int paidCount;
 
-  const _StatementCard({required this.cardColor, required this.textColor, required this.subColor, required this.totalDebt, required this.totalPaid, required this.totalRemaining, required this.onOpenWallet});
+  const _BalanceStoryCard({required this.cardColor, required this.textColor, required this.subColor, required this.totalRemaining, required this.totalPaid, required this.activeCount, required this.paidCount});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [const Icon(Icons.summarize_rounded, color: AppColors.primary), const SizedBox(width: 8), Text('کورتەی کەشف حساب', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))]),
-          const SizedBox(height: 10),
-          _StatementLine(label: 'کۆی قەرز', value: AppHelpers.formatCurrency(totalDebt), subColor: subColor),
-          _StatementLine(label: 'کۆی پارەی دراو', value: AppHelpers.formatCurrency(totalPaid), subColor: subColor),
-          _StatementLine(label: 'قەرزی ماوە', value: AppHelpers.formatCurrency(totalRemaining), subColor: subColor),
-          const SizedBox(height: 12),
-          FilledButton.icon(onPressed: onOpenWallet, icon: const Icon(Icons.receipt_long_rounded), label: const Text('بینینی وەصڵەکان')),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [const Icon(Icons.auto_stories_rounded, color: AppColors.primary), const SizedBox(width: 8), Text('کورتەی هەژمارەکەت', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: _MiniStat(title: 'قەرزی ماوە', value: AppHelpers.formatCurrency(totalRemaining), icon: Icons.account_balance_wallet, color: AppColors.danger, cardColor: cardColor, textColor: textColor, subColor: subColor, compact: true)),
+          const SizedBox(width: 10),
+          Expanded(child: _MiniStat(title: 'پارەی دراو', value: AppHelpers.formatCurrency(totalPaid), icon: Icons.payments, color: AppColors.secondary, cardColor: cardColor, textColor: textColor, subColor: subColor, compact: true)),
+        ]),
+        const SizedBox(height: 10),
+        Text(activeCount == 0 ? 'هیچ قەرزی چالاکت نییە ✅' : '$activeCount قەرزی چالاکت هەیە و $paidCount قەرزت تەواو کراوە.', style: TextStyle(color: subColor, height: 1.6)),
+      ]),
     );
   }
 }
 
-class _StatementLine extends StatelessWidget {
-  final String label;
-  final String value;
+class _QuickCustomerActions extends StatelessWidget {
+  final Color cardColor;
+  final Color textColor;
   final Color subColor;
+  final VoidCallback onOpenReceipts;
 
-  const _StatementLine({required this.label, required this.value, required this.subColor});
+  const _QuickCustomerActions({required this.cardColor, required this.textColor, required this.subColor, required this.onOpenReceipts});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: TextStyle(color: subColor))),
-          Text(value, style: TextStyle(color: subColor, fontWeight: FontWeight.bold), textDirection: TextDirection.ltr),
-        ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('کرداری خێرا', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: _QuickAction(label: 'وەصڵەکانم', icon: Icons.receipt_long_rounded, onTap: onOpenReceipts)),
+          const SizedBox(width: 8),
+          Expanded(child: _QuickAction(label: 'کەشف حساب', icon: Icons.description_rounded, onTap: onOpenReceipts)),
+          const SizedBox(width: 8),
+          Expanded(child: _QuickAction(label: 'وەعدی پارەدانەوە', icon: Icons.event_available_rounded, onTap: onOpenReceipts)),
+        ]),
+        const SizedBox(height: 10),
+        Text('تۆ دەتوانیت زانیاری قەرزی خۆت ببینیت؛ تۆمارکردنی قەرز و پارە لەلایەن مارکێتەوە دەکرێت.', style: TextStyle(color: subColor, height: 1.55, fontSize: 12)),
+      ]),
+    );
+  }
+}\n
+class _QuickAction extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _QuickAction({required this.label, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
+        child: Column(children: [
+          Icon(icon, color: AppColors.primary),
+          const SizedBox(height: 6),
+          Text(label, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 10.5)),
+        ]),
       ),
     );
   }
@@ -341,12 +338,9 @@ class _ReceiptWallet extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SafeArea(
-            bottom: false,
-            child: Text('جانتای وەصڵەکان', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
-          ),
+          SafeArea(bottom: false, child: Text('جانتای وەصڵەکان', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold))),
           const SizedBox(height: 8),
-          Text('کەشف حساب، قەرزەکان، و پارەدانەوەکانت لێرە بە ڕوونی دەبینیت.', style: TextStyle(color: subColor, height: 1.6)),
+          Text('کەشف حساب، قەرز و پارەدانەوەکانی خۆت لێرە دەبینیت.', style: TextStyle(color: subColor, height: 1.6)),
           const SizedBox(height: 16),
           if (isLoading)
             const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
@@ -384,31 +378,16 @@ class _DebtCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20)),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: (isPaid ? AppColors.secondary : AppColors.warning).withOpacity(0.12),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(isPaid ? Icons.verified_rounded : Icons.receipt_long_rounded, color: isPaid ? AppColors.secondary : AppColors.warning),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(isPaid ? 'قەرز تەواوە' : 'قەرزی ماوە', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('کۆی قەرز: ${AppHelpers.formatCurrency(amount)}', style: TextStyle(color: subColor, fontSize: 12)),
-                ],
-              ),
-            ),
-            Text(AppHelpers.formatCurrency(remaining), style: TextStyle(color: isPaid ? AppColors.secondary : AppColors.danger, fontWeight: FontWeight.bold), textDirection: TextDirection.ltr),
-          ],
-        ),
+        child: Row(children: [
+          Container(width: 48, height: 48, decoration: BoxDecoration(color: (isPaid ? AppColors.secondary : AppColors.warning).withOpacity(0.12), borderRadius: BorderRadius.circular(16)), child: Icon(isPaid ? Icons.verified_rounded : Icons.receipt_long_rounded, color: isPaid ? AppColors.secondary : AppColors.warning)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(isPaid ? 'قەرز تەواوە' : 'قەرزی ماوە', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('کۆی قەرز: ${AppHelpers.formatCurrency(amount)}', style: TextStyle(color: subColor, fontSize: 12)),
+          ])),
+          Text(AppHelpers.formatCurrency(remaining), style: TextStyle(color: isPaid ? AppColors.secondary : AppColors.danger, fontWeight: FontWeight.bold), textDirection: TextDirection.ltr),
+        ]),
       ),
     );
   }
@@ -422,28 +401,22 @@ class _MiniStat extends StatelessWidget {
   final Color cardColor;
   final Color textColor;
   final Color subColor;
+  final bool compact;
 
-  const _MiniStat({required this.title, required this.value, required this.icon, required this.color, required this.cardColor, required this.textColor, required this.subColor});
+  const _MiniStat({required this.title, required this.value, required this.icon, required this.color, required this.cardColor, required this.textColor, required this.subColor, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(9),
-            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(13)),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const Spacer(),
-          Text(title, style: TextStyle(color: subColor, fontSize: 12)),
-          const SizedBox(height: 4),
-          Text(value, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 15), textDirection: TextDirection.ltr),
-        ],
-      ),
+      padding: EdgeInsets.all(compact ? 12 : 14),
+      decoration: BoxDecoration(color: compact ? color.withOpacity(0.06) : cardColor, borderRadius: BorderRadius.circular(20), border: compact ? Border.all(color: color.withOpacity(0.12)) : null),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(13)), child: Icon(icon, color: color, size: 22)),
+        const SizedBox(height: 10),
+        Text(title, style: TextStyle(color: subColor, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: compact ? 13 : 15), textDirection: TextDirection.ltr),
+      ]),
     );
   }
 }
@@ -460,22 +433,15 @@ class _EmptyCustomerCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle_rounded, color: AppColors.secondary, size: 34),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('هیچ قەرزێکی ماوەت نییە ✅', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text('کەشف حسابەکەت پاکە.', style: TextStyle(color: subColor)),
-              ],
-            ),
-          ),
-        ],
-      ),
+      child: Row(children: [
+        const Icon(Icons.check_circle_rounded, color: AppColors.secondary, size: 34),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('هیچ قەرزێکی ماوەت نییە ✅', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text('کەشف حسابەکەت پاکە و هەژمارت باشە.', style: TextStyle(color: subColor, height: 1.5)),
+        ])),
+      ]),
     );
   }
 }
