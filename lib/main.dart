@@ -244,20 +244,20 @@ class _ConnectivityBannerState extends State<_ConnectivityBanner> {
         SafeArea(
           bottom: false,
           child: Material(
-            color: Colors.orange.shade900,
+            color: AppColors.warning,
             child: InkWell(
               onTap: () => ConnectivityService.instance.checkNow(),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+                padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 16),
                 child: const Row(
                   textDirection: TextDirection.rtl,
                   children: [
-                    Icon(Icons.cloud_off, color: Colors.white, size: 16),
+                    Icon(Icons.shield_rounded, color: Colors.white, size: 16),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'پارێزرا ✅ کاتێک ئینتەرنێت گەڕایەوە، خۆکارانە تەواو دەبێت',
+                        AppUserMessages.protectedOffline,
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -265,7 +265,7 @@ class _ConnectivityBannerState extends State<_ConnectivityBanner> {
                         ),
                       ),
                     ),
-                    Icon(Icons.refresh, color: Colors.white70, size: 18),
+                    Icon(Icons.sync_rounded, color: Colors.white70, size: 18),
                   ],
                 ),
               ),
