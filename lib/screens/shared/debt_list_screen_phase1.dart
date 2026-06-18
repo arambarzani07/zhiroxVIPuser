@@ -5,6 +5,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/add_debt_screen_clean.dart';
 import 'package:zhirox/screens/shared/add_payment_screen_clean.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen_clean.dart';
+import 'package:zhirox/screens/shared/overdue_debts_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/debt_balance.dart';
@@ -67,6 +68,11 @@ class _DebtListScreenPhase1State extends State<DebtListScreenPhase1> {
     }
     final saved = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const AddPaymentScreenClean()));
     if (saved == true) await _loadDebts();
+  }
+
+  Future<void> _openOverdueDebts() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const OverdueDebtsScreen()));
+    await _loadDebts();
   }
 
   List<_CustomerDebtGroup> _buildGroups(List<RecordModel> debts) {
@@ -155,6 +161,15 @@ class _DebtListScreenPhase1State extends State<DebtListScreenPhase1> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 46,
+              child: OutlinedButton.icon(
+                onPressed: _openOverdueDebts,
+                icon: const Icon(Icons.event_busy_rounded),
+                label: const Text('قەرزی دواکەوتوو'),
+              ),
             ),
             const SizedBox(height: 12),
             Container(
