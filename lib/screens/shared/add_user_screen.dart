@@ -26,8 +26,9 @@ class _AddUserDialogState extends State<AddUserDialog> {
   bool _canSetDebtLimit = false;
   bool _canSetDueDate = false;
   bool _canEditDebts = false;
-
   bool _canSendNotifications = false;
+
+  bool get _isCustomer => widget.role == 'customer';
 
   @override
   void dispose() {
@@ -41,19 +42,25 @@ class _AddUserDialogState extends State<AddUserDialog> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final auth = context.read<AuthProvider>();
+    if (_isCustomer && !auth.isManager && !auth.canAddCustomers) {
+      AppHelpers.showSnackBar(context, AppUserMessages.needsManagerApproval, isError: true);
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      final auth = context.read<AuthProvider>();
-      final debtLimit = double.tryParse(_debtLimitController.text.trim()) ?? 0;
+      final debtLimit = double.tryParse(_debtLimitController.text.trim().replaceAll(',', '')) ?? 0;
+      final adminId = auth.isManager ? auth.userId : auth.adminId;
 
       await PBService.createUser(
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
-        password: _passwordController.text,
+        password: _passwordController.text.trim(),
         role: widget.role,
         createdBy: auth.userId,
-        adminId: auth.adminId,
+        adminId: adminId,
         canAddCustomers: _canAddCustomers,
         canSetDebtLimit: _canSetDebtLimit,
         canSetDueDate: _canSetDueDate,
@@ -62,329 +69,163 @@ class _AddUserDialogState extends State<AddUserDialog> {
         debtLimit: debtLimit,
       );
 
+      if (!mounted) return;
+      AppHelpers.showSnackBar(context, _isCustomer ? 'کڕیار زیادکرا ✅' : 'کارمەند زیادکرا ✅');
+      Navigator.pop(context, true);
+    } catch (_) {
       if (mounted) {
-        AppHelpers.showSnackBar(context, 'بە سەرکەوتوویی زیادکرا');
-        Navigator.pop(context, true);
+        AppHelpers.showSnackBar(context, 'تکایە ژمارەی مۆبایل بە دروستی بنووسە', isError: true);
       }
-    } catch (e) {
-      if (mounted) {
-        AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
-      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.role == 'customer'
-        ? AppStrings.addCustomer
-        : AppStrings.addEmployee;
+    final title = _isCustomer ? 'زیادکردنی کڕیار' : 'زیادکردنی کارمەند';
     final auth = context.read<AuthProvider>();
-
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      elevation: 0,
-      backgroundColor: Colors.transparent,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 400),
-        decoration: BoxDecoration(
-          color: isDark ? AppDarkColors.card : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isDark
-              ? []
-              : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 420),
+          decoration: BoxDecoration(
+            color: isDark ? AppDarkColors.card : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
                   ),
-                ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header with Gradient
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary,
-                    AppColors.primary.withOpacity(0.8),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
                 ),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.person_add, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                child: Row(
+                  children: [
+                    Icon(_isCustomer ? Icons.person_add_alt_1_rounded : Icons.badge_rounded, color: Colors.white),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                     ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
               ),
-            ),
-
-            // Form Content - Scrollable
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildTextField(
-                        controller: _nameController,
-                        label: AppStrings.name,
-                        hint: 'ناوی سێ بەش',
-                        icon: Icons.person_outline,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildTextField(
-                        controller: _phoneController,
-                        label: AppStrings.phone,
-                        hint: '07xxxxxxxxx',
-                        icon: Icons.phone_android,
-                        isPhone: true,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildTextField(
-                        controller: _passwordController,
-                        label: AppStrings.password,
-                        hint: 'وشەی نهێنی',
-                        icon: Icons.lock_outline,
-                        isObscure: true,
-                        validator: (v) {
-                          if (v == null || v.isEmpty) {
-                            return 'تکایە وشەی نهێنی بنووسە';
-                          }
-                          if (v.length < 8) return 'نابێت لە ٨ پیت کەمتر بێت';
-                          return null;
-                        },
-                      ),
-
-                      // Permissions Group
-                      if (widget.role == 'employee' &&
-                          auth.userRole == 'admin') ...[
-                        const SizedBox(height: 24),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? AppDarkColors.surface
-                                : const Color(0xFFF8F9FA),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isDark
-                                  ? AppDarkColors.cardBorder
-                                  : Colors.grey[200]!,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  12,
-                                  16,
-                                  8,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.admin_panel_settings_outlined,
-                                      size: 18,
-                                      color: isDark
-                                          ? AppDarkColors.textSecondary
-                                          : Colors.grey[700],
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'دەسەڵاتەکان',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark
-                                            ? AppDarkColors.textPrimary
-                                            : Colors.grey[800],
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Divider(height: 1),
-                              _buildSwitch(
-                                'زیادکردنی کڕیار',
-                                _canAddCustomers,
-                                (v) => setState(() => _canAddCustomers = v),
-                              ),
-                              _buildSwitch(
-                                'دانانی سنوری قەرز',
-                                _canSetDebtLimit,
-                                (v) => setState(() => _canSetDebtLimit = v),
-                              ),
-                              _buildSwitch(
-                                'دانانی بەرواری دانەوە',
-                                _canSetDueDate,
-                                (v) => setState(() => _canSetDueDate = v),
-                              ),
-                              _buildSwitch(
-                                'دەستکاریکردنی قەرز',
-                                _canEditDebts,
-                                (v) => setState(() => _canEditDebts = v),
-                              ),
-                              _buildSwitch(
-                                'ناردنی ئاگادارکردنەوە',
-                                _canSendNotifications,
-                                (v) =>
-                                    setState(() => _canSendNotifications = v),
-                                isLast: true,
-                              ),
-                            ],
-                          ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildTextField(
+                          controller: _nameController,
+                          label: _isCustomer ? 'ناوی کڕیار' : 'ناوی کارمەند',
+                          hint: 'ناوی تەواو',
+                          icon: Icons.person_outline,
+                          validator: (v) => v == null || v.trim().isEmpty ? (_isCustomer ? 'تکایە ناوی کڕیار بنووسە' : 'تکایە ناوی کارمەند بنووسە') : null,
                         ),
-                      ],
-
-                      // Debt Limit
-                      if (widget.role == 'customer' &&
-                          (auth.userRole == 'admin' ||
-                              auth.canSetDebtLimit)) ...[
                         const SizedBox(height: 16),
                         _buildTextField(
-                          controller: _debtLimitController,
-                          label: 'سنوری قەرز (0 = بێ سنور)',
-                          hint: '0',
-                          icon: Icons.money_off,
+                          controller: _phoneController,
+                          label: 'ژمارەی مۆبایل',
+                          hint: '07xxxxxxxxx',
+                          icon: Icons.phone_android,
                           isPhone: true,
+                          validator: (v) => v == null || v.trim().length < 7 ? 'تکایە ژمارەی مۆبایل بە دروستی بنووسە' : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildTextField(
+                          controller: _passwordController,
+                          label: 'وشەی نهێنی',
+                          hint: 'وشەی نهێنی',
+                          icon: Icons.lock_outline,
+                          isObscure: true,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return 'تکایە وشەی نهێنی بنووسە';
+                            if (v.length < 6) return 'وشەی نهێنی دەبێت کەمتر نەبێت لە ٦ پیت';
+                            return null;
+                          },
+                        ),
+                        if (!_isCustomer && auth.isManager) ...[
+                          const SizedBox(height: 22),
+                          _PermissionBox(
+                            canAddCustomers: _canAddCustomers,
+                            canSetDebtLimit: _canSetDebtLimit,
+                            canSetDueDate: _canSetDueDate,
+                            canEditDebts: _canEditDebts,
+                            canSendNotifications: _canSendNotifications,
+                            onAddCustomers: (v) => setState(() => _canAddCustomers = v),
+                            onSetDebtLimit: (v) => setState(() => _canSetDebtLimit = v),
+                            onSetDueDate: (v) => setState(() => _canSetDueDate = v),
+                            onEditDebts: (v) => setState(() => _canEditDebts = v),
+                            onSendNotifications: (v) => setState(() => _canSendNotifications = v),
+                          ),
+                        ],
+                        if (_isCustomer && (auth.isManager || auth.canSetDebtLimit)) ...[
+                          const SizedBox(height: 16),
+                          _buildTextField(
+                            controller: _debtLimitController,
+                            label: 'سنووری قەرز',
+                            hint: '0',
+                            icon: Icons.account_balance_wallet_rounded,
+                            isPhone: true,
+                            validator: (_) => null,
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        Text(
+                          _isCustomer ? 'کڕیار دواتر دەتوانێت قەرز و وەصڵەکانی خۆی ببینێت.' : 'کارمەند تەنها بە پێی دەسەڵاتی بەڕێوەبەر کار دەکات.',
+                          style: TextStyle(color: isDark ? AppDarkColors.textSecondary : AppColors.textSecondary, height: 1.5, fontSize: 12),
+                          textAlign: TextAlign.start,
                         ),
                       ],
-                      const SizedBox(height: 16),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-
-            // Footer Actions
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: isDark
-                        ? AppDarkColors.cardBorder
-                        : Colors.grey[100]!,
-                  ),
+              Container(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('پاشگەزبوونەوە'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _save,
+                        child: _isLoading
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('زیادکردن', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey[600],
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: const Text('پاشگەزبوونەوە'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text(
-                              AppStrings.save,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildSwitch(
-    String title,
-    bool value,
-    Function(bool) onChanged, {
-    bool isLast = false,
-  }) {
-    return Column(
-      children: [
-        SwitchListTile(
-          title: Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? AppDarkColors.textPrimary
-                  : null,
-            ),
-          ),
-          value: value,
-          onChanged: onChanged,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          dense: true,
-          activeThumbColor: AppColors.primary,
-          visualDensity: VisualDensity.compact,
-        ),
-        if (!isLast)
-          Divider(
-            height: 1,
-            indent: 12,
-            endIndent: 12,
-            color: Colors.grey[100],
-          ),
-      ],
     );
   }
 
@@ -405,42 +246,64 @@ class _AddUserDialogState extends State<AddUserDialog> {
       textDirection: isPhone ? TextDirection.ltr : TextDirection.rtl,
       textAlign: isPhone ? TextAlign.center : TextAlign.start,
       style: TextStyle(color: isDark ? AppDarkColors.textPrimary : null),
-      validator:
-          validator ??
-          (v) => v?.isEmpty == true ? 'تکایە ئەم بەشە پڕبکەرەوە' : null,
+      validator: validator,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(
-          color: isDark ? AppDarkColors.textSecondary : null,
-        ),
         hintText: hint,
-        hintStyle: TextStyle(
-          color: isDark ? AppDarkColors.textSecondary : Colors.grey[400],
-        ),
         prefixIcon: Icon(icon, color: AppColors.primary),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
-            color: isDark ? AppDarkColors.cardBorder : Colors.grey[300]!,
-          ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
-            color: isDark ? AppDarkColors.cardBorder : Colors.grey[300]!,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
-        ),
-        filled: true,
-        fillColor: isDark ? AppDarkColors.inputFill : Colors.grey[50],
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
       ),
+    );
+  }
+}
+
+class _PermissionBox extends StatelessWidget {
+  final bool canAddCustomers;
+  final bool canSetDebtLimit;
+  final bool canSetDueDate;
+  final bool canEditDebts;
+  final bool canSendNotifications;
+  final ValueChanged<bool> onAddCustomers;
+  final ValueChanged<bool> onSetDebtLimit;
+  final ValueChanged<bool> onSetDueDate;
+  final ValueChanged<bool> onEditDebts;
+  final ValueChanged<bool> onSendNotifications;
+
+  const _PermissionBox({
+    required this.canAddCustomers,
+    required this.canSetDebtLimit,
+    required this.canSetDueDate,
+    required this.canEditDebts,
+    required this.canSendNotifications,
+    required this.onAddCustomers,
+    required this.onSetDebtLimit,
+    required this.onSetDueDate,
+    required this.onEditDebts,
+    required this.onSendNotifications,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.06), borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        children: [
+          _switch('کڕیار زیادکردن', canAddCustomers, onAddCustomers),
+          _switch('سنووری قەرز', canSetDebtLimit, onSetDebtLimit),
+          _switch('بەرواری دانەوە', canSetDueDate, onSetDueDate),
+          _switch('دەستکاری قەرز', canEditDebts, onEditDebts),
+          _switch('ناردنی ئاگاداری', canSendNotifications, onSendNotifications),
+        ],
+      ),
+    );
+  }
+
+  Widget _switch(String title, bool value, ValueChanged<bool> onChanged) {
+    return SwitchListTile(
+      title: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      value: value,
+      onChanged: onChanged,
+      dense: true,
+      activeThumbColor: AppColors.primary,
     );
   }
 }
