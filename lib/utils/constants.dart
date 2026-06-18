@@ -108,6 +108,8 @@ class AppStrings {
   static const String payments = 'پارە وەرگرتنەوەکان';
   static const String addPayment = 'پارە وەرگرتنەوەی نوێ';
   static const String paymentAmount = 'بڕی پارەی وەرگیراو';
+  static const String paymentForCustomer = 'پارە وەرگرتنەوە بۆ';
+  static const String bulkPaymentNote = 'پارە وەرگرتنەوەی کۆمەڵ';
   static const String paymentSaved = 'پارە وەرگرتنەوە تۆمار کرا ✅';
   static const String noPayments = 'هیچ پارە وەرگرتنەوەیەک نییە';
   static const String receivedPercent = 'وەرگیراوە';
