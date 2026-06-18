@@ -29,38 +29,31 @@ class AppDarkColors {
 
 class AppStrings {
   static const String appName = 'ژیرۆکس';
-  static const String appTagline = 'سیستەمی زیرەکی پاراستنی پارەی مارکێت';
-
-  // گشتی
   static const String login = 'چوونەژوورەوە';
   static const String logout = 'چوونەدەرەوە';
-  static const String phone = 'ژمارە مۆبایل';
+  static const String phone = 'ژمارەی مۆبایل';
   static const String password = 'وشەی نهێنی';
   static const String save = 'پاشەکەوتکردن';
   static const String cancel = 'پاشگەزبوونەوە';
   static const String delete = 'سڕینەوە';
   static const String edit = 'دەستکاریکردن';
   static const String search = 'گەڕان';
-  static const String noData = 'هێشتا هیچ تۆمارێک نییە';
+  static const String noData = 'هێشتا هیچ زانیارییەک تۆمار نەکراوە';
   static const String loading = 'ئامادەکردن...';
   static const String notice = 'ئاگاداری';
+  static const String done = 'تەواو بوو';
   static const String success = 'سەرکەوتوو';
 
-  // ڕۆڵەکان
-  static const String role = 'ڕۆڵ';
-  static const String manager = 'بەڕێوەبەر';
-  static const String admin = 'بەڕێوەبەر';
-  static const String employee = 'کارمەند';
-  static const String customer = 'کڕیار';
-
-  // زانیاری کەسی
   static const String name = 'ناو';
   static const String fatherName = 'ناوی باوک';
   static const String grandfatherName = 'ناوی باپیر';
   static const String fullName = 'ناوی سیانی';
+  static const String role = 'ڕۆڵ';
+  static const String admin = 'بەڕێوەبەر';
+  static const String employee = 'کارمەند';
+  static const String customer = 'کڕیار';
   static const String marketName = 'ناوی مارکێت';
 
-  // تۆمارکردن
   static const String register = 'خۆتۆمارکردن';
   static const String registerAdmin = 'تۆمارکردنی بەڕێوەبەری نوێ';
   static const String registerCustomer = 'خۆتۆمارکردنی کڕیار';
@@ -69,11 +62,10 @@ class AppStrings {
   static const String pendingRequests = 'داواکارییەکان';
   static const String approve = 'ڕێگەپێدان';
   static const String reject = 'ڕەتکردنەوە';
-  static const String debtDuration = 'ماوەی قەرز (ڕۆژ)';
+  static const String debtDuration = 'ماوەی قەرز بە ڕۆژ';
   static const String requestSent = 'داواکارییەکەت نێردرا ✅';
-  static const String notApproved = 'هێشتا پێویستی بە ڕێگەپێدانی بەڕێوەبەر هەیە';
+  static const String notApproved = 'داواکارییەکەت لە چاوەڕوانیدایە';
 
-  // قەرز
   static const String debt = 'قەرز';
   static const String debts = 'قەرزەکان';
   static const String addDebt = 'قەرز پێدان';
@@ -81,7 +73,7 @@ class AppStrings {
   static const String amount = 'بڕی پارە';
   static const String description = 'تێبینی';
   static const String dueDate = 'بەرواری دانەوە';
-  static const String status = 'بار';
+  static const String status = 'بارودۆخ';
   static const String pending = 'چاوەڕوانە';
   static const String partial = 'بەشێکی ماوە';
   static const String paid = 'تەواوە';
@@ -91,9 +83,8 @@ class AppStrings {
   static const String remainingAmount = 'ماوە';
   static const String debtLimit = 'سنووری قەرز';
   static const String noDebtLimit = 'بێ سنوور';
-  static const String debtGivenSaved = 'قەرز پێدان تۆمار کرا ✅';
+  static const String debtGivenSaved = 'قەرز پێدان تۆمارکرا ✅';
 
-  // دراو و کاڵا
   static const String currency = 'دراو';
   static const String iqd = 'دینار';
   static const String usd = 'دۆلار';
@@ -104,7 +95,6 @@ class AppStrings {
   static const String items = 'کاڵاکان';
   static const String total = 'کۆی گشتی';
 
-  // پارە وەرگرتنەوە
   static const String payment = 'پارە وەرگرتنەوە';
   static const String payments = 'پارە وەرگرتنەوەکان';
   static const String addPayment = 'پارە وەرگرتنەوەی نوێ';
@@ -113,16 +103,12 @@ class AppStrings {
   static const String bulkPaymentNote = 'پارە وەرگرتنەوەی کۆمەڵ';
   static const String fullyReceivedDebt = 'قەرز تەواو وەرگیرا';
   static const String partiallyReceivedDebt = 'قەرز بەشێکی وەرگیرا';
-  static const String paymentSaved = 'پارە وەرگرتنەوە تۆمار کرا ✅';
-  static const String noPayments = 'هێشتا هیچ پارە وەرگرتنەوەیەک نییە';
+  static const String paymentSaved = 'پارە وەرگرتنەوە تۆمارکرا ✅';
+  static const String noPayments = 'هیچ پارە وەرگرتنەوەیەک نییە';
   static const String receivedPercent = 'وەرگیراوە';
   static const String note = 'تێبینی';
 
-  // داشبۆرد و ناوبەری
   static const String dashboard = 'داشبۆرد';
-  static const String managerDashboard = 'داشبۆردی بەڕێوەبەر';
-  static const String employeeDesk = 'میزکاری کارمەند';
-  static const String customerHome = 'قەرزی من';
   static const String customers = 'کڕیارەکان';
   static const String employees = 'کارمەندەکان';
   static const String addCustomer = 'کڕیاری نوێ';
@@ -130,18 +116,6 @@ class AppStrings {
   static const String totalCustomers = 'کۆی کڕیارەکان';
   static const String totalDebts = 'کۆی قەرزەکان';
   static const String totalPayments = 'کۆی پارە وەرگرتنەوەکان';
-
-  // پەیامە ڕێگەپێدراوەکانی قۆناغی یەکەم
-  static const String chooseCustomer = 'تکایە کڕیارێک هەڵبژێرە';
-  static const String enterDebtAmount = 'تکایە بڕی قەرز بنووسە';
-  static const String enterPaymentAmount = 'تکایە بڕی پارەی وەرگیراو بنووسە';
-  static const String amountMustBePositive = 'بڕی پارە دەبێت لە سفر زیاتر بێت';
-  static const String paymentCannotExceedDebt =
-      'بڕی پارەی وەرگیراو نابێت زیاتر بێت لە قەرزی ماوە';
-  static const String managerApprovalNeeded =
-      'ئەم کردارە پێویستی بە ڕێگەپێدانی بەڕێوەبەر هەیە';
-  static const String savedForLater =
-      'پارێزرا ✅ کاتێک ئینتەرنێت گەڕایەوە، خۆکارانە تەواو دەبێت';
 }
 
 class PBConfig {
