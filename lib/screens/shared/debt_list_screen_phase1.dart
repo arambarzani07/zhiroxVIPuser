@@ -7,6 +7,7 @@ import 'package:zhirox/screens/shared/add_payment_screen_clean.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen_clean.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
+import 'package:zhirox/utils/debt_balance.dart';
 import 'package:zhirox/utils/helpers.dart';
 
 class DebtListScreenPhase1 extends StatefulWidget {
@@ -78,8 +79,8 @@ class _DebtListScreenPhase1State extends State<DebtListScreenPhase1> {
       final phone = customer?.getStringValue('phone') ?? '';
       final group = map.putIfAbsent(customerId, () => _CustomerDebtGroup(id: customerId, name: name.isEmpty ? 'کڕیار' : name, phone: phone));
       group.debts.add(debt);
-      group.totalDebt += debt.getDoubleValue('amount');
-      group.totalRemaining += debt.getDoubleValue('remaining');
+      group.totalDebt += DebtBalance.amount(debt);
+      group.totalRemaining += DebtBalance.remaining(debt);
     }
     final list = map.values.toList();
     final q = _searchController.text.trim().toLowerCase();
@@ -241,8 +242,8 @@ class _DebtMiniRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final remaining = debt.getDoubleValue('remaining');
-    final paid = debt.getStringValue('status') == 'paid' || remaining <= 0;
+    final remaining = DebtBalance.remaining(debt);
+    final paid = DebtBalance.isPaid(debt);
     return InkWell(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DebtDetailScreenClean(debtId: debt.id))),
       child: Padding(
@@ -251,7 +252,7 @@ class _DebtMiniRow extends StatelessWidget {
           children: [
             Icon(paid ? Icons.verified_rounded : Icons.receipt_long_rounded, size: 18, color: paid ? AppColors.secondary : AppColors.warning),
             const SizedBox(width: 8),
-            Expanded(child: Text(paid ? 'قەرز تەواوە' : 'قەرزی ماوە', style: TextStyle(color: textColor, fontSize: 13))),
+            Expanded(child: Text(DebtBalance.statusLabel(debt), style: TextStyle(color: textColor, fontSize: 13))),
             Text(AppHelpers.formatCurrency(remaining), style: TextStyle(color: paid ? AppColors.secondary : AppColors.danger, fontWeight: FontWeight.bold, fontSize: 12), textDirection: TextDirection.ltr),
           ],
         ),
