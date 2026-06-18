@@ -7,6 +7,7 @@ import 'package:zhirox/screens/shared/debt_detail_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
+import 'package:zhirox/widgets/customer_limit_summary_card.dart';
 import 'package:zhirox/widgets/employee_access_settings_card.dart';
 
 class UserProfileScreenClean extends StatefulWidget {
@@ -101,6 +102,16 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
                       label: const Text('کەشف حساب'),
                     ),
                   ),
+                  if (user != null) ...[
+                    const SizedBox(height: 16),
+                    CustomerLimitSummaryCard(
+                      customer: user,
+                      debts: _debts,
+                      cardColor: cardColor,
+                      textColor: textColor,
+                      subColor: subColor,
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   _CustomerMoneySummaryCard(debts: _debts, debtLimit: debtLimit, cardColor: cardColor, textColor: textColor, subColor: subColor),
                   const SizedBox(height: 16),
