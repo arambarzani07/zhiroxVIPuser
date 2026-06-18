@@ -21,19 +21,17 @@ class CustomerDebtLockCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final locked = DebtLock.isLocked(customer, debts);
-    final color = locked ? AppColors.danger : AppColors.secondary;
-    final title = locked ? 'قەرزی قفڵکراو' : 'قەرزی نوێ کراوەیە';
+    final paused = DebtLock.shouldPauseNewDebt(customer, debts);
+    final color = paused ? AppColors.danger : AppColors.secondary;
+    final title = DebtLock.pauseTitle(customer, debts);
     final reason = DebtLock.reason(customer, debts);
-    final message = locked
-        ? 'قەرزی نوێ بۆ ئەم کڕیارە پێویستی بە ڕێگەپێدانی بەڕێوەبەر هەیە.'
-        : 'دەتوانرێت قەرزی نوێ بە شێوەی ئاسایی تۆمار بکرێت.';
+    final message = DebtLock.pauseMessage(customer, debts);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(locked ? Icons.lock_rounded : Icons.lock_open_rounded, color: color),
+        Icon(paused ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded, color: color),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16)),
