@@ -41,23 +41,12 @@ class _EmployeeDashboardCleanState extends State<EmployeeDashboardClean> {
 
     return Scaffold(
       backgroundColor: isDark ? AppDarkColors.background : const Color(0xFFF5F7FA),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        child: screens[_currentIndex],
-      ),
+      body: AnimatedSwitcher(duration: const Duration(milliseconds: 280), child: screens[_currentIndex]),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: isDark ? AppDarkColors.card : Colors.white,
           borderRadius: const BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
-          boxShadow: isDark
-              ? []
-              : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 24,
-                    offset: const Offset(0, -6),
-                  ),
-                ],
+          boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 24, offset: const Offset(0, -6))],
         ),
         child: SafeArea(
           child: Padding(
@@ -87,13 +76,7 @@ class _EmployeeDashboardCleanState extends State<EmployeeDashboardClean> {
         duration: const Duration(milliseconds: 300),
         padding: EdgeInsets.symmetric(horizontal: selected ? 14 : 10, vertical: 10),
         decoration: BoxDecoration(
-          gradient: selected
-              ? LinearGradient(
-                  colors: [AppColors.primary, AppColors.primary.withOpacity(0.72)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
+          gradient: selected ? LinearGradient(colors: [AppColors.primary, AppColors.primary.withOpacity(0.72)], begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -128,75 +111,197 @@ class _EmployeeHome extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.primary, AppColors.primary.withOpacity(0.75)],
-                begin: Alignment.topRight,
-                end: Alignment.bottomLeft,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withOpacity(0.22),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(18)),
-                  child: const Icon(Icons.badge_rounded, color: Colors.white, size: 30),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('میزکاری کارمەند', style: TextStyle(color: Colors.white.withOpacity(0.78), fontSize: 14)),
-                      const SizedBox(height: 4),
-                      Text(auth.userName.isEmpty ? 'کارمەند' : auth.userName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _EmployeeHero(auth: auth),
+          const SizedBox(height: 16),
+          _TodayWorkCard(cardColor: cardColor, textColor: textColor, subColor: subColor, onOpenCustomers: () => onOpenTab(1), onOpenDebts: () => onOpenTab(2)),
           const SizedBox(height: 16),
           Text('کاری خێرا', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           GridView.count(
             crossAxisCount: 2,
-            childAspectRatio: 1.2,
+            childAspectRatio: 1.16,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
             children: [
-              _ActionCard(title: 'کڕیارەکان', subtitle: 'گەڕان و پڕۆفایلی کڕیار', icon: Icons.people_rounded, cardColor: cardColor, textColor: textColor, subColor: subColor, onTap: () => onOpenTab(1)),
-              _ActionCard(title: 'قەرزەکان', subtitle: 'قەرز پێدان و پارە وەرگرتنەوە', icon: Icons.receipt_long_rounded, cardColor: cardColor, textColor: textColor, subColor: subColor, onTap: () => onOpenTab(2)),
-              _ActionCard(title: 'وەعدی پارەدانەوە', subtitle: 'ڕێککەوتنی کڕیار تۆمار بکە', icon: Icons.event_available_rounded, cardColor: cardColor, textColor: textColor, subColor: subColor, onTap: () => onOpenTab(1)),
-              _ActionCard(title: 'هەژماری من', subtitle: 'زانیاری و دەسەڵاتەکانم', icon: Icons.person_rounded, cardColor: cardColor, textColor: textColor, subColor: subColor, onTap: () => onOpenTab(3)),
+              _ActionCard(title: 'گەڕانی کڕیار', subtitle: 'قەرز، پارە، کەشف حساب', icon: Icons.search_rounded, cardColor: cardColor, textColor: textColor, subColor: subColor, onTap: () => onOpenTab(1)),
+              _ActionCard(title: 'قەرز پێدان', subtitle: 'پێش قەرز پێدان، قەرزی ماوە ببینە', icon: Icons.add_card_rounded, cardColor: cardColor, textColor: textColor, subColor: subColor, onTap: () => onOpenTab(2)),
+              _ActionCard(title: 'پارە وەرگرتنەوە', subtitle: 'بڕ بنووسە و قەرزی ماوە نوێ بکە', icon: Icons.payments_rounded, cardColor: cardColor, textColor: textColor, subColor: subColor, onTap: () => onOpenTab(2)),
+              _ActionCard(title: 'وەعد و کەشف حساب', subtitle: 'ڕێککەوتن و کەشف حسابی کڕیار', icon: Icons.event_available_rounded, cardColor: cardColor, textColor: textColor, subColor: subColor, onTap: () => onOpenTab(1)),
             ],
           ),
           const SizedBox(height: 16),
+          _PermissionSummaryCard(auth: auth, cardColor: cardColor, textColor: textColor, subColor: subColor, onOpenProfile: () => onOpenTab(3)),
+          const SizedBox(height: 16),
+          _SafeWorkCard(cardColor: cardColor, subColor: subColor),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmployeeHero extends StatelessWidget {
+  final AuthProvider auth;
+
+  const _EmployeeHero({required this.auth});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [AppColors.primary, AppColors.primary.withOpacity(0.75)], begin: Alignment.topRight, end: Alignment.bottomLeft),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.22), blurRadius: 20, offset: const Offset(0, 10))],
+      ),
+      child: Row(
+        children: [
           Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20)),
-            child: Row(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(18)),
+            child: const Icon(Icons.badge_rounded, color: Colors.white, size: 30),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.shield_rounded, color: AppColors.secondary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text('کارە گرنگەکان بە شێوەی پارێزراو دەچنە پێش و ئەگەر پێویست بوو ڕێگەپێدانی بەڕێوەبەر دەوێت.', style: TextStyle(color: subColor, height: 1.6)),
-                ),
+                Text('میزکاری کارمەند', style: TextStyle(color: Colors.white.withOpacity(0.80), fontSize: 14)),
+                const SizedBox(height: 4),
+                Text(auth.userName.isEmpty ? 'کارمەند' : auth.userName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Text('کاری قەرز و پارە بە شێوەی پارێزراو', style: TextStyle(color: Colors.white.withOpacity(0.74), fontSize: 12)),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TodayWorkCard extends StatelessWidget {
+  final Color cardColor;
+  final Color textColor;
+  final Color subColor;
+  final VoidCallback onOpenCustomers;
+  final VoidCallback onOpenDebts;
+
+  const _TodayWorkCard({required this.cardColor, required this.textColor, required this.subColor, required this.onOpenCustomers, required this.onOpenDebts});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [const Icon(Icons.task_alt_rounded, color: AppColors.secondary), const SizedBox(width: 8), Text('کاری ئەمڕۆت', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))]),
+          const SizedBox(height: 10),
+          Text('سەرەتا کڕیار بدۆزەوە، قەرزی ماوە ببینە، پاشان قەرز پێدان یان پارە وەرگرتنەوە ئەنجام بدە.', style: TextStyle(color: subColor, height: 1.6)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: FilledButton.icon(onPressed: onOpenCustomers, icon: const Icon(Icons.people_rounded), label: const Text('کڕیار'))),
+              const SizedBox(width: 8),
+              Expanded(child: OutlinedButton.icon(onPressed: onOpenDebts, icon: const Icon(Icons.receipt_long_rounded), label: const Text('قەرز'))),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PermissionSummaryCard extends StatelessWidget {
+  final AuthProvider auth;
+  final Color cardColor;
+  final Color textColor;
+  final Color subColor;
+  final VoidCallback onOpenProfile;
+
+  const _PermissionSummaryCard({required this.auth, required this.cardColor, required this.textColor, required this.subColor, required this.onOpenProfile});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _PermissionItem('قەرز پێدان', auth.canGiveDebt),
+      _PermissionItem('پارە وەرگرتنەوە', auth.canReceivePayment),
+      _PermissionItem('کڕیار زیادکردن', auth.canAddCustomers),
+      _PermissionItem('کەشف حساب', auth.canCreateStatement),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [const Icon(Icons.verified_user_rounded, color: AppColors.primary), const SizedBox(width: 8), Text('دەسەڵاتەکانی کاری من', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))]),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: items.map((item) => _PermissionChip(item: item)).toList(),
+          ),
+          const SizedBox(height: 12),
+          TextButton.icon(onPressed: onOpenProfile, icon: const Icon(Icons.person_rounded), label: const Text('بینینی هەژماری من')),
+        ],
+      ),
+    );
+  }
+}
+
+class _PermissionItem {
+  final String label;
+  final bool allowed;
+
+  const _PermissionItem(this.label, this.allowed);
+}
+
+class _PermissionChip extends StatelessWidget {
+  final _PermissionItem item;
+
+  const _PermissionChip({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = item.allowed ? AppColors.secondary : AppColors.warning;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withOpacity(0.22))),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(item.allowed ? Icons.check_circle_rounded : Icons.lock_clock_rounded, color: color, size: 16),
+          const SizedBox(width: 5),
+          Text(item.label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SafeWorkCard extends StatelessWidget {
+  final Color cardColor;
+  final Color subColor;
+
+  const _SafeWorkCard({required this.cardColor, required this.subColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        children: [
+          const Icon(Icons.shield_rounded, color: AppColors.secondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('ئەگەر کردارێک پێویستی بە ڕێگەپێدانی بەڕێوەبەر هەبوو، بە شێوەی پارێزراو دەچێتە پێش.', style: TextStyle(color: subColor, height: 1.6)),
           ),
         ],
       ),
@@ -234,7 +339,7 @@ class _ActionCard extends StatelessWidget {
             const Spacer(),
             Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 15)),
             const SizedBox(height: 4),
-            Text(subtitle, style: TextStyle(color: subColor, fontSize: 11), maxLines: 2),
+            Text(subtitle, style: TextStyle(color: subColor, fontSize: 11, height: 1.35), maxLines: 2),
           ],
         ),
       ),
