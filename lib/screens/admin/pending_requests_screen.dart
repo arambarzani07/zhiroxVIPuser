@@ -38,6 +38,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   }
 
   Future<void> _loadPending() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final cacheKey = 'cached_pending_${widget.adminId}';
 
@@ -47,35 +48,32 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         adminId: widget.adminId,
         approved: false,
       );
-
-      // Cache
       final prefs = await SharedPreferences.getInstance();
       final usersJson = _pendingUsers.map((u) => u.toJson()).toList();
       await prefs.setString(cacheKey, jsonEncode(usersJson));
-    } catch (e) {
-      // Offline fallback
+    } catch (_) {
       try {
         final prefs = await SharedPreferences.getInstance();
         final cachedString = prefs.getString(cacheKey);
-
         if (cachedString != null) {
-          final List<dynamic> decoded = jsonDecode(cachedString);
-          _pendingUsers = decoded
-              .map((item) => RecordModel.fromJson(item))
-              .toList();
+          final decoded = jsonDecode(cachedString) as List<dynamic>;
+          _pendingUsers = decoded.map((item) => RecordModel.fromJson(item)).toList();
         }
       } catch (_) {}
     }
-    setState(() => _isLoading = false);
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _approve(RecordModel user) async {
     try {
       await PBService.updateUser(user.id, {'approved': true});
-      AppHelpers.showSnackBar(context, 'کڕیار قبوڵ کرا ✅');
+      if (!mounted) return;
+      AppHelpers.showSnackBar(context, 'کڕیار ڕێگەی پێدرا ✅');
       _loadPending();
-    } catch (e) {
-      AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+    } catch (_) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(context, AppStrings.savedForLater, isError: true);
     }
   }
 
@@ -83,16 +81,18 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     final confirm = await AppHelpers.showConfirmDialog(
       context,
       title: AppStrings.reject,
-      message: 'دڵنیایت لە ڕەتکردنەوەی ئەم داواکاریە؟',
+      message: 'دڵنیایت لە ڕەتکردنەوەی ئەم داواکارییە؟',
     );
     if (!confirm) return;
 
     try {
       await PBService.deleteUser(user.id);
+      if (!mounted) return;
       AppHelpers.showSnackBar(context, 'داواکاری ڕەتکرایەوە');
       _loadPending();
-    } catch (e) {
-      AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+    } catch (_) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(context, AppStrings.savedForLater, isError: true);
     }
   }
 
@@ -101,14 +101,13 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return CustomScrollView(
       slivers: [
-        // ───── Gradient Header ─────
         SliverToBoxAdapter(
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.purple.shade600, Colors.purple.shade400],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                colors: [AppColors.primary, AppColors.primary.withOpacity(0.72)],
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
               ),
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(32),
@@ -119,48 +118,32 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
               bottom: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
-                child: Column(
+                child: Row(
                   children: [
-                    // Icon + Title
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(14),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'ڕێگەپێدانەکان',
+                            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                           ),
-                          child: const Icon(
-                            Icons.person_add_alt_1,
-                            color: Colors.white,
-                            size: 24,
+                          const SizedBox(height: 2),
+                          Text(
+                            _isLoading ? 'ئامادەکردن...' : '${_pendingUsers.length} داواکاری',
+                            style: TextStyle(color: Colors.white.withOpacity(0.72), fontSize: 13),
                           ),
-                        ),
-                        const SizedBox(width: 14),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'داواکارییە چاوەڕوانکراوەکان',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _isLoading
-                                  ? '...'
-                                  : '${_pendingUsers.length} داواکاری',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -168,12 +151,8 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
             ),
           ),
         ),
-
-        // ───── Content ─────
         if (_isLoading)
-          const SliverFillRemaining(
-            child: Center(child: CircularProgressIndicator()),
-          )
+          const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
         else if (_pendingUsers.isEmpty)
           SliverFillRemaining(
             child: Center(
@@ -186,21 +165,15 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                       color: Colors.green.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Icon(
-                      Icons.check_circle_outline,
-                      size: 56,
-                      color: Colors.green.withOpacity(0.4),
-                    ),
+                    child: Icon(Icons.check_circle_outline, size: 56, color: Colors.green.withOpacity(0.45)),
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'هیچ داواکاریەکی چاوەڕوان نییە',
+                    'هیچ داواکارییەکی چاوەڕوان نییە',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: isDark
-                          ? AppDarkColors.textPrimary
-                          : Colors.black54,
+                      color: isDark ? AppDarkColors.textPrimary : Colors.black54,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -217,8 +190,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, index) =>
-                    _buildRequestCard(_pendingUsers[index], index),
+                (context, index) => _buildRequestCard(_pendingUsers[index], index),
                 childCount: _pendingUsers.length,
               ),
             ),
@@ -235,8 +207,6 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     final phone = user.getStringValue('phone');
     final fullName = '$name $fatherName $grandfatherName'.trim();
     final date = user.getStringValue('created');
-
-    // Generate color from name
     final hue = (name.hashCode % 360).abs().toDouble();
     final avatarColor = HSLColor.fromAHSL(1, hue, 0.6, 0.5).toColor();
 
@@ -269,10 +239,8 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // User Info Row
               Row(
                 children: [
-                  // Gradient Avatar
                   Container(
                     width: 50,
                     height: 50,
@@ -286,12 +254,8 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                     ),
                     child: Center(
                       child: Text(
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        name.isNotEmpty ? name[0].toUpperCase() : 'ک',
+                        style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -301,13 +265,11 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          fullName,
+                          fullName.isEmpty ? 'کڕیار' : fullName,
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
-                            color: isDark
-                                ? AppDarkColors.textPrimary
-                                : Colors.black87,
+                            color: isDark ? AppDarkColors.textPrimary : Colors.black87,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -315,138 +277,48 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(
-                              Icons.phone_android,
-                              size: 13,
-                              color: Colors.grey[400],
-                            ),
+                            Icon(Icons.phone_android, size: 13, color: Colors.grey[400]),
                             const SizedBox(width: 4),
                             Text(
                               phone,
                               textDirection: TextDirection.ltr,
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 13,
-                              ),
+                              style: TextStyle(color: Colors.grey[500], fontSize: 13),
                             ),
                           ],
                         ),
                       ],
                     ),
                   ),
-                  // Time badge
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.orange.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.access_time,
-                          size: 12,
-                          color: Colors.orange[700],
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          AppHelpers.formatDate(date),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.orange[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      AppHelpers.formatDate(date),
+                      style: TextStyle(fontSize: 10, color: Colors.orange[700], fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 14),
-
-              // Buttons Row
               Row(
                 children: [
-                  // Approve Button
                   Expanded(
-                    child: GestureDetector(
-                      onTap: () => _approve(user),
-                      child: Container(
-                        height: 42,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF66BB6A), Color(0xFF43A047)],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.green.withOpacity(0.25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.check_rounded,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              AppStrings.approve,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    child: FilledButton.icon(
+                      onPressed: () => _approve(user),
+                      icon: const Icon(Icons.check_rounded),
+                      label: const Text(AppStrings.approve),
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // Reject Button
                   Expanded(
-                    child: GestureDetector(
-                      onTap: () => _reject(user),
-                      child: Container(
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.red.withOpacity(0.2),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.close_rounded,
-                              color: Colors.red[600],
-                              size: 18,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              AppStrings.reject,
-                              style: TextStyle(
-                                color: Colors.red[600],
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    child: OutlinedButton.icon(
+                      onPressed: () => _reject(user),
+                      icon: const Icon(Icons.close_rounded),
+                      label: const Text(AppStrings.reject),
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
                     ),
                   ),
                 ],
