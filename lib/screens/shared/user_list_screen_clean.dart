@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
+import 'package:zhirox/screens/shared/add_user_screen.dart';
 import 'package:zhirox/screens/shared/user_profile_screen_clean.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -47,6 +48,16 @@ class _UserListScreenCleanState extends State<UserListScreenClean> {
       // Keep the visible screen calm and preserve the last state.
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _openAddUser() async {
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (_) => AddUserDialog(role: widget.role),
+    );
+    if (created == true) {
+      await _loadUsers();
     }
   }
 
@@ -122,6 +133,17 @@ class _UserListScreenCleanState extends State<UserListScreenClean> {
               ),
             ),
             const SizedBox(height: 16),
+            if (_isCustomers) ...[
+              SizedBox(
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: _openAddUser,
+                  icon: const Icon(Icons.person_add_alt_1_rounded),
+                  label: const Text('کڕیار زیادکردن'),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: _searchController,
               onChanged: (_) => setState(() {}),
