@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/screens/shared/customer_statement_screen.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -88,6 +89,18 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
                   if (isCustomer) _InfoRow(label: 'سنووری قەرز', value: debtLimit <= 0 ? 'بێ سنوور' : AppHelpers.formatCurrency(debtLimit), subColor: subColor, ltr: true),
                 ]),
                 if (isCustomer) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 48,
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => CustomerStatementScreen(customerId: widget.userId)),
+                      ),
+                      icon: const Icon(Icons.summarize_rounded),
+                      label: const Text('کەشف حساب'),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   _CustomerMoneySummaryCard(debts: _debts, debtLimit: debtLimit, cardColor: cardColor, textColor: textColor, subColor: subColor),
                   const SizedBox(height: 16),
