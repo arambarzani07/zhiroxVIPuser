@@ -36,9 +36,23 @@ class DebtLock {
     return hasOverLimit(customer, debts) || hasOverdue(debts);
   }
 
+  static bool shouldPauseNewDebt(RecordModel customer, Iterable<RecordModel> debts) {
+    return isLocked(customer, debts);
+  }
+
   static String reason(RecordModel customer, Iterable<RecordModel> debts) {
     if (hasOverLimit(customer, debts)) return 'سنووری قەرز تێپەڕیوە';
     if (hasOverdue(debts)) return 'قەرزی دواکەوتوو هەیە';
     return 'قەرزی نوێ کراوەیە';
+  }
+
+  static String pauseTitle(RecordModel customer, Iterable<RecordModel> debts) {
+    return shouldPauseNewDebt(customer, debts) ? 'قەرزی نوێ ڕاگیراوە' : 'قەرزی نوێ کراوەیە';
+  }
+
+  static String pauseMessage(RecordModel customer, Iterable<RecordModel> debts) {
+    return shouldPauseNewDebt(customer, debts)
+        ? 'تەنها بەڕێوەبەر دەتوانێت بە بڕیاری خۆی قەرزی نوێ زیاد بکات.'
+        : 'دەتوانرێت قەرزی نوێ بە شێوەی ئاسایی تۆمار بکرێت.';
   }
 }
