@@ -67,7 +67,7 @@ class _AddDebtScreenCleanState extends State<AddDebtScreenClean> {
     return null;
   }
 
-  Future<bool> _confirmDebtLockIfNeeded() async {
+  Future<bool> _confirmNewDebtPauseIfNeeded() async {
     final customer = _selectedCustomer();
     if (customer == null) return false;
     var debts = <RecordModel>[];
@@ -76,17 +76,19 @@ class _AddDebtScreenCleanState extends State<AddDebtScreenClean> {
     } catch (_) {
       debts = [];
     }
-    if (!DebtLock.isLocked(customer, debts)) return true;
+    if (!DebtLock.shouldPauseNewDebt(customer, debts)) return true;
     if (!mounted) return false;
+
     final auth = context.read<AuthProvider>();
-    if (!auth.isManager && !auth.canSetDebtLimit) {
+    if (!auth.isManager) {
       AppHelpers.showSnackBar(context, AppUserMessages.needsManagerApproval, isError: true);
       return false;
     }
+
     final confirm = await AppHelpers.showConfirmDialog(
       context,
-      title: 'قەرزی قفڵکراو',
-      message: 'قەرزی نوێ بۆ ئەم کڕیارە پێویستی بە بڕیاری بەڕێوەبەر هەیە. دەتەوێت بەردەوام بیت؟',
+      title: DebtLock.pauseTitle(customer, debts),
+      message: 'تەنها بەڕێوەبەر دەتوانێت بە بڕیاری خۆی قەرزی نوێ زیاد بکات. دەتەوێت بەردەوام بیت؟',
     );
     return confirm;
   }
@@ -141,8 +143,8 @@ class _AddDebtScreenCleanState extends State<AddDebtScreenClean> {
       return;
     }
 
-    final lockCanContinue = await _confirmDebtLockIfNeeded();
-    if (!lockCanContinue) return;
+    final pauseCanContinue = await _confirmNewDebtPauseIfNeeded();
+    if (!pauseCanContinue) return;
 
     final canContinue = await _confirmLimitIfNeeded(amount);
     if (!canContinue) return;
@@ -274,9 +276,9 @@ class _AddDebtScreenCleanState extends State<AddDebtScreenClean> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
                     child: Row(children: [
-                      const Icon(Icons.shield_rounded, color: AppColors.primary),
+                      const Icon(Icons.pause_circle_filled_rounded, color: AppColors.primary),
                       const SizedBox(width: 10),
-                      Expanded(child: Text('پێش تۆمارکردن، سنووری قەرزی کڕیار و دۆخی قەرزی قفڵکراو پشکنرێت.', style: TextStyle(color: subColor, height: 1.6))),
+                      Expanded(child: Text('پێش تۆمارکردن، دۆخی ڕاگرتنی قەرزی نوێ و سنووری قەرز پشکنرێت.', style: TextStyle(color: subColor, height: 1.6))),
                     ]),
                   ),
                   const SizedBox(height: 18),
