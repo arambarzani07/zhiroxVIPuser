@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
+import 'package:zhirox/screens/shared/debt_receipt_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/debt_balance.dart';
@@ -85,6 +86,8 @@ class _DebtDetailScreenCleanState extends State<DebtDetailScreenClean> {
                 _QuietEmpty(cardColor: cardColor, textColor: textColor, subColor: subColor)
               else ...[
                 _DebtSummaryCard(debt: debt, payments: _payments, cardColor: cardColor, textColor: textColor, subColor: subColor),
+                const SizedBox(height: 12),
+                _ReceiptActionCard(debtId: debt.id, cardColor: cardColor, textColor: textColor, subColor: subColor),
                 const SizedBox(height: 16),
                 _DebtTimelineCard(debt: debt, payments: _payments, cardColor: cardColor, textColor: textColor, subColor: subColor),
               ],
@@ -140,6 +143,34 @@ class _DebtSummaryCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _ReceiptActionCard extends StatelessWidget {
+  final String debtId;
+  final Color cardColor;
+  final Color textColor;
+  final Color subColor;
+
+  const _ReceiptActionCard({required this.debtId, required this.cardColor, required this.textColor, required this.subColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20)),
+      child: Row(children: [
+        const Icon(Icons.verified_rounded, color: AppColors.primary),
+        const SizedBox(width: 10),
+        Expanded(child: Text('وەصڵی ئەم قەرزە ئامادەیە بۆ بینین و پشکنین.', style: TextStyle(color: subColor, height: 1.5))),
+        const SizedBox(width: 10),
+        FilledButton.icon(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DebtReceiptScreen(debtId: debtId))),
+          icon: const Icon(Icons.receipt_rounded, size: 18),
+          label: const Text('وەصڵ'),
+        ),
+      ]),
     );
   }
 }
