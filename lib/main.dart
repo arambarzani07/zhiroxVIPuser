@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/debt_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
-import 'package:zhirox/screens/admin/admin_dashboard.dart';
+import 'package:zhirox/screens/admin/manager_dashboard_clean.dart';
 import 'package:zhirox/screens/auth/login_screen.dart';
 import 'package:zhirox/screens/customer/customer_dashboard.dart';
 import 'package:zhirox/screens/employee/employee_dashboard.dart';
@@ -22,15 +22,11 @@ Future<void> _startCoreServices() async {
   try {
     await NotificationService.init();
     await NotificationService.requestPermission();
-  } catch (e) {
-    debugPrint('Notifications skipped: $e');
-  }
+  } catch (_) {}
 
   try {
     await ConnectivityService.instance.init();
-  } catch (e) {
-    debugPrint('Connectivity skipped: $e');
-  }
+  } catch (_) {}
 }
 
 class ZhiroxApp extends StatelessWidget {
@@ -47,7 +43,7 @@ class ZhiroxApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
           return MaterialApp(
-            title: 'ژیرۆکس',
+            title: AppStrings.appName,
             debugShowCheckedModeBanner: false,
             locale: const Locale('ckb'),
             themeMode: themeProvider.themeMode,
@@ -207,7 +203,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         switch (auth.userRole) {
           case 'admin':
-            return const AdminDashboard();
+            return const ManagerDashboardClean();
           case 'employee':
             return const EmployeeDashboard();
           case 'customer':
@@ -261,7 +257,7 @@ class _ConnectivityBannerState extends State<_ConnectivityBanner> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'ئۆفلاین — زانیارییەکان لەوانەیە نوێ نەبن',
+                        'پارێزرا ✅ کاتێک ئینتەرنێت گەڕایەوە، خۆکارانە تەواو دەبێت',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 12,
