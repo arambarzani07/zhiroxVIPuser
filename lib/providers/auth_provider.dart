@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zhirox/services/pb_service.dart';
+import 'package:zhirox/utils/market_ui_policy.dart';
 
 class AuthProvider extends ChangeNotifier {
   static const _secureStorage = FlutterSecureStorage();
@@ -19,19 +20,15 @@ class AuthProvider extends ChangeNotifier {
   String get userId => _user?.id ?? '';
   String get userName => _user?.getStringValue('name') ?? '';
 
-  bool get isManager => userRole == 'admin';
-  bool get isEmployee => userRole == 'employee';
-  bool get isCustomer => userRole == 'customer';
+  bool get isManager => userRole == ZhiroxRoles.manager;
+  bool get isEmployee => userRole == ZhiroxRoles.employee;
+  bool get isCustomer => userRole == ZhiroxRoles.customer;
+  bool get hasVisibleMarketRole => ZhiroxRoles.isVisibleRole(userRole);
 
-  String get roleDisplayName {
-    if (isManager) return 'بەڕێوەبەر';
-    if (isEmployee) return 'کارمەند';
-    if (isCustomer) return 'کڕیار';
-    return '';
-  }
+  String get roleDisplayName => ZhiroxRoles.label(userRole);
 
   String get adminId {
-    if (userRole == 'admin') return userId;
+    if (isManager) return userId;
     return _user?.getStringValue('admin_id') ?? '';
   }
 
@@ -39,9 +36,8 @@ class AuthProvider extends ChangeNotifier {
 
   int get subscriptionDaysLeft {
     if (_user == null) return 9999;
-    final role = userRole;
     String subEnd = '';
-    if (role == 'admin') {
+    if (isManager) {
       subEnd = _user!.getStringValue('subscription_end');
     }
     if (subEnd.isEmpty) return 9999;
@@ -136,20 +132,34 @@ class AuthProvider extends ChangeNotifier {
     super.dispose();
   }
 
+  Future<void> _clearSavedUser() async {
+    _user = null;
+    await _secureStorage.delete(key: 'user_id');
+    await _secureStorage.delete(key: 'user_data');
+  }
+
+  bool _acceptOnlyVisibleMarketRole() {
+    if (_user == null) return false;
+    return ZhiroxRoles.isVisibleRole(userRole);
+  }
+
   void _subscribeToUserChanges() {
-    if (_user == null) return;
+    if (_user == null || !isEmployee) return;
     final uid = _user!.id;
     try {
       PBService.pb.collection('users').subscribe(uid, (event) async {
         if (event.record == null || _disposed) return;
         final isActive = event.record!.getBoolValue('active');
         final isApproved = event.record!.getBoolValue('approved');
-        if ((!isActive || !isApproved) && userRole == 'employee') {
+        if ((!isActive || !isApproved) && isEmployee) {
           wasDeactivated = true;
           await logout();
           return;
         }
         _user = event.record;
+        if (!_acceptOnlyVisibleMarketRole()) {
+          await _clearSavedUser();
+        }
         notifyListeners();
       });
     } catch (_) {}
@@ -160,18 +170,24 @@ class AuthProvider extends ChangeNotifier {
     if (userId != null) {
       try {
         _user = await PBService.getUser(userId);
-        await _secureStorage.write(key: 'user_data', value: jsonEncode(_user!.toJson()));
-        if (userRole == 'employee') _subscribeToUserChanges();
+        if (!_acceptOnlyVisibleMarketRole()) {
+          await _clearSavedUser();
+        } else {
+          await _secureStorage.write(key: 'user_data', value: jsonEncode(_user!.toJson()));
+          if (isEmployee) _subscribeToUserChanges();
+        }
       } catch (_) {
         final userDataString = await _secureStorage.read(key: 'user_data');
         if (userDataString != null) {
           try {
             _user = RecordModel.fromJson(jsonDecode(userDataString));
+            if (!_acceptOnlyVisibleMarketRole()) {
+              await _clearSavedUser();
+            }
           } catch (_) {}
         }
         if (_user == null) {
-          await _secureStorage.delete(key: 'user_id');
-          await _secureStorage.delete(key: 'user_data');
+          await _clearSavedUser();
         }
       }
     }
@@ -183,6 +199,9 @@ class AuthProvider extends ChangeNotifier {
     if (_user == null) return;
     try {
       _user = await PBService.getUser(_user!.id);
+      if (!_acceptOnlyVisibleMarketRole()) {
+        await _clearSavedUser();
+      }
       notifyListeners();
     } catch (_) {}
   }
@@ -230,7 +249,13 @@ class AuthProvider extends ChangeNotifier {
         await _handleLoginFailure();
         throw 'وشەی نهێنی یان ژمارە مۆبایل هەڵەیە';
       }
-      if (userRole == 'employee') _subscribeToUserChanges();
+
+      if (!_acceptOnlyVisibleMarketRole()) {
+        await _clearSavedUser();
+        throw 'ئەم هەژمارە بۆ ئەم سیستەمە چالاک نییە';
+      }
+
+      if (isEmployee) _subscribeToUserChanges();
       await _secureStorage.write(key: 'user_id', value: _user!.id);
       await _secureStorage.write(key: 'user_data', value: jsonEncode(_user!.toJson()));
       final prefs = await SharedPreferences.getInstance();
@@ -301,9 +326,7 @@ class AuthProvider extends ChangeNotifier {
       await PBService.pb.collection('payments').unsubscribe();
       await PBService.pb.collection('notifications').unsubscribe();
     } catch (_) {}
-    _user = null;
-    await _secureStorage.delete(key: 'user_id');
-    await _secureStorage.delete(key: 'user_data');
+    await _clearSavedUser();
     notifyListeners();
   }
 }
