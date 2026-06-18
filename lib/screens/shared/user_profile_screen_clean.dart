@@ -7,6 +7,7 @@ import 'package:zhirox/screens/shared/debt_detail_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
+import 'package:zhirox/widgets/customer_debt_lock_card.dart';
 import 'package:zhirox/widgets/customer_limit_summary_card.dart';
 import 'package:zhirox/widgets/employee_access_settings_card.dart';
 
@@ -103,6 +104,14 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
                     ),
                   ),
                   if (user != null) ...[
+                    const SizedBox(height: 16),
+                    CustomerDebtLockCard(
+                      customer: user,
+                      debts: _debts,
+                      cardColor: cardColor,
+                      textColor: textColor,
+                      subColor: subColor,
+                    ),
                     const SizedBox(height: 16),
                     CustomerLimitSummaryCard(
                       customer: user,
