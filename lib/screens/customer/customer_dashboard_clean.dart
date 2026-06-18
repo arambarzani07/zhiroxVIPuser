@@ -50,7 +50,13 @@ class _CustomerDashboardCleanState extends State<CustomerDashboardClean> {
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
     final screens = [
-      _CustomerHome(debts: _debts, isLoading: _isLoading, onRefresh: _loadDebts, onOpenReceipts: () => setState(() => _currentIndex = 1)),
+      _CustomerHome(
+        debts: _debts,
+        isLoading: _isLoading,
+        onRefresh: _loadDebts,
+        onOpenReceipts: () => setState(() => _currentIndex = 1),
+        onOpenProfile: () => setState(() => _currentIndex = 2),
+      ),
       _ReceiptWallet(debts: _debts, isLoading: _isLoading, onRefresh: _loadDebts),
       UserProfileScreen(key: const ValueKey('profile'), userId: auth.userId),
     ];
@@ -115,8 +121,15 @@ class _CustomerHome extends StatelessWidget {
   final bool isLoading;
   final Future<void> Function() onRefresh;
   final VoidCallback onOpenReceipts;
+  final VoidCallback onOpenProfile;
 
-  const _CustomerHome({required this.debts, required this.isLoading, required this.onRefresh, required this.onOpenReceipts});
+  const _CustomerHome({
+    required this.debts,
+    required this.isLoading,
+    required this.onRefresh,
+    required this.onOpenReceipts,
+    required this.onOpenProfile,
+  });
 
   int _trustScore(double totalDebt, double totalRemaining, int activeCount) {
     if (totalDebt <= 0 || totalRemaining <= 0) return 100;
@@ -151,12 +164,33 @@ class _CustomerHome extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _CustomerHero(customerName: auth.userName.isEmpty ? 'کڕیار' : auth.userName, trustScore: trustScore, trustText: _trustText(trustScore, totalRemaining), onToggleTheme: () => context.read<ThemeProvider>().toggleTheme()),
+          _CustomerHero(
+            customerName: auth.userName.isEmpty ? 'کڕیار' : auth.userName,
+            trustScore: trustScore,
+            trustText: _trustText(trustScore, totalRemaining),
+            onToggleTheme: () => context.read<ThemeProvider>().toggleTheme(),
+          ),
           const SizedBox(height: 16),
           if (isLoading)
             const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
           else ...[
-            _BalanceStoryCard(cardColor: cardColor, textColor: textColor, subColor: subColor, totalRemaining: totalRemaining, totalPaid: totalPaid, activeCount: activeDebts.length, paidCount: paidDebts.length),
+            _BalanceStoryCard(
+              cardColor: cardColor,
+              textColor: textColor,
+              subColor: subColor,
+              totalRemaining: totalRemaining,
+              totalPaid: totalPaid,
+              activeCount: activeDebts.length,
+              paidCount: paidDebts.length,
+            ),
+            const SizedBox(height: 14),
+            _CustomerAuthorityCard(
+              cardColor: cardColor,
+              textColor: textColor,
+              subColor: subColor,
+              onOpenReceipts: onOpenReceipts,
+              onOpenProfile: onOpenProfile,
+            ),
             const SizedBox(height: 14),
             _QuickCustomerActions(cardColor: cardColor, textColor: textColor, subColor: subColor, onOpenReceipts: onOpenReceipts),
             const SizedBox(height: 16),
@@ -265,6 +299,65 @@ class _BalanceStoryCard extends StatelessWidget {
   }
 }
 
+class _CustomerAuthorityCard extends StatelessWidget {
+  final Color cardColor;
+  final Color textColor;
+  final Color subColor;
+  final VoidCallback onOpenReceipts;
+  final VoidCallback onOpenProfile;
+
+  const _CustomerAuthorityCard({required this.cardColor, required this.textColor, required this.subColor, required this.onOpenReceipts, required this.onOpenProfile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [const Icon(Icons.verified_user_rounded, color: AppColors.primary), const SizedBox(width: 8), Text('دەسەڵاتی کڕیار', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))]),
+        const SizedBox(height: 8),
+        Text('کڕیار تەنها زانیاری خۆی دەبینێت. زیادکردن، گۆڕین، یان سڕینەوە لەلایەن مارکێتەوە دەکرێت.', style: TextStyle(color: subColor, height: 1.55, fontSize: 12)),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _CustomerAuthorityChip(label: 'قەرزی من', icon: Icons.account_balance_wallet_rounded, allowed: true, onTap: () {}),
+          _CustomerAuthorityChip(label: 'وەصڵەکانم', icon: Icons.receipt_long_rounded, allowed: true, onTap: onOpenReceipts),
+          _CustomerAuthorityChip(label: 'کەشف حساب', icon: Icons.description_rounded, allowed: true, onTap: onOpenReceipts),
+          _CustomerAuthorityChip(label: 'هەژماری من', icon: Icons.person_rounded, allowed: true, onTap: onOpenProfile),
+          _CustomerAuthorityChip(label: 'زیادکردنی قەرز', icon: Icons.lock_clock_rounded, allowed: false, onTap: () {}),
+          _CustomerAuthorityChip(label: 'گۆڕین/سڕینەوە', icon: Icons.lock_clock_rounded, allowed: false, onTap: () {}),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _CustomerAuthorityChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool allowed;
+  final VoidCallback onTap;
+
+  const _CustomerAuthorityChip({required this.label, required this.icon, required this.allowed, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = allowed ? AppColors.secondary : AppColors.warning;
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: allowed ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withOpacity(0.22))),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(allowed ? icon : Icons.lock_clock_rounded, color: color, size: 16),
+          const SizedBox(width: 5),
+          Text(allowed ? label : '$label — بۆ مارکێت', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+        ]),
+      ),
+    );
+  }
+}
+
 class _QuickCustomerActions extends StatelessWidget {
   final Color cardColor;
   final Color textColor;
@@ -293,7 +386,8 @@ class _QuickCustomerActions extends StatelessWidget {
       ]),
     );
   }
-}\n
+}
+
 class _QuickAction extends StatelessWidget {
   final String label;
   final IconData icon;
