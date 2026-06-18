@@ -5,7 +5,7 @@ import 'package:zhirox/providers/debt_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/manager_dashboard_clean.dart';
 import 'package:zhirox/screens/auth/login_screen.dart';
-import 'package:zhirox/screens/customer/customer_dashboard.dart';
+import 'package:zhirox/screens/customer/customer_dashboard_clean.dart';
 import 'package:zhirox/screens/employee/employee_dashboard.dart';
 import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/services/notification_service.dart';
@@ -207,7 +207,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
           case 'employee':
             return const EmployeeDashboard();
           case 'customer':
-            return const CustomerDashboard();
+            return const CustomerDashboardClean();
           default:
             return const LoginScreen();
         }
