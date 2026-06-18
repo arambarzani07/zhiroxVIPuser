@@ -6,6 +6,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/market_action_queue.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
+import 'package:zhirox/utils/debt_lock.dart';
 import 'package:zhirox/utils/helpers.dart';
 
 class AddDebtScreenClean extends StatefulWidget {
@@ -66,6 +67,30 @@ class _AddDebtScreenCleanState extends State<AddDebtScreenClean> {
     return null;
   }
 
+  Future<bool> _confirmDebtLockIfNeeded() async {
+    final customer = _selectedCustomer();
+    if (customer == null) return false;
+    var debts = <RecordModel>[];
+    try {
+      debts = await PBService.getDebts(customerId: customer.id, perPage: 500);
+    } catch (_) {
+      debts = [];
+    }
+    if (!DebtLock.isLocked(customer, debts)) return true;
+    if (!mounted) return false;
+    final auth = context.read<AuthProvider>();
+    if (!auth.isManager && !auth.canSetDebtLimit) {
+      AppHelpers.showSnackBar(context, AppUserMessages.needsManagerApproval, isError: true);
+      return false;
+    }
+    final confirm = await AppHelpers.showConfirmDialog(
+      context,
+      title: 'قەرزی قفڵکراو',
+      message: 'قەرزی نوێ بۆ ئەم کڕیارە پێویستی بە بڕیاری بەڕێوەبەر هەیە. دەتەوێت بەردەوام بیت؟',
+    );
+    return confirm;
+  }
+
   Future<bool> _confirmLimitIfNeeded(double amount) async {
     final customer = _selectedCustomer();
     if (customer == null) return false;
@@ -115,6 +140,9 @@ class _AddDebtScreenCleanState extends State<AddDebtScreenClean> {
       AppHelpers.showSnackBar(context, 'بڕی قەرز دەبێت لە سفر زیاتر بێت', isError: true);
       return;
     }
+
+    final lockCanContinue = await _confirmDebtLockIfNeeded();
+    if (!lockCanContinue) return;
 
     final canContinue = await _confirmLimitIfNeeded(amount);
     if (!canContinue) return;
@@ -248,7 +276,7 @@ class _AddDebtScreenCleanState extends State<AddDebtScreenClean> {
                     child: Row(children: [
                       const Icon(Icons.shield_rounded, color: AppColors.primary),
                       const SizedBox(width: 10),
-                      Expanded(child: Text('پێش تۆمارکردن، سنووری قەرزی کڕیار و دەسەڵاتی کارمەند پشکنرێت.', style: TextStyle(color: subColor, height: 1.6))),
+                      Expanded(child: Text('پێش تۆمارکردن، سنووری قەرزی کڕیار و دۆخی قەرزی قفڵکراو پشکنرێت.', style: TextStyle(color: subColor, height: 1.6))),
                     ]),
                   ),
                   const SizedBox(height: 18),
