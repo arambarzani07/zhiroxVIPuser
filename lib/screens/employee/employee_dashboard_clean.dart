@@ -227,11 +227,17 @@ class _PermissionSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [
+    final allowedItems = [
       _PermissionItem('قەرز پێدان', auth.canGiveDebt),
       _PermissionItem('پارە وەرگرتنەوە', auth.canReceivePayment),
       _PermissionItem('کڕیار زیادکردن', auth.canAddCustomers),
       _PermissionItem('کەشف حساب', auth.canCreateStatement),
+      _PermissionItem('ناردنی ئاگاداری', auth.canSendNotifications),
+    ];
+    final protectedItems = [
+      _PermissionItem('بینینی ڕاپۆرت', auth.canViewReports),
+      _PermissionItem('دەستکاری قەرز', auth.canEditDebts),
+      _PermissionItem('سنووری قەرز', auth.canSetDebtLimit),
     ];
 
     return Container(
@@ -240,13 +246,17 @@ class _PermissionSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [const Icon(Icons.verified_user_rounded, color: AppColors.primary), const SizedBox(width: 8), Text('دەسەڵاتەکانی کاری من', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))]),
+          Row(children: [const Icon(Icons.verified_user_rounded, color: AppColors.primary), const SizedBox(width: 8), Text('دەسەڵاتەکانی کارمەند', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))]),
+          const SizedBox(height: 8),
+          Text('ئەمە ئەو کارانەیە کە دەتوانیت بکەیت، یان پێویستیان بە ڕێگەپێدانی بەڕێوەبەر هەیە.', style: TextStyle(color: subColor, height: 1.55, fontSize: 12)),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: items.map((item) => _PermissionChip(item: item)).toList(),
-          ),
+          Text('کاری ڕۆژانە', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: allowedItems.map((item) => _PermissionChip(item: item)).toList()),
+          const SizedBox(height: 12),
+          Text('کرداری گرنگ', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: protectedItems.map((item) => _PermissionChip(item: item)).toList()),
           const SizedBox(height: 12),
           TextButton.icon(onPressed: onOpenProfile, icon: const Icon(Icons.person_rounded), label: const Text('بینینی هەژماری من')),
         ],
@@ -270,6 +280,7 @@ class _PermissionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = item.allowed ? AppColors.secondary : AppColors.warning;
+    final text = item.allowed ? item.label : '${item.label} — بە ڕێگەپێدان';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withOpacity(0.22))),
@@ -278,7 +289,7 @@ class _PermissionChip extends StatelessWidget {
         children: [
           Icon(item.allowed ? Icons.check_circle_rounded : Icons.lock_clock_rounded, color: color, size: 16),
           const SizedBox(width: 5),
-          Text(item.label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+          Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
         ],
       ),
     );
@@ -301,7 +312,7 @@ class _SafeWorkCard extends StatelessWidget {
           const Icon(Icons.shield_rounded, color: AppColors.secondary),
           const SizedBox(width: 10),
           Expanded(
-            child: Text('ئەگەر کردارێک پێویستی بە ڕێگەپێدانی بەڕێوەبەر هەبوو، بە شێوەی پارێزراو دەچێتە پێش.', style: TextStyle(color: subColor, height: 1.6)),
+            child: Text('ئەگەر کردارێک پێویستی بە ڕێگەپێدانی بەڕێوەبەر هەبوو، بە شێوەی پارێزراو دەچێتە پێش و بەڕێوەبەر بڕیار دەدات.', style: TextStyle(color: subColor, height: 1.6)),
           ),
         ],
       ),
