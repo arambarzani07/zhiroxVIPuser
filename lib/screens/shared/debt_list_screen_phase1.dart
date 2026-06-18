@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/screens/shared/add_debt_screen_clean.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen_clean.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -44,6 +45,16 @@ class _DebtListScreenPhase1State extends State<DebtListScreenPhase1> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _openAddDebt() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isManager && !auth.canGiveDebt) {
+      AppHelpers.showSnackBar(context, AppUserMessages.needsManagerApproval, isError: true);
+      return;
+    }
+    final created = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const AddDebtScreenClean()));
+    if (created == true) await _loadDebts();
   }
 
   List<_CustomerDebtGroup> _buildGroups(List<RecordModel> debts) {
@@ -108,6 +119,15 @@ class _DebtListScreenPhase1State extends State<DebtListScreenPhase1> {
               ),
             ),
             const SizedBox(height: 16),
+            SizedBox(
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: _openAddDebt,
+                icon: const Icon(Icons.add_card_rounded),
+                label: const Text('قەرز پێدان'),
+              ),
+            ),
+            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
