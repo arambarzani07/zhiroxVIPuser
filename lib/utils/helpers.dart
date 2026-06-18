@@ -1,6 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
+class AppUserMessages {
+  static const String protectedOffline = 'پارێزرا ✅ کاتێک ئینتەرنێت گەڕایەوە، خۆکارانە تەواو دەبێت';
+  static const String needsManagerApproval = 'ئەم کردارە پێویستی بە ڕێگەپێدانی بەڕێوەبەر هەیە';
+  static const String debtLimitExceeded = 'ئەم بڕە سنووری قەرزی کڕیار تێدەپەڕێنێت';
+
+  static const List<String> allowedValidationMessages = [
+    'تکایە کڕیارێک هەڵبژێرە',
+    'تکایە بڕی قەرز بنووسە',
+    'بڕی قەرز دەبێت لە سفر زیاتر بێت',
+    'تکایە لانیکەم یەک کاڵا زیاد بکە',
+    'تکایە بەرواری دانەوە هەڵبژێرە',
+    'تکایە ژمارەی مۆبایل بە دروستی بنووسە',
+    'بڕی پارە نابێت زیاتر بێت لە قەرزی ماوە',
+    'تکایە ژمارە مۆبایل بنووسە',
+    'تکایە وشەی نهێنی بنووسە',
+  ];
+
+  static const List<String> allowedSuccessMessages = [
+    'قەرز تۆمارکرا ✅',
+    'پارە وەرگیرا ✅',
+    'کڕیار زیادکرا ✅',
+    'قەرزی ماوە نوێکرایەوە',
+    'ڕاپۆرت ئامادەیە',
+    'کەشف حساب درووستکرا',
+    'دەسەڵاتی کارمەند نوێکرایەوە ✅',
+  ];
+}
+
 class AppHelpers {
   // فۆرماتی پارە
   static String formatCurrency(double amount) {
@@ -96,32 +124,13 @@ class AppHelpers {
   }
 
   /// Final Phase-1 UI rule:
-  /// Users must never see internal/technical failure wording. Only helpful
-  /// action guidance, ordinary business confirmations, and internet-safe
-  /// protection messages are allowed.
+  /// Market users must see only helpful guidance, confirmations, protection,
+  /// or manager-approval wording. Technical and internal wording is hidden.
   static String? businessSafeMessage(String rawMessage, {bool isError = false}) {
     final message = rawMessage.trim();
     if (message.isEmpty) return null;
 
     final lower = message.toLowerCase();
-
-    final isAllowedGuidance =
-        message.contains('تکایە') ||
-        message.contains('نابێت') ||
-        message.contains('دەبێت') ||
-        message.contains('ڕێگەپێدانی بەڕێوەبەر') ||
-        message.contains('وشەی نهێنی') ||
-        message.contains('ژمارە مۆبایل') ||
-        message.contains('سنووری قەرز') ||
-        message.contains('ئینتەرنێت') ||
-        message.contains('پارێزرا') ||
-        message.contains('تۆمار کرا') ||
-        message.contains('تۆمارکرا') ||
-        message.contains('نوێکرایەوە') ||
-        message.contains('وەرگیرا') ||
-        message.contains('نێردرا') ||
-        message.contains('ئامادەیە') ||
-        message.contains('تەواو بوو');
 
     final isInternetState =
         lower.contains('internet') ||
@@ -132,9 +141,35 @@ class AppHelpers {
         lower.contains('offline') ||
         message.contains('ئینتەرنێت');
 
-    if (isInternetState) {
-      return 'پارێزرا ✅ کاتێک ئینتەرنێت گەڕایەوە، خۆکارانە تەواو دەبێت';
-    }
+    if (isInternetState) return AppUserMessages.protectedOffline;
+
+    final exactAllowed = <String>{
+      ...AppUserMessages.allowedValidationMessages,
+      ...AppUserMessages.allowedSuccessMessages,
+      AppUserMessages.needsManagerApproval,
+      AppUserMessages.debtLimitExceeded,
+    };
+
+    if (exactAllowed.contains(message)) return message;
+
+    final isAllowedGuidance =
+        message.contains('تکایە') ||
+        message.contains('نابێت') ||
+        message.contains('دەبێت') ||
+        message.contains('ڕێگەپێدانی بەڕێوەبەر') ||
+        message.contains('وشەی نهێنی') ||
+        message.contains('ژمارە مۆبایل') ||
+        message.contains('سنووری قەرز') ||
+        message.contains('پارێزرا') ||
+        message.contains('تۆمار کرا') ||
+        message.contains('تۆمارکرا') ||
+        message.contains('زیادکرا') ||
+        message.contains('نوێکرایەوە') ||
+        message.contains('وەرگیرا') ||
+        message.contains('نێردرا') ||
+        message.contains('ئامادەیە') ||
+        message.contains('درووستکرا') ||
+        message.contains('تەواو بوو');
 
     final forbidden = <String>[
       'database',
@@ -153,10 +188,12 @@ class AppHelpers {
       'failure',
       'clientexception',
       'socketexception',
-      'formatException'.toLowerCase(),
+      'formatexception',
       'stack',
       'debug',
       'schema',
+      'try again',
+      'something went wrong',
       'هەڵە لە',
       'هەڵە ڕوویدا',
       'داتابەیس',
@@ -166,16 +203,11 @@ class AppHelpers {
       'فیلد',
     ];
 
-    final hasForbidden = forbidden.any(lower.contains) ||
-        forbidden.any((word) => message.contains(word));
+    final hasForbidden = forbidden.any(lower.contains) || forbidden.any((word) => message.contains(word));
+    if (hasForbidden) return null;
 
-    if (hasForbidden && !isAllowedGuidance) {
-      return null;
-    }
-
-    if (isError && message.contains(':') && !isAllowedGuidance) {
-      return null;
-    }
+    if (isError && message.contains(':')) return null;
+    if (isError && !isAllowedGuidance) return null;
 
     return message;
   }
