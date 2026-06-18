@@ -3,10 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/debt_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
-import 'package:zhirox/screens/admin/manager_dashboard_phase1.dart';
+import 'package:zhirox/screens/admin/manager_dashboard_phase1_final.dart';
 import 'package:zhirox/screens/auth/login_screen.dart';
-import 'package:zhirox/screens/customer/customer_dashboard_clean.dart';
-import 'package:zhirox/screens/employee/employee_dashboard_clean.dart';
+import 'package:zhirox/screens/customer/customer_dashboard_phase1_final.dart';
+import 'package:zhirox/screens/employee/employee_dashboard_phase1_final.dart';
 import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/services/notification_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -203,11 +203,11 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         switch (auth.userRole) {
           case 'admin':
-            return const ManagerDashboardPhase1();
+            return const ManagerDashboardPhase1Final();
           case 'employee':
-            return const EmployeeDashboardClean();
+            return const EmployeeDashboardPhase1Final();
           case 'customer':
-            return const CustomerDashboardClean();
+            return const CustomerDashboardPhase1Final();
           default:
             return const LoginScreen();
         }
