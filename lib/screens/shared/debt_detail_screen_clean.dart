@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
+import 'package:zhirox/utils/debt_balance.dart';
 import 'package:zhirox/utils/helpers.dart';
 
 class DebtDetailScreenClean extends StatefulWidget {
@@ -30,6 +31,7 @@ class _DebtDetailScreenCleanState extends State<DebtDetailScreenClean> {
     try {
       final debt = await PBService.pb.collection('debts').getOne(widget.debtId, expand: 'customer,created_by');
       final payments = await PBService.getPayments(debtId: widget.debtId);
+      payments.sort((a, b) => a.getStringValue('created').compareTo(b.getStringValue('created')));
       if (mounted) {
         _debt = debt;
         _payments = payments;
@@ -84,12 +86,7 @@ class _DebtDetailScreenCleanState extends State<DebtDetailScreenClean> {
               else ...[
                 _DebtSummaryCard(debt: debt, payments: _payments, cardColor: cardColor, textColor: textColor, subColor: subColor),
                 const SizedBox(height: 16),
-                Text('مێژووی پارە وەرگرتنەوە', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                if (_payments.isEmpty)
-                  _NoPayments(cardColor: cardColor, textColor: textColor, subColor: subColor)
-                else
-                  ..._payments.map((payment) => _PaymentCard(payment: payment, cardColor: cardColor, textColor: textColor, subColor: subColor)),
+                _DebtTimelineCard(debt: debt, payments: _payments, cardColor: cardColor, textColor: textColor, subColor: subColor),
               ],
             ],
           ),
@@ -110,11 +107,10 @@ class _DebtSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final amount = debt.getDoubleValue('amount');
-    final remaining = debt.getDoubleValue('remaining');
-    final paid = (amount - remaining).clamp(0, double.infinity).toDouble();
-    final status = debt.getStringValue('status');
-    final isPaid = status == 'paid' || remaining <= 0;
+    final amount = DebtBalance.amount(debt);
+    final remaining = DebtBalance.remaining(debt);
+    final paid = DebtBalance.paid(debt);
+    final isPaid = DebtBalance.isPaid(debt);
     final customer = debt.expand['customer']?.isNotEmpty == true ? debt.expand['customer']!.first : null;
     final customerName = customer?.getStringValue('name') ?? 'کڕیار';
 
@@ -148,45 +144,114 @@ class _DebtSummaryCard extends StatelessWidget {
   }
 }
 
-class _PaymentCard extends StatelessWidget {
-  final RecordModel payment;
+class _DebtTimelineCard extends StatelessWidget {
+  final RecordModel debt;
+  final List<RecordModel> payments;
   final Color cardColor;
   final Color textColor;
   final Color subColor;
 
-  const _PaymentCard({required this.payment, required this.cardColor, required this.textColor, required this.subColor});
+  const _DebtTimelineCard({required this.debt, required this.payments, required this.cardColor, required this.textColor, required this.subColor});
 
   @override
   Widget build(BuildContext context) {
-    final amount = payment.getDoubleValue('amount');
-    final note = payment.getStringValue('note');
-    final date = payment.getStringValue('created');
+    final events = <_TimelineItem>[
+      _TimelineItem.debt(debt),
+      ...payments.map(_TimelineItem.payment),
+    ]..sort((a, b) => a.created.compareTo(b.created));
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(18)),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(color: AppColors.secondary.withOpacity(0.10), borderRadius: BorderRadius.circular(14)),
-            child: const Icon(Icons.payments_rounded, color: AppColors.secondary),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Text('مێژووی قەرز و پارە بە شێوەی چات', style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.bold)),
+        ]),
+        const SizedBox(height: 14),
+        ...events.map((event) => _TimelineBubble(item: event, textColor: textColor, subColor: subColor)),
+      ]),
+    );
+  }
+}
+
+class _TimelineBubble extends StatelessWidget {
+  final _TimelineItem item;
+  final Color textColor;
+  final Color subColor;
+
+  const _TimelineBubble({required this.item, required this.textColor, required this.subColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDebt = item.kind == _TimelineKind.debt;
+    final align = isDebt ? Alignment.centerRight : Alignment.centerLeft;
+    final color = isDebt ? AppColors.warning : AppColors.secondary;
+    final bg = color.withOpacity(0.10);
+    final title = isDebt ? 'قەرز پێدرا' : 'پارە وەرگیرا';
+    final icon = isDebt ? Icons.add_card_rounded : Icons.payments_rounded;
+
+    return Align(
+      alignment: align,
+      child: Container(
+        width: MediaQuery.sizeOf(context).width * 0.78,
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isDebt ? 18 : 4),
+            bottomRight: Radius.circular(isDebt ? 4 : 18),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(AppHelpers.formatCurrency(amount), textDirection: TextDirection.ltr, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-                if (note.isNotEmpty) Text(note, style: TextStyle(color: subColor, fontSize: 12), overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-          Text(AppHelpers.formatDate(date), style: TextStyle(color: subColor, fontSize: 11)),
-        ],
+          border: Border.all(color: color.withOpacity(0.16)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 7),
+            Expanded(child: Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.bold))),
+            Text(AppHelpers.formatCurrency(item.amount), textDirection: TextDirection.ltr, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+          ]),
+          if (item.note.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(item.note, style: TextStyle(color: subColor, height: 1.5, fontSize: 12)),
+          ],
+          const SizedBox(height: 6),
+          Text(AppHelpers.formatDate(item.created), style: TextStyle(color: subColor, fontSize: 11)),
+        ]),
       ),
+    );
+  }
+}
+
+enum _TimelineKind { debt, payment }
+
+class _TimelineItem {
+  final _TimelineKind kind;
+  final double amount;
+  final String note;
+  final String created;
+
+  const _TimelineItem({required this.kind, required this.amount, required this.note, required this.created});
+
+  factory _TimelineItem.debt(RecordModel debt) {
+    return _TimelineItem(
+      kind: _TimelineKind.debt,
+      amount: DebtBalance.amount(debt),
+      note: debt.getStringValue('description'),
+      created: debt.getStringValue('created'),
+    );
+  }
+
+  factory _TimelineItem.payment(RecordModel payment) {
+    return _TimelineItem(
+      kind: _TimelineKind.payment,
+      amount: payment.getDoubleValue('amount'),
+      note: payment.getStringValue('note'),
+      created: payment.getStringValue('created'),
     );
   }
 }
@@ -224,23 +289,6 @@ class _StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(color: (isPaid ? AppColors.secondary : AppColors.warning).withOpacity(0.10), borderRadius: BorderRadius.circular(99)),
       child: Text(isPaid ? 'تەواوە' : 'چالاکە', style: TextStyle(color: isPaid ? AppColors.secondary : AppColors.warning, fontSize: 11, fontWeight: FontWeight.bold)),
-    );
-  }
-}
-
-class _NoPayments extends StatelessWidget {
-  final Color cardColor;
-  final Color textColor;
-  final Color subColor;
-
-  const _NoPayments({required this.cardColor, required this.textColor, required this.subColor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(18)),
-      child: Text('هێشتا پارەیەک بۆ ئەم قەرزە وەرنەگیراوە', style: TextStyle(color: subColor)),
     );
   }
 }
