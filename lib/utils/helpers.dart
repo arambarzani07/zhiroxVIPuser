@@ -33,7 +33,7 @@ class AppHelpers {
       final parsed = DateTime.parse(date).toLocal();
       return DateFormat('yyyy/MM/dd').format(parsed);
     } catch (_) {
-      return date;
+      return '';
     }
   }
 
@@ -42,7 +42,7 @@ class AppHelpers {
       final parsed = DateTime.parse(date).toLocal();
       return DateFormat('yyyy/MM/dd  hh:mm a').format(parsed);
     } catch (_) {
-      return date;
+      return '';
     }
   }
 
@@ -70,7 +70,7 @@ class AppHelpers {
       case 'paid':
         return 'تەواوە';
       default:
-        return status;
+        return '';
     }
   }
 
@@ -78,33 +78,121 @@ class AppHelpers {
   static String roleName(String role) {
     switch (role) {
       case 'admin':
-        return 'بەڕێوبەر';
+        return 'بەڕێوەبەر';
       case 'employee':
         return 'کارمەند';
       case 'customer':
         return 'کڕیار';
       default:
-        return role;
+        return '';
     }
   }
 
   // ماوەی ماوە بە ڕۆژ
   static String remainingDays(int days) {
-    if (days <= 0) return 'تەواو بووە';
+    if (days <= 0) return 'ئەمڕۆ';
     if (days == 1) return '١ ڕۆژ ماوە';
     return '$days ڕۆژ ماوە';
   }
 
-  // پیشاندانی سناکبار
+  /// Final Phase-1 UI rule:
+  /// Users must never see internal/technical failure wording. Only helpful
+  /// action guidance, ordinary business confirmations, and internet-safe
+  /// protection messages are allowed.
+  static String? businessSafeMessage(String rawMessage, {bool isError = false}) {
+    final message = rawMessage.trim();
+    if (message.isEmpty) return null;
+
+    final lower = message.toLowerCase();
+
+    final isAllowedGuidance =
+        message.contains('تکایە') ||
+        message.contains('نابێت') ||
+        message.contains('دەبێت') ||
+        message.contains('ڕێگەپێدانی بەڕێوەبەر') ||
+        message.contains('وشەی نهێنی') ||
+        message.contains('ژمارە مۆبایل') ||
+        message.contains('سنووری قەرز') ||
+        message.contains('ئینتەرنێت') ||
+        message.contains('پارێزرا') ||
+        message.contains('تۆمار کرا') ||
+        message.contains('تۆمارکرا') ||
+        message.contains('نوێکرایەوە') ||
+        message.contains('وەرگیرا') ||
+        message.contains('نێردرا') ||
+        message.contains('ئامادەیە') ||
+        message.contains('تەواو بوو');
+
+    final isInternetState =
+        lower.contains('internet') ||
+        lower.contains('network') ||
+        lower.contains('connection') ||
+        lower.contains('socket') ||
+        lower.contains('timeout') ||
+        lower.contains('offline') ||
+        message.contains('ئینتەرنێت');
+
+    if (isInternetState) {
+      return 'پارێزرا ✅ کاتێک ئینتەرنێت گەڕایەوە، خۆکارانە تەواو دەبێت';
+    }
+
+    final forbidden = <String>[
+      'database',
+      'server',
+      'api',
+      'backend',
+      'pocketbase',
+      'collection',
+      'field',
+      'record',
+      'relation',
+      'admin_id',
+      'null',
+      'exception',
+      'failed',
+      'failure',
+      'clientexception',
+      'socketexception',
+      'formatException'.toLowerCase(),
+      'stack',
+      'debug',
+      'schema',
+      'هەڵە لە',
+      'هەڵە ڕوویدا',
+      'داتابەیس',
+      'سێرڤەر',
+      'باکێند',
+      'کۆلێکشن',
+      'فیلد',
+    ];
+
+    final hasForbidden = forbidden.any(lower.contains) ||
+        forbidden.any((word) => message.contains(word));
+
+    if (hasForbidden && !isAllowedGuidance) {
+      return null;
+    }
+
+    if (isError && message.contains(':') && !isAllowedGuidance) {
+      return null;
+    }
+
+    return message;
+  }
+
+  // پیشاندانی سناکبار بە یاسای ڕووکارە پاکەکان
   static void showSnackBar(
     BuildContext context,
     String message, {
     bool isError = false,
   }) {
+    final safeMessage = businessSafeMessage(message, isError: isError);
+    if (safeMessage == null || safeMessage.isEmpty) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, textDirection: TextDirection.rtl),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        content: Text(safeMessage, textDirection: TextDirection.rtl),
+        backgroundColor: isError ? Colors.orange.shade800 : Colors.green,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -140,7 +228,6 @@ class AppHelpers {
   static String formatTime(String date) {
     try {
       final parsed = DateTime.parse(date).toLocal();
-      // Format: 04:30 PM
       return DateFormat('hh:mm a').format(parsed);
     } catch (_) {
       return '';
