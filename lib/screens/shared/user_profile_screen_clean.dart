@@ -5,6 +5,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
+import 'package:zhirox/widgets/employee_access_settings_card.dart';
 
 class UserProfileScreenClean extends StatefulWidget {
   final String userId;
@@ -53,6 +54,7 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
     final phone = user?.getStringValue('phone') ?? '';
     final marketName = user?.getStringValue('market_name') ?? auth.marketName;
     final debtLimit = user?.getDoubleValue('debt_limit') ?? 0;
+    final canManageEmployeeAccess = auth.isManager && role == 'employee' && user != null;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -125,6 +127,16 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
                   if (marketName.isNotEmpty) _InfoRow(label: 'مارکێت', value: marketName, subColor: subColor),
                   if (role == 'customer') _InfoRow(label: 'سنووری قەرز', value: debtLimit <= 0 ? 'بێ سنوور' : AppHelpers.formatCurrency(debtLimit), subColor: subColor, ltr: true),
                 ]),
+                if (canManageEmployeeAccess) ...[
+                  const SizedBox(height: 16),
+                  EmployeeAccessSettingsCard(
+                    employee: user!,
+                    cardColor: cardColor,
+                    textColor: textColor,
+                    subColor: subColor,
+                    onSaved: _loadUser,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 if (isOwnProfile)
                   SizedBox(
