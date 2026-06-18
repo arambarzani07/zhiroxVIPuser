@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
+import 'package:zhirox/utils/zhirox_phase1_policy.dart';
 
 class AppHelpers {
   // فۆرماتی پارە
@@ -75,18 +76,7 @@ class AppHelpers {
   }
 
   // ناوی ڕۆڵ بە کوردی
-  static String roleName(String role) {
-    switch (role) {
-      case 'admin':
-        return 'بەڕێوبەر';
-      case 'employee':
-        return 'کارمەند';
-      case 'customer':
-        return 'کڕیار';
-      default:
-        return role;
-    }
-  }
+  static String roleName(String role) => ZhiroxRoles.label(role);
 
   // ماوەی ماوە بە ڕۆژ
   static String remainingDays(int days) {
@@ -95,16 +85,21 @@ class AppHelpers {
     return '$days ڕۆژ ماوە';
   }
 
-  // پیشاندانی سناکبار
+  // پیشاندانی پەیامی پاکی کاربەر
   static void showSnackBar(
     BuildContext context,
     String message, {
     bool isError = false,
   }) {
+    final safeMessage = ZhiroxBusinessMessages.cleanSnackMessage(
+      message,
+      isWarning: isError,
+    );
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, textDirection: TextDirection.rtl),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        content: Text(safeMessage, textDirection: TextDirection.rtl),
+        backgroundColor: isError ? Colors.orange.shade800 : Colors.green,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -140,7 +135,6 @@ class AppHelpers {
   static String formatTime(String date) {
     try {
       final parsed = DateTime.parse(date).toLocal();
-      // Format: 04:30 PM
       return DateFormat('hh:mm a').format(parsed);
     } catch (_) {
       return '';
