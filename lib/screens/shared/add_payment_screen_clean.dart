@@ -5,6 +5,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/market_action_queue.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
+import 'package:zhirox/utils/debt_balance.dart';
 import 'package:zhirox/utils/helpers.dart';
 
 class AddPaymentScreenClean extends StatefulWidget {
@@ -43,7 +44,7 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
     final adminId = auth.adminId.isNotEmpty ? auth.adminId : auth.userId;
     try {
       final allDebts = await PBService.getDebts(adminId: adminId, perPage: 500);
-      final openDebts = allDebts.where((debt) => debt.getDoubleValue('remaining') > 0).toList();
+      final openDebts = allDebts.where(DebtBalance.isActive).toList();
       if (mounted) _debts = openDebts;
     } catch (_) {
       // Keep the screen calm and preserve visible state.
@@ -85,7 +86,7 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
       return;
     }
 
-    final remaining = debt.getDoubleValue('remaining');
+    final remaining = DebtBalance.remaining(debt);
     final amount = _amount();
     if (amount <= 0) {
       AppHelpers.showSnackBar(context, 'بڕی پارە دەبێت لە سفر زیاتر بێت', isError: true);
@@ -134,7 +135,8 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
     final textColor = isDark ? AppDarkColors.textPrimary : AppColors.textPrimary;
     final subColor = isDark ? AppDarkColors.textSecondary : AppColors.textSecondary;
     final debt = _selectedDebt();
-    final remaining = debt?.getDoubleValue('remaining') ?? 0;
+    final remaining = debt == null ? 0 : DebtBalance.remaining(debt);
+    final afterPayment = debt == null ? 0 : DebtBalance.afterPayment(debt, _amount());
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -157,17 +159,13 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
                         decoration: const InputDecoration(labelText: 'قەرزێک هەڵبژێرە'),
                         items: _debts.map((debt) {
                           final name = _customerName(debt);
-                          final remaining = debt.getDoubleValue('remaining');
-                          return DropdownMenuItem(value: debt.id, child: Text('$name — ${AppHelpers.formatCurrency(remaining)}'));
+                          return DropdownMenuItem(value: debt.id, child: Text('$name — ${DebtBalance.formatRemaining(debt)}'));
                         }).toList(),
                         onChanged: (value) => setState(() => _selectedDebtId = value),
                       ),
                       if (debt != null) ...[
                         const SizedBox(height: 10),
-                        Row(children: [
-                          Expanded(child: Text('قەرزی ماوە', style: TextStyle(color: subColor))),
-                          Text(AppHelpers.formatCurrency(remaining), textDirection: TextDirection.ltr, style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold)),
-                        ]),
+                        _BalanceRow(label: 'قەرزی ماوە', value: AppHelpers.formatCurrency(remaining), color: AppColors.danger, subColor: subColor),
                       ],
                     ]),
                   ),
@@ -182,8 +180,13 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
                         controller: _amountController,
                         keyboardType: TextInputType.number,
                         textDirection: TextDirection.ltr,
+                        onChanged: (_) => setState(() {}),
                         decoration: const InputDecoration(labelText: 'بڕی پارە', prefixIcon: Icon(Icons.payments_rounded), suffixText: 'د.ع'),
                       ),
+                      if (debt != null) ...[
+                        const SizedBox(height: 10),
+                        _BalanceRow(label: 'دوای وەرگرتنەوە', value: AppHelpers.formatCurrency(afterPayment), color: afterPayment <= 0 ? AppColors.secondary : AppColors.warning, subColor: subColor),
+                      ],
                       const SizedBox(height: 10),
                       TextField(
                         controller: _noteController,
@@ -216,5 +219,22 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
               ),
       ),
     );
+  }
+}
+
+class _BalanceRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final Color subColor;
+
+  const _BalanceRow({required this.label, required this.value, required this.color, required this.subColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(child: Text(label, style: TextStyle(color: subColor))),
+      Text(value, textDirection: TextDirection.ltr, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+    ]);
   }
 }
