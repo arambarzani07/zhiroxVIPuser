@@ -3,7 +3,7 @@ import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/customer_statement_screen.dart';
-import 'package:zhirox/screens/shared/debt_detail_screen.dart';
+import 'package:zhirox/screens/shared/debt_detail_screen_clean.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/debt_balance.dart';
@@ -39,12 +39,13 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
     try {
       final user = await PBService.getUser(widget.userId);
       final debts = user.getStringValue('role') == 'customer' ? await PBService.getDebts(customerId: widget.userId) : <RecordModel>[];
+      final visibleDebts = DebtBalance.visible(debts).toList();
       if (mounted) {
         _user = user;
-        _debts = debts;
+        _debts = visibleDebts;
       }
     } catch (_) {
-      // Keep the last calm visible state.
+      if (mounted) _debts = [];
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -187,10 +188,11 @@ class _CustomerMoneySummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalDebt = debts.fold<double>(0, (sum, d) => sum + d.getDoubleValue('amount'));
-    final totalRemaining = DebtBalance.totalRemaining(debts);
+    final visibleDebts = DebtBalance.visible(debts).toList();
+    final totalDebt = visibleDebts.fold<double>(0, (sum, d) => sum + DebtBalance.amount(d));
+    final totalRemaining = DebtBalance.totalRemaining(visibleDebts);
     final paid = (totalDebt - totalRemaining).clamp(0, double.infinity).toDouble();
-    final activeCount = DebtBalance.activeCount(debts);
+    final activeCount = DebtBalance.activeCount(visibleDebts);
     final remainingLimit = debtLimit <= 0 ? 0 : (debtLimit - totalRemaining).clamp(0, double.infinity).toDouble();
 
     return Container(
@@ -225,7 +227,7 @@ class _CustomerDebtHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shown = debts.take(6).toList();
+    final shown = DebtBalance.visible(debts).take(6).toList();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(22)),
@@ -253,7 +255,7 @@ class _DebtHistoryTile extends StatelessWidget {
     final remaining = DebtBalance.remaining(debt);
     final paid = DebtBalance.isPaid(debt);
     return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DebtDetailScreen(debtId: debt.id))),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DebtDetailScreenClean(debtId: debt.id))),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(children: [
