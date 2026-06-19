@@ -41,7 +41,7 @@ class _DebtRestoreScreenState extends State<DebtRestoreScreen> {
       );
       if (mounted) debts = result.items;
     } catch (_) {
-      // Keep calm visible state.
+      if (mounted) debts = [];
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -56,14 +56,13 @@ class _DebtRestoreScreenState extends State<DebtRestoreScreen> {
     final ok = await AppHelpers.showConfirmDialog(
       context,
       title: 'گەڕاندنەوەی کردار',
-      message: 'ئەم قەرزە دەگەڕێتەوە بۆ لیستە چالاکەکان. دڵنیایت؟',
+      message: 'ئەم قەرزە دەگەڕێتەوە بۆ لیستەکان، و هۆکاری سڕینەوە لە مێژوودا دەمێنێتەوە. دڵنیایت؟',
     );
     if (!ok || !mounted) return;
     setState(() => savingId = debt.id);
     try {
       await PBService.pb.collection('debts').update(debt.id, body: {
         'is_deleted': false,
-        'delete_reason': '',
       });
       if (!mounted) return;
       AppHelpers.showSnackBar(context, 'قەرزی ماوە نوێکرایەوە');
@@ -96,7 +95,7 @@ class _DebtRestoreScreenState extends State<DebtRestoreScreen> {
             else if (debts.isEmpty)
               _Empty(cardColor: cardColor, textColor: textColor, subColor: subColor)
             else
-              ...debts.map((debt) => _DeletedDebtCard(
+              ...debts.map((debt) => _ArchivedDebtCard(
                     debt: debt,
                     saving: savingId == debt.id,
                     cardColor: cardColor,
@@ -111,7 +110,7 @@ class _DebtRestoreScreenState extends State<DebtRestoreScreen> {
   }
 }
 
-class _DeletedDebtCard extends StatelessWidget {
+class _ArchivedDebtCard extends StatelessWidget {
   final RecordModel debt;
   final bool saving;
   final Color cardColor;
@@ -119,7 +118,7 @@ class _DeletedDebtCard extends StatelessWidget {
   final Color subColor;
   final VoidCallback onRestore;
 
-  const _DeletedDebtCard({required this.debt, required this.saving, required this.cardColor, required this.textColor, required this.subColor, required this.onRestore});
+  const _ArchivedDebtCard({required this.debt, required this.saving, required this.cardColor, required this.textColor, required this.subColor, required this.onRestore});
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +134,7 @@ class _DeletedDebtCard extends StatelessWidget {
           const Icon(Icons.restore_rounded, color: AppColors.primary),
           const SizedBox(width: 10),
           Expanded(child: Text(name.isEmpty ? 'کڕیار' : name, style: TextStyle(color: textColor, fontWeight: FontWeight.bold))),
-          Text(AppHelpers.formatCurrency(DebtBalance.remaining(debt)), textDirection: TextDirection.ltr, style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold)),
+          Text(AppHelpers.formatCurrency(DebtBalance.remaining(debt)), textDirection: TextDirection.ltr, style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold)),
         ]),
         if (reason.isNotEmpty) ...[
           const SizedBox(height: 8),
