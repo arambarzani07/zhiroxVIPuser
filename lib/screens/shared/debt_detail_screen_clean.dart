@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
-import 'package:zhirox/screens/shared/debt_correction_screen.dart';
+import 'package:zhirox/screens/shared/debt_correction_review_screen.dart';
 import 'package:zhirox/screens/shared/debt_protected_delete_screen.dart';
 import 'package:zhirox/screens/shared/debt_receipt_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -48,7 +48,7 @@ class _DebtDetailScreenCleanState extends State<DebtDetailScreenClean> {
   Future<void> correctDebt() async {
     final d = debt;
     if (d == null) return;
-    final saved = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => DebtCorrectionScreen(debt: d)));
+    final saved = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => DebtCorrectionReviewScreen(debt: d)));
     if (saved == true) await load();
   }
 
