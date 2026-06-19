@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
-import 'package:zhirox/screens/shared/debt_list_screen_phase1.dart';
+import 'package:zhirox/screens/shared/active_debt_list_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen_clean.dart';
 import 'package:zhirox/screens/shared/user_profile_screen_clean.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -22,7 +22,7 @@ class _EmployeeDashboardPhase1FinalState extends State<EmployeeDashboardPhase1Fi
     final screens = [
       _EmployeeHome(onOpenTab: (index) => setState(() => _currentIndex = index)),
       UserListScreenClean(key: const ValueKey('customers_phase1'), role: 'customer', adminId: auth.adminId),
-      const DebtListScreenPhase1(key: ValueKey('debts_phase1')),
+      const ActiveDebtListScreen(key: ValueKey('employee_active_debts')),
       UserProfileScreenClean(key: const ValueKey('profile_phase1'), userId: auth.userId),
     ];
     final isDark = Theme.of(context).brightness == Brightness.dark;
