@@ -7,6 +7,7 @@ import 'package:zhirox/screens/shared/debt_detail_screen_clean.dart';
 import 'package:zhirox/screens/shared/user_profile_screen_clean.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
+import 'package:zhirox/utils/debt_balance.dart';
 import 'package:zhirox/utils/helpers.dart';
 
 class CustomerDashboardPhase1Final extends StatefulWidget {
@@ -33,9 +34,9 @@ class _CustomerDashboardPhase1FinalState extends State<CustomerDashboardPhase1Fi
     final auth = context.read<AuthProvider>();
     try {
       final debts = await PBService.getDebts(customerId: auth.userId);
-      if (mounted) _debts = debts;
+      if (mounted) _debts = DebtBalance.visible(debts).toList();
     } catch (_) {
-      // Keep customer UI calm and preserve last state.
+      if (mounted) _debts = [];
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -113,11 +114,12 @@ class _CustomerHome extends StatelessWidget {
     final cardColor = isDark ? AppDarkColors.card : Colors.white;
     final textColor = isDark ? AppDarkColors.textPrimary : AppColors.textPrimary;
     final subColor = isDark ? AppDarkColors.textSecondary : AppColors.textSecondary;
-    final activeDebts = debts.where((d) => d.getStringValue('status') != 'paid' && d.getDoubleValue('remaining') > 0).toList();
-    final paidDebts = debts.where((d) => d.getStringValue('status') == 'paid' || d.getDoubleValue('remaining') <= 0).toList();
-    final totalDebt = debts.fold<double>(0, (sum, d) => sum + d.getDoubleValue('amount'));
-    final totalRemaining = debts.fold<double>(0, (sum, d) => sum + d.getDoubleValue('remaining'));
-    final totalPaid = totalDebt - totalRemaining;
+    final visibleDebts = DebtBalance.visible(debts).toList();
+    final activeDebts = visibleDebts.where(DebtBalance.isActive).toList();
+    final paidDebts = visibleDebts.where(DebtBalance.isPaid).toList();
+    final totalDebt = visibleDebts.fold<double>(0, (sum, d) => sum + DebtBalance.amount(d));
+    final totalRemaining = DebtBalance.totalRemaining(visibleDebts);
+    final totalPaid = (totalDebt - totalRemaining).clamp(0, double.infinity).toDouble();
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -184,6 +186,7 @@ class _ReceiptWallet extends StatelessWidget {
     final cardColor = isDark ? AppDarkColors.card : Colors.white;
     final textColor = isDark ? AppDarkColors.textPrimary : AppColors.textPrimary;
     final subColor = isDark ? AppDarkColors.textSecondary : AppColors.textSecondary;
+    final visibleDebts = DebtBalance.visible(debts).toList();
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(padding: const EdgeInsets.all(16), children: [
@@ -191,7 +194,7 @@ class _ReceiptWallet extends StatelessWidget {
         const SizedBox(height: 8),
         Text('کەشف حساب و مێژووی قەرزەکانت لێرە دەبینیت.', style: TextStyle(color: subColor)),
         const SizedBox(height: 16),
-        if (isLoading) const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())) else if (debts.isEmpty) _EmptyCustomerCard(cardColor: cardColor, textColor: textColor, subColor: subColor) else ...debts.map((debt) => _DebtCard(debt: debt, cardColor: cardColor, textColor: textColor, subColor: subColor)),
+        if (isLoading) const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())) else if (visibleDebts.isEmpty) _EmptyCustomerCard(cardColor: cardColor, textColor: textColor, subColor: subColor) else ...visibleDebts.map((debt) => _DebtCard(debt: debt, cardColor: cardColor, textColor: textColor, subColor: subColor)),
       ]),
     );
   }
@@ -207,10 +210,9 @@ class _DebtCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final amount = debt.getDoubleValue('amount');
-    final remaining = debt.getDoubleValue('remaining');
-    final status = debt.getStringValue('status');
-    final isPaid = status == 'paid' || remaining <= 0;
+    final amount = DebtBalance.amount(debt);
+    final remaining = DebtBalance.remaining(debt);
+    final isPaid = DebtBalance.isPaid(debt);
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DebtDetailScreenClean(debtId: debt.id))),
@@ -222,7 +224,7 @@ class _DebtCard extends StatelessWidget {
           Container(width: 48, height: 48, decoration: BoxDecoration(color: (isPaid ? AppColors.secondary : AppColors.warning).withOpacity(0.12), borderRadius: BorderRadius.circular(16)), child: Icon(isPaid ? Icons.verified_rounded : Icons.receipt_long_rounded, color: isPaid ? AppColors.secondary : AppColors.warning)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(isPaid ? 'قەرز تەواوە' : 'قەرزی ماوە', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+            Text(DebtBalance.statusLabel(debt), style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text('کۆی قەرز: ${AppHelpers.formatCurrency(amount)}', style: TextStyle(color: subColor, fontSize: 12)),
           ])),
