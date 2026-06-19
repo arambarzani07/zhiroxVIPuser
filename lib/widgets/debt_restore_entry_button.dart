@@ -21,10 +21,13 @@ class DebtRestoreEntryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: () => open(context),
-      icon: const Icon(Icons.restore_rounded, color: AppColors.primary),
-      label: const Text('گەڕاندنەوەی کردار'),
+    return SizedBox(
+      height: 46,
+      child: OutlinedButton.icon(
+        onPressed: () => open(context),
+        icon: const Icon(Icons.restore_rounded, color: AppColors.primary),
+        label: const Text('گەڕاندنەوەی کردار'),
+      ),
     );
   }
 }
