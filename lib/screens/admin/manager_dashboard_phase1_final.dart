@@ -6,7 +6,7 @@ import 'package:zhirox/screens/admin/pending_requests_screen.dart';
 import 'package:zhirox/screens/shared/active_debt_list_screen.dart';
 import 'package:zhirox/screens/shared/debt_restore_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen_clean.dart';
-import 'package:zhirox/services/pb_service.dart';
+import 'package:zhirox/services/dashboard_stats_safe_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 
@@ -33,10 +33,10 @@ class _ManagerDashboardPhase1FinalState extends State<ManagerDashboardPhase1Fina
     setState(() => _isLoading = true);
     final auth = context.read<AuthProvider>();
     try {
-      final stats = await PBService.getDashboardStats(adminId: auth.userId);
+      final stats = await DashboardStatsSafeService.getStats(adminId: auth.userId);
       if (mounted) _stats = stats;
     } catch (_) {
-      // No internal wording in the market UI.
+      if (mounted) _stats = {};
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
