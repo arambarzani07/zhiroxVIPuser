@@ -46,9 +46,16 @@ class _AddPaymentScreenCleanState extends State<AddPaymentScreenClean> {
     try {
       final allDebts = await PBService.getDebts(adminId: adminId, perPage: 500);
       final openDebts = allDebts.where(DebtBalance.isActive).toList();
-      if (mounted) _debts = openDebts;
+      final selectedIsVisible = openDebts.any((debt) => debt.id == _selectedDebtId);
+      if (mounted) {
+        _debts = openDebts;
+        if (!selectedIsVisible) _selectedDebtId = null;
+      }
     } catch (_) {
-      // Keep the screen calm and preserve visible state.
+      if (mounted) {
+        _debts = [];
+        _selectedDebtId = null;
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
