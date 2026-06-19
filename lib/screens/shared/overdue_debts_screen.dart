@@ -33,10 +33,10 @@ class _OverdueDebtsScreenState extends State<OverdueDebtsScreen> {
     try {
       final debts = await PBService.getDebts(adminId: adminId, perPage: 500);
       final overdue = debts.where(_isOverdue).toList()
-        ..sort((a, b) => _dueDate(a).compareTo(_dueDate(b)));
+        ..sort((a, b) => _requiredDueDate(a).compareTo(_requiredDueDate(b)));
       if (mounted) _debts = overdue;
     } catch (_) {
-      // Keep last visible state calmly.
+      if (mounted) _debts = [];
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -49,6 +49,10 @@ class _OverdueDebtsScreenState extends State<OverdueDebtsScreen> {
     final today = DateTime.now();
     final dayStart = DateTime(today.year, today.month, today.day);
     return due.isBefore(dayStart);
+  }
+
+  DateTime _requiredDueDate(RecordModel debt) {
+    return _dueDate(debt) ?? DateTime(9999, 12, 31);
   }
 
   DateTime? _dueDate(RecordModel debt) {
@@ -67,7 +71,7 @@ class _OverdueDebtsScreenState extends State<OverdueDebtsScreen> {
     if (due == null) return 0;
     final today = DateTime.now();
     final dayStart = DateTime(today.year, today.month, today.day);
-    return dayStart.difference(due).inDays.clamp(0, 99999);
+    return dayStart.difference(due).inDays.clamp(0, 99999).toInt();
   }
 
   @override
