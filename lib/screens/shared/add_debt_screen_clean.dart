@@ -6,6 +6,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/market_action_queue.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
+import 'package:zhirox/utils/debt_balance.dart';
 import 'package:zhirox/utils/debt_lock.dart';
 import 'package:zhirox/utils/helpers.dart';
 
@@ -67,12 +68,17 @@ class _AddDebtScreenCleanState extends State<AddDebtScreenClean> {
     return null;
   }
 
+  Future<List<RecordModel>> _visibleCustomerDebts(String customerId) async {
+    final list = await PBService.getDebts(customerId: customerId, perPage: 500);
+    return DebtBalance.visible(list).toList();
+  }
+
   Future<bool> _confirmNewDebtPauseIfNeeded() async {
     final customer = _selectedCustomer();
     if (customer == null) return false;
     var debts = <RecordModel>[];
     try {
-      debts = await PBService.getDebts(customerId: customer.id, perPage: 500);
+      debts = await _visibleCustomerDebts(customer.id);
     } catch (_) {
       debts = [];
     }
@@ -101,7 +107,7 @@ class _AddDebtScreenCleanState extends State<AddDebtScreenClean> {
 
     double currentBalance = 0;
     try {
-      currentBalance = await PBService.getCustomerBalance(customer.id);
+      currentBalance = DebtBalance.totalRemaining(await _visibleCustomerDebts(customer.id));
     } catch (_) {
       currentBalance = 0;
     }
