@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
-import 'package:zhirox/screens/shared/customer_statement_screen.dart';
+import 'package:zhirox/screens/shared/customer_statement_safe_screen.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen_clean.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -94,7 +94,7 @@ class _UserProfileScreenCleanState extends State<UserProfileScreenClean> {
                   SizedBox(
                     height: 48,
                     child: FilledButton.icon(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerStatementScreen(customerId: widget.userId))),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerStatementSafeScreen(customerId: widget.userId))),
                       icon: const Icon(Icons.summarize_rounded),
                       label: const Text('کەشف حساب'),
                     ),
