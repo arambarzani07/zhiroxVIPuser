@@ -39,6 +39,7 @@ class _DebtCorrectionScreenState extends State<DebtCorrectionScreen> {
 
   double newAmount() => double.tryParse(amountCtrl.text.replaceAll(',', '').trim()) ?? 0;
   double newRemaining() => (newAmount() - DebtBalance.paid(widget.debt)).clamp(0, double.infinity).toDouble();
+  bool isHiddenDebt() => widget.debt.getBoolValue('is_deleted');
 
   String correctionDescription() {
     final note = noteCtrl.text.trim().isEmpty ? 'قەرزی نوێ' : noteCtrl.text.trim();
@@ -54,9 +55,18 @@ class _DebtCorrectionScreenState extends State<DebtCorrectionScreen> {
       AppHelpers.showSnackBar(context, AppUserMessages.needsManagerApproval, isError: true);
       return;
     }
+    if (isHiddenDebt()) {
+      AppHelpers.showSnackBar(context, 'ئەم قەرزە پێش ڕاستکردنەوە پێویستی بە گەڕاندنەوە هەیە', isError: true);
+      return;
+    }
     final amount = newAmount();
+    final paid = DebtBalance.paid(widget.debt);
     if (amount <= 0) {
       AppHelpers.showSnackBar(context, 'بڕی قەرز دەبێت لە سفر زیاتر بێت', isError: true);
+      return;
+    }
+    if (amount < paid) {
+      AppHelpers.showSnackBar(context, 'بڕی نوێ نابێت لە پارەی پێشتر وەرگیراو کەمتر بێت', isError: true);
       return;
     }
     if (reasonCtrl.text.trim().isEmpty) {
@@ -111,7 +121,7 @@ class _DebtCorrectionScreenState extends State<DebtCorrectionScreen> {
               const SizedBox(height: 10),
               TextField(controller: reasonCtrl, minLines: 2, maxLines: 3, decoration: const InputDecoration(labelText: 'هۆکاری گۆڕانکاری')),
               const SizedBox(height: 8),
-              Text('بۆ پاراستنی مێژوو، هۆکاری گۆڕانکاری لەگەڵ تێبینی قەرز تۆمار دەبێت.', style: TextStyle(color: subColor, height: 1.5, fontSize: 12)),
+              Text('بڕی نوێ نابێت لە پارەی پێشتر وەرگیراو کەمتر بێت. هۆکاری گۆڕانکاریش لەگەڵ تێبینی قەرز تۆمار دەبێت.', style: TextStyle(color: subColor, height: 1.5, fontSize: 12)),
             ]),
           ),
           const SizedBox(height: 14),
