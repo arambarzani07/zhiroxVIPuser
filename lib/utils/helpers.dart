@@ -8,12 +8,17 @@ class AppUserMessages {
 
   static const List<String> allowedValidationMessages = [
     'تکایە کڕیارێک هەڵبژێرە',
+    'تکایە قەرزێک هەڵبژێرە',
     'تکایە بڕی قەرز بنووسە',
     'بڕی قەرز دەبێت لە سفر زیاتر بێت',
+    'بڕی پارە دەبێت لە سفر زیاتر بێت',
     'تکایە لانیکەم یەک کاڵا زیاد بکە',
     'تکایە بەرواری دانەوە هەڵبژێرە',
     'تکایە ژمارەی مۆبایل بە دروستی بنووسە',
     'بڕی پارە نابێت زیاتر بێت لە قەرزی ماوە',
+    'بڕی نوێ نابێت لە پارەی پێشتر وەرگیراو کەمتر بێت',
+    'ئەم قەرزە پێش ڕاستکردنەوە پێویستی بە گەڕاندنەوە هەیە',
+    'هۆکاری گۆڕانکاری بنووسە',
     'تکایە ژمارە مۆبایل بنووسە',
     'تکایە وشەی نهێنی بنووسە',
   ];
@@ -30,13 +35,11 @@ class AppUserMessages {
 }
 
 class AppHelpers {
-  // فۆرماتی پارە
   static String formatCurrency(double amount) {
     final formatter = NumberFormat('#,###', 'en');
     return '${formatter.format(amount)} د.ع';
   }
 
-  // فۆرماتی پارە بە جۆری دراو
   static String formatCurrencyWithType(
     double amount,
     String currency, {
@@ -55,7 +58,6 @@ class AppHelpers {
     return '${formatter.format(amount)} د.ع';
   }
 
-  // فۆرماتی بەروار
   static String formatDate(String date) {
     try {
       final parsed = DateTime.parse(date).toLocal();
@@ -74,7 +76,6 @@ class AppHelpers {
     }
   }
 
-  // رەنگی بارودۆخ
   static Color statusColor(String status) {
     switch (status) {
       case 'pending':
@@ -88,7 +89,6 @@ class AppHelpers {
     }
   }
 
-  // ناوی بارودۆخ بە کوردی
   static String statusName(String status) {
     switch (status) {
       case 'pending':
@@ -102,7 +102,6 @@ class AppHelpers {
     }
   }
 
-  // ناوی ڕۆڵ بە کوردی
   static String roleName(String role) {
     switch (role) {
       case 'admin':
@@ -116,16 +115,12 @@ class AppHelpers {
     }
   }
 
-  // ماوەی ماوە بە ڕۆژ
   static String remainingDays(int days) {
     if (days <= 0) return 'ئەمڕۆ';
     if (days == 1) return '١ ڕۆژ ماوە';
     return '$days ڕۆژ ماوە';
   }
 
-  /// Final Phase-1 UI rule:
-  /// Market users must see only helpful guidance, confirmations, protection,
-  /// or manager-approval wording. Technical and internal wording is hidden.
   static String? businessSafeMessage(String rawMessage, {bool isError = false}) {
     final message = rawMessage.trim();
     if (message.isEmpty) return null;
@@ -156,10 +151,13 @@ class AppHelpers {
         message.contains('تکایە') ||
         message.contains('نابێت') ||
         message.contains('دەبێت') ||
+        message.contains('پێویستی') ||
+        message.contains('هۆکاری گۆڕانکاری') ||
         message.contains('ڕێگەپێدانی بەڕێوەبەر') ||
         message.contains('وشەی نهێنی') ||
         message.contains('ژمارە مۆبایل') ||
         message.contains('سنووری قەرز') ||
+        message.contains('ئینتەرنێت') ||
         message.contains('پارێزرا') ||
         message.contains('تۆمار کرا') ||
         message.contains('تۆمارکرا') ||
@@ -206,13 +204,12 @@ class AppHelpers {
     final hasForbidden = forbidden.any(lower.contains) || forbidden.any((word) => message.contains(word));
     if (hasForbidden) return null;
 
-    if (isError && message.contains(':')) return null;
+    if (isError && message.contains(':') && !isAllowedGuidance) return null;
     if (isError && !isAllowedGuidance) return null;
 
     return message;
   }
 
-  // پیشاندانی سناکبار بە یاسای ڕووکارە پاکەکان
   static void showSnackBar(
     BuildContext context,
     String message, {
@@ -231,7 +228,6 @@ class AppHelpers {
     );
   }
 
-  // دیالۆگی دڵنیابوونەوە
   static Future<bool> showConfirmDialog(
     BuildContext context, {
     required String title,
