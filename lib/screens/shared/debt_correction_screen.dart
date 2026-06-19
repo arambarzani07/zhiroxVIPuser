@@ -18,6 +18,7 @@ class DebtCorrectionScreen extends StatefulWidget {
 class _DebtCorrectionScreenState extends State<DebtCorrectionScreen> {
   late final TextEditingController amountCtrl;
   late final TextEditingController noteCtrl;
+  late final TextEditingController reasonCtrl;
   bool saving = false;
 
   @override
@@ -25,17 +26,27 @@ class _DebtCorrectionScreenState extends State<DebtCorrectionScreen> {
     super.initState();
     amountCtrl = TextEditingController(text: DebtBalance.amount(widget.debt).toStringAsFixed(0));
     noteCtrl = TextEditingController(text: widget.debt.getStringValue('description'));
+    reasonCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     amountCtrl.dispose();
     noteCtrl.dispose();
+    reasonCtrl.dispose();
     super.dispose();
   }
 
   double newAmount() => double.tryParse(amountCtrl.text.replaceAll(',', '').trim()) ?? 0;
   double newRemaining() => (newAmount() - DebtBalance.paid(widget.debt)).clamp(0, double.infinity).toDouble();
+
+  String correctionDescription() {
+    final note = noteCtrl.text.trim().isEmpty ? 'قەرزی نوێ' : noteCtrl.text.trim();
+    final reason = reasonCtrl.text.trim();
+    final now = DateTime.now();
+    final stamp = '${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
+    return '$note\nهۆکاری گۆڕانکاری: $reason\nبەروار: $stamp';
+  }
 
   Future<void> save() async {
     final auth = context.read<AuthProvider>();
@@ -48,7 +59,11 @@ class _DebtCorrectionScreenState extends State<DebtCorrectionScreen> {
       AppHelpers.showSnackBar(context, 'بڕی قەرز دەبێت لە سفر زیاتر بێت', isError: true);
       return;
     }
-    final ok = await AppHelpers.showConfirmDialog(context, title: 'ڕاستکردنەوەی قەرز', message: 'زانیارییەکانی ئەم قەرزە نوێ دەکرێنەوە. دڵنیایت؟');
+    if (reasonCtrl.text.trim().isEmpty) {
+      AppHelpers.showSnackBar(context, 'هۆکاری گۆڕانکاری بنووسە', isError: true);
+      return;
+    }
+    final ok = await AppHelpers.showConfirmDialog(context, title: 'ڕاستکردنەوەی قەرز', message: 'زانیارییەکانی ئەم قەرزە لەگەڵ هۆکاری گۆڕانکاری نوێ دەکرێنەوە. دڵنیایت؟');
     if (!ok || !mounted) return;
     setState(() => saving = true);
     final left = newRemaining();
@@ -57,7 +72,7 @@ class _DebtCorrectionScreenState extends State<DebtCorrectionScreen> {
         'amount': amount,
         'remaining': left,
         'status': left <= 0 ? 'paid' : 'active',
-        'description': noteCtrl.text.trim().isEmpty ? 'قەرزی نوێ' : noteCtrl.text.trim(),
+        'description': correctionDescription(),
       });
       if (!mounted) return;
       AppHelpers.showSnackBar(context, 'قەرزی ماوە نوێکرایەوە');
@@ -93,6 +108,10 @@ class _DebtCorrectionScreenState extends State<DebtCorrectionScreen> {
               TextField(controller: amountCtrl, keyboardType: TextInputType.number, textDirection: TextDirection.ltr, onChanged: (_) => setState(() {}), decoration: const InputDecoration(labelText: 'کۆی قەرز', suffixText: 'د.ع')),
               const SizedBox(height: 10),
               TextField(controller: noteCtrl, minLines: 2, maxLines: 3, decoration: const InputDecoration(labelText: 'تێبینی')),
+              const SizedBox(height: 10),
+              TextField(controller: reasonCtrl, minLines: 2, maxLines: 3, decoration: const InputDecoration(labelText: 'هۆکاری گۆڕانکاری')),
+              const SizedBox(height: 8),
+              Text('بۆ پاراستنی مێژوو، هۆکاری گۆڕانکاری لەگەڵ تێبینی قەرز تۆمار دەبێت.', style: TextStyle(color: subColor, height: 1.5, fontSize: 12)),
             ]),
           ),
           const SizedBox(height: 14),
