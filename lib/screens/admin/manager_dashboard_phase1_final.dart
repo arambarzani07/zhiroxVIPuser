@@ -4,6 +4,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
 import 'package:zhirox/screens/shared/debt_list_screen_phase1.dart';
+import 'package:zhirox/screens/shared/debt_restore_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen_clean.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -41,11 +42,16 @@ class _ManagerDashboardPhase1FinalState extends State<ManagerDashboardPhase1Fina
     }
   }
 
+  Future<void> _openRestoreActions() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtRestoreScreen()));
+    await _loadStats();
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
     final screens = [
-      _ManagerHome(stats: _stats, isLoading: _isLoading, onRefresh: _loadStats, onOpenTab: (i) => setState(() => _currentIndex = i)),
+      _ManagerHome(stats: _stats, isLoading: _isLoading, onRefresh: _loadStats, onOpenTab: (i) => setState(() => _currentIndex = i), onOpenRestore: _openRestoreActions),
       UserListScreenClean(key: const ValueKey('customers_final'), role: 'customer', adminId: auth.userId),
       UserListScreenClean(key: const ValueKey('employees_final'), role: 'employee', adminId: auth.userId),
       const DebtListScreenPhase1(key: ValueKey('debts_final')),
@@ -111,8 +117,9 @@ class _ManagerHome extends StatelessWidget {
   final bool isLoading;
   final Future<void> Function() onRefresh;
   final ValueChanged<int> onOpenTab;
+  final VoidCallback onOpenRestore;
 
-  const _ManagerHome({required this.stats, required this.isLoading, required this.onRefresh, required this.onOpenTab});
+  const _ManagerHome({required this.stats, required this.isLoading, required this.onRefresh, required this.onOpenTab, required this.onOpenRestore});
 
   double _num(String key) {
     final value = stats[key];
@@ -213,6 +220,8 @@ class _ManagerHome extends StatelessWidget {
             Text(requests > 0 ? '$requests داواکاری پێویستی بە ڕێگەپێدانی تۆ هەیە.' : 'ئێستا هیچ داواکارییەکی گرنگ نییە. چاودێری قەرزی ماوە بەردەوام بکە.', style: TextStyle(color: subColor, height: 1.6)),
             const SizedBox(height: 12),
             FilledButton.icon(onPressed: () => onOpenTab(4), icon: const Icon(Icons.verified_rounded), label: const Text('کردنەوەی ڕێگەپێدانەکان')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(onPressed: onOpenRestore, icon: const Icon(Icons.restore_rounded), label: const Text('گەڕاندنەوەی کردار')),
           ]),
         ),
       ]),
