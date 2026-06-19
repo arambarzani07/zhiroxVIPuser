@@ -17,20 +17,28 @@ class DebtBalance {
     return value < 0 ? 0 : value;
   }
 
+  static bool isHidden(RecordModel debt) {
+    return debt.getBoolValue('is_deleted');
+  }
+
   static bool isPaid(RecordModel debt) {
     return remaining(debt) <= 0 || debt.getStringValue('status') == 'paid';
   }
 
   static bool isActive(RecordModel debt) {
-    return remaining(debt) > 0 && !isPaid(debt);
+    return !isHidden(debt) && remaining(debt) > 0 && !isPaid(debt);
+  }
+
+  static Iterable<RecordModel> visible(Iterable<RecordModel> debts) {
+    return debts.where((debt) => !isHidden(debt));
   }
 
   static double totalRemaining(Iterable<RecordModel> debts) {
-    return debts.fold<double>(0, (sum, debt) => sum + remaining(debt));
+    return visible(debts).fold<double>(0, (sum, debt) => sum + remaining(debt));
   }
 
   static double totalPaid(Iterable<RecordModel> debts) {
-    return debts.fold<double>(0, (sum, debt) => sum + paid(debt));
+    return visible(debts).fold<double>(0, (sum, debt) => sum + paid(debt));
   }
 
   static int activeCount(Iterable<RecordModel> debts) {
@@ -38,6 +46,7 @@ class DebtBalance {
   }
 
   static String statusLabel(RecordModel debt) {
+    if (isHidden(debt)) return 'قەرزی شاراوە';
     return isPaid(debt) ? 'قەرز تەواوە' : 'قەرزی ماوە';
   }
 
