@@ -90,6 +90,8 @@ class _DebtDetailScreenCleanState extends State<DebtDetailScreenClean> {
                 const SizedBox(height: 12),
                 _Action(color: cardColor, subColor: subColor, icon: Icons.shield_rounded, text: 'ئەم قەرزە بە شێوەی پارێزراو لە لیستە چالاکەکان بشارەوە.', label: 'سڕینەوەی پارێزراو', onTap: protectedDeleteDebt),
                 const SizedBox(height: 16),
+                _ChangeLog(debt: d, color: cardColor, textColor: textColor, subColor: subColor),
+                const SizedBox(height: 16),
                 _History(debt: d, payments: payments, color: cardColor, textColor: textColor, subColor: subColor),
               ],
             ],
@@ -119,6 +121,42 @@ class _Summary extends StatelessWidget {
       _Line('پارەی وەرگیراو', AppHelpers.formatCurrency(DebtBalance.paid(debt)), AppColors.secondary, subColor),
       _Line('قەرزی ماوە', AppHelpers.formatCurrency(remaining), remaining <= 0 ? AppColors.secondary : AppColors.danger, subColor),
       Text('ژمارەی پارە وەرگرتنەوە: ${payments.length}', style: TextStyle(color: subColor, fontSize: 12)),
+    ]));
+  }
+}
+
+class _ChangeLog extends StatelessWidget {
+  final RecordModel debt;
+  final Color color;
+  final Color textColor;
+  final Color subColor;
+  const _ChangeLog({required this.debt, required this.color, required this.textColor, required this.subColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = debt.getStringValue('description');
+    final lines = text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final reasons = lines.where((line) => line.startsWith('هۆکاری گۆڕانکاری:')).toList();
+    final dates = lines.where((line) => line.startsWith('بەروار:')).toList();
+    if (reasons.isEmpty && dates.isEmpty) return const SizedBox.shrink();
+    final reason = reasons.isNotEmpty ? reasons.last.replaceFirst('هۆکاری گۆڕانکاری:', '').trim() : 'تۆمارکراو';
+    final date = dates.isNotEmpty ? dates.last.replaceFirst('بەروار:', '').trim() : '';
+    return _Box(color: color, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [const Icon(Icons.manage_history_rounded, color: AppColors.primary), const SizedBox(width: 8), Text('مێژووی گۆڕانکارییەکان', style: TextStyle(color: textColor, fontWeight: FontWeight.bold))]),
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('هۆکار', style: TextStyle(color: subColor, fontSize: 12)),
+          const SizedBox(height: 4),
+          Text(reason, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, height: 1.5)),
+          if (date.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('بەروار: $date', style: TextStyle(color: subColor, fontSize: 12)),
+          ],
+        ]),
+      ),
     ]));
   }
 }
