@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:zhirox/screens/shared/debt_correction_screen.dart';
+import 'package:zhirox/screens/shared/debt_protected_delete_screen.dart';
 import 'package:zhirox/screens/shared/debt_receipt_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -51,6 +52,13 @@ class _DebtDetailScreenCleanState extends State<DebtDetailScreenClean> {
     if (saved == true) await load();
   }
 
+  Future<void> protectedDeleteDebt() async {
+    final d = debt;
+    if (d == null) return;
+    final saved = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => DebtProtectedDeleteScreen(debt: d)));
+    if (saved == true && mounted) Navigator.pop(context, true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -79,6 +87,8 @@ class _DebtDetailScreenCleanState extends State<DebtDetailScreenClean> {
                 _Action(color: cardColor, subColor: subColor, icon: Icons.edit_note_rounded, text: 'بڕ و تێبینی ئەم قەرزە بە شێوەی پارێزراو ڕاست بکەوە.', label: 'ڕاستکردنەوە', onTap: correctDebt),
                 const SizedBox(height: 12),
                 _Action(color: cardColor, subColor: subColor, icon: Icons.receipt_rounded, text: 'وەصڵی ئەم قەرزە ئامادەیە بۆ بینین و پشکنین.', label: 'وەصڵ', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DebtReceiptScreen(debtId: d.id)))),
+                const SizedBox(height: 12),
+                _Action(color: cardColor, subColor: subColor, icon: Icons.shield_rounded, text: 'ئەم قەرزە بە شێوەی پارێزراو لە لیستە چالاکەکان بشارەوە.', label: 'سڕینەوەی پارێزراو', onTap: protectedDeleteDebt),
                 const SizedBox(height: 16),
                 _History(debt: d, payments: payments, color: cardColor, textColor: textColor, subColor: subColor),
               ],
