@@ -43,9 +43,10 @@ class _ActiveDebtListScreenState extends State<ActiveDebtListScreen> {
     final adminId = auth.adminId.isNotEmpty ? auth.adminId : auth.userId;
     try {
       final list = await PBService.getDebts(adminId: adminId, perPage: 500);
-      debts = list.where((debt) => !debt.getBoolValue('is_deleted')).toList();
+      debts = list.where(DebtBalance.isActive).toList();
     } catch (_) {
       // Keep calm visible state.
+      debts = [];
     }
     if (mounted) setState(() => loading = false);
   }
@@ -87,7 +88,8 @@ class _ActiveDebtListScreenState extends State<ActiveDebtListScreen> {
       final customer = debt.expand['customer']?.isNotEmpty == true ? debt.expand['customer']!.first : null;
       final name = customer?.getStringValue('name').toLowerCase() ?? '';
       final phone = customer?.getStringValue('phone').toLowerCase() ?? '';
-      return name.contains(q) || phone.contains(q);
+      final note = debt.getStringValue('description').toLowerCase();
+      return name.contains(q) || phone.contains(q) || note.contains(q);
     }).toList();
   }
 
@@ -98,7 +100,7 @@ class _ActiveDebtListScreenState extends State<ActiveDebtListScreen> {
     final textColor = isDark ? AppDarkColors.textPrimary : AppColors.textPrimary;
     final subColor = isDark ? AppDarkColors.textSecondary : AppColors.textSecondary;
     final list = shownDebts();
-    final total = list.fold<double>(0, (sum, debt) => sum + DebtBalance.remaining(debt));
+    final total = DebtBalance.totalRemaining(list);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -117,7 +119,7 @@ class _ActiveDebtListScreenState extends State<ActiveDebtListScreen> {
           const SizedBox(height: 8),
           OutlinedButton.icon(onPressed: openRestore, icon: const Icon(Icons.restore_rounded), label: const Text('گەڕاندنەوەی کردار')),
           const SizedBox(height: 12),
-          TextField(controller: searchCtrl, onChanged: (_) => setState(() {}), decoration: const InputDecoration(hintText: 'گەڕان بە ناو یان ژمارەی کڕیار', prefixIcon: Icon(Icons.search_rounded))),
+          TextField(controller: searchCtrl, onChanged: (_) => setState(() {}), decoration: const InputDecoration(hintText: 'گەڕان بە ناو، ژمارە، یان تێبینی', prefixIcon: Icon(Icons.search_rounded))),
           const SizedBox(height: 16),
           if (loading)
             const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
@@ -171,7 +173,7 @@ class _DebtTile extends StatelessWidget {
           const Icon(Icons.receipt_long_rounded, color: AppColors.primary),
           const SizedBox(width: 10),
           Expanded(child: Text(name.isEmpty ? 'کڕیار' : name, style: TextStyle(color: textColor, fontWeight: FontWeight.bold))),
-          Text(AppHelpers.formatCurrency(remaining), textDirection: TextDirection.ltr, style: TextStyle(color: remaining <= 0 ? AppColors.secondary : AppColors.danger, fontWeight: FontWeight.bold)),
+          Text(AppHelpers.formatCurrency(remaining), textDirection: TextDirection.ltr, style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold)),
         ]),
       ),
     );
