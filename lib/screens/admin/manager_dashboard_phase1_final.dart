@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
-import 'package:zhirox/screens/shared/debt_list_screen_phase1.dart';
+import 'package:zhirox/screens/shared/active_debt_list_screen.dart';
 import 'package:zhirox/screens/shared/debt_restore_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen_clean.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -54,7 +54,7 @@ class _ManagerDashboardPhase1FinalState extends State<ManagerDashboardPhase1Fina
       _ManagerHome(stats: _stats, isLoading: _isLoading, onRefresh: _loadStats, onOpenTab: (i) => setState(() => _currentIndex = i), onOpenRestore: _openRestoreActions),
       UserListScreenClean(key: const ValueKey('customers_final'), role: 'customer', adminId: auth.userId),
       UserListScreenClean(key: const ValueKey('employees_final'), role: 'employee', adminId: auth.userId),
-      const DebtListScreenPhase1(key: ValueKey('debts_final')),
+      const ActiveDebtListScreen(key: ValueKey('debts_final')),
       PendingRequestsScreen(key: ValueKey('pending_${auth.userId}'), adminId: auth.userId),
     ];
     final isDark = Theme.of(context).brightness == Brightness.dark;
