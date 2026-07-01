@@ -1,0 +1,11 @@
+{
+  "name": "Zhirox AI Debt",
+  "short_name": "Zhirox",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F5F7FA",
+  "theme_color": "#1A73E8",
+  "description": "Zhirox AI Debt — Kurdish Sorani RTL debt management app.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}
