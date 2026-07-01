@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/config/app_config.dart';
 
 class AppColors {
   static const Color primary = Color(0xFF1A73E8);
@@ -115,8 +116,11 @@ class AppStrings {
   static const String totalPayments = 'کۆی پارەدانەوەکان';
 }
 
-// PocketBase سێرڤەر
+/// Compatibility wrapper for existing services.
+///
+/// New code should read from [AppConfig.pbBaseUrl] directly. This alias keeps
+/// the current PBService import stable while configuration is being cleaned up
+/// step by step on the Dev branch.
 class PBConfig {
-  // ✅ سێرڤەری ئۆنلاین بە HTTPS
-  static const String baseUrl = 'https://pocketbase-production-18bc.up.railway.app';
+  static const String baseUrl = AppConfig.pbBaseUrl;
 }
