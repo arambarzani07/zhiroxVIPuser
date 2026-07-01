@@ -72,6 +72,8 @@ void main() {
   ];
 
   var applied = 0;
+  var alreadyApplied = 0;
+
   for (final change in changes) {
     final file = File('${repoRoot.path}/${change.path}');
     if (!file.existsSync()) {
@@ -82,6 +84,12 @@ void main() {
 
     final before = file.readAsStringSync();
     if (!before.contains(change.from)) {
+      if (change.to.isNotEmpty && before.contains(change.to)) {
+        alreadyApplied++;
+        stdout.writeln('Already applied: ${change.description}');
+        continue;
+      }
+
       stderr.writeln('Pattern not found in ${change.path}: ${change.description}');
       exitCode = 1;
       return;
@@ -97,6 +105,7 @@ void main() {
   }
 
   stdout.writeln('Password cleanup phase 1 applied: $applied replacements.');
+  stdout.writeln('Already applied/skipped: $alreadyApplied replacements.');
   stdout.writeln('Next checks: dart format lib/services/pb_service.dart lib/screens/shared/user_profile_screen.dart && flutter analyze');
 }
 
