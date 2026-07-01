@@ -7,6 +7,12 @@ import 'package:zhirox/services/pb_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   static const _secureStorage = FlutterSecureStorage();
+
+  static const String _userIdKey = 'user_id';
+  static const String _userDataKey = 'user_data';
+  static const String _pbAuthTokenKey = 'pb_auth_token';
+  static const String _pbAuthModelKey = 'pb_auth_model';
+
   RecordModel? _user;
   bool _isLoading = false;
   bool _isInitializing = true;
@@ -117,6 +123,63 @@ class AuthProvider extends ChangeNotifier {
     super.dispose();
   }
 
+  Future<void> _clearStoredAuth() async {
+    PBService.pb.authStore.clear();
+    await _secureStorage.delete(key: _userIdKey);
+    await _secureStorage.delete(key: _userDataKey);
+    await _secureStorage.delete(key: _pbAuthTokenKey);
+    await _secureStorage.delete(key: _pbAuthModelKey);
+  }
+
+  Future<RecordModel?> _restorePocketBaseAuthStore() async {
+    final token = await _secureStorage.read(key: _pbAuthTokenKey);
+    final modelString = await _secureStorage.read(key: _pbAuthModelKey);
+
+    if (token == null || token.isEmpty || modelString == null) {
+      return null;
+    }
+
+    try {
+      final modelJson = jsonDecode(modelString);
+      final model = RecordModel.fromJson(modelJson);
+      PBService.pb.authStore.save(token, model);
+
+      if (!PBService.pb.authStore.isValid) {
+        await _clearStoredAuth();
+        return null;
+      }
+
+      return model;
+    } catch (_) {
+      await _clearStoredAuth();
+      return null;
+    }
+  }
+
+  Future<void> _cacheCurrentAuth() async {
+    if (_user == null) return;
+
+    await _secureStorage.write(key: _userIdKey, value: _user!.id);
+    await _secureStorage.write(
+      key: _userDataKey,
+      value: jsonEncode(_user!.toJson()),
+    );
+
+    final token = PBService.pb.authStore.token;
+    if (PBService.pb.authStore.isValid && token.isNotEmpty) {
+      await _secureStorage.write(key: _pbAuthTokenKey, value: token);
+      await _secureStorage.write(
+        key: _pbAuthModelKey,
+        value: jsonEncode(_user!.toJson()),
+      );
+    } else {
+      // Legacy fallback logins may not produce a PocketBase token.
+      // Keep user cache for compatibility, but do not persist an invalid token.
+      await _secureStorage.delete(key: _pbAuthTokenKey);
+      await _secureStorage.delete(key: _pbAuthModelKey);
+    }
+  }
+
   /// Subscribe to real-time changes on the logged-in user's record.
   /// This ensures permissions update instantly when admin changes them.
   /// Also auto-logs out the employee if admin deactivates them.
@@ -137,19 +200,22 @@ class AuthProvider extends ChangeNotifier {
         }
 
         _user = event.record;
+        await _cacheCurrentAuth();
         notifyListeners();
       });
     } catch (_) {}
   }
 
   Future<void> _loadSavedUser() async {
-    final userId = await _secureStorage.read(key: 'user_id');
+    final restoredAuthModel = await _restorePocketBaseAuthStore();
+    final userId = await _secureStorage.read(key: _userIdKey);
+
     if (userId != null) {
       try {
         _user = await PBService.getUser(userId);
 
-        // Cache user data in secure storage
-        await _secureStorage.write(key: 'user_data', value: jsonEncode(_user!.toJson()));
+        // Cache fresh user data and the current PocketBase auth session.
+        await _cacheCurrentAuth();
 
         // Check subscription for employees/customers on app restart
         if (userRole == 'employee' || userRole == 'customer') {
@@ -162,8 +228,7 @@ class AuthProvider extends ChangeNotifier {
                 final endDate = DateTime.parse(subEnd);
                 if (endDate.isBefore(DateTime.now())) {
                   _user = null;
-                  await _secureStorage.delete(key: 'user_id');
-                  await _secureStorage.delete(key: 'user_data');
+                  await _clearStoredAuth();
                   _isInitializing = false;
                   notifyListeners();
                   return;
@@ -183,8 +248,7 @@ class AuthProvider extends ChangeNotifier {
             final endDate = DateTime.parse(subEnd);
             if (endDate.isBefore(DateTime.now())) {
               _user = null;
-              await _secureStorage.delete(key: 'user_id');
-              await _secureStorage.delete(key: 'user_data');
+              await _clearStoredAuth();
               _isInitializing = false;
               notifyListeners();
               return;
@@ -197,9 +261,13 @@ class AuthProvider extends ChangeNotifier {
           _subscribeToUserChanges();
         }
       } catch (_) {
-        // Network failure? Try to load from cache
-        final userDataString = await _secureStorage.read(key: 'user_data');
-        if (userDataString != null) {
+        // Network failure? Try restored auth model first, then cached user data.
+        if (restoredAuthModel != null) {
+          _user = restoredAuthModel;
+        }
+
+        final userDataString = await _secureStorage.read(key: _userDataKey);
+        if (_user == null && userDataString != null) {
           try {
             final userData = jsonDecode(userDataString);
             _user = RecordModel.fromJson(userData);
@@ -208,8 +276,7 @@ class AuthProvider extends ChangeNotifier {
 
         if (_user == null) {
           // No cache or corrupt -> Logout
-          await _secureStorage.delete(key: 'user_id');
-          await _secureStorage.delete(key: 'user_data');
+          await _clearStoredAuth();
         }
       }
     }
@@ -221,6 +288,7 @@ class AuthProvider extends ChangeNotifier {
     if (_user == null) return;
     try {
       _user = await PBService.getUser(_user!.id);
+      await _cacheCurrentAuth();
       notifyListeners();
     } catch (_) {}
   }
@@ -281,6 +349,7 @@ class AuthProvider extends ChangeNotifier {
           final endDate = DateTime.parse(subEnd);
           if (endDate.isBefore(DateTime.now())) {
             _user = null;
+            await _clearStoredAuth();
             throw 'ماوەی ڕێکەوتنی بەشداریت تەواو بووە. تکایە پەیوەندی بکە بۆ نوێکردنەوە.';
           }
         }
@@ -299,6 +368,7 @@ class AuthProvider extends ChangeNotifier {
               final endDate = DateTime.parse(subEnd);
               if (endDate.isBefore(DateTime.now())) {
                 _user = null;
+                await _clearStoredAuth();
                 throw 'ماوەی ڕێکەوتنی بەڕێوەبەرەکەت تەواو بووە. تکایە پەیوەندی بکە بە بەڕێوەبەرەکەت.';
               }
             }
@@ -313,8 +383,7 @@ class AuthProvider extends ChangeNotifier {
         _subscribeToUserChanges();
       }
 
-      await _secureStorage.write(key: 'user_id', value: _user!.id);
-      await _secureStorage.write(key: 'user_data', value: jsonEncode(_user!.toJson()));
+      await _cacheCurrentAuth();
 
       // Reset lockout on success
       final prefs = await SharedPreferences.getInstance();
@@ -400,8 +469,7 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
 
     _user = null;
-    await _secureStorage.delete(key: 'user_id');
-    await _secureStorage.delete(key: 'user_data');
+    await _clearStoredAuth();
     notifyListeners();
   }
 }
