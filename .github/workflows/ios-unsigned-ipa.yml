@@ -7,11 +7,20 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
   build-ios:
     runs-on: macos-latest
     timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,3 +73,37 @@ jobs:
           path: zhiroxVIPuser-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
+
+      - name: Prepare Safari download site
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp zhiroxVIPuser-unsigned.ipa _site/zhiroxVIPuser-unsigned.ipa
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="ku" dir="rtl">
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>ZHIROX VIP User IPA</title>
+          <body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:680px;margin:60px auto;padding:24px;text-align:center">
+            <h1>ZHIROX VIP User</h1>
+            <p>فایلی IPA بۆ iOS</p>
+            <p><a href="zhiroxVIPuser-unsigned.ipa" download style="font-size:20px">داونلۆدی ڕاستەوخۆی IPA</a></p>
+            <p>Unsigned IPA — پێش دامەزراندن پێویستی بە واژۆکردن هەیە.</p>
+          </body>
+          </html>
+          HTML
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
