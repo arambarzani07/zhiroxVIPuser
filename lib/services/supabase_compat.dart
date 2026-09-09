@@ -4,6 +4,10 @@ import 'dart:convert';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// supabase_flutter 2.17.x exposes FunctionException (singular). Keeping this
+// alias lets the migrated service retain its compatibility-oriented naming.
+typedef FunctionsException = FunctionException;
+
 class PBListResult {
   PBListResult({
     required this.items,
