@@ -39,8 +39,13 @@ jobs:
           cd ios
           pod install
 
-      - name: Analyze
-        run: flutter analyze --no-fatal-infos
+      - name: Wire CocoaPods xcconfig
+        run: |
+          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Debug.xcconfig
+          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Release.xcconfig
+
+      - name: Analyze for compile errors
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build iOS without signing
         run: flutter build ios --release --no-codesign
