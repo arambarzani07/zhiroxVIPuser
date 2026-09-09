@@ -5,6 +5,10 @@ on:
     branches: [ipa-supabase-connected]
   workflow_dispatch:
 
+concurrency:
+  group: zhirox-supabase-ios-ipa
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
