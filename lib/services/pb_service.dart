@@ -1,130 +1,166 @@
+import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'dart:io';
 
-import 'package:pocketbase/pocketbase.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:pocketbase/pocketbase.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:zhirox/services/supabase_compat.dart';
 import 'package:zhirox/utils/constants.dart';
 
 class PBService {
-  static final PocketBase pb = PocketBase(PBConfig.baseUrl);
+  static bool _initialized = false;
+  static Future<void>? _initializing;
 
-  /// Sanitize a value before using it in a PocketBase filter string.
-  /// Escapes double quotes and backslashes to prevent filter injection.
+  static final SupabasePBCompat pb = SupabasePBCompat(
+    ensureInitialized: ensureInitialized,
+  );
+
+  static SupabaseClient get client => Supabase.instance.client;
+
+  static Future<void> ensureInitialized() {
+    if (_initialized) return Future.value();
+    final pending = _initializing;
+    if (pending != null) return pending;
+
+    final completer = Completer<void>();
+    _initializing = completer.future;
+    () async {
+      try {
+        await Supabase.initialize(
+          url: SupabaseConfig.url,
+          publishableKey: SupabaseConfig.publishableKey,
+        );
+        _initialized = true;
+        completer.complete();
+      } catch (e, st) {
+        // If another caller initialized the singleton first, accept it.
+        try {
+          Supabase.instance.client;
+          _initialized = true;
+          completer.complete();
+        } catch (_) {
+          completer.completeError(e, st);
+        }
+      } finally {
+        _initializing = null;
+      }
+    }();
+    return completer.future;
+  }
+
   static String _sanitize(String value) {
     return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+  }
+
+  static RecordModel _profileRecord(Map<String, dynamic> row) {
+    final phone = row['phone']?.toString() ?? '';
+    return RecordModel.fromJson({
+      ...row,
+      'id': row['id']?.toString() ?? '',
+      'collectionId': '',
+      'collectionName': 'users',
+      'email': phone.isEmpty ? '' : '$phone@zhirox.local',
+      'created': row['created_at']?.toString() ?? '',
+      'updated': row['updated_at']?.toString() ?? row['created_at']?.toString() ?? '',
+    });
+  }
+
+  static String _functionError(dynamic data) {
+    final code = data is Map ? data['error']?.toString() ?? '' : data?.toString() ?? '';
+    switch (code) {
+      case 'phone_exists':
+        return 'ئەم ژمارەیە پێشتر تۆمارکراوە';
+      case 'invalid_admin':
+        return 'بەڕێوەبەری هەڵبژێردراو دروست نییە';
+      case 'admin_creation_requires_admin':
+        return 'دروستکردنی ئەکاونتی بەڕێوەبەر تەنها لەلایەن بەڕێوەبەرێکی چالاکەوە دەکرێت';
+      case 'employee_creation_requires_admin':
+        return 'تەنها بەڕێوەبەر دەتوانێت کارمەند دروست بکات';
+      case 'cross_tenant_forbidden':
+      case 'forbidden':
+        return 'دەسەڵاتی ئەم کردارەت نییە';
+      case 'missing_permission':
+        return 'مۆڵەتی ئەم کردارەت نییە';
+      case 'invalid_input':
+        return 'زانیارییەکان تەواو یان دروست نین';
+      default:
+        return code.isEmpty ? 'هەڵەیەک لە سێرڤەر ڕوویدا' : code;
+    }
+  }
+
+  static Future<RecordModel> _invokeCreateAccount(Map<String, dynamic> body) async {
+    await ensureInitialized();
+    try {
+      final response = await client.functions.invoke(
+        'account-admin',
+        body: {'action': 'create_user', ...body},
+      );
+      final data = response.data;
+      if (data is! Map || data['user'] is! Map) {
+        throw _functionError(data);
+      }
+      return _profileRecord(Map<String, dynamic>.from(data['user'] as Map));
+    } on FunctionsException catch (e) {
+      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
+    }
   }
 
   // ==================== Auth ====================
 
   static Future<RecordModel> login(String phone, String password) async {
+    await ensureInitialized();
     final cleanPhone = phone.trim();
-    final localEmail = cleanPhone.contains('@')
+    final email = cleanPhone.contains('@')
         ? cleanPhone
         : '$cleanPhone@zhirox.local';
 
-    RecordModel? user;
-    bool authenticated = false;
-
-    // 1. Secure login path: login directly with the phone-based local email.
-    // This lets PocketBase keep the auth token so protected API Rules work.
     try {
-      final auth = await pb.collection('users').authWithPassword(
-        localEmail,
-        password,
+      final response = await client.auth.signInWithPassword(
+        email: email,
+        password: password,
       );
-      user = auth.record;
-      authenticated = true;
-    } catch (_) {
-      // Fallback below supports older/manual users whose email is not phone@zhirox.local.
-      // For the strongest API Rules, update old users' email to phone@zhirox.local.
-    }
+      final authUser = response.user;
+      if (authUser == null) throw Exception('invalid login');
 
-    // 2. Legacy fallback: find user by phone, then authenticate with stored email.
-    // This fallback may require a temporary List/Search rule on users during migration.
-    if (!authenticated) {
-      final safePhone = _sanitize(cleanPhone);
-      final result = await pb
-          .collection('users')
-          .getList(filter: 'phone = "$safePhone"', perPage: 1);
+      final user = await getUser(authUser.id);
+      final role = user.getStringValue('role');
 
-      if (result.items.isEmpty) {
-        throw Exception('ئەم ژمارەیە تۆمار نەکراوە');
+      if (role == 'customer' && !user.getBoolValue('approved')) {
+        await client.auth.signOut();
+        throw AppStrings.notApproved;
+      }
+      if (role == 'employee' && !user.getBoolValue('active')) {
+        await client.auth.signOut();
+        throw 'ئەم ئەکاونتە لەلایەن ئەدمینەوە ناچالاک کراوە';
       }
 
-      user = result.items.first;
-
-      try {
-        final auth = await pb.collection('users').authWithPassword(
-          user.getStringValue('email'),
-          password,
-        );
-        user = auth.record;
-        authenticated = true;
-      } catch (_) {
-        // PocketBase auth failed — try legacy password_text fallback
-      }
-    }
-
-    // 3. Fallback: check password_text for legacy users who changed password via old system.
-    if (!authenticated && user != null) {
-      final storedPassword = user.getStringValue('password_text');
-      if (storedPassword.isNotEmpty && storedPassword == password) {
-        authenticated = true;
-        // Migrate: sync PocketBase password and clear password_text.
-        // Works only if the current API Rules allow updating this user.
-        try {
-          await pb.collection('users').update(user.id, body: {
-            'password': password,
-            'passwordConfirm': password,
-            'password_text': '',
-          });
-        } catch (_) {}
-      }
-    }
-
-    if (!authenticated || user == null) {
-      throw Exception('وشەی نهێنی هەڵەیە');
-    }
-
-    final role = user.getStringValue('role');
-
-    // بپشکنە ئەگەر کڕیارە و هێشتا قبوڵ نەکراوە
-    if (role == 'customer') {
-      final approved = user.getBoolValue('approved');
-      if (!approved) {
-        throw Exception(AppStrings.notApproved);
-      }
-    }
-
-    // بپشکنە ئەگەر کارمەندە و ناچالاکە
-    if (role == 'employee') {
-      final active = user.getBoolValue('active');
-      if (!active) {
-        throw Exception('ئەم ئەکاونتە لەلایەن ئەدمینەوە ناچالاک کراوە');
-      }
-    }
-
-    // بپشکنینی ماوەی مۆڵەتی بەڕێوەبەر بۆ کارمەند و کڕیار
-    if (role == 'employee' || role == 'customer') {
-      final adminId = user.getStringValue('admin_id');
-      if (adminId.isNotEmpty) {
-        try {
+      if (role == 'employee' || role == 'customer') {
+        final adminId = user.getStringValue('admin_id');
+        if (adminId.isNotEmpty) {
           final admin = await pb.collection('users').getOne(adminId);
           final subEnd = admin.getStringValue('subscription_end');
-          if (subEnd.isNotEmpty) {
-            final endDate = DateTime.parse(subEnd);
-            if (endDate.isBefore(DateTime.now())) {
-              throw 'ماوەی ڕێکەوتنی بەڕێوەبەرەکەت تەواو بووە. تکایە پەیوەندی بکە بە بەڕێوەبەرەکەت.';
-            }
+          if (subEnd.isNotEmpty && DateTime.parse(subEnd).isBefore(DateTime.now())) {
+            await client.auth.signOut();
+            throw 'ماوەی ڕێکەوتنی بەڕێوەبەرەکەت تەواو بووە. تکایە پەیوەندی بکە بە بەڕێوەبەرەکەت.';
           }
-        } catch (e) {
-          if (e is String) rethrow;
-          throw 'ناتوانرێت ماوەی مۆڵەتی بەڕێوەبەرەکەت بپشکنرێت. تکایە دواتر هەوڵبدەرەوە.';
         }
       }
+      return user;
+    } on AuthException catch (_) {
+      throw Exception('وشەی نهێنی هەڵەیە');
     }
+  }
 
-    return user;
+  static Future<void> logout() async {
+    await ensureInitialized();
+    try {
+      await client.removeAllChannels();
+    } catch (_) {}
+    try {
+      await client.auth.signOut();
+    } catch (_) {}
   }
 
   // ==================== Registration ====================
@@ -135,69 +171,60 @@ class PBService {
     required String phone,
     required String password,
     required int subscriptionDays,
-  }) async {
-    // بپشکنە ئەو ژمارەیە پێشتر تۆمار نەکرابێت
-    final safePhone = _sanitize(phone);
-    final existing = await pb
-        .collection('users')
-        .getList(filter: 'phone = "$safePhone"', perPage: 1);
-    if (existing.items.isNotEmpty) {
-      throw Exception('ئەم ژمارەیە پێشتر تۆمارکراوە');
-    }
+  }) {
+    return _invokeCreateAccount({
+      'role': 'admin',
+      'market_name': marketName,
+      'name': adminName,
+      'phone': phone.trim(),
+      'password': password,
+      'subscription_days': subscriptionDays,
+    });
+  }
 
-    final subscriptionEnd = DateTime.now().add(
-      Duration(days: subscriptionDays),
-    );
-
-    return await pb
-        .collection('users')
-        .create(
-          body: {
-            'name': adminName,
-            'email': '$phone@zhirox.local',
-            'market_name': marketName,
-            'phone': phone,
-            'password': password,
-            'passwordConfirm': password,
-            'password_text': password,
-            'role': 'admin',
-            'approved': true,
-            'subscription_end': subscriptionEnd.toUtc().toIso8601String(),
-          },
-        );
+  static Future<RecordModel> registerCustomer({
+    required String name,
+    String fatherName = '',
+    String grandfatherName = '',
+    required String phone,
+    required String password,
+    required String adminId,
+  }) {
+    return _invokeCreateAccount({
+      'role': 'customer',
+      'name': name,
+      'father_name': fatherName,
+      'grandfather_name': grandfatherName,
+      'phone': phone.trim(),
+      'password': password,
+      'admin_id': adminId,
+    });
   }
 
   // ==================== Admin Subscription Management ====================
 
-  /// Get admins with pagination + employee/customer counts
   static Future<Map<String, dynamic>> getAdminsPage({
     int page = 1,
     int perPage = 15,
   }) async {
-    final result = await pb
-        .collection('users')
-        .getList(
-          filter: 'role = "admin"',
-          sort: '-created',
-          page: page,
-          perPage: perPage,
-        );
-
+    await ensureInitialized();
+    final result = await pb.collection('users').getList(
+      filter: 'role = "admin"',
+      sort: '-created',
+      page: page,
+      perPage: perPage,
+    );
     final admins = <Map<String, dynamic>>[];
     for (final admin in result.items) {
-      final safeAdminId = _sanitize(admin.id);
-      final employees = await pb
-          .collection('users')
-          .getList(
-            filter: 'admin_id = "$safeAdminId" && role = "employee"',
-            perPage: 1,
-          );
-      final customers = await pb
-          .collection('users')
-          .getList(
-            filter: 'admin_id = "$safeAdminId" && role = "customer"',
-            perPage: 1,
-          );
+      final adminId = _sanitize(admin.id);
+      final employees = await pb.collection('users').getList(
+        filter: 'admin_id = "$adminId" && role = "employee"',
+        perPage: 1,
+      );
+      final customers = await pb.collection('users').getList(
+        filter: 'admin_id = "$adminId" && role = "customer"',
+        perPage: 1,
+      );
       admins.add({
         'admin': admin,
         'employeeCount': employees.totalItems,
@@ -212,181 +239,65 @@ class PBService {
     };
   }
 
-  /// Renew admin subscription
   static Future<void> renewAdminSubscription(String adminId, int days) async {
     final newEnd = DateTime.now().add(Duration(days: days));
-    await pb
-        .collection('users')
-        .update(
-          adminId,
-          body: {'subscription_end': newEnd.toUtc().toIso8601String()},
-        );
+    await pb.collection('users').update(
+      adminId,
+      body: {'subscription_end': newEnd.toUtc().toIso8601String()},
+    );
   }
 
-  /// Delete admin and ALL their data (employees, customers, debts, payments, notifications)
   static Future<void> deleteAdminWithData(String adminId) async {
-    final safeAdminId = _sanitize(adminId);
-    // 1. Get all users under this admin
-    final users = await pb
-        .collection('users')
-        .getFullList(filter: 'admin_id = "$safeAdminId"');
-
-    // 2. Delete debts, payments, and notifications for each user
-    for (final user in users) {
-      // Delete debts where customer = user.id
-      final safeUserId = _sanitize(user.id);
-      final debts = await pb
-          .collection('debts')
-          .getFullList(filter: 'customer = "$safeUserId"');
-      for (final debt in debts) {
-        // Delete payments for this debt
-        try {
-          final safeDebtId = _sanitize(debt.id);
-          final payments = await pb
-              .collection('payments')
-              .getFullList(filter: 'debt = "$safeDebtId"');
-          for (final payment in payments) {
-            try {
-              await pb.collection('payments').delete(payment.id);
-            } catch (_) {}
-          }
-        } catch (_) {}
-        // Delete the debt
-        try {
-          await pb.collection('debts').delete(debt.id);
-        } catch (_) {}
-      }
-
-      // Delete notifications for user
-      try {
-        final notifs = await pb
-            .collection('notifications')
-            .getFullList(filter: 'customer = "$safeUserId"');
-        for (final notif in notifs) {
-          try {
-            await pb.collection('notifications').delete(notif.id);
-          } catch (_) {}
-        }
-      } catch (_) {}
-
-      // Delete the user
-      try {
-        await pb.collection('users').delete(user.id);
-      } catch (_) {}
-    }
-
-    // 3. Delete debts created by admin (and their payments)
-    final adminDebts = await pb
-        .collection('debts')
-        .getFullList(filter: 'created_by = "$safeAdminId"');
-    for (final debt in adminDebts) {
-      try {
-        final payments = await pb
-            .collection('payments')
-            .getFullList(filter: 'debt = "${_sanitize(debt.id)}"');
-        for (final payment in payments) {
-          try {
-            await pb.collection('payments').delete(payment.id);
-          } catch (_) {}
-        }
-      } catch (_) {}
-      try {
-        await pb.collection('debts').delete(debt.id);
-      } catch (_) {}
-    }
-
-    // 4. Delete admin notifications
+    await ensureInitialized();
     try {
-      final adminNotifs = await pb
-          .collection('notifications')
-          .getFullList(filter: 'customer = "$safeAdminId"');
-      for (final notif in adminNotifs) {
-        try {
-          await pb.collection('notifications').delete(notif.id);
-        } catch (_) {}
+      final response = await client.functions.invoke(
+        'account-admin',
+        body: {'action': 'delete_user', 'user_id': adminId},
+      );
+      if (response.data is Map && response.data['error'] != null) {
+        throw _functionError(response.data);
       }
-    } catch (_) {}
-
-    // 5. Delete the admin
-    await pb.collection('users').delete(adminId);
+    } on FunctionsException catch (e) {
+      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
+    }
   }
 
-  /// Check subscription expiry for an admin, returns days remaining (negative = expired)
   static Future<int> checkSubscriptionDaysLeft(String adminId) async {
     final admin = await pb.collection('users').getOne(adminId);
     final subEnd = admin.getStringValue('subscription_end');
-    if (subEnd.isEmpty) return 9999; // No expiry set
-    final endDate = DateTime.parse(subEnd);
-    return endDate.difference(DateTime.now()).inDays;
-  }
-
-  static Future<RecordModel> registerCustomer({
-    required String name,
-    String fatherName = '',
-    String grandfatherName = '',
-    required String phone,
-    required String password,
-    required String adminId,
-  }) async {
-    // بپشکنە ئەو ژمارەیە پێشتر تۆمار نەکرابێت
-    final safePhone = _sanitize(phone);
-    final existing = await pb
-        .collection('users')
-        .getList(filter: 'phone = "$safePhone"', perPage: 1);
-    if (existing.items.isNotEmpty) {
-      throw Exception('ئەم ژمارەیە پێشتر تۆمارکراوە');
-    }
-
-    return await pb
-        .collection('users')
-        .create(
-          body: {
-            'name': name,
-            'email': '$phone@zhirox.local',
-            'father_name': fatherName,
-            'grandfather_name': grandfatherName,
-            'phone': phone,
-            'password': password,
-            'passwordConfirm': password,
-            'password_text': password,
-            'role': 'customer',
-            'admin_id': adminId,
-            'approved': false,
-          },
-        );
+    if (subEnd.isEmpty) return 9999;
+    return DateTime.parse(subEnd).difference(DateTime.now()).inDays;
   }
 
   // ==================== Admin Approval ====================
 
   static Future<List<RecordModel>> getAdminList() async {
-    final result = await pb
-        .collection('users')
-        .getList(filter: 'role = "admin"', sort: '-created', perPage: 500);
-    return result.items;
+    await ensureInitialized();
+    final data = await client.rpc('list_active_markets');
+    final rows = (data as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    return rows
+        .map((row) => _profileRecord({
+              ...row,
+              'role': 'admin',
+              'approved': true,
+              'active': true,
+              'created_at': '',
+              'updated_at': '',
+            }))
+        .toList();
   }
 
-  static Future<List<RecordModel>> getPendingCustomers(String adminId) async {
-    final safeAdminId = _sanitize(adminId);
-    final result = await pb
-        .collection('users')
-        .getList(
-          filter:
-              'role = "customer" && admin_id = "$safeAdminId" && approved = false',
-          sort: '-created',
-          perPage: 500,
-        );
-    return result.items;
+  static Future<List<RecordModel>> getPendingCustomers(String adminId) {
+    return getUsers(role: 'customer', adminId: adminId, approved: false);
   }
 
-  static Future<void> approveCustomer(String id, int debtDuration) async {
-    await pb
-        .collection('users')
-        .update(id, body: {'approved': true, 'debt_duration': debtDuration});
+  static Future<void> approveCustomer(String id, int debtDuration) {
+    return updateUser(id, {'approved': true, 'debt_duration': debtDuration});
   }
 
-  static Future<void> rejectCustomer(String id) async {
-    await pb.collection('users').delete(id);
-  }
+  static Future<void> rejectCustomer(String id) => deleteUser(id);
 
   // ==================== Users ====================
 
@@ -405,116 +316,99 @@ class PBService {
     bool canEditDebts = false,
     bool canSendNotifications = false,
     double debtLimit = 0,
-  }) async {
-    // Check if phone already exists
-    final safePhone = _sanitize(phone);
-    final existing = await pb
-        .collection('users')
-        .getList(filter: 'phone = "$safePhone"', perPage: 1);
-    if (existing.items.isNotEmpty) {
-      throw Exception('ئەم ژمارەیە پێشتر تۆمارکراوە');
-    }
-
-    final body = {
+  }) {
+    return _invokeCreateAccount({
       'name': name,
-      'email': '$phone@zhirox.local',
       'father_name': fatherName,
       'grandfather_name': grandfatherName,
-      'phone': phone,
+      'phone': phone.trim(),
       'password': password,
-      'passwordConfirm': password,
-      'password_text': password,
       'role': role,
       'created_by': createdBy,
       'admin_id': adminId ?? createdBy,
-      'approved': true,
-      'active': true,
-    };
-
-    if (role == 'employee') {
-      body['can_add_customers'] = canAddCustomers;
-      body['can_set_debt_limit'] = canSetDebtLimit;
-      body['can_set_due_date'] = canSetDueDate;
-      body['can_edit_debts'] = canEditDebts;
-      body['can_send_notifications'] = canSendNotifications;
-    }
-
-    if (role == 'customer') {
-      body['debt_limit'] = debtLimit;
-    }
-
-    return await pb.collection('users').create(body: body);
+      'can_add_customers': canAddCustomers,
+      'can_set_debt_limit': canSetDebtLimit,
+      'can_set_due_date': canSetDueDate,
+      'can_edit_debts': canEditDebts,
+      'can_send_notifications': canSendNotifications,
+      'debt_limit': debtLimit,
+    });
   }
 
   static Future<void> updateUser(String id, Map<String, dynamic> data) async {
-    await pb.collection('users').update(id, body: data);
+    await ensureInitialized();
+    final mutable = Map<String, dynamic>.from(data);
+    final botToken = mutable.remove('telegram_bot_token');
+    final chatId = mutable.remove('telegram_chat_id');
+
+    if ((botToken != null || chatId != null) && client.auth.currentUser?.id == id) {
+      String resolvedToken = botToken?.toString() ?? '';
+      String resolvedChat = chatId?.toString() ?? '';
+      if (botToken == null || chatId == null) {
+        try {
+          final current = await client.rpc('get_my_telegram_credentials');
+          if (current is List && current.isNotEmpty) {
+            final row = Map<String, dynamic>.from(current.first as Map);
+            if (botToken == null) resolvedToken = row['bot_token']?.toString() ?? '';
+            if (chatId == null) resolvedChat = row['chat_id']?.toString() ?? '';
+          }
+        } catch (_) {}
+      }
+      await client.rpc(
+        'set_my_telegram_credentials',
+        params: {'p_bot_token': resolvedToken, 'p_chat_id': resolvedChat},
+      );
+    }
+
+    if (mutable.isEmpty) return;
+    try {
+      final response = await client.functions.invoke(
+        'update-account',
+        body: {'user_id': id, 'data': mutable},
+      );
+      if (response.data is Map && response.data['error'] != null) {
+        throw _functionError(response.data);
+      }
+    } on FunctionsException catch (e) {
+      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
+    }
   }
 
-  /// Change password for a user. Handles both PocketBase auth and legacy password_text.
-  /// Verifies oldPassword, then stores password encrypted via PocketBase hashing.
   static Future<void> changePassword({
     required String userId,
     required String oldPassword,
     required String newPassword,
   }) async {
-    final user = await pb.collection('users').getOne(userId);
-    final email = user.getStringValue('email');
-    final storedPasswordText = user.getStringValue('password_text');
-
-    bool pbAuthOk = false;
-
-    // 1. Try PocketBase auth to verify old password
+    await ensureInitialized();
+    if (client.auth.currentUser?.id != userId) {
+      throw Exception('دەسەڵاتی گۆڕینی ئەم وشەی نهێنییەت نییە');
+    }
+    final profile = await getUser(userId);
+    final phone = profile.getStringValue('phone');
     try {
-      await pb.collection('users').authWithPassword(email, oldPassword);
-      pbAuthOk = true;
-    } catch (_) {}
-
-    // 2. If PB auth failed, verify against password_text (legacy)
-    if (!pbAuthOk) {
-      if (storedPasswordText.isEmpty || storedPasswordText != oldPassword) {
-        pb.authStore.clear();
-        throw Exception('\u0648\u0634\u06d5\u06cc \u0646\u0647\u06ce\u0646\u06cc\u06cc \u06a9\u06c6\u0646 \u0647\u06d5\u06b5\u06d5\u06cc\u06d5');
-      }
+      await client.auth.signInWithPassword(
+        email: '$phone@zhirox.local',
+        password: oldPassword,
+      );
+    } on AuthException catch (_) {
+      throw Exception('وشەی نهێنیی کۆن هەڵەیە');
     }
-
-    // 3. Update PocketBase password (encrypted/hashed by PocketBase)
-    if (pbAuthOk) {
-      // PB auth succeeded → auth token is active, update PB password with oldPassword
-      try {
-        await pb.collection('users').update(userId, body: {
-          'oldPassword': oldPassword,
-          'password': newPassword,
-          'passwordConfirm': newPassword,
-          'password_text': '', // Clear plaintext since PB now has the hashed version
-        });
-      } catch (_) {
-        // If PB update fails, fallback to password_text
-        await pb.collection('users').update(userId, body: {
-          'password_text': newPassword,
-        });
-      }
-    } else {
-      // Legacy user: PB password is out of sync, can't provide valid oldPassword.
-      // Try setting PB password without oldPassword (works if PB rules allow it)
-      try {
-        await pb.collection('users').update(userId, body: {
-          'password': newPassword,
-          'passwordConfirm': newPassword,
-          'password_text': '', // Clear plaintext
-        });
-      } catch (_) {
-        // PB password sync failed → keep password_text as fallback for login
-        await pb.collection('users').update(userId, body: {
-          'password_text': newPassword,
-        });
-      }
-    }
-
-    pb.authStore.clear();
+    await client.auth.updateUser(UserAttributes(password: newPassword));
   }
 
   static Future<void> deleteUser(String id) async {
-    await pb.collection('users').delete(id);
+    await ensureInitialized();
+    try {
+      final response = await client.functions.invoke(
+        'account-admin',
+        body: {'action': 'delete_user', 'user_id': id},
+      );
+      if (response.data is Map && response.data['error'] != null) {
+        throw _functionError(response.data);
+      }
+    } on FunctionsException catch (e) {
+      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
+    }
   }
 
   static Future<List<RecordModel>> getUsers({
@@ -523,49 +417,78 @@ class PBService {
     String? adminId,
     bool? approved,
   }) async {
-    String filter = '';
-    List<String> filters = [];
-
+    final filters = <String>[];
     if (role != null) filters.add('role = "${_sanitize(role)}"');
     if (adminId != null) filters.add('admin_id = "${_sanitize(adminId)}"');
     if (approved != null) filters.add('approved = $approved');
     if (search != null && search.isNotEmpty) {
-      final safeSearch = _sanitize(search);
-      filters.add(
-        '(name ~ "$safeSearch" || father_name ~ "$safeSearch" || phone ~ "$safeSearch")',
-      );
+      final q = _sanitize(search);
+      filters.add('(name ~ "$q" || father_name ~ "$q" || phone ~ "$q")');
     }
-
-    if (filters.isNotEmpty) filter = filters.join(' && ');
-
-    final result = await pb
-        .collection('users')
-        .getList(filter: filter, sort: '-created', perPage: 500);
-
+    final result = await pb.collection('users').getList(
+      filter: filters.join(' && '),
+      sort: '-created',
+      perPage: 500,
+    );
     return result.items;
   }
 
   static Future<RecordModel> getUser(String id) async {
-    return await pb.collection('users').getOne(id);
+    var user = await pb.collection('users').getOne(id);
+    await ensureInitialized();
+    if (client.auth.currentUser?.id == id) {
+      try {
+        final data = await client.rpc('get_my_telegram_credentials');
+        if (data is List && data.isNotEmpty) {
+          final creds = Map<String, dynamic>.from(data.first as Map);
+          final json = user.toJson();
+          json['telegram_bot_token'] = creds['bot_token']?.toString() ?? '';
+          json['telegram_chat_id'] = creds['chat_id']?.toString() ?? '';
+          user = RecordModel.fromJson(json);
+        }
+      } catch (_) {}
+    }
+    return user;
   }
 
   // ==================== Debts ====================
 
   static Future<double> getCustomerBalance(String customerId) async {
-    // This is a simplified balance calculation.
-    // Ideally this should be done on backend or with optimized queries.
-    // For now: Sum of (Debt Amount - Paid Amount) for all debts.
     try {
       final debts = await getDebts(customerId: customerId);
-      double totalRemaining = 0;
-
-      for (var debt in debts) {
-        totalRemaining += debt.getDoubleValue('remaining');
-      }
-      return totalRemaining;
-    } catch (e) {
+      return debts.fold<double>(
+        0,
+        (sum, debt) => sum + debt.getDoubleValue('remaining'),
+      );
+    } catch (_) {
       return 0;
     }
+  }
+
+  static String _mimeForPath(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.pdf')) return 'application/pdf';
+    return 'image/jpeg';
+  }
+
+  static Future<String> _uploadReceipt(String sourcePath, String createdBy) async {
+    await ensureInitialized();
+    final creator = await getUser(createdBy);
+    final tenantId = creator.getStringValue('role') == 'admin'
+        ? creator.id
+        : creator.getStringValue('admin_id');
+    if (tenantId.isEmpty) throw Exception('tenant not found');
+    final ext = sourcePath.contains('.') ? sourcePath.substring(sourcePath.lastIndexOf('.')) : '.jpg';
+    final storagePath = '$tenantId/${DateTime.now().microsecondsSinceEpoch}$ext';
+    final bytes = await File(sourcePath).readAsBytes();
+    await client.storage.from('receipts').uploadBinary(
+      storagePath,
+      bytes,
+      fileOptions: FileOptions(contentType: _mimeForPath(sourcePath), upsert: false),
+    );
+    return storagePath;
   }
 
   static Future<RecordModel> createDebt({
@@ -583,6 +506,11 @@ class PBService {
     String? customCreatedDate,
     String? receiptImagePath,
   }) async {
+    String receiptPath = '';
+    if (receiptImagePath != null && receiptImagePath.isNotEmpty) {
+      receiptPath = await _uploadReceipt(receiptImagePath, createdBy);
+    }
+
     final body = <String, dynamic>{
       'customer': customerId,
       'description': description,
@@ -594,76 +522,48 @@ class PBService {
       'currency': currency,
       'dollar_rate': dollarRate,
       'amount_usd': amountUsd,
-      'items': items != null ? jsonEncode(items) : '[]',
+      'items': jsonEncode(items ?? const <Map<String, dynamic>>[]),
+      if (customCreatedDate != null && customCreatedDate.isNotEmpty)
+        'custom_date': customCreatedDate,
+      if (receiptPath.isNotEmpty) 'receipt_image': receiptPath,
     };
 
-    // If custom date provided, store it in custom_date field
-    if (customCreatedDate != null && customCreatedDate.isNotEmpty) {
-      body['custom_date'] = customCreatedDate;
-    }
+    final created = await pb.collection('debts').create(body: body);
 
-    // Prepare file list for receipt image
-    final List<http.MultipartFile> files = [];
-    if (receiptImagePath != null && receiptImagePath.isNotEmpty) {
-      files.add(
-        await http.MultipartFile.fromPath('receipt_image', receiptImagePath),
-      );
-    }
-
-    final record = await pb
-        .collection('debts')
-        .create(body: body, files: files);
-
-    // Auto-send notification
     try {
       final formattedAmount =
-          '${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} د.ع';
-
-      // Always resolve admin name for notification (not employee name)
+          '${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
       String senderName = createdByName ?? 'کارمەند';
-
-      // If market name not provided, try to get it from the user/admin
       String resolvedMarketName = marketName ?? '';
       try {
-        final creator = await pb.collection('users').getOne(createdBy);
-        final role = creator.getStringValue('role');
-        if (role == 'admin') {
+        final creator = await getUser(createdBy);
+        if (creator.getStringValue('role') == 'admin') {
+          senderName = creator.getStringValue('name');
           if (resolvedMarketName.isEmpty) {
             resolvedMarketName = creator.getStringValue('market_name');
           }
-          senderName = creator.getStringValue('name');
         } else {
           final adminId = creator.getStringValue('admin_id');
           if (adminId.isNotEmpty) {
-            final admin = await pb.collection('users').getOne(adminId);
+            final admin = await getUser(adminId);
+            senderName = admin.getStringValue('name');
             if (resolvedMarketName.isEmpty) {
               resolvedMarketName = admin.getStringValue('market_name');
             }
-            senderName = admin.getStringValue('name');
           }
         }
       } catch (_) {}
-
-      final marketLine = resolvedMarketName.isNotEmpty
-          ? '$resolvedMarketName\n'
-          : '';
-
-      final dueDateLine = dueDate.isNotEmpty
-          ? '\nبەرواری دانەوە: ${dueDate.replaceAll('-', '/')}'
-          : '';
-
+      final marketLine = resolvedMarketName.isEmpty ? '' : '$resolvedMarketName\n';
+      final dueLine = dueDate.isEmpty ? '' : '\nبەرواری دانەوە: ${dueDate.replaceAll('-', '/')}';
       await createNotification(
         customerId: customerId,
-        message:
-            '$marketLineقەرزی $formattedAmount لەلایەن $senderName زیادکرا.$dueDateLine',
+        message: '$marketLineقەرزی $formattedAmount لەلایەن $senderName زیادکرا.$dueLine',
         senderId: createdBy,
         type: 'debt_created',
       );
-    } catch (_) {
-      // Ignore notification failures
-    }
+    } catch (_) {}
 
-    return record;
+    return await getDebt(created.id);
   }
 
   static Future<void> updateDebt(String id, Map<String, dynamic> data) async {
@@ -671,12 +571,11 @@ class PBService {
   }
 
   static Future<void> deleteDebt(String id) async {
-    // سەرەتا پارەدانەوەکانی ئەم قەرزە بسڕەوە
-    final safeId = _sanitize(id);
-    final payments = await pb
-        .collection('payments')
-        .getList(filter: 'debt = "$safeId"', perPage: 500);
-    for (var payment in payments.items) {
+    final payments = await pb.collection('payments').getList(
+      filter: 'debt = "${_sanitize(id)}"',
+      perPage: 500,
+    );
+    for (final payment in payments.items) {
       await pb.collection('payments').delete(payment.id);
     }
     await pb.collection('debts').delete(id);
@@ -688,34 +587,25 @@ class PBService {
     String? createdBy,
     String? adminId,
     int page = 1,
-    int perPage =
-        500, // Default high to support legacy calls, DebtListScreen will pass 20
+    int perPage = 500,
     String? filter,
   }) async {
-    List<String> filters = [];
-
+    final filters = <String>[];
     if (customerId != null) filters.add('customer = "${_sanitize(customerId)}"');
     if (status != null) filters.add('status = "${_sanitize(status)}"');
     if (createdBy != null) filters.add('created_by = "${_sanitize(createdBy)}"');
     if (adminId != null) filters.add('customer.admin_id = "${_sanitize(adminId)}"');
     if (filter != null && filter.isNotEmpty) filters.add(filter);
-
-    final filterString = filters.isNotEmpty ? filters.join(' && ') : '';
-
-    final result = await pb
-        .collection('debts')
-        .getList(
-          page: page,
-          perPage: perPage,
-          filter: filterString,
-          sort: '-created',
-          expand: 'customer,created_by',
-        );
-
+    final result = await pb.collection('debts').getList(
+      page: page,
+      perPage: perPage,
+      filter: filters.join(' && '),
+      sort: '-created',
+      expand: 'customer,created_by',
+    );
     return result.items;
   }
 
-  /// Paginated version that also returns totalItems for scroll pagination
   static Future<Map<String, dynamic>> getDebtsPaginated({
     String? customerId,
     String? status,
@@ -725,26 +615,19 @@ class PBService {
     int perPage = 20,
     String? filter,
   }) async {
-    List<String> filters = [];
-
+    final filters = <String>[];
     if (customerId != null) filters.add('customer = "${_sanitize(customerId)}"');
     if (status != null) filters.add('status = "${_sanitize(status)}"');
     if (createdBy != null) filters.add('created_by = "${_sanitize(createdBy)}"');
     if (adminId != null) filters.add('customer.admin_id = "${_sanitize(adminId)}"');
     if (filter != null && filter.isNotEmpty) filters.add(filter);
-
-    final filterString = filters.isNotEmpty ? filters.join(' && ') : '';
-
-    final result = await pb
-        .collection('debts')
-        .getList(
-          page: page,
-          perPage: perPage,
-          filter: filterString,
-          sort: '-created',
-          expand: 'customer,created_by',
-        );
-
+    final result = await pb.collection('debts').getList(
+      page: page,
+      perPage: perPage,
+      filter: filters.join(' && '),
+      sort: '-created',
+      expand: 'customer,created_by',
+    );
     return {
       'items': result.items,
       'totalItems': result.totalItems,
@@ -752,10 +635,8 @@ class PBService {
     };
   }
 
-  static Future<RecordModel> getDebt(String id) async {
-    return await pb
-        .collection('debts')
-        .getOne(id, expand: 'customer,created_by');
+  static Future<RecordModel> getDebt(String id) {
+    return pb.collection('debts').getOne(id, expand: 'customer,created_by');
   }
 
   // ==================== Payments ====================
@@ -767,71 +648,50 @@ class PBService {
     required String createdBy,
     String? createdByName,
   }) async {
-    // پارەدانەوە دروست بکە
-    final payment = await pb
-        .collection('payments')
-        .create(
-          body: {
-            'debt': debtId,
-            'amount': amount,
-            'note': note ?? '',
-            'created_by': createdBy,
-          },
-        );
+    final payment = await pb.collection('payments').create(
+      body: {
+        'debt': debtId,
+        'amount': amount,
+        'note': note ?? '',
+        'created_by': createdBy,
+      },
+    );
 
-    // قەرزەکە ئەپدەیت بکە
-    final debt = await pb
-        .collection('debts')
-        .getOne(debtId, expand: 'customer');
+    final debt = await getDebt(debtId);
     final remaining = debt.getDoubleValue('remaining') - amount;
     final newRemaining = remaining <= 0 ? 0.0 : remaining;
     final newStatus = remaining <= 0 ? 'paid' : 'partial';
+    await pb.collection('debts').update(
+      debtId,
+      body: {'remaining': newRemaining, 'status': newStatus},
+    );
 
-    await pb
-        .collection('debts')
-        .update(debtId, body: {'remaining': newRemaining, 'status': newStatus});
-
-    // ئاگادارکردنەوەی پارەدانەوە بنێرە بۆ کڕیار (ناو ئاپ + تێلیگرام)
     try {
       final customerId = debt.getStringValue('customer');
       if (customerId.isNotEmpty) {
-        // ناوی ناردنکار بدۆزەرەوە
         String senderName = createdByName ?? '';
         if (senderName.isEmpty) {
           try {
-            final creator = await pb.collection('users').getOne(createdBy);
-            final role = creator.getStringValue('role');
-            if (role == 'admin') {
+            final creator = await getUser(createdBy);
+            if (creator.getStringValue('role') == 'admin') {
               senderName = creator.getStringValue('name');
             } else {
               final adminId = creator.getStringValue('admin_id');
-              if (adminId.isNotEmpty) {
-                final admin = await pb.collection('users').getOne(adminId);
-                senderName = admin.getStringValue('name');
-              } else {
-                senderName = creator.getStringValue('name');
-              }
+              senderName = adminId.isEmpty
+                  ? creator.getStringValue('name')
+                  : (await getUser(adminId)).getStringValue('name');
             }
           } catch (_) {
             senderName = 'بەڕێوەبەر';
           }
         }
-
-        // فۆرماتی بڕ
         final formattedAmount =
-            '${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} د.ع';
+            '${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
         final formattedRemaining =
-            '${newRemaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} د.ع';
-
-        final isFullyPaid = newRemaining <= 0;
-
-        final message = isFullyPaid
-            ? '✅ قەرزەکەت بە تەواوی دراوەتەوە!\n'
-                  'بڕی دراو: $formattedAmount لەلایەن $senderName 🎉'
-            : '💰 پارەدانەوەی $formattedAmount تۆمارکرا.\n'
-                  'لەلایەن $senderName\n'
-                  'ماوە: $formattedRemaining';
-
+            '${newRemaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
+        final message = newRemaining <= 0
+            ? '✅ قەرزەکەت بە تەواوی دراوەتەوە!\nبڕی دراو: $formattedAmount لەلایەن $senderName 🎉'
+            : '💰 پارەدانەوەی $formattedAmount تۆمارکرا.\nلەلایەن $senderName\nماوە: $formattedRemaining';
         await createNotification(
           customerId: customerId,
           message: message,
@@ -839,9 +699,7 @@ class PBService {
           type: 'payment',
         );
       }
-    } catch (_) {
-      // ئاگادارکردنەوە نەتوانرا بنێردرێت — بەردەوام بە
-    }
+    } catch (_) {}
 
     return payment;
   }
@@ -851,171 +709,108 @@ class PBService {
     String? createdBy,
     String? customerId,
   }) async {
-    List<String> filters = [];
-
+    final filters = <String>[];
     if (debtId != null) filters.add('debt = "${_sanitize(debtId)}"');
     if (createdBy != null) filters.add('created_by = "${_sanitize(createdBy)}"');
     if (customerId != null) {
-      // Supports Customer Profile chat timeline by loading all payments
-      // that belong to the selected customer through the related debt.
       filters.add('debt.customer = "${_sanitize(customerId)}"');
     }
-
-    final filter = filters.isNotEmpty ? filters.join(' && ') : '';
-
-    final result = await pb
-        .collection('payments')
-        .getList(
-          filter: filter,
-          sort: '-created',
-          expand: 'debt,created_by,debt.customer',
-          perPage: 500,
-        );
-
+    final result = await pb.collection('payments').getList(
+      filter: filters.join(' && '),
+      sort: '-created',
+      expand: 'debt,created_by,debt.customer',
+      perPage: 500,
+    );
     return result.items;
   }
 
   static Future<Map<String, double>> getEmployeeStats(String employeeId) async {
-    // 1. Get total debts created by this employee
-    final debts = await getDebts(
-      createdBy: employeeId,
-    ); // adminId param actually filters created_by
-    double totalDebtsCreated = 0;
-    for (var debt in debts) {
-      totalDebtsCreated += debt.getDoubleValue('amount');
-    }
-
-    // 2. Get total payments collected by this employee
+    final debts = await getDebts(createdBy: employeeId);
     final payments = await getPayments(createdBy: employeeId);
-    double totalPaymentsCollected = 0;
-    for (var payment in payments) {
-      totalPaymentsCollected += payment.getDoubleValue('amount');
-    }
-
     return {
-      'totalDebtsCreated': totalDebtsCreated,
-      'totalPaymentsCollected': totalPaymentsCollected,
+      'totalDebtsCreated': debts.fold<double>(0, (s, d) => s + d.getDoubleValue('amount')),
+      'totalPaymentsCollected': payments.fold<double>(0, (s, p) => s + p.getDoubleValue('amount')),
     };
   }
 
-  static Future<Map<String, int>> getDebtCounts({
-    required String adminId,
-  }) async {
+  static Future<Map<String, int>> getDebtCounts({required String adminId}) async {
     final safeAdminId = _sanitize(adminId);
-
-    final pendingResult = await pb
-        .collection('debts')
-        .getList(
-          filter: 'customer.admin_id = "$safeAdminId" && status = "pending"',
-          perPage: 1,
-        );
-
-    final partialResult = await pb
-        .collection('debts')
-        .getList(
-          filter: 'customer.admin_id = "$safeAdminId" && status = "partial"',
-          perPage: 1,
-        );
-
-    final paidResult = await pb
-        .collection('debts')
-        .getList(
-          filter: 'customer.admin_id = "$safeAdminId" && status = "paid"',
-          perPage: 1,
-        );
-
+    final pending = await pb.collection('debts').getList(
+      filter: 'customer.admin_id = "$safeAdminId" && status = "pending"',
+      perPage: 1,
+    );
+    final partial = await pb.collection('debts').getList(
+      filter: 'customer.admin_id = "$safeAdminId" && status = "partial"',
+      perPage: 1,
+    );
+    final paid = await pb.collection('debts').getList(
+      filter: 'customer.admin_id = "$safeAdminId" && status = "paid"',
+      perPage: 1,
+    );
     return {
-      'pending': pendingResult.totalItems,
-      'partial': partialResult.totalItems,
-      'paid': paidResult.totalItems,
+      'pending': pending.totalItems,
+      'partial': partial.totalItems,
+      'paid': paid.totalItems,
     };
   }
 
   // ==================== Stats ====================
 
-  static Future<Map<String, dynamic>> getDashboardStats({
-    String? adminId,
-  }) async {
-    // Filters
+  static Future<Map<String, dynamic>> getDashboardStats({String? adminId}) async {
     final safeAdminId = adminId != null ? _sanitize(adminId) : null;
-    String customerFilter = 'role = "customer"';
+    var customerFilter = 'role = "customer"';
     if (safeAdminId != null) customerFilter += ' && admin_id = "$safeAdminId"';
-
-    String debtFilter = '';
+    var debtFilter = '';
     if (safeAdminId != null) debtFilter = 'customer.admin_id = "$safeAdminId"';
-
-    String paymentFilter = '';
+    var paymentFilter = '';
     if (safeAdminId != null) paymentFilter = 'debt.customer.admin_id = "$safeAdminId"';
-
-    String pendingFilter = 'role = "customer" && approved = false';
+    var pendingFilter = 'role = "customer" && approved = false';
     if (safeAdminId != null) pendingFilter += ' && admin_id = "$safeAdminId"';
 
-    // Execute all requests in parallel
     final results = await Future.wait([
-      // 0. Total Customers Count
-      pb
-          .collection('users')
-          .getList(filter: '$customerFilter && approved = true', perPage: 1),
-
-      // 1. All Debts (for sums - max 500)
+      pb.collection('users').getList(filter: '$customerFilter && approved = true', perPage: 1),
       pb.collection('debts').getList(filter: debtFilter, perPage: 500),
-
-      // 2. All Payments (for sums - max 500)
       pb.collection('payments').getList(filter: paymentFilter, perPage: 500),
-
-      // 3. Pending Requests Count
       pb.collection('users').getList(filter: pendingFilter, perPage: 1),
-
-      // 4. Recent Activity (Latest 5 items)
-      pb
-          .collection('debts')
-          .getList(
-            filter: debtFilter,
-            sort: '-created',
-            perPage: 5,
-            expand: 'customer,created_by',
-          ),
+      pb.collection('debts').getList(
+        filter: debtFilter,
+        sort: '-created',
+        perPage: 5,
+        expand: 'customer,created_by',
+      ),
     ]);
 
-    // Process Customers
-    final customersResult = results[0];
+    final customers = results[0] as PBListResult;
+    final debts = results[1] as PBListResult;
+    final payments = results[2] as PBListResult;
+    final pending = results[3] as PBListResult;
+    final recent = results[4] as PBListResult;
 
-    // Process Debts
-    final debts = results[1];
     double totalDebt = 0;
     double totalRemaining = 0;
     int pendingCount = 0;
-    for (var debt in debts.items) {
+    for (final debt in debts.items) {
       totalDebt += debt.getDoubleValue('amount');
       totalRemaining += debt.getDoubleValue('remaining');
       if (debt.getStringValue('status') != 'paid') pendingCount++;
     }
-
-    // Process Payments
-    final payments = results[2];
     double totalPayments = 0;
-    for (var payment in payments.items) {
+    for (final payment in payments.items) {
       totalPayments += payment.getDoubleValue('amount');
     }
 
-    // Process Pending
-    final pending = results[3];
-
-    // Process Recent Activity
-    final recentDebts = results[4];
-
     return {
-      'totalCustomers': customersResult.totalItems,
+      'totalCustomers': customers.totalItems,
       'totalDebt': totalDebt,
       'totalRemaining': totalRemaining,
       'totalPayments': totalPayments,
       'pendingDebts': pendingCount,
       'pendingRequests': pending.totalItems,
-      'recentActivity': recentDebts.items,
+      'recentActivity': recent.items,
     };
   }
 
-  // ───── Notification Methods ─────
+  // ==================== Notifications ====================
 
   static Future<void> createNotification({
     required String customerId,
@@ -1023,43 +818,22 @@ class PBService {
     required String senderId,
     String type = 'general',
   }) async {
-    // ١. لە PocketBase تۆمار بکە
-    await pb
-        .collection('notifications')
-        .create(
-          body: {
-            'customer': customerId,
-            'message': message,
-            'sender': senderId,
-            'is_read': false,
-            'type': type,
-          },
-        );
+    await pb.collection('notifications').create(
+      body: {
+        'customer': customerId,
+        'message': message,
+        'sender': senderId,
+        'is_read': false,
+        'type': type,
+      },
+    );
 
-    // Telegram Notification
     try {
-      RecordModel? user;
-      try {
-        user = await getUser(customerId);
-      } catch (e) {
-        debugPrint('getUser failed: $e');
-        final safeCustomerId = _sanitize(customerId);
-        final list = await pb
-            .collection('users')
-            .getList(filter: 'id = "$safeCustomerId"', perPage: 1);
-        if (list.items.isNotEmpty) {
-          user = list.items.first;
-        }
-      }
-
-      if (user != null) {
-        final botToken = user.getStringValue('telegram_bot_token');
-        final chatId = user.getStringValue('telegram_chat_id');
-
-        if (botToken.isNotEmpty && chatId.isNotEmpty) {
-          await sendTelegramMessage(botToken, chatId, message);
-        }
-      }
+      await ensureInitialized();
+      await client.functions.invoke(
+        'send-telegram',
+        body: {'customer_id': customerId, 'message': message},
+      );
     } catch (e) {
       debugPrint('Telegram notification error: $e');
     }
@@ -1078,33 +852,26 @@ class PBService {
         body: jsonEncode({'chat_id': chatId, 'text': text}),
       );
       return response.statusCode == 200;
-    } catch (e) {
-      debugPrint('Telegram send error: $e');
+    } catch (_) {
       return false;
     }
   }
 
   static Future<List<RecordModel>> getNotifications(String customerId) async {
-    final safeCustomerId = _sanitize(customerId);
-    final result = await pb
-        .collection('notifications')
-        .getList(
-          filter: 'customer = "$safeCustomerId"',
-          sort: '-created',
-          perPage: 50,
-          expand: 'sender',
-        );
+    final result = await pb.collection('notifications').getList(
+      filter: 'customer = "${_sanitize(customerId)}"',
+      sort: '-created',
+      perPage: 50,
+      expand: 'sender',
+    );
     return result.items;
   }
 
   static Future<int> getUnreadNotificationCount(String customerId) async {
-    final safeCustomerId = _sanitize(customerId);
-    final result = await pb
-        .collection('notifications')
-        .getList(
-          filter: 'customer = "$safeCustomerId" && is_read = false',
-          perPage: 1,
-        );
+    final result = await pb.collection('notifications').getList(
+      filter: 'customer = "${_sanitize(customerId)}" && is_read = false',
+      perPage: 1,
+    );
     return result.totalItems;
   }
 
@@ -1116,63 +883,40 @@ class PBService {
     await pb.collection('notifications').delete(id);
   }
 
-  /// بپشکنە بۆ ئاگادارکردنەوەی نوێ (بەکاردەهێنرێت لە background)
-  static Future<int> checkNewNotifications(String customerId) async {
-    return await getUnreadNotificationCount(customerId);
+  static Future<int> checkNewNotifications(String customerId) {
+    return getUnreadNotificationCount(customerId);
   }
 
-  /// پشکنینی قەرزە دواکەوتووەکان و ناردنی ئاگادارکردنەوە
   static Future<void> checkAndNotifyOverdueDebts() async {
     try {
       final now = DateTime.now();
       final today =
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final overdue = await pb.collection('debts').getList(
+        filter: 'due_date < "$today" && status != "paid" && remaining > 0',
+        perPage: 500,
+        expand: 'customer',
+      );
 
-      // هەموو قەرزە دواکەوتووەکان بدۆزەرەوە
-      final overdueDebts = await pb
-          .collection('debts')
-          .getList(
-            filter: 'due_date < "$today" && status != "paid" && remaining > 0',
-            perPage: 500,
-            expand: 'customer',
-          );
-
-      for (var debt in overdueDebts.items) {
+      for (final debt in overdue.items) {
         final customerId = debt.getStringValue('customer');
         final debtId = debt.id;
+        final existing = await pb.collection('notifications').getList(
+          filter:
+              'customer = "${_sanitize(customerId)}" && type = "debt_overdue" && message ~ "${_sanitize(debtId)}" && created >= "$today 00:00:00"',
+          perPage: 1,
+        );
+        if (existing.items.isNotEmpty) continue;
 
-        // بپشکنە ئایا ئەمڕۆ ئاگادارکردنەوەی دواکەوتوو نێردراوە بۆ ئەم قەرزە
-        final todayStart = '$today 00:00:00';
-        final safeCustomerId = _sanitize(customerId);
-        final safeDebtId = _sanitize(debtId);
-        final existingNotifications = await pb
-            .collection('notifications')
-            .getList(
-              filter:
-                  'customer = "$safeCustomerId" && type = "debt_overdue" && message ~ "$safeDebtId" && created >= "$todayStart"',
-              perPage: 1,
-            );
-
-        if (existingNotifications.items.isNotEmpty) continue; // ئەمڕۆ نێردراوە
-
-        // پەیامی ئاگادارکردنەوە ئامادە بکە
         final remaining = debt.getDoubleValue('remaining');
         final dueDate = debt.getStringValue('due_date');
-
         final formattedAmount =
-            '${remaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} د.ع';
-
-        final message =
-            '⚠️ قەرزی $formattedAmount دواکەوتووە!\n'
-            'بەرواری دانەوە: ${dueDate.replaceAll('-', '/')} بووە.\n'
-            'تکایە هەرچی زووتر بیگەڕێنەوە.\n'
-            '[#$debtId]';
-
-        // ئاگادارکردنەوە بنێرە (ناو ئاپ + تێلیگرام)
+            '${remaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
         await createNotification(
           customerId: customerId,
-          message: message,
-          senderId: customerId, // سیستەم خۆی ناردووە
+          message:
+              '⚠️ قەرزی $formattedAmount دواکەوتووە!\nبەرواری دانەوە: ${dueDate.replaceAll('-', '/')} بووە.\nتکایە هەرچی زووتر بیگەڕێنەوە.\n[#$debtId]',
+          senderId: customerId,
           type: 'debt_overdue',
         );
       }
