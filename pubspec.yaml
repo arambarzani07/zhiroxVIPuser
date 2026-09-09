@@ -1,8 +1,7 @@
 name: zhirox
 description: "A new Flutter project."
 
-publish_to: 'none' 
-
+publish_to: 'none'
 
 version: 1.0.0+1
 
@@ -15,7 +14,10 @@ dependencies:
   provider: ^6.1.5+1
   shared_preferences: ^2.5.4
   cupertino_icons: ^1.0.8
+  # Kept temporarily as a local RecordModel compatibility type while all
+  # backend/network operations are served by Supabase.
   pocketbase: ^0.23.2
+  supabase_flutter: 2.17.2
   intl: ^0.20.2
   flutter_local_notifications: ^18.0.1
   permission_handler: ^11.3.1
@@ -30,11 +32,10 @@ dependencies:
   path_provider: ^2.1.5
   flutter_secure_storage: ^10.0.0
   connectivity_plus: ^6.1.0
-  
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.13.1
 
@@ -47,9 +48,7 @@ flutter_launcher_icons:
   adaptive_icon_background: "#ffffff"
   adaptive_icon_foreground: "assets/images/logo.png"
 
-
 flutter:
-
   uses-material-design: true
 
   fonts:
@@ -61,4 +60,3 @@ flutter:
 
   assets:
     - assets/images/
-
