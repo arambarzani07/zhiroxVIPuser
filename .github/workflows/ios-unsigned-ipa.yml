@@ -13,16 +13,8 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
-      - name: Checkout build payload
+      - name: Checkout Supabase-connected source
         uses: actions/checkout@v4
-
-      - name: Extract exact Supabase-connected source
-        run: |
-          rm -rf /tmp/zhirox-src
-          mkdir -p /tmp/zhirox-src
-          unzip -q .ipa_source/zhirox-source.zip -d /tmp/zhirox-src
-          test -f /tmp/zhirox-src/zhirox/pubspec.yaml
-          test -f /tmp/zhirox-src/zhirox/ios/Runner.xcodeproj/project.pbxproj
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -34,11 +26,9 @@ jobs:
         run: flutter --version
 
       - name: Get dependencies
-        working-directory: /tmp/zhirox-src/zhirox
         run: flutter pub get
 
       - name: Prepare iOS 15 deployment target
-        working-directory: /tmp/zhirox-src/zhirox
         run: |
           if [ -f ios/Podfile ]; then
             sed -i '' "s/platform :ios, '13.0'/platform :ios, '15.0'/" ios/Podfile || true
@@ -46,19 +36,16 @@ jobs:
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' ios/Runner.xcodeproj/project.pbxproj || true
 
       - name: Install CocoaPods
-        working-directory: /tmp/zhirox-src/zhirox/ios
+        working-directory: ios
         run: pod install
 
       - name: Analyze Dart compile issues
-        working-directory: /tmp/zhirox-src/zhirox
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build iOS without signing
-        working-directory: /tmp/zhirox-src/zhirox
         run: flutter build ios --release --no-codesign
 
       - name: Verify new Supabase backend is embedded
-        working-directory: /tmp/zhirox-src/zhirox
         run: |
           APP=build/ios/iphoneos/Runner.app
           grep -R -a -q 'zfuvnczdqifihsnrhqzj' "$APP"
@@ -72,7 +59,6 @@ jobs:
           fi
 
       - name: Package unsigned IPA
-        working-directory: /tmp/zhirox-src/zhirox
         run: |
           rm -rf Payload zhiroxVIPuser-SUPABASE-unsigned.ipa
           mkdir -p Payload
@@ -83,6 +69,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zhiroxVIPuser-SUPABASE-unsigned-ipa
-          path: /tmp/zhirox-src/zhirox/zhiroxVIPuser-SUPABASE-unsigned.ipa
+          path: zhiroxVIPuser-SUPABASE-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
