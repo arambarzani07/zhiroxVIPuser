@@ -164,9 +164,7 @@ class PBService {
       if (response.session == null) throw Exception('AUTH_FAILED');
       final user = await _context();
       if (user.getStringValue('role') == 'owner') {
-        await db.auth.signOut();
-        _currentUser = null;
-        throw 'ئەم هەژمارە تایبەتە بە C-Panel';
+        await db.auth.signOut(); _currentUser = null; throw 'ئەم هەژمارە تایبەتە بە C-Panel';
       }
       if (user.getStringValue('role') == 'customer' && !user.getBoolValue('approved')) {
         await db.auth.signOut(); _currentUser = null; throw AppStrings.notApproved;
@@ -199,9 +197,7 @@ class PBService {
       await _registerDevice();
       return user;
     } catch (_) {
-      await db.auth.signOut();
-      _currentUser = null;
-      return null;
+      await db.auth.signOut(); _currentUser = null; return null;
     }
   }
 
@@ -221,10 +217,7 @@ class PBService {
   static Future<RecordModel> registerAdmin({required String marketName, required String adminName, required String phone, required String password, required int subscriptionDays}) async {
     await ensureInitialized();
     _requireRole({'owner'});
-    final res = await db.functions.invoke('zhirox-create-account', body: {
-      'kind': 'admin', 'marketName': marketName, 'name': adminName,
-      'phone': normalizePhone(phone), 'password': password, 'subscriptionDays': subscriptionDays,
-    });
+    final res = await db.functions.invoke('zhirox-create-account', body: {'kind': 'admin', 'marketName': marketName, 'name': adminName, 'phone': normalizePhone(phone), 'password': password, 'subscriptionDays': subscriptionDays});
     final data = Map<String, dynamic>.from(res.data as Map);
     if (data['error'] != null) throw _friendly(data['error']!);
     return _fromMap(Map<String, dynamic>.from(data['user'] as Map));
@@ -261,10 +254,7 @@ class PBService {
 
   static Future<RecordModel> registerCustomer({required String name, String fatherName = '', String grandfatherName = '', required String phone, required String password, required String adminId}) async {
     await ensureInitialized();
-    final res = await db.functions.invoke('zhirox-register-customer', body: {
-      'name': name, 'fatherName': fatherName, 'grandfatherName': grandfatherName,
-      'phone': normalizePhone(phone), 'password': password, 'adminId': adminId,
-    });
+    final res = await db.functions.invoke('zhirox-register-customer', body: {'name': name, 'fatherName': fatherName, 'grandfatherName': grandfatherName, 'phone': normalizePhone(phone), 'password': password, 'adminId': adminId});
     final data = Map<String, dynamic>.from(res.data as Map);
     if (data['error'] != null) throw _friendly(data['error']!);
     return _fromMap(Map<String, dynamic>.from(data['user'] as Map));
@@ -285,13 +275,7 @@ class PBService {
 
   static Future<RecordModel> createUser({required String name, String fatherName = '', String grandfatherName = '', required String phone, required String password, required String role, required String createdBy, String? adminId, bool canAddCustomers = false, bool canSetDebtLimit = false, bool canSetDueDate = false, bool canEditDebts = false, bool canSendNotifications = false, double debtLimit = 0}) async {
     await ensureInitialized();
-    final res = await db.functions.invoke('zhirox-create-account', body: {
-      'kind': role, 'name': name, 'fatherName': fatherName, 'grandfatherName': grandfatherName,
-      'phone': normalizePhone(phone), 'password': password, 'debtLimit': debtLimit.round(),
-      'canAddCustomers': canAddCustomers, 'canSetDebtLimit': canSetDebtLimit,
-      'canSetDueDate': canSetDueDate, 'canEditDebts': canEditDebts,
-      'canSendNotifications': canSendNotifications,
-    });
+    final res = await db.functions.invoke('zhirox-create-account', body: {'kind': role, 'name': name, 'fatherName': fatherName, 'grandfatherName': grandfatherName, 'phone': normalizePhone(phone), 'password': password, 'debtLimit': debtLimit.round(), 'canAddCustomers': canAddCustomers, 'canSetDebtLimit': canSetDebtLimit, 'canSetDueDate': canSetDueDate, 'canEditDebts': canEditDebts, 'canSendNotifications': canSendNotifications});
     final data = Map<String, dynamic>.from(res.data as Map);
     if (data['error'] != null) throw _friendly(data['error']!);
     return _fromMap(Map<String, dynamic>.from(data['user'] as Map));
@@ -299,8 +283,7 @@ class PBService {
 
   static Future<void> updateUser(String id, Map<String, dynamic> data) async {
     await ensureInitialized();
-    final body = <String, dynamic>{'userId': id, 'data': Map<String, dynamic>.from(data)};
-    final res = await db.functions.invoke('zhirox-update-account', body: body);
+    final res = await db.functions.invoke('zhirox-update-account', body: {'userId': id, 'data': Map<String, dynamic>.from(data)});
     final result = Map<String, dynamic>.from(res.data as Map);
     if (result['error'] != null) throw _friendly(result['error']!);
     if (id == db.auth.currentUser?.id) await refreshCurrentUser();
@@ -357,51 +340,36 @@ class PBService {
       receiptPath = '$businessId/$customerId/${_uuid()}.$ext';
       await db.storage.from('zhirox-receipts').uploadBinary(receiptPath, bytes, fileOptions: const FileOptions(upsert: false));
     }
-    final id = await db.rpc('zhirox_create_debt', params: {
-      'p_business_id': businessId, 'p_customer_user_id': customerId, 'p_amount': amount.round(),
-      'p_due_date': dueDate.substring(0, 10), 'p_description': description, 'p_currency': currency,
-      'p_dollar_rate': dollarRate, 'p_amount_usd': amountUsd, 'p_items': items ?? const [],
-      'p_custom_date': customCreatedDate == null || customCreatedDate.isEmpty ? null : customCreatedDate.substring(0, 10),
-      'p_receipt_path': receiptPath, 'p_idempotency_key': _uuid(),
-    });
+    final id = await db.rpc('zhirox_create_debt', params: {'p_business_id': businessId, 'p_customer_user_id': customerId, 'p_amount': amount.round(), 'p_due_date': dueDate.substring(0, 10), 'p_description': description, 'p_currency': currency, 'p_dollar_rate': dollarRate, 'p_amount_usd': amountUsd, 'p_items': items ?? const [], 'p_custom_date': customCreatedDate == null || customCreatedDate.isEmpty ? null : customCreatedDate.substring(0, 10), 'p_receipt_path': receiptPath, 'p_idempotency_key': _uuid()});
     return getDebt(id.toString());
   }
 
   static Future<void> updateDebt(String id, Map<String, dynamic> data) async {
     final old = await getDebt(id);
     dynamic rawItems = data['items'];
-    if (rawItems is String) {
-      try { rawItems = jsonDecode(rawItems); } catch (_) { rawItems = const []; }
-    }
-    await db.rpc('zhirox_update_debt', params: {
-      'p_business_id': businessId, 'p_debt_id': id,
-      'p_description': data['description']?.toString() ?? old.getStringValue('description'),
-      'p_due_date': data['due_date']?.toString().substring(0, 10) ?? old.getStringValue('due_date').substring(0, 10),
-      'p_currency': data['currency']?.toString() ?? old.getStringValue('currency'),
-      'p_dollar_rate': (data['dollar_rate'] as num?)?.toDouble() ?? old.getDoubleValue('dollar_rate'),
-      'p_amount_usd': (data['amount_usd'] as num?)?.toDouble() ?? old.getDoubleValue('amount_usd'),
-      'p_items': rawItems ?? _decodeItems(old.getStringValue('items')),
-    });
+    if (rawItems is String) { try { rawItems = jsonDecode(rawItems); } catch (_) { rawItems = const []; } }
+    final oldDue = old.getStringValue('due_date');
+    final due = data['due_date']?.toString() ?? oldDue;
+    await db.rpc('zhirox_update_debt', params: {'p_business_id': businessId, 'p_debt_id': id, 'p_description': data['description']?.toString() ?? old.getStringValue('description'), 'p_due_date': due.length >= 10 ? due.substring(0, 10) : due, 'p_currency': data['currency']?.toString() ?? old.getStringValue('currency'), 'p_dollar_rate': (data['dollar_rate'] as num?)?.toDouble() ?? old.getDoubleValue('dollar_rate'), 'p_amount_usd': (data['amount_usd'] as num?)?.toDouble() ?? old.getDoubleValue('amount_usd'), 'p_items': rawItems ?? _decodeItems(old.getStringValue('items'))});
   }
 
-  static List<dynamic> _decodeItems(String value) {
-    try { final x = jsonDecode(value); return x is List ? x : const []; } catch (_) { return const []; }
-  }
+  static List<dynamic> _decodeItems(String value) { try { final x = jsonDecode(value); return x is List ? x : const []; } catch (_) { return const []; } }
 
   static Future<void> deleteDebt(String id) async {
     await db.rpc('zhirox_reverse_debt', params: {'p_business_id': businessId, 'p_debt_id': id, 'p_reason': 'USER_DELETE'});
   }
 
-  static Future<List<RecordModel>> getDebts({String? customerId, String? status, String? createdBy, String? adminId, String? filter}) async {
+  static Future<List<RecordModel>> getDebts({String? customerId, String? status, String? createdBy, String? adminId, String? filter, int? perPage}) async {
     await ensureInitialized();
     final all = <RecordModel>[];
     var offset = 0;
+    final batchSize = (perPage ?? 500).clamp(1, 500);
     while (true) {
-      final value = await db.rpc('zhirox_list_debts', params: {'p_business_id': businessId, 'p_customer_user_id': customerId, 'p_status': status, 'p_created_by': createdBy, 'p_debt_id': null, 'p_limit': 500, 'p_offset': offset});
+      final value = await db.rpc('zhirox_list_debts', params: {'p_business_id': businessId, 'p_customer_user_id': customerId, 'p_status': status, 'p_created_by': createdBy, 'p_debt_id': null, 'p_limit': batchSize, 'p_offset': offset});
       final map = Map<String, dynamic>.from(value as Map);
       final batch = ((map['items'] as List?) ?? const []).map((e) => _fromMap(Map<String, dynamic>.from(e as Map))).toList();
       all.addAll(batch); offset += batch.length;
-      if (batch.isEmpty || offset >= (map['totalItems'] as num? ?? 0).toInt()) break;
+      if (batch.isEmpty || offset >= (map['totalItems'] as num? ?? 0).toInt() || perPage != null) break;
     }
     return all;
   }
@@ -431,7 +399,7 @@ class PBService {
     return payments.firstWhere((p) => p.id == paymentId.toString(), orElse: () => _fromMap({'id': paymentId.toString(), 'debt': debtId, 'amount': amount, 'note': note ?? '', 'created': DateTime.now().toUtc().toIso8601String()}));
   }
 
-  static Future<List<RecordModel>> getPayments({String? debtId, String? createdBy}) async {
+  static Future<List<RecordModel>> getPayments({String? debtId, String? createdBy, String? customerId}) async {
     await ensureInitialized();
     final all = <RecordModel>[];
     var offset = 0;
@@ -442,7 +410,8 @@ class PBService {
       all.addAll(batch); offset += batch.length;
       if (batch.isEmpty || offset >= (map['totalItems'] as num? ?? 0).toInt()) break;
     }
-    return all;
+    if (customerId == null || customerId.isEmpty) return all;
+    return all.where((p) => p.getStringValue('customer') == customerId).toList();
   }
 
   static Future<Map<String, double>> getEmployeeStats(String employeeId) async {
@@ -470,6 +439,7 @@ class PBService {
   }
 
   static Future<bool> testTelegramConnection(String chatId) async => false;
+  static Future<bool> sendTelegramMessage(String botToken, String chatId, String message) async => false;
 
   static Future<List<RecordModel>> getNotifications(String customerId) async {
     await ensureInitialized();
@@ -536,7 +506,6 @@ class PBService {
 
 class _CompatRoot {
   _CompatCollection collection(String name) => _CompatCollection(name);
-
   Uri getFileUrl(RecordModel record, String filename) {
     if (filename.startsWith('http://') || filename.startsWith('https://')) return Uri.parse(filename);
     return Uri.parse('${SupabaseConfig.url}/storage/v1/object/public/zhirox-receipts/$filename');
@@ -578,9 +547,7 @@ class _CompatCollection {
         try {
           final data = await PBService.getAdminsPage(page: 1, perPage: 1000);
           rows = (data['admins'] as List).map((e) => (e as Map)['admin'] as RecordModel).toList();
-        } catch (_) {
-          rows = <RecordModel>[];
-        }
+        } catch (_) { rows = <RecordModel>[]; }
       } else {
         rows = await PBService.getUsers(role: role, approved: approved);
       }
@@ -598,7 +565,7 @@ class _CompatCollection {
         if (day != null) rows = rows.where((r) { final d = DateTime.tryParse(r.getStringValue('due_date')); return d != null && !d.isAfter(day) && r.getDoubleValue('remaining') > 0 && r.getStringValue('status') != 'paid'; }).toList();
       }
     } else if (name == 'payments') {
-      rows = await PBService.getPayments(debtId: _quoted(f, 'debt'), createdBy: _quoted(f, 'created_by'));
+      rows = await PBService.getPayments(debtId: _quoted(f, 'debt'), createdBy: _quoted(f, 'created_by'), customerId: _quoted(f, 'customer'));
     } else if (name == 'notifications') {
       rows = await PBService.getNotifications(PBService.client.auth.currentUser?.id ?? '');
     } else {
@@ -615,17 +582,14 @@ class _CompatCollection {
   Future<RecordModel> update(String id, {required Map<String, dynamic> body}) async {
     if (name == 'users') { await PBService.updateUser(id, body); return PBService.getUser(id); }
     if (name == 'debts') { await PBService.updateDebt(id, body); return PBService.getDebt(id); }
-    if (name == 'notifications') {
-      if (body['is_read'] == true) await PBService.markNotificationRead(id);
-      return getOne(id);
-    }
+    if (name == 'notifications') { if (body['is_read'] == true) await PBService.markNotificationRead(id); return getOne(id); }
     throw Exception('Unsupported update: $name');
   }
 
   Future<void> delete(String id) async {
-    if (name == 'users') return PBService.deleteUser(id);
-    if (name == 'debts') return PBService.deleteDebt(id);
-    if (name == 'notifications') return PBService.deleteNotification(id);
+    if (name == 'users') { await PBService.deleteUser(id); return; }
+    if (name == 'debts') { await PBService.deleteDebt(id); return; }
+    if (name == 'notifications') { await PBService.deleteNotification(id); return; }
   }
 
   Future<void> subscribe(String topic, void Function(PBRealtimeEvent) callback) async {
@@ -635,8 +599,7 @@ class _CompatCollection {
       });
       return;
     }
-    final table = name;
-    await PBService.subscribeTable('compat:$name:$topic', table, () => callback(PBRealtimeEvent(action: 'update')));
+    await PBService.subscribeTable('compat:$name:$topic', name, () => callback(PBRealtimeEvent(action: 'update')));
   }
 
   Future<void> unsubscribe([String? topic]) async {
