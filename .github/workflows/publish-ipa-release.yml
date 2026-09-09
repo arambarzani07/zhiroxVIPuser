@@ -15,12 +15,12 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Download IPA artifact from successful iOS build
+      - name: Download IPA artifact from fixed iOS build
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p out
-          gh run download 34398922491 \
+          gh run download 34399840674 \
             --repo "${{ github.repository }}" \
             --name zhiroxVIPuser-unsigned-ipa \
             --dir out
