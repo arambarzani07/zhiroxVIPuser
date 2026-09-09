@@ -1,41 +1,54 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:pocketbase/pocketbase.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zhirox/services/supabase_compat.dart';
 import 'package:zhirox/utils/constants.dart';
+
+class PBListResult {
+  PBListResult({required this.items, required this.totalItems, required this.totalPages, required this.page, required this.perPage});
+  final List<RecordModel> items;
+  final int totalItems;
+  final int totalPages;
+  final int page;
+  final int perPage;
+}
+
+class PBRealtimeEvent {
+  PBRealtimeEvent({this.record, this.action = 'update'});
+  final RecordModel? record;
+  final String action;
+}
 
 class PBService {
   static bool _initialized = false;
   static Future<void>? _initializing;
+  static RecordModel? _currentUser;
+  static final Map<String, RealtimeChannel> _channels = {};
+  static final _CompatRoot pb = _CompatRoot();
 
-  static final SupabasePBCompat pb = SupabasePBCompat(
-    ensureInitialized: ensureInitialized,
-  );
-
+  static SupabaseClient get db => Supabase.instance.client;
   static SupabaseClient get client => Supabase.instance.client;
+  static RecordModel? get currentUser => _currentUser;
+  static String get businessId => _currentUser?.getStringValue('business_id') ?? '';
+  static bool get hasSession => _initialized && db.auth.currentSession != null;
 
   static Future<void> ensureInitialized() {
     if (_initialized) return Future.value();
-    final pending = _initializing;
-    if (pending != null) return pending;
-
+    final existing = _initializing;
+    if (existing != null) return existing;
     final completer = Completer<void>();
     _initializing = completer.future;
     () async {
       try {
-        await Supabase.initialize(
-          url: SupabaseConfig.url,
-          publishableKey: SupabaseConfig.publishableKey,
-        );
+        await Supabase.initialize(url: SupabaseConfig.url, publishableKey: SupabaseConfig.publishableKey);
         _initialized = true;
         completer.complete();
       } catch (e, st) {
-        // If another caller initialized the singleton first, accept it.
         try {
           Supabase.instance.client;
           _initialized = true;
@@ -50,876 +63,593 @@ class PBService {
     return completer.future;
   }
 
-  static String _sanitize(String value) {
-    return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+  static String normalizePhone(String value) {
+    var digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.startsWith('00964')) digits = digits.substring(2);
+    if (digits.startsWith('0') && digits.length == 11) {
+      digits = '964${digits.substring(1)}';
+    } else if (digits.startsWith('7') && digits.length == 10) {
+      digits = '964$digits';
+    }
+    return digits;
   }
 
-  static RecordModel _profileRecord(Map<String, dynamic> row) {
-    final phone = row['phone']?.toString() ?? '';
-    return RecordModel.fromJson({
-      ...row,
-      'id': row['id']?.toString() ?? '',
-      'collectionId': '',
-      'collectionName': 'users',
-      'email': phone.isEmpty ? '' : '$phone@zhirox.local',
-      'created': row['created_at']?.toString() ?? '',
-      'updated': row['updated_at']?.toString() ?? row['created_at']?.toString() ?? '',
+  static String phoneIdentity(String phone) {
+    final normalized = normalizePhone(phone);
+    if (!RegExp(r'^9647\d{9}$').hasMatch(normalized)) throw Exception('ژمارە مۆبایل دروست نییە');
+    return '$normalized@zhirox.app';
+  }
+
+  static String _friendly(Object error) {
+    final raw = error.toString();
+    if (raw.contains('PERMISSION_DENIED')) return 'دەسەڵاتی ئەم کردارەت نییە';
+    if (raw.contains('SUBSCRIPTION_INACTIVE')) return 'ماوەی بەشداریت تەواو بووە';
+    if (raw.contains('CUSTOMER_HAS_BALANCE')) return 'کڕیار هێشتا قەرزی ماوەی هەیە';
+    if (raw.contains('CREDIT_LIMIT')) return 'سنوری قەرز ڕێگە بەو بڕە نادات';
+    if (raw.contains('PAYMENT_EXCEEDS')) return 'بڕی پارەدانەوە زیاترە لە قەرزی ماوە';
+    if (raw.contains('DEPENDENT_PAYMENTS_EXIST')) return 'قەرزەکە پارەدانەوەی پەیوەست پێوەیە';
+    if (raw.contains('PHONE_ALREADY_EXISTS') || raw.toLowerCase().contains('already registered')) return 'ئەم ژمارە مۆبایلە پێشتر بەکارهاتووە';
+    if (raw.contains('MARKET_ALREADY_EXISTS')) return 'ئەم ناوەی مارکێتە پێشتر بەکارهاتووە';
+    if (raw.contains('ACCOUNT_NOT_LINKED') || raw.contains('not approved')) return AppStrings.notApproved;
+    return raw.replaceFirst('Exception: ', '');
+  }
+
+  static void _requireRole(Set<String> roles) {
+    if (_currentUser == null || !hasSession) throw Exception('پێویستە دووبارە بچیتە ژوورەوە');
+    if (!roles.contains(_currentUser!.getStringValue('role'))) throw Exception('دەسەڵاتی ئەم کردارەت نییە');
+  }
+
+  static Future<String> _deviceKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    var key = prefs.getString('zhirox_device_key');
+    if (key != null && RegExp(r'^[0-9a-f-]{36}$', caseSensitive: false).hasMatch(key)) return key;
+    final r = Random.secure();
+    final b = List<int>.generate(16, (_) => r.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    String h(int n) => n.toRadixString(16).padLeft(2, '0');
+    final s = b.map(h).join();
+    key = '${s.substring(0, 8)}-${s.substring(8, 12)}-${s.substring(12, 16)}-${s.substring(16, 20)}-${s.substring(20)}';
+    await prefs.setString('zhirox_device_key', key);
+    return key;
+  }
+
+  static String _platformName() {
+    if (kIsWeb) return 'web';
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android: return 'android';
+      case TargetPlatform.iOS: return 'ios';
+      case TargetPlatform.windows: return 'windows';
+      case TargetPlatform.macOS: return 'macos';
+      case TargetPlatform.linux: return 'linux';
+      default: return 'web';
+    }
+  }
+
+  static Future<void> _registerDevice() async {
+    await db.rpc('register_current_device', params: {
+      'p_device_key': await _deviceKey(),
+      'p_platform': _platformName(),
+      'p_app_version': AppConfig.appVersion,
     });
   }
 
-  static String _functionError(dynamic data) {
-    final code = data is Map ? data['error']?.toString() ?? '' : data?.toString() ?? '';
-    switch (code) {
-      case 'phone_exists':
-        return 'ئەم ژمارەیە پێشتر تۆمارکراوە';
-      case 'invalid_admin':
-        return 'بەڕێوەبەری هەڵبژێردراو دروست نییە';
-      case 'admin_creation_requires_admin':
-        return 'دروستکردنی ئەکاونتی بەڕێوەبەر تەنها لەلایەن بەڕێوەبەرێکی چالاکەوە دەکرێت';
-      case 'employee_creation_requires_admin':
-        return 'تەنها بەڕێوەبەر دەتوانێت کارمەند دروست بکات';
-      case 'cross_tenant_forbidden':
-      case 'forbidden':
-        return 'دەسەڵاتی ئەم کردارەت نییە';
-      case 'missing_permission':
-        return 'مۆڵەتی ئەم کردارەت نییە';
-      case 'invalid_input':
-        return 'زانیارییەکان تەواو یان دروست نین';
-      default:
-        return code.isEmpty ? 'هەڵەیەک لە سێرڤەر ڕوویدا' : code;
-    }
+  static RecordModel _fromMap(Map<String, dynamic> map) {
+    final data = Map<String, dynamic>.from(map);
+    final expand = <String, dynamic>{};
+    final customer = data.remove('customer_record');
+    final creator = data.remove('creator_record');
+    final debt = data.remove('debt_record');
+    if (customer is Map) expand['customer'] = [Map<String, dynamic>.from(customer)];
+    if (creator is Map) expand['created_by'] = [Map<String, dynamic>.from(creator)];
+    if (debt is Map) expand['debt'] = [Map<String, dynamic>.from(debt)];
+    if (expand.isNotEmpty) data['expand'] = expand;
+    data.putIfAbsent('created', () => data['created_at']?.toString() ?? '');
+    data.putIfAbsent('updated', () => data['updated_at']?.toString() ?? data['created']?.toString() ?? '');
+    return RecordModel.fromJson(data);
   }
 
-  static Future<RecordModel> _invokeCreateAccount(Map<String, dynamic> body) async {
-    await ensureInitialized();
-    try {
-      final response = await client.functions.invoke(
-        'account-admin',
-        body: {'action': 'create_user', ...body},
-      );
-      final data = response.data;
-      if (data is! Map || data['user'] is! Map) {
-        throw _functionError(data);
-      }
-      return _profileRecord(Map<String, dynamic>.from(data['user'] as Map));
-    } on FunctionsException catch (e) {
-      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
-    }
+  static Future<RecordModel> _context() async {
+    final value = await db.rpc('get_my_zhirox_context');
+    if (value is! Map) throw Exception('ACCOUNT_NOT_LINKED');
+    final record = _fromMap(Map<String, dynamic>.from(value));
+    _currentUser = record;
+    return record;
   }
-
-  // ==================== Auth ====================
 
   static Future<RecordModel> login(String phone, String password) async {
     await ensureInitialized();
-    final cleanPhone = phone.trim();
-    final email = cleanPhone.contains('@')
-        ? cleanPhone
-        : '$cleanPhone@zhirox.local';
-
     try {
-      final response = await client.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
-      final authUser = response.user;
-      if (authUser == null) throw Exception('invalid login');
-
-      final user = await getUser(authUser.id);
-      final role = user.getStringValue('role');
-
-      if (role == 'customer' && !user.getBoolValue('approved')) {
-        await client.auth.signOut();
-        throw AppStrings.notApproved;
+      final response = await db.auth.signInWithPassword(email: phoneIdentity(phone), password: password);
+      if (response.session == null) throw Exception('AUTH_FAILED');
+      final user = await _context();
+      if (user.getStringValue('role') == 'owner') {
+        await db.auth.signOut();
+        _currentUser = null;
+        throw 'ئەم هەژمارە تایبەتە بە C-Panel';
       }
-      if (role == 'employee' && !user.getBoolValue('active')) {
-        await client.auth.signOut();
-        throw 'ئەم ئەکاونتە لەلایەن ئەدمینەوە ناچالاک کراوە';
+      if (user.getStringValue('role') == 'customer' && !user.getBoolValue('approved')) {
+        await db.auth.signOut(); _currentUser = null; throw AppStrings.notApproved;
       }
-
-      if (role == 'employee' || role == 'customer') {
-        final adminId = user.getStringValue('admin_id');
-        if (adminId.isNotEmpty) {
-          final admin = await pb.collection('users').getOne(adminId);
-          final subEnd = admin.getStringValue('subscription_end');
-          if (subEnd.isNotEmpty && DateTime.parse(subEnd).isBefore(DateTime.now())) {
-            await client.auth.signOut();
-            throw 'ماوەی ڕێکەوتنی بەڕێوەبەرەکەت تەواو بووە. تکایە پەیوەندی بکە بە بەڕێوەبەرەکەت.';
-          }
-        }
+      if (!user.getBoolValue('active')) {
+        await db.auth.signOut(); _currentUser = null; throw 'ئەم هەژمارە ناچالاکە';
       }
+      if (!user.getBoolValue('subscription_active')) {
+        await db.auth.signOut(); _currentUser = null; throw 'ماوەی بەشداریت تەواو بووە. تکایە پەیوەندی بکە بە بەڕێوەبەر.';
+      }
+      await _registerDevice();
       return user;
-    } on AuthException catch (_) {
-      throw Exception('وشەی نهێنی هەڵەیە');
+    } on AuthException {
+      throw 'وشەی نهێنی یان ژمارە مۆبایل هەڵەیە';
+    } catch (e) {
+      if (e is String) rethrow;
+      throw _friendly(e);
     }
+  }
+
+  static Future<RecordModel?> restoreSession() async {
+    await ensureInitialized();
+    if (db.auth.currentSession == null) return null;
+    try {
+      await db.auth.refreshSession();
+      final user = await _context();
+      if (user.getStringValue('role') == 'owner') throw Exception('wrong app');
+      if (user.getStringValue('role') == 'customer' && !user.getBoolValue('approved')) throw Exception('not approved');
+      if (!user.getBoolValue('active') || !user.getBoolValue('subscription_active')) throw Exception('inactive');
+      await _registerDevice();
+      return user;
+    } catch (_) {
+      await db.auth.signOut();
+      _currentUser = null;
+      return null;
+    }
+  }
+
+  static Future<RecordModel> refreshCurrentUser() async {
+    await ensureInitialized();
+    if (!hasSession) throw Exception('پێویستە دووبارە بچیتە ژوورەوە');
+    return _context();
   }
 
   static Future<void> logout() async {
     await ensureInitialized();
-    try {
-      await client.removeAllChannels();
-    } catch (_) {}
-    try {
-      await client.auth.signOut();
-    } catch (_) {}
+    await unsubscribeAll();
+    await db.auth.signOut();
+    _currentUser = null;
   }
 
-  // ==================== Registration ====================
-
-  static Future<RecordModel> registerAdmin({
-    required String marketName,
-    required String adminName,
-    required String phone,
-    required String password,
-    required int subscriptionDays,
-  }) {
-    return _invokeCreateAccount({
-      'role': 'admin',
-      'market_name': marketName,
-      'name': adminName,
-      'phone': phone.trim(),
-      'password': password,
-      'subscription_days': subscriptionDays,
-    });
-  }
-
-  static Future<RecordModel> registerCustomer({
-    required String name,
-    String fatherName = '',
-    String grandfatherName = '',
-    required String phone,
-    required String password,
-    required String adminId,
-  }) {
-    return _invokeCreateAccount({
-      'role': 'customer',
-      'name': name,
-      'father_name': fatherName,
-      'grandfather_name': grandfatherName,
-      'phone': phone.trim(),
-      'password': password,
-      'admin_id': adminId,
-    });
-  }
-
-  // ==================== Admin Subscription Management ====================
-
-  static Future<Map<String, dynamic>> getAdminsPage({
-    int page = 1,
-    int perPage = 15,
-  }) async {
+  static Future<RecordModel> registerAdmin({required String marketName, required String adminName, required String phone, required String password, required int subscriptionDays}) async {
     await ensureInitialized();
-    final result = await pb.collection('users').getList(
-      filter: 'role = "admin"',
-      sort: '-created',
-      page: page,
-      perPage: perPage,
-    );
-    final admins = <Map<String, dynamic>>[];
-    for (final admin in result.items) {
-      final adminId = _sanitize(admin.id);
-      final employees = await pb.collection('users').getList(
-        filter: 'admin_id = "$adminId" && role = "employee"',
-        perPage: 1,
-      );
-      final customers = await pb.collection('users').getList(
-        filter: 'admin_id = "$adminId" && role = "customer"',
-        perPage: 1,
-      );
-      admins.add({
-        'admin': admin,
-        'employeeCount': employees.totalItems,
-        'customerCount': customers.totalItems,
-      });
-    }
-    return {
-      'admins': admins,
-      'totalItems': result.totalItems,
-      'totalPages': result.totalPages,
-      'page': result.page,
-    };
+    _requireRole({'owner'});
+    final res = await db.functions.invoke('zhirox-create-account', body: {
+      'kind': 'admin', 'marketName': marketName, 'name': adminName,
+      'phone': normalizePhone(phone), 'password': password, 'subscriptionDays': subscriptionDays,
+    });
+    final data = Map<String, dynamic>.from(res.data as Map);
+    if (data['error'] != null) throw _friendly(data['error']!);
+    return _fromMap(Map<String, dynamic>.from(data['user'] as Map));
+  }
+
+  static Future<Map<String, dynamic>> getAdminsPage({int page = 1, int perPage = 15}) async {
+    await ensureInitialized();
+    final value = await db.rpc('zhirox_platform_list_admins', params: {'p_page': page, 'p_per_page': perPage});
+    final raw = Map<String, dynamic>.from(value as Map);
+    final admins = ((raw['admins'] as List?) ?? const []).map((e) {
+      final m = Map<String, dynamic>.from(e as Map);
+      return {'admin': _fromMap(Map<String, dynamic>.from(m['admin'] as Map)), 'employeeCount': m['employeeCount'] ?? 0, 'customerCount': m['customerCount'] ?? 0};
+    }).toList();
+    return {...raw, 'admins': admins};
   }
 
   static Future<void> renewAdminSubscription(String adminId, int days) async {
-    final newEnd = DateTime.now().add(Duration(days: days));
-    await pb.collection('users').update(
-      adminId,
-      body: {'subscription_end': newEnd.toUtc().toIso8601String()},
-    );
+    await ensureInitialized();
+    await db.rpc('zhirox_platform_renew_admin', params: {'p_admin_user_id': adminId, 'p_days': days});
   }
 
   static Future<void> deleteAdminWithData(String adminId) async {
     await ensureInitialized();
-    try {
-      final response = await client.functions.invoke(
-        'account-admin',
-        body: {'action': 'delete_user', 'user_id': adminId},
-      );
-      if (response.data is Map && response.data['error'] != null) {
-        throw _functionError(response.data);
-      }
-    } on FunctionsException catch (e) {
-      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
-    }
+    final res = await db.functions.invoke('zhirox-delete-admin', body: {'adminId': adminId});
+    final data = Map<String, dynamic>.from(res.data as Map);
+    if (data['error'] != null) throw _friendly(data['error']!);
   }
 
   static Future<int> checkSubscriptionDaysLeft(String adminId) async {
-    final admin = await pb.collection('users').getOne(adminId);
-    final subEnd = admin.getStringValue('subscription_end');
-    if (subEnd.isEmpty) return 9999;
-    return DateTime.parse(subEnd).difference(DateTime.now()).inDays;
+    final admin = await getUser(adminId);
+    final end = DateTime.tryParse(admin.getStringValue('subscription_end'));
+    return end == null ? 9999 : end.difference(DateTime.now()).inDays;
   }
 
-  // ==================== Admin Approval ====================
+  static Future<RecordModel> registerCustomer({required String name, String fatherName = '', String grandfatherName = '', required String phone, required String password, required String adminId}) async {
+    await ensureInitialized();
+    final res = await db.functions.invoke('zhirox-register-customer', body: {
+      'name': name, 'fatherName': fatherName, 'grandfatherName': grandfatherName,
+      'phone': normalizePhone(phone), 'password': password, 'adminId': adminId,
+    });
+    final data = Map<String, dynamic>.from(res.data as Map);
+    if (data['error'] != null) throw _friendly(data['error']!);
+    return _fromMap(Map<String, dynamic>.from(data['user'] as Map));
+  }
 
   static Future<List<RecordModel>> getAdminList() async {
     await ensureInitialized();
-    final data = await client.rpc('list_active_markets');
-    final rows = (data as List)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    return rows
-        .map((row) => _profileRecord({
-              ...row,
-              'role': 'admin',
-              'approved': true,
-              'active': true,
-              'created_at': '',
-              'updated_at': '',
-            }))
-        .toList();
+    final value = await db.rpc('list_public_markets');
+    return ((value as List?) ?? const []).map((e) {
+      final m = Map<String, dynamic>.from(e as Map);
+      return _fromMap({'id': m['id'].toString(), 'name': m['admin_name'] ?? '', 'market_name': m['market_name'] ?? '', 'role': 'admin', 'approved': true, 'active': true});
+    }).toList();
   }
 
-  static Future<List<RecordModel>> getPendingCustomers(String adminId) {
-    return getUsers(role: 'customer', adminId: adminId, approved: false);
-  }
-
-  static Future<void> approveCustomer(String id, int debtDuration) {
-    return updateUser(id, {'approved': true, 'debt_duration': debtDuration});
-  }
-
+  static Future<List<RecordModel>> getPendingCustomers(String adminId) => getUsers(role: 'customer', approved: false);
+  static Future<void> approveCustomer(String id, int debtDuration) => updateUser(id, {'approved': true, 'debt_duration': debtDuration});
   static Future<void> rejectCustomer(String id) => deleteUser(id);
 
-  // ==================== Users ====================
-
-  static Future<RecordModel> createUser({
-    required String name,
-    String fatherName = '',
-    String grandfatherName = '',
-    required String phone,
-    required String password,
-    required String role,
-    required String createdBy,
-    String? adminId,
-    bool canAddCustomers = false,
-    bool canSetDebtLimit = false,
-    bool canSetDueDate = false,
-    bool canEditDebts = false,
-    bool canSendNotifications = false,
-    double debtLimit = 0,
-  }) {
-    return _invokeCreateAccount({
-      'name': name,
-      'father_name': fatherName,
-      'grandfather_name': grandfatherName,
-      'phone': phone.trim(),
-      'password': password,
-      'role': role,
-      'created_by': createdBy,
-      'admin_id': adminId ?? createdBy,
-      'can_add_customers': canAddCustomers,
-      'can_set_debt_limit': canSetDebtLimit,
-      'can_set_due_date': canSetDueDate,
-      'can_edit_debts': canEditDebts,
-      'can_send_notifications': canSendNotifications,
-      'debt_limit': debtLimit,
+  static Future<RecordModel> createUser({required String name, String fatherName = '', String grandfatherName = '', required String phone, required String password, required String role, required String createdBy, String? adminId, bool canAddCustomers = false, bool canSetDebtLimit = false, bool canSetDueDate = false, bool canEditDebts = false, bool canSendNotifications = false, double debtLimit = 0}) async {
+    await ensureInitialized();
+    final res = await db.functions.invoke('zhirox-create-account', body: {
+      'kind': role, 'name': name, 'fatherName': fatherName, 'grandfatherName': grandfatherName,
+      'phone': normalizePhone(phone), 'password': password, 'debtLimit': debtLimit.round(),
+      'canAddCustomers': canAddCustomers, 'canSetDebtLimit': canSetDebtLimit,
+      'canSetDueDate': canSetDueDate, 'canEditDebts': canEditDebts,
+      'canSendNotifications': canSendNotifications,
     });
+    final data = Map<String, dynamic>.from(res.data as Map);
+    if (data['error'] != null) throw _friendly(data['error']!);
+    return _fromMap(Map<String, dynamic>.from(data['user'] as Map));
   }
 
   static Future<void> updateUser(String id, Map<String, dynamic> data) async {
     await ensureInitialized();
-    final mutable = Map<String, dynamic>.from(data);
-    final botToken = mutable.remove('telegram_bot_token');
-    final chatId = mutable.remove('telegram_chat_id');
-
-    if ((botToken != null || chatId != null) && client.auth.currentUser?.id == id) {
-      String resolvedToken = botToken?.toString() ?? '';
-      String resolvedChat = chatId?.toString() ?? '';
-      if (botToken == null || chatId == null) {
-        try {
-          final current = await client.rpc('get_my_telegram_credentials');
-          if (current is List && current.isNotEmpty) {
-            final row = Map<String, dynamic>.from(current.first as Map);
-            if (botToken == null) resolvedToken = row['bot_token']?.toString() ?? '';
-            if (chatId == null) resolvedChat = row['chat_id']?.toString() ?? '';
-          }
-        } catch (_) {}
-      }
-      await client.rpc(
-        'set_my_telegram_credentials',
-        params: {'p_bot_token': resolvedToken, 'p_chat_id': resolvedChat},
-      );
-    }
-
-    if (mutable.isEmpty) return;
-    try {
-      final response = await client.functions.invoke(
-        'update-account',
-        body: {'user_id': id, 'data': mutable},
-      );
-      if (response.data is Map && response.data['error'] != null) {
-        throw _functionError(response.data);
-      }
-    } on FunctionsException catch (e) {
-      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
-    }
+    final body = <String, dynamic>{'userId': id, 'data': Map<String, dynamic>.from(data)};
+    final res = await db.functions.invoke('zhirox-update-account', body: body);
+    final result = Map<String, dynamic>.from(res.data as Map);
+    if (result['error'] != null) throw _friendly(result['error']!);
+    if (id == db.auth.currentUser?.id) await refreshCurrentUser();
   }
 
-  static Future<void> changePassword({
-    required String userId,
-    required String oldPassword,
-    required String newPassword,
-  }) async {
+  static Future<void> changePassword({required String userId, required String oldPassword, required String newPassword}) async {
     await ensureInitialized();
-    if (client.auth.currentUser?.id != userId) {
-      throw Exception('دەسەڵاتی گۆڕینی ئەم وشەی نهێنییەت نییە');
-    }
-    final profile = await getUser(userId);
-    final phone = profile.getStringValue('phone');
-    try {
-      await client.auth.signInWithPassword(
-        email: '$phone@zhirox.local',
-        password: oldPassword,
-      );
-    } on AuthException catch (_) {
-      throw Exception('وشەی نهێنیی کۆن هەڵەیە');
-    }
-    await client.auth.updateUser(UserAttributes(password: newPassword));
+    if (userId != db.auth.currentUser?.id) throw Exception('دەسەڵاتی ئەم کردارەت نییە');
+    final email = db.auth.currentUser?.email;
+    if (email == null) throw Exception('هەژمار نەدۆزرایەوە');
+    await db.auth.signInWithPassword(email: email, password: oldPassword);
+    await db.auth.updateUser(UserAttributes(password: newPassword));
   }
 
   static Future<void> deleteUser(String id) async {
     await ensureInitialized();
-    try {
-      final response = await client.functions.invoke(
-        'account-admin',
-        body: {'action': 'delete_user', 'user_id': id},
-      );
-      if (response.data is Map && response.data['error'] != null) {
-        throw _functionError(response.data);
-      }
-    } on FunctionsException catch (e) {
-      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
-    }
+    final res = await db.functions.invoke('zhirox-delete-account', body: {'userId': id});
+    final result = Map<String, dynamic>.from(res.data as Map);
+    if (result['error'] != null) throw _friendly(result['error']!);
   }
 
-  static Future<List<RecordModel>> getUsers({
-    String? role,
-    String? search,
-    String? adminId,
-    bool? approved,
-  }) async {
-    final filters = <String>[];
-    if (role != null) filters.add('role = "${_sanitize(role)}"');
-    if (adminId != null) filters.add('admin_id = "${_sanitize(adminId)}"');
-    if (approved != null) filters.add('approved = $approved');
-    if (search != null && search.isNotEmpty) {
-      final q = _sanitize(search);
-      filters.add('(name ~ "$q" || father_name ~ "$q" || phone ~ "$q")');
-    }
-    final result = await pb.collection('users').getList(
-      filter: filters.join(' && '),
-      sort: '-created',
-      perPage: 500,
-    );
-    return result.items;
+  static Future<List<RecordModel>> getUsers({String? role, String? search, String? adminId, bool? approved}) async {
+    await ensureInitialized();
+    final value = await db.rpc('zhirox_list_users', params: {'p_business_id': businessId, 'p_role': role, 'p_approved': approved, 'p_search': search});
+    return ((value as List?) ?? const []).map((e) => _fromMap(Map<String, dynamic>.from(e as Map))).toList();
   }
 
   static Future<RecordModel> getUser(String id) async {
-    var user = await pb.collection('users').getOne(id);
     await ensureInitialized();
-    if (client.auth.currentUser?.id == id) {
-      try {
-        final data = await client.rpc('get_my_telegram_credentials');
-        if (data is List && data.isNotEmpty) {
-          final creds = Map<String, dynamic>.from(data.first as Map);
-          final json = user.toJson();
-          json['telegram_bot_token'] = creds['bot_token']?.toString() ?? '';
-          json['telegram_chat_id'] = creds['chat_id']?.toString() ?? '';
-          user = RecordModel.fromJson(json);
-        }
-      } catch (_) {}
-    }
-    return user;
+    final value = await db.rpc('zhirox_get_user', params: {'p_target_user_id': id});
+    return _fromMap(Map<String, dynamic>.from(value as Map));
   }
-
-  // ==================== Debts ====================
 
   static Future<double> getCustomerBalance(String customerId) async {
-    try {
-      final debts = await getDebts(customerId: customerId);
-      return debts.fold<double>(
-        0,
-        (sum, debt) => sum + debt.getDoubleValue('remaining'),
-      );
-    } catch (_) {
-      return 0;
-    }
+    final debts = await getDebts(customerId: customerId);
+    return debts.fold<double>(0, (s, d) => s + d.getDoubleValue('remaining'));
   }
 
-  static String _mimeForPath(String path) {
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    if (lower.endsWith('.pdf')) return 'application/pdf';
-    return 'image/jpeg';
+  static String _uuid() {
+    final r = Random.secure();
+    String h(int n) => n.toRadixString(16).padLeft(2, '0');
+    final b = List<int>.generate(16, (_) => r.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+    final s = b.map(h).join();
+    return '${s.substring(0,8)}-${s.substring(8,12)}-${s.substring(12,16)}-${s.substring(16,20)}-${s.substring(20)}';
   }
 
-  static Future<String> _uploadReceipt(String sourcePath, String createdBy) async {
+  static Future<RecordModel> createDebt({required String customerId, required String description, required double amount, required String dueDate, required String createdBy, String currency = 'IQD', double dollarRate = 0, double amountUsd = 0, List<Map<String, dynamic>>? items, String? createdByName, String? marketName, String? customCreatedDate, String? receiptImagePath}) async {
     await ensureInitialized();
-    final creator = await getUser(createdBy);
-    final tenantId = creator.getStringValue('role') == 'admin'
-        ? creator.id
-        : creator.getStringValue('admin_id');
-    if (tenantId.isEmpty) throw Exception('tenant not found');
-    final ext = sourcePath.contains('.') ? sourcePath.substring(sourcePath.lastIndexOf('.')) : '.jpg';
-    final storagePath = '$tenantId/${DateTime.now().microsecondsSinceEpoch}$ext';
-    final bytes = await File(sourcePath).readAsBytes();
-    await client.storage.from('receipts').uploadBinary(
-      storagePath,
-      bytes,
-      fileOptions: FileOptions(contentType: _mimeForPath(sourcePath), upsert: false),
-    );
-    return storagePath;
-  }
-
-  static Future<RecordModel> createDebt({
-    required String customerId,
-    required String description,
-    required double amount,
-    required String dueDate,
-    required String createdBy,
-    String currency = 'IQD',
-    double dollarRate = 0,
-    double amountUsd = 0,
-    List<Map<String, dynamic>>? items,
-    String? createdByName,
-    String? marketName,
-    String? customCreatedDate,
-    String? receiptImagePath,
-  }) async {
-    String receiptPath = '';
+    String? receiptPath;
     if (receiptImagePath != null && receiptImagePath.isNotEmpty) {
-      receiptPath = await _uploadReceipt(receiptImagePath, createdBy);
+      final bytes = await XFile(receiptImagePath).readAsBytes();
+      final ext = receiptImagePath.split('.').last.toLowerCase();
+      receiptPath = '$businessId/$customerId/${_uuid()}.$ext';
+      await db.storage.from('zhirox-receipts').uploadBinary(receiptPath, bytes, fileOptions: const FileOptions(upsert: false));
     }
-
-    final body = <String, dynamic>{
-      'customer': customerId,
-      'description': description,
-      'amount': amount,
-      'remaining': amount,
-      'due_date': dueDate,
-      'status': 'pending',
-      'created_by': createdBy,
-      'currency': currency,
-      'dollar_rate': dollarRate,
-      'amount_usd': amountUsd,
-      'items': jsonEncode(items ?? const <Map<String, dynamic>>[]),
-      if (customCreatedDate != null && customCreatedDate.isNotEmpty)
-        'custom_date': customCreatedDate,
-      if (receiptPath.isNotEmpty) 'receipt_image': receiptPath,
-    };
-
-    final created = await pb.collection('debts').create(body: body);
-
-    try {
-      final formattedAmount =
-          '${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
-      String senderName = createdByName ?? 'کارمەند';
-      String resolvedMarketName = marketName ?? '';
-      try {
-        final creator = await getUser(createdBy);
-        if (creator.getStringValue('role') == 'admin') {
-          senderName = creator.getStringValue('name');
-          if (resolvedMarketName.isEmpty) {
-            resolvedMarketName = creator.getStringValue('market_name');
-          }
-        } else {
-          final adminId = creator.getStringValue('admin_id');
-          if (adminId.isNotEmpty) {
-            final admin = await getUser(adminId);
-            senderName = admin.getStringValue('name');
-            if (resolvedMarketName.isEmpty) {
-              resolvedMarketName = admin.getStringValue('market_name');
-            }
-          }
-        }
-      } catch (_) {}
-      final marketLine = resolvedMarketName.isEmpty ? '' : '$resolvedMarketName\n';
-      final dueLine = dueDate.isEmpty ? '' : '\nبەرواری دانەوە: ${dueDate.replaceAll('-', '/')}';
-      await createNotification(
-        customerId: customerId,
-        message: '$marketLineقەرزی $formattedAmount لەلایەن $senderName زیادکرا.$dueLine',
-        senderId: createdBy,
-        type: 'debt_created',
-      );
-    } catch (_) {}
-
-    return await getDebt(created.id);
+    final id = await db.rpc('zhirox_create_debt', params: {
+      'p_business_id': businessId, 'p_customer_user_id': customerId, 'p_amount': amount.round(),
+      'p_due_date': dueDate.substring(0, 10), 'p_description': description, 'p_currency': currency,
+      'p_dollar_rate': dollarRate, 'p_amount_usd': amountUsd, 'p_items': items ?? const [],
+      'p_custom_date': customCreatedDate == null || customCreatedDate.isEmpty ? null : customCreatedDate.substring(0, 10),
+      'p_receipt_path': receiptPath, 'p_idempotency_key': _uuid(),
+    });
+    return getDebt(id.toString());
   }
 
   static Future<void> updateDebt(String id, Map<String, dynamic> data) async {
-    await pb.collection('debts').update(id, body: data);
+    final old = await getDebt(id);
+    dynamic rawItems = data['items'];
+    if (rawItems is String) {
+      try { rawItems = jsonDecode(rawItems); } catch (_) { rawItems = const []; }
+    }
+    await db.rpc('zhirox_update_debt', params: {
+      'p_business_id': businessId, 'p_debt_id': id,
+      'p_description': data['description']?.toString() ?? old.getStringValue('description'),
+      'p_due_date': data['due_date']?.toString().substring(0, 10) ?? old.getStringValue('due_date').substring(0, 10),
+      'p_currency': data['currency']?.toString() ?? old.getStringValue('currency'),
+      'p_dollar_rate': (data['dollar_rate'] as num?)?.toDouble() ?? old.getDoubleValue('dollar_rate'),
+      'p_amount_usd': (data['amount_usd'] as num?)?.toDouble() ?? old.getDoubleValue('amount_usd'),
+      'p_items': rawItems ?? _decodeItems(old.getStringValue('items')),
+    });
+  }
+
+  static List<dynamic> _decodeItems(String value) {
+    try { final x = jsonDecode(value); return x is List ? x : const []; } catch (_) { return const []; }
   }
 
   static Future<void> deleteDebt(String id) async {
-    final payments = await pb.collection('payments').getList(
-      filter: 'debt = "${_sanitize(id)}"',
-      perPage: 500,
-    );
-    for (final payment in payments.items) {
-      await pb.collection('payments').delete(payment.id);
+    await db.rpc('zhirox_reverse_debt', params: {'p_business_id': businessId, 'p_debt_id': id, 'p_reason': 'USER_DELETE'});
+  }
+
+  static Future<List<RecordModel>> getDebts({String? customerId, String? status, String? createdBy, String? adminId, String? filter}) async {
+    await ensureInitialized();
+    final all = <RecordModel>[];
+    var offset = 0;
+    while (true) {
+      final value = await db.rpc('zhirox_list_debts', params: {'p_business_id': businessId, 'p_customer_user_id': customerId, 'p_status': status, 'p_created_by': createdBy, 'p_debt_id': null, 'p_limit': 500, 'p_offset': offset});
+      final map = Map<String, dynamic>.from(value as Map);
+      final batch = ((map['items'] as List?) ?? const []).map((e) => _fromMap(Map<String, dynamic>.from(e as Map))).toList();
+      all.addAll(batch); offset += batch.length;
+      if (batch.isEmpty || offset >= (map['totalItems'] as num? ?? 0).toInt()) break;
     }
-    await pb.collection('debts').delete(id);
+    return all;
   }
 
-  static Future<List<RecordModel>> getDebts({
-    String? customerId,
-    String? status,
-    String? createdBy,
-    String? adminId,
-    int page = 1,
-    int perPage = 500,
-    String? filter,
-  }) async {
-    final filters = <String>[];
-    if (customerId != null) filters.add('customer = "${_sanitize(customerId)}"');
-    if (status != null) filters.add('status = "${_sanitize(status)}"');
-    if (createdBy != null) filters.add('created_by = "${_sanitize(createdBy)}"');
-    if (adminId != null) filters.add('customer.admin_id = "${_sanitize(adminId)}"');
-    if (filter != null && filter.isNotEmpty) filters.add(filter);
-    final result = await pb.collection('debts').getList(
-      page: page,
-      perPage: perPage,
-      filter: filters.join(' && '),
-      sort: '-created',
-      expand: 'customer,created_by',
-    );
-    return result.items;
+  static Future<Map<String, dynamic>> getDebtsPaginated({String? customerId, String? status, String? createdBy, String? adminId, int page = 1, int perPage = 20, String? filter}) async {
+    await ensureInitialized();
+    final value = await db.rpc('zhirox_list_debts', params: {'p_business_id': businessId, 'p_customer_user_id': customerId, 'p_status': status, 'p_created_by': createdBy, 'p_debt_id': null, 'p_limit': perPage, 'p_offset': (page - 1) * perPage});
+    final map = Map<String, dynamic>.from(value as Map);
+    final items = ((map['items'] as List?) ?? const []).map((e) => _fromMap(Map<String, dynamic>.from(e as Map))).toList();
+    final total = (map['totalItems'] as num? ?? 0).toInt();
+    return {'items': items, 'totalItems': total, 'totalPages': (total / perPage).ceil()};
   }
 
-  static Future<Map<String, dynamic>> getDebtsPaginated({
-    String? customerId,
-    String? status,
-    String? createdBy,
-    String? adminId,
-    int page = 1,
-    int perPage = 20,
-    String? filter,
-  }) async {
-    final filters = <String>[];
-    if (customerId != null) filters.add('customer = "${_sanitize(customerId)}"');
-    if (status != null) filters.add('status = "${_sanitize(status)}"');
-    if (createdBy != null) filters.add('created_by = "${_sanitize(createdBy)}"');
-    if (adminId != null) filters.add('customer.admin_id = "${_sanitize(adminId)}"');
-    if (filter != null && filter.isNotEmpty) filters.add(filter);
-    final result = await pb.collection('debts').getList(
-      page: page,
-      perPage: perPage,
-      filter: filters.join(' && '),
-      sort: '-created',
-      expand: 'customer,created_by',
-    );
-    return {
-      'items': result.items,
-      'totalItems': result.totalItems,
-      'totalPages': result.totalPages,
-    };
+  static Future<RecordModel> getDebt(String id) async {
+    await ensureInitialized();
+    final value = await db.rpc('zhirox_list_debts', params: {'p_business_id': businessId, 'p_customer_user_id': null, 'p_status': null, 'p_created_by': null, 'p_debt_id': id, 'p_limit': 1, 'p_offset': 0});
+    final items = (Map<String, dynamic>.from(value as Map)['items'] as List?) ?? const [];
+    if (items.isEmpty) throw Exception('قەرز نەدۆزرایەوە');
+    return _fromMap(Map<String, dynamic>.from(items.first as Map));
   }
 
-  static Future<RecordModel> getDebt(String id) {
-    return pb.collection('debts').getOne(id, expand: 'customer,created_by');
+  static Future<RecordModel> createPayment({required String debtId, required double amount, String? note, required String createdBy, String? createdByName}) async {
+    await ensureInitialized();
+    if (amount <= 0) throw Exception('بڕی پارەدانەوە دەبێت گەورەتر لە سفر بێت');
+    final paymentId = await db.rpc('zhirox_create_payment_for_debt', params: {'p_business_id': businessId, 'p_debt_id': debtId, 'p_amount': amount.round(), 'p_note': note ?? '', 'p_idempotency_key': _uuid()});
+    final payments = await getPayments(debtId: debtId);
+    return payments.firstWhere((p) => p.id == paymentId.toString(), orElse: () => _fromMap({'id': paymentId.toString(), 'debt': debtId, 'amount': amount, 'note': note ?? '', 'created': DateTime.now().toUtc().toIso8601String()}));
   }
 
-  // ==================== Payments ====================
-
-  static Future<RecordModel> createPayment({
-    required String debtId,
-    required double amount,
-    String? note,
-    required String createdBy,
-    String? createdByName,
-  }) async {
-    final payment = await pb.collection('payments').create(
-      body: {
-        'debt': debtId,
-        'amount': amount,
-        'note': note ?? '',
-        'created_by': createdBy,
-      },
-    );
-
-    final debt = await getDebt(debtId);
-    final remaining = debt.getDoubleValue('remaining') - amount;
-    final newRemaining = remaining <= 0 ? 0.0 : remaining;
-    final newStatus = remaining <= 0 ? 'paid' : 'partial';
-    await pb.collection('debts').update(
-      debtId,
-      body: {'remaining': newRemaining, 'status': newStatus},
-    );
-
-    try {
-      final customerId = debt.getStringValue('customer');
-      if (customerId.isNotEmpty) {
-        String senderName = createdByName ?? '';
-        if (senderName.isEmpty) {
-          try {
-            final creator = await getUser(createdBy);
-            if (creator.getStringValue('role') == 'admin') {
-              senderName = creator.getStringValue('name');
-            } else {
-              final adminId = creator.getStringValue('admin_id');
-              senderName = adminId.isEmpty
-                  ? creator.getStringValue('name')
-                  : (await getUser(adminId)).getStringValue('name');
-            }
-          } catch (_) {
-            senderName = 'بەڕێوەبەر';
-          }
-        }
-        final formattedAmount =
-            '${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
-        final formattedRemaining =
-            '${newRemaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
-        final message = newRemaining <= 0
-            ? '✅ قەرزەکەت بە تەواوی دراوەتەوە!\nبڕی دراو: $formattedAmount لەلایەن $senderName 🎉'
-            : '💰 پارەدانەوەی $formattedAmount تۆمارکرا.\nلەلایەن $senderName\nماوە: $formattedRemaining';
-        await createNotification(
-          customerId: customerId,
-          message: message,
-          senderId: createdBy,
-          type: 'payment',
-        );
-      }
-    } catch (_) {}
-
-    return payment;
-  }
-
-  static Future<List<RecordModel>> getPayments({
-    String? debtId,
-    String? createdBy,
-    String? customerId,
-  }) async {
-    final filters = <String>[];
-    if (debtId != null) filters.add('debt = "${_sanitize(debtId)}"');
-    if (createdBy != null) filters.add('created_by = "${_sanitize(createdBy)}"');
-    if (customerId != null) {
-      filters.add('debt.customer = "${_sanitize(customerId)}"');
+  static Future<List<RecordModel>> getPayments({String? debtId, String? createdBy}) async {
+    await ensureInitialized();
+    final all = <RecordModel>[];
+    var offset = 0;
+    while (true) {
+      final value = await db.rpc('zhirox_list_payments', params: {'p_business_id': businessId, 'p_debt_id': debtId, 'p_created_by': createdBy, 'p_limit': 500, 'p_offset': offset});
+      final map = Map<String, dynamic>.from(value as Map);
+      final batch = ((map['items'] as List?) ?? const []).map((e) => _fromMap(Map<String, dynamic>.from(e as Map))).toList();
+      all.addAll(batch); offset += batch.length;
+      if (batch.isEmpty || offset >= (map['totalItems'] as num? ?? 0).toInt()) break;
     }
-    final result = await pb.collection('payments').getList(
-      filter: filters.join(' && '),
-      sort: '-created',
-      expand: 'debt,created_by,debt.customer',
-      perPage: 500,
-    );
-    return result.items;
+    return all;
   }
 
   static Future<Map<String, double>> getEmployeeStats(String employeeId) async {
     final debts = await getDebts(createdBy: employeeId);
     final payments = await getPayments(createdBy: employeeId);
-    return {
-      'totalDebtsCreated': debts.fold<double>(0, (s, d) => s + d.getDoubleValue('amount')),
-      'totalPaymentsCollected': payments.fold<double>(0, (s, p) => s + p.getDoubleValue('amount')),
-    };
+    return {'totalDebtsCreated': debts.fold<double>(0, (s, d) => s + d.getDoubleValue('amount')), 'totalPaymentsCollected': payments.fold<double>(0, (s, p) => s + p.getDoubleValue('amount'))};
   }
 
   static Future<Map<String, int>> getDebtCounts({required String adminId}) async {
-    final safeAdminId = _sanitize(adminId);
-    final pending = await pb.collection('debts').getList(
-      filter: 'customer.admin_id = "$safeAdminId" && status = "pending"',
-      perPage: 1,
-    );
-    final partial = await pb.collection('debts').getList(
-      filter: 'customer.admin_id = "$safeAdminId" && status = "partial"',
-      perPage: 1,
-    );
-    final paid = await pb.collection('debts').getList(
-      filter: 'customer.admin_id = "$safeAdminId" && status = "paid"',
-      perPage: 1,
-    );
-    return {
-      'pending': pending.totalItems,
-      'partial': partial.totalItems,
-      'paid': paid.totalItems,
-    };
+    final debts = await getDebts();
+    return {'pending': debts.where((d) => d.getStringValue('status') == 'pending').length, 'partial': debts.where((d) => d.getStringValue('status') == 'partial').length, 'paid': debts.where((d) => d.getStringValue('status') == 'paid').length};
   }
-
-  // ==================== Stats ====================
 
   static Future<Map<String, dynamic>> getDashboardStats({String? adminId}) async {
-    final safeAdminId = adminId != null ? _sanitize(adminId) : null;
-    var customerFilter = 'role = "customer"';
-    if (safeAdminId != null) customerFilter += ' && admin_id = "$safeAdminId"';
-    var debtFilter = '';
-    if (safeAdminId != null) debtFilter = 'customer.admin_id = "$safeAdminId"';
-    var paymentFilter = '';
-    if (safeAdminId != null) paymentFilter = 'debt.customer.admin_id = "$safeAdminId"';
-    var pendingFilter = 'role = "customer" && approved = false';
-    if (safeAdminId != null) pendingFilter += ' && admin_id = "$safeAdminId"';
-
-    final results = await Future.wait([
-      pb.collection('users').getList(filter: '$customerFilter && approved = true', perPage: 1),
-      pb.collection('debts').getList(filter: debtFilter, perPage: 500),
-      pb.collection('payments').getList(filter: paymentFilter, perPage: 500),
-      pb.collection('users').getList(filter: pendingFilter, perPage: 1),
-      pb.collection('debts').getList(
-        filter: debtFilter,
-        sort: '-created',
-        perPage: 5,
-        expand: 'customer,created_by',
-      ),
-    ]);
-
-    final customers = results[0] as PBListResult;
-    final debts = results[1] as PBListResult;
-    final payments = results[2] as PBListResult;
-    final pending = results[3] as PBListResult;
-    final recent = results[4] as PBListResult;
-
-    double totalDebt = 0;
-    double totalRemaining = 0;
-    int pendingCount = 0;
-    for (final debt in debts.items) {
-      totalDebt += debt.getDoubleValue('amount');
-      totalRemaining += debt.getDoubleValue('remaining');
-      if (debt.getStringValue('status') != 'paid') pendingCount++;
-    }
-    double totalPayments = 0;
-    for (final payment in payments.items) {
-      totalPayments += payment.getDoubleValue('amount');
-    }
-
-    return {
-      'totalCustomers': customers.totalItems,
-      'totalDebt': totalDebt,
-      'totalRemaining': totalRemaining,
-      'totalPayments': totalPayments,
-      'pendingDebts': pendingCount,
-      'pendingRequests': pending.totalItems,
-      'recentActivity': recent.items,
-    };
+    await ensureInitialized();
+    final value = await db.rpc('zhirox_dashboard_stats', params: {'p_business_id': businessId});
+    final map = Map<String, dynamic>.from(value as Map);
+    final recent = ((map['recentActivity'] as List?) ?? const []).map((e) => _fromMap(Map<String, dynamic>.from(e as Map))).toList();
+    return {...map, 'recentActivity': recent};
   }
 
-  // ==================== Notifications ====================
-
-  static Future<void> createNotification({
-    required String customerId,
-    required String message,
-    required String senderId,
-    String type = 'general',
-  }) async {
-    await pb.collection('notifications').create(
-      body: {
-        'customer': customerId,
-        'message': message,
-        'sender': senderId,
-        'is_read': false,
-        'type': type,
-      },
-    );
-
-    try {
-      await ensureInitialized();
-      await client.functions.invoke(
-        'send-telegram',
-        body: {'customer_id': customerId, 'message': message},
-      );
-    } catch (e) {
-      debugPrint('Telegram notification error: $e');
-    }
+  static Future<void> createNotification({required String customerId, required String message, required String senderId, String type = 'general', String? debtId}) async {
+    await ensureInitialized();
+    await db.rpc('zhirox_create_notification', params: {'p_business_id': businessId, 'p_customer_user_id': customerId, 'p_message': message, 'p_type': type, 'p_debt_id': debtId});
   }
 
-  static Future<bool> sendTelegramMessage(
-    String botToken,
-    String chatId,
-    String text,
-  ) async {
-    final url = 'https://api.telegram.org/bot$botToken/sendMessage';
-    try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'chat_id': chatId, 'text': text}),
-      );
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
-  }
+  static Future<bool> testTelegramConnection(String chatId) async => false;
 
   static Future<List<RecordModel>> getNotifications(String customerId) async {
-    final result = await pb.collection('notifications').getList(
-      filter: 'customer = "${_sanitize(customerId)}"',
-      sort: '-created',
-      perPage: 50,
-      expand: 'sender',
-    );
-    return result.items;
+    await ensureInitialized();
+    final uid = db.auth.currentUser?.id;
+    if (uid == null) return const [];
+    final rows = await db.from('notifications').select('id,business_id,user_id,type,title,body,entity_type,entity_id,read_at,created_at,sender_user_id').eq('user_id', uid).order('created_at', ascending: false).limit(100);
+    return (rows as List).map((e) {
+      final m = Map<String, dynamic>.from(e as Map);
+      return _fromMap({'id': m['id'], 'customer': m['user_id'], 'message': m['body'] ?? '', 'type': m['type'] ?? 'general', 'debt': m['entity_type'] == 'DEBT' ? m['entity_id'] : null, 'sender': m['sender_user_id'], 'is_read': m['read_at'] != null, 'created': m['created_at']?.toString() ?? '', 'updated': m['created_at']?.toString() ?? ''});
+    }).toList();
   }
 
   static Future<int> getUnreadNotificationCount(String customerId) async {
-    final result = await pb.collection('notifications').getList(
-      filter: 'customer = "${_sanitize(customerId)}" && is_read = false',
-      perPage: 1,
-    );
-    return result.totalItems;
+    final rows = await getNotifications(customerId);
+    return rows.where((r) => !r.getBoolValue('is_read')).length;
   }
 
-  static Future<void> markNotificationRead(String id) async {
-    await pb.collection('notifications').update(id, body: {'is_read': true});
+  static Future<void> markNotificationRead(String id) async { await db.from('notifications').update({'read_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id); }
+  static Future<void> deleteNotification(String id) async { await db.from('notifications').delete().eq('id', id); }
+  static Future<int> checkNewNotifications(String customerId) => getUnreadNotificationCount(customerId);
+  static Future<void> checkAndNotifyOverdueDebts() async {}
+
+  static Future<String> getReceiptUrl(RecordModel debt) async {
+    final path = debt.getStringValue('receipt_image');
+    if (path.isEmpty) return '';
+    return db.storage.from('zhirox-receipts').createSignedUrl(path, 3600);
   }
 
-  static Future<void> deleteNotification(String id) async {
-    await pb.collection('notifications').delete(id);
+  static Future<void> subscribeTable(String key, String table, VoidCallback callback, {String? filterColumn, Object? filterValue}) async {
+    await ensureInitialized();
+    await unsubscribe(key);
+    var channel = db.channel('zhirox:$key:${DateTime.now().microsecondsSinceEpoch}');
+    if (filterColumn != null && filterValue != null) {
+      channel = channel.onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: table, filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: filterColumn, value: filterValue), callback: (_) => callback());
+    } else {
+      channel = channel.onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: table, callback: (_) => callback());
+    }
+    _channels[key] = channel;
+    channel.subscribe();
   }
 
-  static Future<int> checkNewNotifications(String customerId) {
-    return getUnreadNotificationCount(customerId);
+  static Future<void> subscribeCurrentUser(VoidCallback callback) async {
+    if (_currentUser == null) return;
+    final role = _currentUser!.getStringValue('role');
+    if (role == 'customer') {
+      await subscribeTable('current-user', 'customers', callback, filterColumn: 'auth_user_id', filterValue: _currentUser!.id);
+    } else if (role == 'admin' || role == 'employee') {
+      await subscribeTable('current-user', 'business_members', callback, filterColumn: 'user_id', filterValue: _currentUser!.id);
+    }
+    if (businessId.isNotEmpty) await subscribeTable('current-subscription', 'business_subscriptions', callback, filterColumn: 'business_id', filterValue: businessId);
   }
 
-  static Future<void> checkAndNotifyOverdueDebts() async {
-    try {
-      final now = DateTime.now();
-      final today =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      final overdue = await pb.collection('debts').getList(
-        filter: 'due_date < "$today" && status != "paid" && remaining > 0',
-        perPage: 500,
-        expand: 'customer',
-      );
+  static Future<void> unsubscribe(String key) async {
+    final c = _channels.remove(key);
+    if (c != null) await db.removeChannel(c);
+  }
 
-      for (final debt in overdue.items) {
-        final customerId = debt.getStringValue('customer');
-        final debtId = debt.id;
-        final existing = await pb.collection('notifications').getList(
-          filter:
-              'customer = "${_sanitize(customerId)}" && type = "debt_overdue" && message ~ "${_sanitize(debtId)}" && created >= "$today 00:00:00"',
-          perPage: 1,
-        );
-        if (existing.items.isNotEmpty) continue;
+  static Future<void> unsubscribeAll() async {
+    if (!_initialized) return;
+    await db.removeAllChannels();
+    _channels.clear();
+  }
+}
 
-        final remaining = debt.getDoubleValue('remaining');
-        final dueDate = debt.getStringValue('due_date');
-        final formattedAmount =
-            '${remaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
-        await createNotification(
-          customerId: customerId,
-          message:
-              '⚠️ قەرزی $formattedAmount دواکەوتووە!\nبەرواری دانەوە: ${dueDate.replaceAll('-', '/')} بووە.\nتکایە هەرچی زووتر بیگەڕێنەوە.\n[#$debtId]',
-          senderId: customerId,
-          type: 'debt_overdue',
-        );
+class _CompatRoot {
+  _CompatCollection collection(String name) => _CompatCollection(name);
+
+  Uri getFileUrl(RecordModel record, String filename) {
+    if (filename.startsWith('http://') || filename.startsWith('https://')) return Uri.parse(filename);
+    return Uri.parse('${SupabaseConfig.url}/storage/v1/object/public/zhirox-receipts/$filename');
+  }
+}
+
+class _CompatCollection {
+  _CompatCollection(this.name);
+  final String name;
+
+  String? _quoted(String filter, String field) {
+    final m = RegExp('${RegExp.escape(field)}\\s*=\\s*"([^"]+)"').firstMatch(filter);
+    return m?.group(1);
+  }
+
+  bool? _bool(String filter, String field) {
+    final m = RegExp('${RegExp.escape(field)}\\s*=\\s*(true|false)', caseSensitive: false).firstMatch(filter);
+    if (m == null) return null;
+    return m.group(1)!.toLowerCase() == 'true';
+  }
+
+  Future<RecordModel> getOne(String id, {String? expand}) async {
+    if (name == 'users') return PBService.getUser(id);
+    if (name == 'debts') return PBService.getDebt(id);
+    if (name == 'notifications') {
+      final rows = await PBService.getNotifications(PBService.client.auth.currentUser?.id ?? '');
+      return rows.firstWhere((e) => e.id == id);
+    }
+    throw Exception('Unsupported collection: $name');
+  }
+
+  Future<PBListResult> getList({int page = 1, int perPage = 30, String? filter, String? sort, String? expand}) async {
+    final f = filter ?? '';
+    List<RecordModel> rows;
+    if (name == 'users') {
+      final role = _quoted(f, 'role');
+      final approved = _bool(f, 'approved');
+      if (role == 'admin') {
+        try {
+          final data = await PBService.getAdminsPage(page: 1, perPage: 1000);
+          rows = (data['admins'] as List).map((e) => (e as Map)['admin'] as RecordModel).toList();
+        } catch (_) {
+          rows = <RecordModel>[];
+        }
+      } else {
+        rows = await PBService.getUsers(role: role, approved: approved);
       }
-    } catch (_) {}
+      final phone = _quoted(f, 'phone');
+      final id = _quoted(f, 'id');
+      final market = _quoted(f, 'market_name');
+      if (phone != null) rows = rows.where((r) => r.getStringValue('phone') == phone).toList();
+      if (market != null) rows = rows.where((r) => r.getStringValue('market_name') == market).toList();
+      if (id != null && f.contains('id !=')) rows = rows.where((r) => r.id != id).toList();
+    } else if (name == 'debts') {
+      rows = await PBService.getDebts(customerId: _quoted(f, 'customer'), status: _quoted(f, 'status'), createdBy: _quoted(f, 'created_by'));
+      final todayMatch = RegExp(r'due_date\s*<=\s*"([0-9-]+)"').firstMatch(f);
+      if (todayMatch != null) {
+        final day = DateTime.tryParse(todayMatch.group(1)!);
+        if (day != null) rows = rows.where((r) { final d = DateTime.tryParse(r.getStringValue('due_date')); return d != null && !d.isAfter(day) && r.getDoubleValue('remaining') > 0 && r.getStringValue('status') != 'paid'; }).toList();
+      }
+    } else if (name == 'payments') {
+      rows = await PBService.getPayments(debtId: _quoted(f, 'debt'), createdBy: _quoted(f, 'created_by'));
+    } else if (name == 'notifications') {
+      rows = await PBService.getNotifications(PBService.client.auth.currentUser?.id ?? '');
+    } else {
+      rows = <RecordModel>[];
+    }
+    if (sort == '-created') rows.sort((a, b) => b.created.compareTo(a.created));
+    final total = rows.length;
+    final start = ((page - 1) * perPage).clamp(0, total);
+    final end = (start + perPage).clamp(0, total);
+    final items = rows.sublist(start, end);
+    return PBListResult(items: items, totalItems: total, totalPages: perPage <= 0 ? 1 : (total / perPage).ceil(), page: page, perPage: perPage);
+  }
+
+  Future<RecordModel> update(String id, {required Map<String, dynamic> body}) async {
+    if (name == 'users') { await PBService.updateUser(id, body); return PBService.getUser(id); }
+    if (name == 'debts') { await PBService.updateDebt(id, body); return PBService.getDebt(id); }
+    if (name == 'notifications') {
+      if (body['is_read'] == true) await PBService.markNotificationRead(id);
+      return getOne(id);
+    }
+    throw Exception('Unsupported update: $name');
+  }
+
+  Future<void> delete(String id) async {
+    if (name == 'users') return PBService.deleteUser(id);
+    if (name == 'debts') return PBService.deleteDebt(id);
+    if (name == 'notifications') return PBService.deleteNotification(id);
+  }
+
+  Future<void> subscribe(String topic, void Function(PBRealtimeEvent) callback) async {
+    if (name == 'users') {
+      await PBService.subscribeCurrentUser(() async {
+        try { callback(PBRealtimeEvent(record: await PBService.getUser(topic))); } catch (_) { callback(PBRealtimeEvent()); }
+      });
+      return;
+    }
+    final table = name;
+    await PBService.subscribeTable('compat:$name:$topic', table, () => callback(PBRealtimeEvent(action: 'update')));
+  }
+
+  Future<void> unsubscribe([String? topic]) async {
+    if (name == 'users') {
+      await PBService.unsubscribe('current-user');
+      await PBService.unsubscribe('current-subscription');
+      return;
+    }
+    if (topic == null) {
+      final keys = PBService._channels.keys.where((k) => k.startsWith('compat:$name:')).toList();
+      for (final key in keys) { await PBService.unsubscribe(key); }
+    } else {
+      await PBService.unsubscribe('compat:$name:$topic');
+    }
   }
 }
