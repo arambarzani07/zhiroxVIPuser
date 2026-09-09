@@ -1,29 +1,28 @@
-name: iOS Unsigned IPA
+name: iOS Supabase Unsigned IPA
 
 on:
   push:
-    branches: [main]
+    branches: [ipa-supabase-connected]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
   build-ios:
     runs-on: macos-latest
     timeout-minutes: 60
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
+      - name: Checkout build payload
         uses: actions/checkout@v4
+
+      - name: Extract exact Supabase-connected source
+        run: |
+          rm -rf /tmp/zhirox-src
+          mkdir -p /tmp/zhirox-src
+          unzip -q .ipa_source/zhirox-source.zip -d /tmp/zhirox-src
+          test -f /tmp/zhirox-src/zhirox/pubspec.yaml
+          test -f /tmp/zhirox-src/zhirox/ios/Runner.xcodeproj/project.pbxproj
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -35,75 +34,55 @@ jobs:
         run: flutter --version
 
       - name: Get dependencies
+        working-directory: /tmp/zhirox-src/zhirox
         run: flutter pub get
 
       - name: Prepare iOS 15 deployment target
+        working-directory: /tmp/zhirox-src/zhirox
         run: |
-          sed -i '' "s/platform :ios, '13.0'/platform :ios, '15.0'/" ios/Podfile
-          sed -i '' "s/IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'/IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'/" ios/Podfile
-          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' ios/Runner.xcodeproj/project.pbxproj
+          if [ -f ios/Podfile ]; then
+            sed -i '' "s/platform :ios, '13.0'/platform :ios, '15.0'/" ios/Podfile || true
+          fi
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' ios/Runner.xcodeproj/project.pbxproj || true
 
       - name: Install CocoaPods
-        run: |
-          cd ios
-          pod install
+        working-directory: /tmp/zhirox-src/zhirox/ios
+        run: pod install
 
-      - name: Wire CocoaPods xcconfig
-        run: |
-          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Debug.xcconfig
-          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Release.xcconfig
-
-      - name: Analyze for compile errors
+      - name: Analyze Dart compile issues
+        working-directory: /tmp/zhirox-src/zhirox
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build iOS without signing
+        working-directory: /tmp/zhirox-src/zhirox
         run: flutter build ios --release --no-codesign
 
-      - name: Package unsigned IPA
+      - name: Verify new Supabase backend is embedded
+        working-directory: /tmp/zhirox-src/zhirox
         run: |
-          rm -rf Payload
+          APP=build/ios/iphoneos/Runner.app
+          grep -R -a -q 'zfuvnczdqifihsnrhqzj' "$APP"
+          if grep -R -a -q 'hsoyfbtpvwfmjokudznx' "$APP"; then
+            echo 'Old Supabase project detected in binary' >&2
+            exit 1
+          fi
+          if grep -R -a -q 'zhirox.duckdns.org' "$APP"; then
+            echo 'Old PocketBase backend detected in binary' >&2
+            exit 1
+          fi
+
+      - name: Package unsigned IPA
+        working-directory: /tmp/zhirox-src/zhirox
+        run: |
+          rm -rf Payload zhiroxVIPuser-SUPABASE-unsigned.ipa
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
-          ditto -c -k --sequesterRsrc --keepParent Payload zhiroxVIPuser-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload zhiroxVIPuser-SUPABASE-unsigned.ipa
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zhiroxVIPuser-unsigned-ipa
-          path: zhiroxVIPuser-unsigned.ipa
+          name: zhiroxVIPuser-SUPABASE-unsigned-ipa
+          path: /tmp/zhirox-src/zhirox/zhiroxVIPuser-SUPABASE-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
-
-      - name: Prepare Safari download site
-        run: |
-          rm -rf _site
-          mkdir -p _site
-          cp zhiroxVIPuser-unsigned.ipa _site/zhiroxVIPuser-unsigned.ipa
-          cat > _site/index.html <<'HTML'
-          <!doctype html>
-          <html lang="ku" dir="rtl">
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>ZHIROX VIP User IPA</title>
-          <body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:680px;margin:60px auto;padding:24px;text-align:center">
-            <h1>ZHIROX VIP User</h1>
-            <p>فایلی IPA بۆ iOS</p>
-            <p><a href="zhiroxVIPuser-unsigned.ipa" download style="font-size:20px">داونلۆدی ڕاستەوخۆی IPA</a></p>
-            <p>Unsigned IPA — پێش دامەزراندن پێویستی بە واژۆکردن هەیە.</p>
-          </body>
-          </html>
-          HTML
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
