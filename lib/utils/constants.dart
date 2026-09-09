@@ -42,7 +42,6 @@ class AppStrings {
   static const String loading = 'چاوەڕوان بە...';
   static const String error = 'هەڵە';
   static const String success = 'سەرکەوتوو';
-
   static const String name = 'ناو';
   static const String fatherName = 'ناوی باوک';
   static const String grandfatherName = 'ناوی باپیر';
@@ -52,7 +51,6 @@ class AppStrings {
   static const String employee = 'کارمەند';
   static const String customer = 'کڕیار';
   static const String marketName = 'ناوی مارکێت';
-
   static const String register = 'خۆتۆمارکردن';
   static const String registerAdmin = 'تۆمارکردنی بەڕێوبەری نوێ';
   static const String registerCustomer = 'خۆتۆمارکردنی کڕیار';
@@ -62,10 +60,8 @@ class AppStrings {
   static const String approve = 'قبوڵکردن';
   static const String reject = 'ڕەتکردنەوە';
   static const String debtDuration = 'ماوەی قەرز (ڕۆژ)';
-  static const String requestSent =
-      'داواکاریت نێردرا، چاوەڕوان بە هەتا قبوڵ بکرێت';
+  static const String requestSent = 'داواکاریت نێردرا، چاوەڕوان بە هەتا قبوڵ بکرێت';
   static const String notApproved = 'هێشتا داواکاریت قبوڵ نەکراوە';
-
   static const String debt = 'قەرز';
   static const String debts = 'قەرزەکان';
   static const String addDebt = 'قەرزی نوێ';
@@ -78,7 +74,6 @@ class AppStrings {
   static const String paid = 'دراوە';
   static const String totalDebt = 'کۆی قەرز';
   static const String remainingDebt = 'قەرزی ماوە';
-
   static const String currency = 'دراو';
   static const String iqd = 'دینار';
   static const String usd = 'دۆلار';
@@ -88,13 +83,11 @@ class AppStrings {
   static const String addItem = 'کاڵا زیادبکە';
   static const String items = 'کاڵاکان';
   static const String total = 'کۆی گشتی';
-
   static const String payment = 'پارەدانەوە';
   static const String payments = 'پارەدانەوەکان';
   static const String addPayment = 'پارەدانەوەی نوێ';
   static const String paymentAmount = 'بڕی پارەدانەوە';
   static const String note = 'تێبینی';
-
   static const String dashboard = 'داشبۆرد';
   static const String customers = 'کڕیارەکان';
   static const String employees = 'کارمەندەکان';
@@ -106,12 +99,20 @@ class AppStrings {
 }
 
 class SupabaseConfig {
-  static const String url = 'https://hsoyfbtpvwfmjokudznx.supabase.co';
-  static const String publishableKey =
-      'sb_publishable_EU2ZhecxlnsvNMQkk76x2A_X-jF6aOr';
+  static const String url = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://zfuvnczdqifihsnrhqzj.supabase.co',
+  );
+  static const String publishableKey = String.fromEnvironment(
+    'SUPABASE_PUBLISHABLE_KEY',
+    defaultValue: 'sb_publishable_HWmOdApexuI8Ha7ZPZKa6A_SYVwOozk',
+  );
 }
 
-// Compatibility alias retained so older files do not need a broad rename.
 class PBConfig {
   static const String baseUrl = SupabaseConfig.url;
+}
+
+class AppConfig {
+  static const String appVersion = '1.0.0';
 }
