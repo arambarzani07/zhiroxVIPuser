@@ -87,7 +87,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         _hasDueDate = false;
       }
     } catch (_) {}
-    setState(() => _loadingCustomers = false);
+    if (mounted) setState(() => _loadingCustomers = false);
   }
 
   @override
@@ -602,6 +602,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       final originalFile = File(picked.path);
       final compressed = await ImageUtils.compressImage(originalFile);
 
+      if (!mounted) return;
       setState(() {
         _receiptImage = compressed ?? originalFile;
       });
@@ -825,101 +826,80 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final background = isDark
+        ? AppDarkColors.background
+        : const Color(0xFFF7F8FA);
+
     return Scaffold(
-      backgroundColor: isDark
-          ? AppDarkColors.background
-          : const Color(0xFFF5F7FA),
+      backgroundColor: background,
+      appBar: AppBar(
+        title: Text(
+          widget.debt != null ? 'دەستکاریکردنی قەرز' : AppStrings.addDebt,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: isDark ? AppDarkColors.textPrimary : const Color(0xFF101828),
+          ),
+        ),
+        centerTitle: true,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: background,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor:
+            isDark ? AppDarkColors.textPrimary : const Color(0xFF344054),
+      ),
       body: Stack(
         children: [
-          // Gradient Background
-          Container(
-            height: 250,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.primary,
-                  AppColors.primary.withOpacity(0.8),
-                  isDark ? AppDarkColors.background : const Color(0xFFF5F7FA),
-                ],
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Column(
+          Form(
+            key: _formKey,
+            child: ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
-                AppBar(
-                  title: Text(
-                    widget.debt != null
-                        ? 'دەستکاریکردنی قەرز'
-                        : AppStrings.addDebt,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  centerTitle: true,
-                  iconTheme: const IconThemeData(color: Colors.white),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Customer Card
-                          _buildCustomerSelector(),
-                          const SizedBox(height: 16),
-
-                          // Currency & Rate Card
-                          _buildCurrencyCard(),
-                          const SizedBox(height: 16),
-
-                          // Items Card
-                          _buildItemsCard(),
-                          const SizedBox(height: 16),
-
-                          // Date & Description Card
-                          _buildDetailsCard(),
-                          const SizedBox(height: 16),
-
-                          // Receipt Image Card
-                          if (widget.debt == null) ...[
-                            _buildReceiptCard(),
-                            const SizedBox(height: 24),
-                          ] else
-                            const SizedBox(height: 24),
-
-                          // Total & Action
-                          _buildBottomAction(),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                _buildCustomerSelector(),
+                const SizedBox(height: 10),
+                _buildCurrencyCard(),
+                const SizedBox(height: 10),
+                _buildItemsCard(),
+                const SizedBox(height: 10),
+                _buildDetailsCard(),
+                if (widget.debt == null) ...[
+                  const SizedBox(height: 10),
+                  _buildReceiptCard(),
+                ],
+                const SizedBox(height: 12),
               ],
             ),
           ),
           if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.18),
+                alignment: Alignment.center,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppDarkColors.card : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const CircularProgressIndicator(strokeWidth: 2.5),
+                ),
               ),
             ),
         ],
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: _buildBottomAction(),
       ),
     );
   }
@@ -929,18 +909,14 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: isDark
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? AppDarkColors.cardBorder
+              : const Color(0xFFE9EDF3),
+        ),
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -965,7 +941,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           _loadingCustomers
               ? const Center(child: CircularProgressIndicator())
               : DropdownButtonFormField<String>(
@@ -1171,18 +1147,14 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: isDark
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? AppDarkColors.cardBorder
+              : const Color(0xFFE9EDF3),
+        ),
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1207,7 +1179,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
               color: isDark ? AppDarkColors.surface : Colors.grey.shade100,
@@ -1333,18 +1305,14 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: isDark
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? AppDarkColors.cardBorder
+              : const Color(0xFFE9EDF3),
+        ),
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1363,8 +1331,8 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                   ),
                   const SizedBox(width: 12),
                   const Text(
-                    'تێچوونەکان',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    'قەرز / کاڵاکان',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -1437,13 +1405,13 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
 
           if (_items.isEmpty)
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 30),
+              padding: const EdgeInsets.symmetric(vertical: 18),
               alignment: Alignment.center,
               child: Column(
                 children: [
                   Icon(
                     Icons.add_shopping_cart,
-                    size: 48,
+                    size: 34,
                     color: Colors.grey.shade300,
                   ),
                   const SizedBox(height: 10),
@@ -1658,18 +1626,14 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: isDark
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? AppDarkColors.cardBorder
+              : const Color(0xFFE9EDF3),
+        ),
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2013,18 +1977,14 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: isDark
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? AppDarkColors.cardBorder
+              : const Color(0xFFE9EDF3),
+        ),
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2071,7 +2031,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                   child: Image.file(
                     _receiptImage!,
                     width: double.infinity,
-                    height: 200,
+                    height: 96,
                     fit: BoxFit.cover,
                   ),
                 ),
@@ -2143,7 +2103,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               onTap: _pickImage,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 32),
+                padding: const EdgeInsets.symmetric(vertical: 18),
                 decoration: BoxDecoration(
                   border: Border.all(
                     color: isDark
@@ -2159,12 +2119,12 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                   children: [
                     Icon(
                       Icons.add_a_photo_rounded,
-                      size: 36,
+                      size: 28,
                       color: isDark
                           ? AppDarkColors.textSecondary
                           : Colors.grey.shade400,
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 7),
                     Text(
                       'وێنەی وەصڵ زیاد بکە',
                       style: TextStyle(
@@ -2197,123 +2157,114 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
 
   Widget _buildBottomAction() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    double totalIQD = 0;
+    double totalUSD = 0;
+    final dollarRate = double.tryParse(_dollarRateController.text.trim()) ?? 0;
+    for (final item in _items) {
+      final itemCurrency = item['currency'] as String? ?? _currency;
+      final itemTotal = (item['price'] as double) * (item['qty'] as int);
+      if (itemCurrency == 'USD') {
+        totalUSD += itemTotal;
+        if (dollarRate > 0) totalIQD += itemTotal * dollarRate;
+      } else {
+        totalIQD += itemTotal;
+        if (dollarRate > 0) totalUSD += itemTotal / dollarRate;
+      }
+    }
+
     return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: isDark
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, -4),
-                ),
-              ],
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          // Totals in both currencies
-          Builder(
-            builder: (_) {
-              double totalIQD = 0;
-              double totalUSD = 0;
-              final dollarRate =
-                  double.tryParse(_dollarRateController.text.trim()) ?? 0;
-
-              for (var item in _items) {
-                final itemCurrency = item['currency'] as String? ?? _currency;
-                final itemTotal =
-                    (item['price'] as double) * (item['qty'] as int);
-                if (itemCurrency == 'USD') {
-                  totalUSD += itemTotal;
-                  if (dollarRate > 0) totalIQD += itemTotal * dollarRate;
-                } else {
-                  totalIQD += itemTotal;
-                  if (dollarRate > 0) totalUSD += itemTotal / dollarRate;
-                }
-              }
-
-              return Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'کۆی گشتی بە دینار',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        AppHelpers.formatCurrencyWithType(totalIQD, 'IQD'),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
-                        textDirection: TextDirection.ltr,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'کۆی گشتی بە دۆلار',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        AppHelpers.formatCurrencyWithType(totalUSD, 'USD'),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                        textDirection: TextDirection.ltr,
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? AppDarkColors.cardBorder
+                : const Color(0xFFE9EDF3),
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : _save,
-              style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'کۆی گشتی',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: isDark
+                        ? AppDarkColors.textSecondary
+                        : const Color(0xFF98A2B3),
+                  ),
                 ),
-                elevation: 4,
-                shadowColor: AppColors.primary.withOpacity(0.4),
-              ),
-              child: _isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text(
-                      AppStrings.save,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                const SizedBox(height: 2),
+                Text(
+                  AppHelpers.formatCurrencyWithType(totalIQD, 'IQD'),
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF101828),
+                  ),
+                  textDirection: TextDirection.ltr,
+                ),
+                if (totalUSD > 0)
+                  Text(
+                    AppHelpers.formatCurrencyWithType(totalUSD, 'USD'),
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green,
                     ),
+                    textDirection: TextDirection.ltr,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            height: 48,
+            width: 142,
+            child: ElevatedButton.icon(
+              onPressed: _isLoading ? null : _save,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.check_rounded, size: 18),
+              label: Text(
+                widget.debt != null ? 'نوێکردنەوە' : AppStrings.save,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.55),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(13),
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+
 }
 
 class ThousandsSeparatorInputFormatter extends TextInputFormatter {
