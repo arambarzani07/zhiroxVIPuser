@@ -11,75 +11,23 @@ class RegisterCustomerScreen extends StatefulWidget {
   State<RegisterCustomerScreen> createState() => _RegisterCustomerScreenState();
 }
 
-class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
-    with SingleTickerProviderStateMixin {
+class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+
   bool _isLoading = false;
   bool _obscurePassword = true;
-
+  bool _loadingAdmins = true;
+  String? _adminLoadError;
   List<RecordModel> _admins = [];
   String? _selectedAdminId;
-  bool _loadingAdmins = true;
-
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
     _loadAdmins();
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-      ),
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: const Interval(0.2, 0.8, curve: Curves.easeOutCubic),
-          ),
-        );
-
-    _animationController.forward();
-  }
-
-  Future<void> _loadAdmins() async {
-    try {
-      final allAdmins = await PBService.getAdminList();
-
-      // Deduplicate by market_name (keep first one per name)
-      final seen = <String>{};
-      final unique = <RecordModel>[];
-      for (final admin in allAdmins) {
-        final name = admin.getStringValue('market_name').trim();
-        if (name.isNotEmpty && seen.add(name)) {
-          unique.add(admin);
-        }
-      }
-
-      // Sort alphabetically by market_name
-      unique.sort(
-        (a, b) => a
-            .getStringValue('market_name')
-            .compareTo(b.getStringValue('market_name')),
-      );
-
-      _admins = unique;
-    } catch (_) {}
-    setState(() => _loadingAdmins = false);
   }
 
   @override
@@ -87,23 +35,76 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
     _nameController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
-    _animationController.dispose();
     super.dispose();
   }
 
-  Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedAdminId == null) {
-      AppHelpers.showSnackBar(
-        context,
-        'تکایە مارکێتێک هەڵبژێرە',
-        isError: true,
+  String _friendlyRegistrationError(Object error) {
+    final raw = error.toString().toLowerCase();
+    if (raw.contains('socketexception') ||
+        raw.contains('clientexception') ||
+        raw.contains('network') ||
+        raw.contains('failed host lookup') ||
+        raw.contains('connection')) {
+      return 'پەیوەندی بە سێرڤەر نەکرا. ئینتەرنێتەکەت بپشکنە و دووبارە هەوڵ بدە.';
+    }
+    if (raw.contains('phone') &&
+        (raw.contains('exist') || raw.contains('already') || raw.contains('unique'))) {
+      return 'ئەم ژمارە مۆبایلە پێشتر تۆمارکراوە.';
+    }
+    if (raw.contains('market') || raw.contains('admin')) {
+      return 'مارکێتە هەڵبژێردراوەکە بەردەست نییە. دووبارە مارکێت هەڵبژێرە.';
+    }
+    return 'نەتوانرا داواکارییەکەت بنێردرێت. دووبارە هەوڵ بدە.';
+  }
+
+  Future<void> _loadAdmins() async {
+    if (!mounted) return;
+    setState(() {
+      _loadingAdmins = true;
+      _adminLoadError = null;
+    });
+
+    try {
+      final allAdmins = await PBService.getAdminList();
+      final seen = <String>{};
+      final unique = <RecordModel>[];
+      for (final admin in allAdmins) {
+        final name = admin.getStringValue('market_name').trim();
+        if (name.isNotEmpty && seen.add(name)) unique.add(admin);
+      }
+      unique.sort(
+        (a, b) => a
+            .getStringValue('market_name')
+            .compareTo(b.getStringValue('market_name')),
       );
+      if (!mounted) return;
+      setState(() {
+        _admins = unique;
+        if (_selectedAdminId != null &&
+            !_admins.any((admin) => admin.id == _selectedAdminId)) {
+          _selectedAdminId = null;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _adminLoadError = 'نەتوانرا لیستی مارکێتەکان بار بکرێت.';
+      });
+    } finally {
+      if (mounted) setState(() => _loadingAdmins = false);
+    }
+  }
+
+  Future<void> _register() async {
+    final form = _formKey.currentState;
+    if (form == null || !form.validate()) return;
+    if (_selectedAdminId == null) {
+      AppHelpers.showSnackBar(context, 'تکایە مارکێتێک هەڵبژێرە.', isError: true);
       return;
     }
 
+    FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
-
     try {
       await PBService.registerCustomer(
         name: _nameController.text.trim(),
@@ -111,441 +112,337 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
         password: _passwordController.text,
         adminId: _selectedAdminId!,
       );
-
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: const Column(
-              children: [
-                Icon(Icons.check_circle_outline, size: 60, color: Colors.green),
-                SizedBox(height: 10),
-                Text(
-                  'داواکاریت نێردرا',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.bold),
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle_outline_rounded, color: Colors.green),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'داواکاری نێردرا',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                 ),
-              ],
-            ),
-            content: const Text(
-              AppStrings.requestSent,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14),
-            ),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pop(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 12,
-                  ),
-                ),
-                child: const Text('باشە'),
               ),
             ],
           ),
-        );
-      }
+          content: const Text(
+            AppStrings.requestSent,
+            style: TextStyle(fontSize: 13, height: 1.6),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('باشە'),
+            ),
+          ],
+        ),
+      );
+      if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) {
-        AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
-      }
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        _friendlyRegistrationError(e),
+        isError: true,
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
 
-    setState(() => _isLoading = false);
+  InputDecoration _fieldDecoration({
+    required String label,
+    required IconData icon,
+    String? hint,
+    Widget? suffix,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon),
+      suffixIcon: suffix,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppDarkColors.card : Colors.white;
+    final border = isDark ? AppDarkColors.cardBorder : const Color(0xFFEAECF0);
+    final textPrimary = isDark ? AppDarkColors.textPrimary : const Color(0xFF1D2939);
+    final textSecondary = isDark ? AppDarkColors.textSecondary : const Color(0xFF667085);
+
+    Widget section({
+      required String title,
+      required String subtitle,
+      required IconData icon,
+      required List<Widget> children,
+    }) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(icon, size: 19, color: AppColors.primary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          height: 1.45,
+                          color: textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
-      backgroundColor: isDark ? AppDarkColors.background : Colors.white,
+      backgroundColor: isDark ? AppDarkColors.background : const Color(0xFFF7F8FA),
       appBar: AppBar(
-        title: const Text('خۆتۆمارکردن'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        titleTextStyle: TextStyle(
-          color: isDark ? AppDarkColors.textPrimary : Colors.black87,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'Rabar',
+        title: const Text(
+          'خۆتۆمارکردن وەک کڕیار',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
         ),
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios_new,
-            color: isDark ? AppDarkColors.textPrimary : Colors.black87,
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
+        centerTitle: false,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: isDark ? AppDarkColors.surface : Colors.white,
+        foregroundColor: textPrimary,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: border),
         ),
       ),
-      extendBodyBehindAppBar: true,
-      body: SizedBox(
-        height: size.height,
-        child: Stack(
-          children: [
-            // Background Shapes
-            Positioned(
-              top: -80,
-              left: -80,
-              child: Container(
-                width: 250,
-                height: 250,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.orange.withOpacity(isDark ? 0.04 : 0.08),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 50,
-              right: -50,
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.primary.withOpacity(isDark ? 0.04 : 0.08),
-                ),
-              ),
-            ),
-
-            // Content
-            SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Form(
+                key: _formKey,
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 20),
-
-                    // Header Animation
-                    FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Column(
-                        children: [
+                    section(
+                      title: 'مارکێت',
+                      subtitle: 'ئەو مارکێتە هەڵبژێرە کە قەرزەکانت لەگەڵیدا تۆمار دەکرێن.',
+                      icon: Icons.storefront_outlined,
+                      children: [
+                        if (_adminLoadError != null) ...[
                           Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: isDark ? AppDarkColors.card : Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.primary.withOpacity(0.2),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 5),
+                              color: Colors.orange.withValues(alpha: 0.07),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.wifi_off_rounded, color: Colors.orange, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _adminLoadError!,
+                                    style: TextStyle(fontSize: 11.5, color: textSecondary),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: _loadingAdmins ? null : _loadAdmins,
+                                  child: const Text('دووبارە'),
                                 ),
                               ],
                             ),
-                            child: const Icon(
-                              Icons.person_add_rounded,
-                              size: 40,
-                              color: AppColors.primary,
-                            ),
                           ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'هەژماری نوێ',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: isDark
-                                  ? AppDarkColors.textPrimary
-                                  : AppColors.textPrimary,
+                        ] else
+                          DropdownButtonFormField<String>(
+                            initialValue: _selectedAdminId,
+                            isExpanded: true,
+                            decoration: _fieldDecoration(
+                              label: AppStrings.selectMarket,
+                              icon: Icons.store_rounded,
+                              hint: _loadingAdmins
+                                  ? 'مارکێتەکان بار دەکرێن...'
+                                  : 'مارکێت هەڵبژێرە',
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'زانیارییەکانت پڕبکەرەوە بۆ دروستکردنی هەژمار',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isDark
-                                  ? AppDarkColors.textSecondary
-                                  : Colors.grey[500],
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // Form Animation
-                    SlideTransition(
-                      position: _slideAnimation,
-                      child: FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            children: [
-                              // Market Select
-                              _buildDropdown(),
-                              const SizedBox(height: 16),
-
-                              // Name
-                              _buildTextField(
-                                controller: _nameController,
-                                label: AppStrings.name,
-                                icon: Icons.person_outline_rounded,
-                                hint: 'ناوی سیانی',
-                                validator: (v) => v == null || v.isEmpty
-                                    ? 'ناو بنووسە'
-                                    : null,
-                              ),
-                              const SizedBox(height: 16),
-
-                              // Phone
-                              _buildTextField(
-                                controller: _phoneController,
-                                label: AppStrings.phone,
-                                icon: Icons.phone_iphone_rounded,
-                                hint: '07xxxxxxxxx',
-                                keyboardType: TextInputType.phone,
-                                validator: (v) => v == null || v.isEmpty
-                                    ? 'ژمارە مۆبایل بنووسە'
-                                    : null,
-                              ),
-                              const SizedBox(height: 16),
-
-                              // Password
-                              _buildTextField(
-                                controller: _passwordController,
-                                label: AppStrings.password,
-                                icon: Icons.lock_outline_rounded,
-                                obscureText: _obscurePassword,
-                                isPassword: true,
-                                onVisibilityChanged: () {
-                                  setState(
-                                    () => _obscurePassword = !_obscurePassword,
-                                  );
-                                },
-                                validator: (v) {
-                                  if (v == null || v.isEmpty) {
-                                    return 'وشەی نهێنی بنووسە';
-                                  }
-                                  if (v.length < 8) {
-                                    return 'وشەی نهێنی لانیکەم ٨ پیت بێت';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 32),
-
-                              // Register Button
-                              Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primary.withOpacity(0.3),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 6),
+                            items: _admins
+                                .map(
+                                  (admin) => DropdownMenuItem<String>(
+                                    value: admin.id,
+                                    child: Text(
+                                      admin.getStringValue('market_name'),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ],
-                                ),
-                                child: ElevatedButton(
-                                  onPressed: _isLoading ? null : _register,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    minimumSize: const Size(
-                                      double.infinity,
-                                      56,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    elevation: 0,
                                   ),
-                                  child: _isLoading
-                                      ? const SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Text(
-                                          AppStrings.register,
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ],
+                                )
+                                .toList(),
+                            onChanged: _loadingAdmins || _isLoading
+                                ? null
+                                : (value) => setState(() => _selectedAdminId = value),
+                            validator: (value) => value == null ? 'مارکێتێک هەڵبژێرە' : null,
                           ),
+                        if (!_loadingAdmins &&
+                            _adminLoadError == null &&
+                            _admins.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Text(
+                              'هێشتا هیچ مارکێتێکی بەردەست نییە.',
+                              style: TextStyle(fontSize: 11.5, color: textSecondary),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    section(
+                      title: 'زانیاری هەژمار',
+                      subtitle: 'زانیاری بنەڕەتی خۆت بنووسە؛ داواکارییەکەت پاشان بۆ مارکێت دەنێردرێت.',
+                      icon: Icons.person_add_alt_1_outlined,
+                      children: [
+                        TextFormField(
+                          controller: _nameController,
+                          enabled: !_isLoading,
+                          textInputAction: TextInputAction.next,
+                          decoration: _fieldDecoration(
+                            label: AppStrings.name,
+                            icon: Icons.person_outline_rounded,
+                            hint: 'ناوی سیانی',
+                          ),
+                          validator: (value) => value == null || value.trim().isEmpty
+                              ? 'ناو بنووسە'
+                              : null,
                         ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _phoneController,
+                          enabled: !_isLoading,
+                          keyboardType: TextInputType.phone,
+                          textInputAction: TextInputAction.next,
+                          textDirection: TextDirection.ltr,
+                          autofillHints: const [AutofillHints.telephoneNumber],
+                          decoration: _fieldDecoration(
+                            label: AppStrings.phone,
+                            icon: Icons.phone_iphone_rounded,
+                            hint: '07xxxxxxxxx',
+                          ),
+                          validator: (value) => value == null || value.trim().isEmpty
+                              ? 'ژمارە مۆبایل بنووسە'
+                              : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _passwordController,
+                          enabled: !_isLoading,
+                          obscureText: _obscurePassword,
+                          textInputAction: TextInputAction.done,
+                          textDirection: TextDirection.ltr,
+                          autofillHints: const [AutofillHints.newPassword],
+                          onFieldSubmitted: (_) => _register(),
+                          decoration: _fieldDecoration(
+                            label: AppStrings.password,
+                            icon: Icons.lock_outline_rounded,
+                            suffix: IconButton(
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => setState(
+                                        () => _obscurePassword = !_obscurePassword,
+                                      ),
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'وشەی نهێنی بنووسە';
+                            }
+                            if (value.length < 8) {
+                              return 'وشەی نهێنی لانیکەم ٨ پیت بێت';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading || _loadingAdmins || _adminLoadError != null
+                            ? null
+                            : _register,
+                        icon: _isLoading
+                            ? const SizedBox.shrink()
+                            : const Icon(Icons.send_outlined, size: 19),
+                        label: _isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'ناردنی داواکاری',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
                       ),
                     ),
-                    const SizedBox(height: 32),
                   ],
                 ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDropdown() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppDarkColors.inputFill : Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? AppDarkColors.cardBorder : Colors.grey[200]!,
-        ),
-      ),
-      child: ButtonTheme(
-        alignedDropdown: true,
-        child: DropdownButtonFormField<String>(
-          initialValue: _selectedAdminId,
-          decoration: InputDecoration(
-            labelText: AppStrings.selectMarket,
-            labelStyle: TextStyle(
-              color: isDark ? AppDarkColors.textSecondary : null,
-            ),
-            floatingLabelBehavior: FloatingLabelBehavior.auto,
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 16,
-            ),
-            prefixIcon: Icon(
-              Icons.store_rounded,
-              color: AppColors.primary.withOpacity(0.7),
-            ),
           ),
-          icon: Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: isDark ? AppDarkColors.textSecondary : null,
-          ),
-          dropdownColor: isDark ? AppDarkColors.card : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          style: TextStyle(
-            color: isDark ? AppDarkColors.textPrimary : Colors.black87,
-            fontFamily: 'NotoKufiArabic',
-          ),
-          items: _admins.isEmpty
-              ? []
-              : _admins
-                    .asMap()
-                    .entries
-                    .map(
-                      (entry) => DropdownMenuItem<String>(
-                        value: entry.value.id,
-                        child: Text(
-                          '${entry.key + 1}. ${entry.value.getStringValue('market_name')}',
-                          style: const TextStyle(
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-          onChanged: (value) => setState(() => _selectedAdminId = value),
-          validator: (v) => v == null ? 'مارکێتێک هەڵبژێرە' : null,
-          hint: _loadingAdmins
-              ? Text(
-                  'دەهێنرێت...',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppDarkColors.textSecondary : null,
-                  ),
-                )
-              : Text(
-                  'مارکێتێک هەڵبژێرە',
-                  style: TextStyle(
-                    color: isDark ? AppDarkColors.textSecondary : null,
-                  ),
-                ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    String? hint,
-    TextInputType? keyboardType,
-    bool obscureText = false,
-    bool isPassword = false,
-    VoidCallback? onVisibilityChanged,
-    String? Function(String?)? validator,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppDarkColors.inputFill : Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? AppDarkColors.cardBorder : Colors.grey[200]!,
-        ),
-      ),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        obscureText: obscureText,
-        textDirection: TextDirection.ltr,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontWeight: FontWeight.w600,
-          color: isDark ? AppDarkColors.textPrimary : null,
-        ),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(
-            color: isDark ? AppDarkColors.textSecondary : null,
-          ),
-          hintText: hint,
-          hintStyle: TextStyle(
-            color: isDark ? AppDarkColors.textSecondary : null,
-          ),
-          floatingLabelBehavior: FloatingLabelBehavior.auto,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 16,
-          ),
-          prefixIcon: Icon(icon, color: AppColors.primary.withOpacity(0.7)),
-          suffixIcon: isPassword
-              ? IconButton(
-                  icon: Icon(
-                    obscureText ? Icons.visibility_off : Icons.visibility,
-                    color: isDark
-                        ? AppDarkColors.textSecondary
-                        : Colors.grey[400],
-                  ),
-                  onPressed: onVisibilityChanged,
-                )
-              : null,
-        ),
-        validator: validator,
       ),
     );
   }
