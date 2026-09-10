@@ -396,6 +396,31 @@ class PBService {
     await client.auth.updateUser(UserAttributes(password: newPassword));
   }
 
+  static Future<void> resetUserPassword({
+    required String userId,
+    required String newPassword,
+  }) async {
+    await ensureInitialized();
+    if (newPassword.length < 8) {
+      throw Exception('وشەی نهێنی لانیکەم ٨ پیت بێت');
+    }
+    try {
+      final response = await client.functions.invoke(
+        'account-admin',
+        body: {
+          'action': 'reset_password',
+          'user_id': userId,
+          'new_password': newPassword,
+        },
+      );
+      if (response.data is Map && response.data['error'] != null) {
+        throw _functionError(response.data);
+      }
+    } on FunctionsException catch (e) {
+      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
+    }
+  }
+
   static Future<void> deleteUser(String id) async {
     await ensureInitialized();
     try {

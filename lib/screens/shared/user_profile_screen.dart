@@ -53,7 +53,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController();
 
   Map<String, double> _employeeStats = {};
   final _debtLimitController = TextEditingController();
@@ -64,7 +63,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _canSetDueDate = false;
   bool _canEditDebts = false;
   bool _canSendNotifications = false;
-  bool _obscurePassword = true;
   StreamSubscription<bool>? _connectivitySub;
 
   bool get _isCustomer => _user?.getStringValue('role') == 'customer';
@@ -85,7 +83,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     _connectivitySub?.cancel();
     _nameController.dispose();
     _phoneController.dispose();
-    _passwordController.dispose();
     _debtLimitController.dispose();
     super.dispose();
   }
@@ -125,7 +122,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _employeeStats = employeeStats;
         _nameController.text = user.getStringValue('name');
         _phoneController.text = user.getStringValue('phone');
-        _passwordController.text = user.getStringValue('password_text');
 
         if (role == 'employee') {
           _canAddCustomers = user.getBoolValue('can_add_customers');
@@ -190,27 +186,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       AppHelpers.showSnackBar(context, 'ژمارە مۆبایل بنووسە', isError: true);
       return;
     }
-    if (_passwordController.text.length < 8) {
-      AppHelpers.showSnackBar(
-        context,
-        'وشەی نهێنی لانیکەم ٨ پیت بێت',
-        isError: true,
-      );
-      return;
-    }
-
     setState(() => _isSaving = true);
     try {
       final data = <String, dynamic>{
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
       };
-
-      // Update password_text if password field is not empty
-      if (_passwordController.text.isNotEmpty) {
-        data['password_text'] = _passwordController.text;
-      }
-
 
       await PBService.updateUser(widget.userId, data);
       if (mounted) {
@@ -1465,19 +1446,298 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   // ═══════════════════════════════════════════
+  // ── Secure Password Management ──
+  // ═══════════════════════════════════════════
+
+  String _friendlyPasswordError(Object error) {
+    final raw = error.toString().toLowerCase();
+    if (raw.contains('network') ||
+        raw.contains('socketexception') ||
+        raw.contains('clientexception') ||
+        raw.contains('connection')) {
+      return 'پەیوەندی بە سێرڤەر نەکرا. ئینتەرنێتەکەت بپشکنە.';
+    }
+    if (raw.contains('old') || raw.contains('کۆن')) {
+      return 'وشەی نهێنیی کۆن هەڵەیە.';
+    }
+    if (raw.contains('forbidden') ||
+        raw.contains('permission') ||
+        raw.contains('دەسەڵات')) {
+      return 'دەسەڵاتی گۆڕینی ئەم وشەی نهێنییەت نییە.';
+    }
+    return 'نەتوانرا وشەی نهێنی بگۆڕدرێت. دووبارە هەوڵ بدە.';
+  }
+
+  Future<void> _showChangeOwnPasswordDialog() async {
+    final oldController = TextEditingController();
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    var loading = false;
+    var obscureOld = true;
+    var obscureNew = true;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('گۆڕینی وشەی نهێنی'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: oldController,
+                      obscureText: obscureOld,
+                      decoration: InputDecoration(
+                        labelText: 'وشەی نهێنیی کۆن',
+                        prefixIcon: const Icon(Icons.lock_clock_outlined),
+                        suffixIcon: IconButton(
+                          onPressed: () => setDialogState(
+                            () => obscureOld = !obscureOld,
+                          ),
+                          icon: Icon(
+                            obscureOld ? Icons.visibility_off : Icons.visibility,
+                          ),
+                        ),
+                      ),
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'وشەی نهێنیی کۆن بنووسە'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: newController,
+                      obscureText: obscureNew,
+                      decoration: InputDecoration(
+                        labelText: 'وشەی نهێنیی نوێ',
+                        prefixIcon: const Icon(Icons.lock_outline_rounded),
+                        suffixIcon: IconButton(
+                          onPressed: () => setDialogState(
+                            () => obscureNew = !obscureNew,
+                          ),
+                          icon: Icon(
+                            obscureNew ? Icons.visibility_off : Icons.visibility,
+                          ),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'وشەی نهێنیی نوێ بنووسە';
+                        }
+                        if (value.length < 8) {
+                          return 'وشەی نهێنی لانیکەم ٨ پیت بێت';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: confirmController,
+                      obscureText: obscureNew,
+                      decoration: const InputDecoration(
+                        labelText: 'دووبارەکردنەوەی وشەی نهێنی',
+                        prefixIcon: Icon(Icons.lock_reset_rounded),
+                      ),
+                      validator: (value) => value != newController.text
+                          ? 'وشەی نهێنی یەکناگرنەوە'
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: loading ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('پاشگەزبوونەوە'),
+                ),
+                ElevatedButton(
+                  onPressed: loading
+                      ? null
+                      : () async {
+                          final form = formKey.currentState;
+                          if (form == null || !form.validate()) return;
+                          setDialogState(() => loading = true);
+                          try {
+                            await PBService.changePassword(
+                              userId: widget.userId,
+                              oldPassword: oldController.text,
+                              newPassword: newController.text,
+                            );
+                            if (!dialogContext.mounted) return;
+                            Navigator.pop(dialogContext);
+                            if (mounted) {
+                              AppHelpers.showSnackBar(
+                                context,
+                                'وشەی نهێنی بە سەرکەوتوویی گۆڕدرا',
+                              );
+                            }
+                          } catch (e) {
+                            if (!dialogContext.mounted) return;
+                            setDialogState(() => loading = false);
+                            if (mounted) {
+                              AppHelpers.showSnackBar(
+                                context,
+                                _friendlyPasswordError(e),
+                                isError: true,
+                              );
+                            }
+                          }
+                        },
+                  child: loading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('گۆڕین'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      oldController.dispose();
+      newController.dispose();
+      confirmController.dispose();
+    }
+  }
+
+  Future<void> _showAdminResetPasswordDialog() async {
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    var loading = false;
+    var obscure = true;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('ڕێکخستنەوەی وشەی نهێنی'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: newController,
+                      obscureText: obscure,
+                      decoration: InputDecoration(
+                        labelText: 'وشەی نهێنیی نوێ',
+                        prefixIcon: const Icon(Icons.lock_reset_rounded),
+                        suffixIcon: IconButton(
+                          onPressed: () => setDialogState(() => obscure = !obscure),
+                          icon: Icon(
+                            obscure ? Icons.visibility_off : Icons.visibility,
+                          ),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'وشەی نهێنیی نوێ بنووسە';
+                        }
+                        if (value.length < 8) {
+                          return 'وشەی نهێنی لانیکەم ٨ پیت بێت';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: confirmController,
+                      obscureText: obscure,
+                      decoration: const InputDecoration(
+                        labelText: 'دووبارەکردنەوەی وشەی نهێنی',
+                        prefixIcon: Icon(Icons.lock_outline_rounded),
+                      ),
+                      validator: (value) => value != newController.text
+                          ? 'وشەی نهێنی یەکناگرنەوە'
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: loading ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('پاشگەزبوونەوە'),
+                ),
+                ElevatedButton(
+                  onPressed: loading
+                      ? null
+                      : () async {
+                          final form = formKey.currentState;
+                          if (form == null || !form.validate()) return;
+                          setDialogState(() => loading = true);
+                          try {
+                            await PBService.resetUserPassword(
+                              userId: widget.userId,
+                              newPassword: newController.text,
+                            );
+                            if (!dialogContext.mounted) return;
+                            Navigator.pop(dialogContext);
+                            if (mounted) {
+                              AppHelpers.showSnackBar(
+                                context,
+                                'وشەی نهێنیی هەژمارەکە ڕێکخرایەوە',
+                              );
+                            }
+                          } catch (e) {
+                            if (!dialogContext.mounted) return;
+                            setDialogState(() => loading = false);
+                            if (mounted) {
+                              AppHelpers.showSnackBar(
+                                context,
+                                _friendlyPasswordError(e),
+                                isError: true,
+                              );
+                            }
+                          }
+                        },
+                  child: loading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('ڕێکخستنەوە'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      newController.dispose();
+      confirmController.dispose();
+    }
+  }
+
+  // ═══════════════════════════════════════════
   // ── Shared Profile Editor ──
   // ═══════════════════════════════════════════
 
   Widget _buildProfileEditor() {
     final auth = context.read<AuthProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    // Employee can only edit Password.
-    // Customer can only edit Password (Task 21 - Updated).
-    // Admin can edit everything.
-    final bool isEmployeeView = auth.userRole == 'employee';
-    final bool isCustomerView = auth.userRole == 'customer';
-    // Only admins can edit name/phone
-    final bool canEditInfo = !isEmployeeView && !isCustomerView;
+    final bool canEditInfo = auth.userRole == 'admin';
+    final bool isSelf = auth.userId == widget.userId;
+    final bool canAdminResetPassword =
+        auth.userRole == 'admin' && !isSelf && (_isCustomer || _isEmployee);
+    final bool canManagePassword = isSelf || canAdminResetPassword;
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -1529,29 +1789,31 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   textDirection: TextDirection.ltr,
                   readOnly: !canEditInfo,
                 ),
-                // Password field: hide from employees viewing other users' profiles
-                if (!isEmployeeView || auth.userId == widget.userId) ...[
+                if (canManagePassword) ...[
                   const SizedBox(height: 12),
-                  _buildTextField(
-                    controller: _passwordController,
-                    label: AppStrings.password,
-                    icon: Icons.lock_outline,
-                    obscureText: _obscurePassword,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                        size: 20,
-                        color: isDark ? AppDarkColors.textSecondary : Colors.grey,
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: isSelf
+                          ? _showChangeOwnPasswordDialog
+                          : _showAdminResetPasswordDialog,
+                      icon: const Icon(Icons.lock_reset_rounded, size: 19),
+                      label: Text(
+                        isSelf
+                            ? 'گۆڕینی وشەی نهێنی'
+                            : 'ڕێکخستنەوەی وشەی نهێنی',
                       ),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                 ],
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : _saveProfileChanges,
+                if (canEditInfo) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _saveProfileChanges,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _accentColor,
                       foregroundColor: Colors.white,
@@ -1583,8 +1845,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                             ],
                           ),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
