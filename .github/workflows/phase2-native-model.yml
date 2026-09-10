@@ -42,6 +42,27 @@ jobs:
               text = text.replace("getStringValue('password_text')", "''")
               path.write_text(text)
 
+          profile = root / 'lib/screens/shared/user_profile_screen.dart'
+          if profile.exists():
+              text = profile.read_text()
+              text = text.replace("""    if (_passwordController.text.length < 8) {
+      AppHelpers.showSnackBar(
+        context,
+        'وشەی نهێنی لانیکەم ٨ پیت بێت',
+        isError: true,
+      );
+      return;
+    }
+
+""", '')
+              text = text.replace("""      // Update password_text if password field is not empty
+      if (_passwordController.text.isNotEmpty) {
+        data['password_text'] = _passwordController.text;
+      }
+
+""", '')
+              profile.write_text(text)
+
           login = root / 'lib/screens/auth/login_screen.dart'
           if login.exists():
               text = login.read_text()
