@@ -35,7 +35,7 @@ jobs:
             ARTIFACT_ID="$(gh api \
               -H 'Accept: application/vnd.github+json' \
               "/repos/${{ github.repository }}/actions/artifacts?name=zhiroxVIPuser-unsigned-ipa&per_page=20" \
-              --jq '.artifacts[] | select(.expired == false) | .id' | head -n 1)"
+              --jq 'first(.artifacts[] | select(.expired == false) | .id)')"
             test -n "$ARTIFACT_ID"
             gh api \
               -H 'Accept: application/vnd.github+json' \
