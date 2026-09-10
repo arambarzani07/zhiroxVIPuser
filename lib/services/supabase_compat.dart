@@ -161,23 +161,20 @@ class SupabasePBCompat {
   Future<_RelationContext> _contextFor(String logicalName) async {
     if (logicalName == 'users') return const _RelationContext();
 
-    List<Map<String, dynamic>> profiles = const [];
-    List<Map<String, dynamic>> debts = const [];
+    // Relation data is part of the live record contract. Never downgrade a
+    // failed profiles/debts request to an empty relation context, because that
+    // makes a network/database failure look like legitimately missing data.
+    final profileData = await _client.from('profiles').select();
+    final profiles = (profileData as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
 
-    try {
-      final data = await _client.from('profiles').select();
-      profiles = (data as List)
+    List<Map<String, dynamic>> debts = const [];
+    if (logicalName == 'payments') {
+      final debtData = await _client.from('debts').select();
+      debts = (debtData as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
-    } catch (_) {}
-
-    if (logicalName == 'payments') {
-      try {
-        final data = await _client.from('debts').select();
-        debts = (data as List)
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-      } catch (_) {}
     }
 
     return _RelationContext(
