@@ -649,70 +649,96 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         }
       }
 
-      // Check Debt Limit
-      try {
-        final customer = _customers.firstWhere(
-          (c) => c.id == _selectedCustomerId,
-        );
-        final debtLimit = customer.getDoubleValue('debt_limit');
+      // Check Debt Limit. This is fail-closed: if the selected customer or
+      // current server balance cannot be verified, do not create/update a debt.
+      RecordModel? selectedCustomer;
+      for (final customer in _customers) {
+        if (customer.id == _selectedCustomerId) {
+          selectedCustomer = customer;
+          break;
+        }
+      }
 
-        if (debtLimit > 0) {
-          final currentBalance = await PBService.getCustomerBalance(
+      if (selectedCustomer == null) {
+        if (!mounted) return;
+        AppHelpers.showSnackBar(
+          context,
+          'نەتوانرا زانیاریی کڕیار پشتڕاست بکرێتەوە. دووبارە هەوڵ بدە.',
+          isError: true,
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final debtLimit = selectedCustomer.getDoubleValue('debt_limit');
+      if (debtLimit > 0) {
+        double currentBalance;
+        try {
+          currentBalance = await PBService.getCustomerBalance(
             _selectedCustomerId!,
           );
-          if (currentBalance + totalNewDebt > debtLimit) {
-            final canOverride = auth.canSetDebtLimit;
+        } catch (_) {
+          if (!mounted) return;
+          AppHelpers.showSnackBar(
+            context,
+            'نەتوانرا باڵانسی کڕیار پشتڕاست بکرێتەوە. ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.',
+            isError: true,
+          );
+          setState(() => _isLoading = false);
+          return;
+        }
+        if (!mounted) return;
 
-            if (canOverride) {
-              // Ask for confirmation to override
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('سنوری قەرز تێپەڕیوە'),
-                  content: Text(
-                    'بەکارهێنەر سنوری قەرزی تێپەڕاندووە.\n'
-                    'سنور: ${AppHelpers.formatCurrency(debtLimit)}\n'
-                    'کۆی گشتی: ${AppHelpers.formatCurrency(currentBalance + totalNewDebt)}\n\n'
-                    'ئایا دەتەوێت بەردەوام بیت؟',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('نەخێر'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      style: TextButton.styleFrom(foregroundColor: Colors.red),
-                      child: const Text('بەڵێ، بەردەوام بە'),
-                    ),
-                  ],
+        if (currentBalance + totalNewDebt > debtLimit) {
+          final canOverride = auth.canSetDebtLimit;
+
+          if (canOverride) {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (dialogContext) => AlertDialog(
+                title: const Text('سنوری قەرز تێپەڕیوە'),
+                content: Text(
+                  'بەکارهێنەر سنوری قەرزی تێپەڕاندووە.
+'
+                  'سنور: ${AppHelpers.formatCurrency(debtLimit)}
+'
+                  'کۆی گشتی: ${AppHelpers.formatCurrency(currentBalance + totalNewDebt)}
+
+'
+                  'ئایا دەتەوێت بەردەوام بیت؟',
                 ),
-              );
-
-              if (confirm != true) {
-                setState(() => _isLoading = false);
-                return;
-              }
-              // If true, proceed to save (fall through)
-            } else {
-              // Block action
-              if (mounted) {
-                AppHelpers.showSnackBar(
-                  context,
-                  'ناتوانیت ئەم قەرزە زیاد بکەیت! بەکارهێنەر سنوری قەرزی تێپەڕاندووە.\n'
-                  'سنور: ${AppHelpers.formatCurrency(debtLimit)}\n'
-                  'کۆی گشتی دوای زیادکردن: ${AppHelpers.formatCurrency(currentBalance + totalNewDebt)}',
-                  isError: true,
-                );
-              }
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('نەخێر'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    child: const Text('بەڵێ، بەردەوام بە'),
+                  ),
+                ],
+              ),
+            );
+            if (!mounted) return;
+            if (confirm != true) {
               setState(() => _isLoading = false);
               return;
             }
+          } else {
+            AppHelpers.showSnackBar(
+              context,
+              'ناتوانیت ئەم قەرزە زیاد بکەیت! بەکارهێنەر سنوری قەرزی تێپەڕاندووە.
+'
+              'سنور: ${AppHelpers.formatCurrency(debtLimit)}
+'
+              'کۆی گشتی دوای زیادکردن: ${AppHelpers.formatCurrency(currentBalance + totalNewDebt)}',
+              isError: true,
+            );
+            setState(() => _isLoading = false);
+            return;
           }
         }
-      } catch (_) {
-        // Customer not found in list (maybe deleted or not loaded yet)
-        // Proceed without limit check or handle error
       }
 
       if (widget.debt != null) {
@@ -1025,119 +1051,185 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
     return FutureBuilder<double>(
       future: PBService.getCustomerBalance(_selectedCustomerId!),
       builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'باڵانسی کڕیار دەپشکنرێت...',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: isDark
+                        ? AppDarkColors.textSecondary
+                        : Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Container(
+            margin: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Colors.orange.withValues(alpha: 0.24),
+              ),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.cloud_off_rounded, size: 18, color: Colors.orange),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'نەتوانرا باڵانسی کڕیار پشتڕاست بکرێتەوە. پاشەکەوتکردن تا گەڕانەوەی پەیوەندی ڕادەوەستێت.',
+                    style: TextStyle(fontSize: 11.5, height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
         if (!snapshot.hasData) return const SizedBox.shrink();
 
-        try {
-          final customer = _customers.firstWhere(
-            (c) => c.id == _selectedCustomerId,
+        RecordModel? selectedCustomer;
+        for (final customer in _customers) {
+          if (customer.id == _selectedCustomerId) {
+            selectedCustomer = customer;
+            break;
+          }
+        }
+        if (selectedCustomer == null) {
+          return Container(
+            margin: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text(
+              'زانیاری کڕیار بەردەست نییە. دووبارە کڕیار هەڵبژێرە.',
+              style: TextStyle(fontSize: 11.5),
+            ),
           );
-          final limit = customer.getDoubleValue('debt_limit');
-          final currentBalance = snapshot.data!;
+        }
 
-          if (limit > 0) {
-            final remainingLimit = limit - currentBalance;
-            final isOver = remainingLimit < 0;
-            final usagePercent = (currentBalance / limit).clamp(0.0, 1.0);
+        final limit = selectedCustomer.getDoubleValue('debt_limit');
+        final currentBalance = snapshot.data!;
+        if (limit <= 0) return const SizedBox.shrink();
 
-            return Container(
-              margin: const EdgeInsets.only(top: 12),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isOver
-                    ? Colors.red.withOpacity(0.05)
-                    : Colors.green.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isOver
-                      ? Colors.red.withOpacity(0.3)
-                      : Colors.green.withOpacity(0.3),
-                ),
-              ),
-              child: Column(
+        final remainingLimit = limit - currentBalance;
+        final isOver = remainingLimit < 0;
+        final usagePercent = (currentBalance / limit).clamp(0.0, 1.0).toDouble();
+
+        return Container(
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isOver
+                ? Colors.red.withValues(alpha: 0.05)
+                : Colors.green.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isOver
+                  ? Colors.red.withValues(alpha: 0.3)
+                  : Colors.green.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Column(
+            children: [
+              Row(
                 children: [
-                  Row(
+                  Icon(
+                    isOver
+                        ? Icons.warning_amber_rounded
+                        : Icons.check_circle_outline,
+                    color: isOver ? Colors.red : Colors.green,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'سنوری قەرز: ${AppHelpers.formatCurrency(limit)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? AppDarkColors.textSecondary
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'قەرزی ئێستا: ${AppHelpers.formatCurrency(currentBalance)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isOver
+                                ? Colors.red
+                                : (isDark
+                                    ? AppDarkColors.textPrimary
+                                    : Colors.black87),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Icon(
-                        isOver
-                            ? Icons.warning_amber_rounded
-                            : Icons.check_circle_outline,
-                        color: isOver ? Colors.red : Colors.green,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'سنوری قەرز: ${AppHelpers.formatCurrency(limit)}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark
-                                    ? AppDarkColors.textSecondary
-                                    : Colors.grey.shade700,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'قەرزی ئێستا: ${AppHelpers.formatCurrency(currentBalance)}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: isOver
-                                    ? Colors.red
-                                    : (isDark
-                                          ? AppDarkColors.textPrimary
-                                          : Colors.black87),
-                              ),
-                            ),
-                          ],
+                      Text(
+                        isOver ? 'تێپەڕیوە' : 'بەردەستە',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isOver ? Colors.red : Colors.green,
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            isOver ? 'تێپەڕیوە' : 'بەردەستە',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isOver ? Colors.red : Colors.green,
-                            ),
-                          ),
-                          Text(
-                            AppHelpers.formatCurrency(remainingLimit.abs()),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: isOver ? Colors.red : Colors.green,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        AppHelpers.formatCurrency(remainingLimit.abs()),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isOver ? Colors.red : Colors.green,
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: usagePercent,
-                      minHeight: 4,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        isOver
-                            ? Colors.red
-                            : usagePercent > 0.8
-                            ? Colors.orange
-                            : Colors.green,
-                      ),
-                    ),
-                  ),
                 ],
               ),
-            );
-          }
-        } catch (_) {}
-        return const SizedBox.shrink();
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: usagePercent,
+                  minHeight: 4,
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isOver
+                        ? Colors.red
+                        : usagePercent > 0.8
+                            ? Colors.orange
+                            : Colors.green,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
       },
     );
   }
