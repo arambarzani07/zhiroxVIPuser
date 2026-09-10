@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
-import 'package:pocketbase/pocketbase.dart';
+import 'package:zhirox/models/record_model.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
@@ -105,7 +105,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       // Populate controllers for all users (if viewing self or editable)
       _nameController.text = _user!.getStringValue('name');
       _phoneController.text = _user!.getStringValue('phone');
-      _passwordController.text = _user!.getStringValue('password_text');
+      _passwordController.text = '';
 
       if (_isCustomer) {
         _debts = await PBService.getDebts(customerId: widget.userId);
@@ -139,7 +139,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
           _nameController.text = _user!.getStringValue('name');
           _phoneController.text = _user!.getStringValue('phone');
-          _passwordController.text = _user!.getStringValue('password_text');
+          _passwordController.text = '';
 
           if (_isCustomer) {
             final cachedDebts = prefs.getString(cacheKeyDebts);
@@ -216,7 +216,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       AppHelpers.showSnackBar(context, 'ژمارە مۆبایل بنووسە', isError: true);
       return;
     }
-    if (_passwordController.text.length < 8) {
+    if (_passwordController.text.isNotEmpty && _passwordController.text.length < 8) {
       AppHelpers.showSnackBar(
         context,
         'وشەی نهێنی لانیکەم ٨ پیت بێت',
@@ -232,9 +232,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         'phone': _phoneController.text.trim(),
       };
 
-      // Update password_text if password field is not empty
+      // Password changes are handled by Supabase Auth.
       if (_passwordController.text.isNotEmpty) {
-        data['password_text'] = _passwordController.text;
+        // Plaintext password persistence removed.
       }
 
       // Update permissions if admin editing employee

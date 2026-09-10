@@ -4,7 +4,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:zhirox/utils/helpers.dart';
-import 'package:pocketbase/pocketbase.dart';
+import 'package:zhirox/models/record_model.dart';
 import 'package:zhirox/utils/kurdish_reshaper.dart';
 import 'dart:convert';
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pocketbase/pocketbase.dart';
+import 'package:zhirox/models/record_model.dart';
 import 'package:zhirox/services/pb_service.dart';
 
 class DebtProvider extends ChangeNotifier {

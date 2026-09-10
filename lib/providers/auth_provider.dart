@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:pocketbase/pocketbase.dart';
+import 'package:zhirox/models/record_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zhirox/services/pb_service.dart';
 
