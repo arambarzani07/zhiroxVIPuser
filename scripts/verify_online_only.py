@@ -105,6 +105,22 @@ for marker in ('String? _loadError', 'AppHelpers.backendErrorMessage', 'دووب
         fail(f'lib/screens/shared/debt_detail_screen.dart: lifecycle/error marker missing: {marker}')
 
 
+# Financial Chat realtime/audit markers: business history remains server-backed
+# and new activity must arrive through Supabase realtime, never a local cache.
+profile = (LIB / 'screens/shared/user_profile_screen.dart').read_text(encoding='utf-8')
+for marker in (
+    'PBService.getFinancialEvents',
+    "table: 'financial_events'",
+    '_hasNewFinancialActivity',
+    '_jumpToLatest',
+    '_buildFinancialSystemMessage',
+):
+    if marker not in profile:
+        fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat marker missing: {marker}')
+if 'getFinancialEvents(String customerId)' not in pb:
+    fail('lib/services/pb_service.dart: Financial Chat audit reader missing')
+
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
