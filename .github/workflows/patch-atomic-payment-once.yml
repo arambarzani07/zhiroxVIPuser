@@ -52,7 +52,7 @@ jobs:
             final debt = await getDebt(debtId);
             final newRemaining = debt.getDoubleValue('remaining');
 
-"""
+            """
           path.write_text(text[:block_start] + new + text[block_end:])
           PY
       - name: Commit fix
