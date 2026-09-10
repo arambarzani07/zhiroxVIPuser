@@ -23,6 +23,7 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   int _currentIndex = 0;
+  final Set<int> _visitedTabs = <int>{0};
   Map<String, dynamic> _stats = {};
   bool _isLoading = true;
   String? _statsError;
@@ -126,11 +127,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
       backgroundColor: isDark
           ? AppDarkColors.background
           : const Color(0xFFF5F7FA),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: screens[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: List<Widget>.generate(
+          screens.length,
+          (index) => _visitedTabs.contains(index)
+              ? screens[index]
+              : const SizedBox.shrink(),
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -192,7 +196,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return GestureDetector(
       onTap: () {
         if (_currentIndex == index) return;
-        setState(() => _currentIndex = index);
+        setState(() {
+          _visitedTabs.add(index);
+          _currentIndex = index;
+        });
         if (index == 0) unawaited(_loadStats());
       },
       behavior: HitTestBehavior.opaque,
