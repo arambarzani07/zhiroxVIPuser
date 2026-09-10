@@ -23,6 +23,7 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
   bool _isLoading = false;
   bool _obscureOwnerPassword = true;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
@@ -37,44 +38,40 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
   }
 
   String _friendlyRegistrationError(Object error) {
-    final raw = error.toString();
-    final normalized = raw.toLowerCase();
-
+    final normalized = error.toString().toLowerCase();
     if (normalized.contains('socketexception') ||
         normalized.contains('clientexception') ||
         normalized.contains('failed host lookup') ||
         normalized.contains('connection refused') ||
         normalized.contains('network')) {
-      return 'پەیوەندی بە سێرڤەر نەکرا. تکایە ئینتەرنێت بپشکنە و دووبارە هەوڵ بدەرەوە.';
+      return 'پەیوەندی بە سێرڤەر نەکرا. ئینتەرنێتەکەت بپشکنە و دووبارە هەوڵ بدە.';
     }
-
     if (normalized.contains('system_owner_required') ||
         normalized.contains('invalid login') ||
         normalized.contains('invalid credentials') ||
         normalized.contains('authapierror')) {
-      return 'ژمارە یان وشەی نهێنی خاوەن سیستەم هەڵەیە، یان ئەم هەژمارە دەسەڵاتی System Owner ـی نییە.';
+      return 'زانیاری پشتڕاستکردنەوەی خاوەن سیستەم دروست نییە یان دەسەڵاتی پێویست نییە.';
     }
-
     if (normalized.contains('market_exists') ||
         normalized.contains('market already exists')) {
       return 'ئەم ناوی مارکێتە پێشتر تۆمارکراوە.';
     }
-
     if (normalized.contains('phone_exists') ||
-        normalized.contains('ژمارەیە پێشتر تۆمارکراوە')) {
+        normalized.contains('already') ||
+        normalized.contains('unique')) {
       return 'ئەم ژمارە مۆبایلە پێشتر تۆمارکراوە.';
     }
-
     if (normalized.contains('invalid_input')) {
       return 'زانیارییەکان تەواو یان دروست نین.';
     }
-
-    return raw.replaceFirst(RegExp(r'^Exception:\s*'), '');
+    return 'نەتوانرا هەژماری بەڕێوەبەر درووست بکرێت. دووبارە هەوڵ بدە.';
   }
 
   Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) return;
+    final form = _formKey.currentState;
+    if (form == null || !form.validate()) return;
 
+    FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
     final ownerClient = SupabaseClient(
       SupabaseConfig.url,
@@ -87,7 +84,6 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
         email: '$ownerPhone@zhirox.local',
         password: _ownerPasswordController.text,
       );
-
       if (ownerLogin.user == null) {
         throw Exception('invalid credentials');
       }
@@ -118,220 +114,364 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
       );
       Navigator.pop(context);
     } on AuthException catch (_) {
-      if (mounted) {
-        AppHelpers.showSnackBar(
-          context,
-          'ژمارە یان وشەی نهێنی خاوەن سیستەم هەڵەیە.',
-          isError: true,
-        );
-      }
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        'زانیاری پشتڕاستکردنەوەی خاوەن سیستەم هەڵەیە.',
+        isError: true,
+      );
     } catch (e) {
-      if (mounted) {
-        AppHelpers.showSnackBar(
-          context,
-          _friendlyRegistrationError(e),
-          isError: true,
-        );
-      }
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        _friendlyRegistrationError(e),
+        isError: true,
+      );
     } finally {
       try {
         await ownerClient.auth.signOut();
       } catch (_) {}
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  InputDecoration _decoration({
+    required String label,
+    required IconData icon,
+    String? hint,
+    Widget? suffix,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon),
+      suffixIcon: suffix,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('دروستکردنی بەڕێوەبەر — Owner')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.25),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppDarkColors.card : Colors.white;
+    final border = isDark ? AppDarkColors.cardBorder : const Color(0xFFEAECF0);
+    final textPrimary = isDark ? AppDarkColors.textPrimary : const Color(0xFF1D2939);
+    final textSecondary = isDark ? AppDarkColors.textSecondary : const Color(0xFF667085);
+
+    Widget section({
+      required String title,
+      required String subtitle,
+      required IconData icon,
+      required List<Widget> children,
+      bool owner = false,
+    }) {
+      final accent = owner ? Colors.deepPurple : AppColors.primary;
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Icon(icon, size: 20, color: accent),
                 ),
-                child: const Column(
-                  children: [
-                    Icon(
-                      Icons.verified_user_rounded,
-                      size: 42,
-                      color: AppColors.primary,
-                    ),
-                    SizedBox(height: 10),
-                    Text(
-                      'پشتڕاستکردنەوەی خاوەن سیستەم',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'تەنها System Owner دەتوانێت هەژماری بەڕێوەبەری مارکێت درووست بکات.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-              TextFormField(
-                controller: _ownerPhoneController,
-                keyboardType: TextInputType.phone,
-                textDirection: TextDirection.ltr,
-                textAlign: TextAlign.center,
-                decoration: const InputDecoration(
-                  labelText: 'ژمارە مۆبایلی خاوەن سیستەم',
-                  prefixIcon: Icon(Icons.shield_outlined),
-                  hintText: '07xxxxxxxxx',
-                ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? 'ژمارەی خاوەن سیستەم بنووسە'
-                    : null,
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _ownerPasswordController,
-                obscureText: _obscureOwnerPassword,
-                decoration: InputDecoration(
-                  labelText: 'وشەی نهێنی خاوەن سیستەم',
-                  prefixIcon: const Icon(Icons.key_rounded),
-                  suffixIcon: IconButton(
-                    onPressed: () => setState(
-                      () => _obscureOwnerPassword = !_obscureOwnerPassword,
-                    ),
-                    icon: Icon(
-                      _obscureOwnerPassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                    ),
-                  ),
-                ),
-                validator: (v) => v == null || v.isEmpty
-                    ? 'وشەی نهێنی خاوەن سیستەم بنووسە'
-                    : null,
-              ),
-              const SizedBox(height: 28),
-              const Divider(),
-              const SizedBox(height: 18),
-              const Text(
-                'زانیاری مارکێت و بەڕێوەبەری نوێ',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _marketNameController,
-                decoration: const InputDecoration(
-                  labelText: AppStrings.marketName,
-                  prefixIcon: Icon(Icons.store),
-                  hintText: 'ناوی مارکێتەکە...',
-                ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? 'ناوی مارکێت بنووسە'
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _adminNameController,
-                decoration: const InputDecoration(
-                  labelText: 'ناوی بەڕێوەبەر',
-                  prefixIcon: Icon(Icons.person),
-                ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? 'ناوی بەڕێوەبەر بنووسە'
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                textDirection: TextDirection.ltr,
-                textAlign: TextAlign.center,
-                decoration: const InputDecoration(
-                  labelText: AppStrings.phone,
-                  prefixIcon: Icon(Icons.phone),
-                  hintText: '07xxxxxxxxx',
-                ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? 'ژمارە مۆبایل بنووسە'
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'وشەی نهێنی بەڕێوەبەری نوێ',
-                  prefixIcon: const Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    onPressed: () => setState(
-                      () => _obscurePassword = !_obscurePassword,
-                    ),
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                    ),
-                  ),
-                ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'وشەی نهێنی بنووسە';
-                  if (v.length < 8) return 'وشەی نهێنی لانیکەم ٨ پیت بێت';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _confirmPasswordController,
-                obscureText: _obscurePassword,
-                decoration: const InputDecoration(
-                  labelText: 'دووبارەکردنەوەی وشەی نهێنی',
-                  prefixIcon: Icon(Icons.lock_outline),
-                ),
-                validator: (v) {
-                  if (v != _passwordController.text) {
-                    return 'وشەی نهێنی یەکناگرنەوە';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                height: 54,
-                child: ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _register,
-                  icon: _isLoading
-                      ? const SizedBox.shrink()
-                      : const Icon(Icons.add_business_rounded),
-                  label: _isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              title,
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                color: textPrimary,
+                              ),
+                            ),
                           ),
-                        )
-                      : const Text(
-                          'دروستکردنی هەژماری بەڕێوەبەر',
-                          style: TextStyle(fontSize: 17),
+                          if (owner) ...[
+                            const SizedBox(width: 7),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.deepPurple.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                              child: const Text(
+                                'OWNER',
+                                style: TextStyle(
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.deepPurple,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          height: 1.45,
+                          color: textSecondary,
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: isDark ? AppDarkColors.background : const Color(0xFFF7F8FA),
+      appBar: AppBar(
+        title: const Text(
+          'دروستکردنی بەڕێوەبەر',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+        centerTitle: false,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: isDark ? AppDarkColors.surface : Colors.white,
+        foregroundColor: textPrimary,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: border),
+        ),
+      ),
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: AutofillGroup(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      section(
+                        title: 'پشتڕاستکردنەوەی خاوەن سیستەم',
+                        subtitle: 'ئەم بەشە تەنها بۆ پشتڕاستکردنەوەی دەسەڵاتی System Owner ـە.',
+                        icon: Icons.verified_user_outlined,
+                        owner: true,
+                        children: [
+                          TextFormField(
+                            controller: _ownerPhoneController,
+                            enabled: !_isLoading,
+                            keyboardType: TextInputType.phone,
+                            textInputAction: TextInputAction.next,
+                            textDirection: TextDirection.ltr,
+                            decoration: _decoration(
+                              label: 'ژمارە مۆبایلی خاوەن سیستەم',
+                              icon: Icons.shield_outlined,
+                              hint: '07xxxxxxxxx',
+                            ),
+                            validator: (value) => value == null || value.trim().isEmpty
+                                ? 'ژمارەی خاوەن سیستەم بنووسە'
+                                : null,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _ownerPasswordController,
+                            enabled: !_isLoading,
+                            obscureText: _obscureOwnerPassword,
+                            textInputAction: TextInputAction.next,
+                            textDirection: TextDirection.ltr,
+                            decoration: _decoration(
+                              label: 'وشەی نهێنی خاوەن سیستەم',
+                              icon: Icons.key_outlined,
+                              suffix: IconButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () => setState(
+                                          () => _obscureOwnerPassword = !_obscureOwnerPassword,
+                                        ),
+                                icon: Icon(
+                                  _obscureOwnerPassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                ),
+                              ),
+                            ),
+                            validator: (value) => value == null || value.isEmpty
+                                ? 'وشەی نهێنی خاوەن سیستەم بنووسە'
+                                : null,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      section(
+                        title: 'مارکێتی نوێ',
+                        subtitle: 'ناوی بازرگانییەکە دیاری بکە؛ ئەم ناوە لە هەژمار و ڕاپۆرتەکاندا بەکاردێت.',
+                        icon: Icons.storefront_outlined,
+                        children: [
+                          TextFormField(
+                            controller: _marketNameController,
+                            enabled: !_isLoading,
+                            textInputAction: TextInputAction.next,
+                            decoration: _decoration(
+                              label: AppStrings.marketName,
+                              icon: Icons.store_outlined,
+                              hint: 'ناوی مارکێتەکە',
+                            ),
+                            validator: (value) => value == null || value.trim().isEmpty
+                                ? 'ناوی مارکێت بنووسە'
+                                : null,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      section(
+                        title: 'هەژماری بەڕێوەبەر',
+                        subtitle: 'زانیاری بەڕێوەبەری سەرەکیی ئەم مارکێتە بنووسە.',
+                        icon: Icons.admin_panel_settings_outlined,
+                        children: [
+                          TextFormField(
+                            controller: _adminNameController,
+                            enabled: !_isLoading,
+                            textInputAction: TextInputAction.next,
+                            decoration: _decoration(
+                              label: 'ناوی بەڕێوەبەر',
+                              icon: Icons.person_outline_rounded,
+                            ),
+                            validator: (value) => value == null || value.trim().isEmpty
+                                ? 'ناوی بەڕێوەبەر بنووسە'
+                                : null,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _phoneController,
+                            enabled: !_isLoading,
+                            keyboardType: TextInputType.phone,
+                            textInputAction: TextInputAction.next,
+                            textDirection: TextDirection.ltr,
+                            autofillHints: const [AutofillHints.telephoneNumber],
+                            decoration: _decoration(
+                              label: AppStrings.phone,
+                              icon: Icons.phone_iphone_rounded,
+                              hint: '07xxxxxxxxx',
+                            ),
+                            validator: (value) => value == null || value.trim().isEmpty
+                                ? 'ژمارە مۆبایل بنووسە'
+                                : null,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _passwordController,
+                            enabled: !_isLoading,
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.next,
+                            textDirection: TextDirection.ltr,
+                            autofillHints: const [AutofillHints.newPassword],
+                            decoration: _decoration(
+                              label: 'وشەی نهێنی بەڕێوەبەر',
+                              icon: Icons.lock_outline_rounded,
+                              suffix: IconButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () => setState(
+                                          () => _obscurePassword = !_obscurePassword,
+                                        ),
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                ),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) return 'وشەی نهێنی بنووسە';
+                              if (value.length < 8) return 'وشەی نهێنی لانیکەم ٨ پیت بێت';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _confirmPasswordController,
+                            enabled: !_isLoading,
+                            obscureText: _obscureConfirmPassword,
+                            textInputAction: TextInputAction.done,
+                            textDirection: TextDirection.ltr,
+                            onFieldSubmitted: (_) => _register(),
+                            decoration: _decoration(
+                              label: 'دووبارەکردنەوەی وشەی نهێنی',
+                              icon: Icons.lock_reset_outlined,
+                              suffix: IconButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () => setState(
+                                          () => _obscureConfirmPassword = !_obscureConfirmPassword,
+                                        ),
+                                icon: Icon(
+                                  _obscureConfirmPassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                ),
+                              ),
+                            ),
+                            validator: (value) => value != _passwordController.text
+                                ? 'وشەی نهێنی یەکناگرنەوە'
+                                : null,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: _isLoading ? null : _register,
+                          icon: _isLoading
+                              ? const SizedBox.shrink()
+                              : const Icon(Icons.add_business_outlined, size: 19),
+                          label: _isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text(
+                                  'دروستکردنی هەژماری بەڕێوەبەر',
+                                  style: TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
