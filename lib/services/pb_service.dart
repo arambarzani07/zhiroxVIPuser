@@ -815,11 +815,11 @@ class PBService {
       ),
     ]);
 
-    final customers = results[0] as PBListResult;
-    final debts = results[1] as PBListResult;
-    final payments = results[2] as PBListResult;
-    final pending = results[3] as PBListResult;
-    final recent = results[4] as PBListResult;
+    final customers = results[0];
+    final debts = results[1];
+    final payments = results[2];
+    final pending = results[3];
+    final recent = results[4];
 
     double totalDebt = 0;
     double totalRemaining = 0;

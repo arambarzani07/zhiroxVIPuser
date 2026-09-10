@@ -110,7 +110,7 @@ Future<void> _initializeAfterLaunch() async {
   // iOS native launch handlers are disabled in the crash-safe build.
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
     try {
-      await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+      await Workmanager().initialize(callbackDispatcher);
       await Workmanager().registerPeriodicTask(
         'overdueDebtsCheck',
         'checkOverdueDebts',
@@ -388,13 +388,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             if (!mounted) return;
             await auth.logout();
-            if (mounted) {
-              AppHelpers.showSnackBar(
-                context,
-                'ماوەی بەشداریت تەواو بووە. تکایە پەیوەندی بکە بۆ نوێکردنەوە.',
-                isError: true,
-              );
-            }
+            if (!context.mounted) return;
+            AppHelpers.showSnackBar(
+              context,
+              'ماوەی بەشداریت تەواو بووە. تکایە پەیوەندی بکە بۆ نوێکردنەوە.',
+              isError: true,
+            );
           });
         }
 

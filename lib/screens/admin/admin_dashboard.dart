@@ -90,7 +90,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     if (!mounted) return;
     setState(() {
       if (freshStats != null) {
-        _stats = freshStats!;
+        _stats = freshStats;
         _statsError = null;
       } else {
         _statsError = loadError;
@@ -146,7 +146,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.2 : 0.06),
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
               blurRadius: 24,
               offset: const Offset(0, -6),
             ),
@@ -221,7 +221,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? AppColors.primary.withOpacity(isDark ? 0.18 : 0.10)
+                    ? AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.10)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -342,8 +342,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 gradient: LinearGradient(
                   colors: [
                     AppColors.primary,
-                    AppColors.primary.withOpacity(0.8),
-                    AppColors.primary.withOpacity(0.6),
+                    AppColors.primary.withValues(alpha: 0.8),
+                    AppColors.primary.withValues(alpha: 0.6),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -365,7 +365,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           Text(
                             AppStrings.appName,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.72),
+                              color: Colors.white.withValues(alpha: 0.72),
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -381,10 +381,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 width: 40,
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.14),
+                                  color: Colors.white.withValues(alpha: 0.14),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: Colors.white.withOpacity(0.16),
+                                    color: Colors.white.withValues(alpha: 0.16),
                                   ),
                                 ),
                                 alignment: Alignment.center,
@@ -412,10 +412,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               width: 52,
                               height: 52,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
+                                  color: Colors.white.withValues(alpha: 0.3),
                                   width: 2,
                                 ),
                               ),
@@ -446,7 +446,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                   Text(
                                     'بەخێربێیتەوە 👋',
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.7),
+                                      color: Colors.white.withValues(alpha: 0.7),
                                       fontSize: 14,
                                     ),
                                   ),
@@ -533,7 +533,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.10),
+                                  color: Colors.white.withValues(alpha: 0.10),
                                   borderRadius: BorderRadius.circular(9),
                                 ),
                                 child: const Icon(
@@ -562,7 +562,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                       'تکایە پەیوەندی بکە بۆ نوێکردنەوە',
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: Colors.white.withOpacity(0.8),
+                                        color: Colors.white.withValues(alpha: 0.8),
                                       ),
                                     ),
                                   ],
@@ -709,7 +709,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.10),
+                        color: AppColors.primary.withValues(alpha: 0.10),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       alignment: Alignment.center,
@@ -863,7 +863,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.10),
+                    color: iconColor.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   alignment: Alignment.center,
@@ -1066,7 +1066,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
@@ -1237,7 +1237,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
@@ -1450,9 +1450,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
         height: 82,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.12),
+          color: Colors.white.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.white.withOpacity(0.14)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
         ),
         child: Row(
           children: [
@@ -1460,7 +1460,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.16),
+                color: Colors.white.withValues(alpha: 0.16),
                 borderRadius: BorderRadius.circular(10),
               ),
               alignment: Alignment.center,
@@ -1477,7 +1477,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.72),
+                      color: Colors.white.withValues(alpha: 0.72),
                       fontSize: 10.5,
                       fontWeight: FontWeight.w600,
                     ),

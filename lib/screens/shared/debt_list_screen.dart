@@ -1188,7 +1188,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
                       hintText: '0',
                       hintStyle: TextStyle(
                         color: isDark
-                            ? AppDarkColors.textSecondary.withOpacity(0.5)
+                            ? AppDarkColors.textSecondary.withValues(alpha: 0.5)
                             : Colors.grey[300],
                         fontSize: 24,
                       ),

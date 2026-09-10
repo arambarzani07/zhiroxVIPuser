@@ -172,7 +172,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+        AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
       }
     }
   }
@@ -200,7 +200,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+        AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
       }
     }
     if (mounted) setState(() => _isSaving = false);
@@ -220,6 +220,43 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             : const Color(0xFFF5F7FA),
         appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
         body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_loadError != null) {
+      return Scaffold(
+        backgroundColor: isDark
+            ? AppDarkColors.background
+            : const Color(0xFFF5F7FA),
+        appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_rounded, size: 42, color: Colors.orange),
+                const SizedBox(height: 12),
+                Text(
+                  _loadError!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    height: 1.6,
+                    color: isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF344054),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  onPressed: _loadData,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('دووبارە هەوڵ بدە'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -247,7 +284,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AppColors.primary, AppColors.primary.withOpacity(0.88)],
+                  colors: [AppColors.primary, AppColors.primary.withValues(alpha: 0.88)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -284,7 +321,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
@@ -423,10 +460,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             width: 68,
                             height: 68,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: Colors.white.withOpacity(0.3),
+                                color: Colors.white.withValues(alpha: 0.3),
                                 width: 2,
                               ),
                             ),
@@ -457,13 +494,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               Icon(
                                 Icons.phone_android,
                                 size: 14,
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 phone,
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
+                                  color: Colors.white.withValues(alpha: 0.8),
                                   fontSize: 14,
                                 ),
                                 textDirection: TextDirection.ltr,
@@ -479,8 +516,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                               decoration: BoxDecoration(
                                 color: _isActive
-                                    ? Colors.green.withOpacity(0.3)
-                                    : Colors.red.withOpacity(0.3),
+                                    ? Colors.green.withValues(alpha: 0.3)
+                                    : Colors.red.withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
@@ -579,7 +616,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
                 foregroundColor: _accentColor,
-                side: BorderSide(color: _accentColor.withOpacity(0.25)),
+                side: BorderSide(color: _accentColor.withValues(alpha: 0.25)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -653,7 +690,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         boxShadow: selected && !isDark
                             ? [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
+                                  color: Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -766,7 +803,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.10),
+                    color: AppColors.primary.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -847,9 +884,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.08 : 0.06),
+        color: color.withValues(alpha: isDark ? 0.08 : 0.06),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: color.withOpacity(0.16)),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
       ),
       child: Row(
         children: [
@@ -891,7 +928,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.06)
+              ? Colors.white.withValues(alpha: 0.06)
               : const Color(0xFFE9EDF3),
         ),
       ),
@@ -966,7 +1003,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isDark
-                ? Colors.white.withOpacity(0.06)
+                ? Colors.white.withValues(alpha: 0.06)
                 : const Color(0xFFE9EDF3),
           ),
         ),
@@ -976,7 +1013,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.10),
+                color: color.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 20),
@@ -1006,7 +1043,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.09),
+                            color: color.withValues(alpha: 0.09),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -1092,7 +1129,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
     } catch (e) {
       if (mounted) {
-        AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+        AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
       }
     }
   }
@@ -1887,7 +1924,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ? []
                 : [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 10,
                       offset: const Offset(0, 3),
                     ),
@@ -1908,7 +1945,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             (hasLimit
                                     ? (isOverLimit ? Colors.red : Colors.teal)
                                     : Colors.grey)
-                                .withOpacity(0.1),
+                                .withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
@@ -1962,7 +1999,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.1),
+                            color: AppColors.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Row(
@@ -2086,7 +2123,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(
@@ -2186,7 +2223,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   }
                 } catch (e) {
                   if (mounted) {
-                    AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+                    AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
                   }
                 }
               },
@@ -2216,7 +2253,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 }
               } catch (e) {
                 if (mounted) {
-                  AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+                  AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
                 }
               }
             },
@@ -2255,7 +2292,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ? []
               : [
                   BoxShadow(
-                    color: color.withOpacity(0.08),
+                    color: color.withValues(alpha: 0.08),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   ),
@@ -2266,7 +2303,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: color, size: 20),
@@ -2298,81 +2335,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textDirection: TextDirection.ltr,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnimatedStatChip(
-    IconData icon,
-    String label,
-    double value,
-    Color color,
-  ) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDark ? AppDarkColors.card : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isDark
-              ? []
-              : [
-                  BoxShadow(
-                    color: color.withOpacity(0.08),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark
-                          ? AppDarkColors.textSecondary
-                          : Colors.grey[500],
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: value),
-                    duration: const Duration(seconds: 2),
-                    curve: Curves.easeOut,
-                    builder: (context, val, _) {
-                      return Text(
-                        AppHelpers.formatCurrency(val),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: color,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textDirection: TextDirection.ltr,
-                      );
-                    },
                   ),
                 ],
               ),
@@ -2480,7 +2442,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         if (mounted) Navigator.pop(context);
       } catch (e) {
         if (mounted) {
-          AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+          AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
         }
       }
     }
@@ -2522,7 +2484,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 }
               } catch (e) {
                 if (mounted) {
-                  AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+                  AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
                 }
               }
             },
