@@ -54,6 +54,22 @@ class PBService {
     return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
   }
 
+  static bool _isRetryableAuthException(AuthException error) {
+    final text = '${error.runtimeType} ${error.message}'.toLowerCase();
+    return text.contains('retryable') ||
+        text.contains('network') ||
+        text.contains('socket') ||
+        text.contains('fetch') ||
+        text.contains('connection') ||
+        text.contains('timeout') ||
+        text.contains('temporarily unavailable') ||
+        text.contains('bad gateway') ||
+        text.contains('service unavailable') ||
+        text.contains('gateway timeout') ||
+        text.contains('internal server error') ||
+        text.contains('too many requests');
+  }
+
   static RecordModel _profileRecord(Map<String, dynamic> row) {
     final phone = row['phone']?.toString() ?? '';
     return RecordModel.fromJson({
@@ -148,7 +164,10 @@ class PBService {
         }
       }
       return user;
-    } on AuthException catch (_) {
+    } on AuthException catch (e) {
+      if (_isRetryableAuthException(e)) {
+        throw SocketException('temporary authentication network failure');
+      }
       throw Exception('وشەی نهێنی هەڵەیە');
     }
   }
@@ -549,7 +568,17 @@ class PBService {
       if (receiptPath.isNotEmpty) 'receipt_image': receiptPath,
     };
 
-    final created = await pb.collection('debts').create(body: body);
+    RecordModel created;
+    try {
+      created = await pb.collection('debts').create(body: body);
+    } catch (error) {
+      if (receiptPath.isNotEmpty) {
+        try {
+          await client.storage.from('receipts').remove([receiptPath]);
+        } catch (_) {}
+      }
+      rethrow;
+    }
 
     try {
       final formattedAmount =
@@ -599,14 +628,21 @@ class PBService {
   }
 
   static Future<void> deleteDebt(String id) async {
-    final payments = await pb.collection('payments').getList(
-      filter: 'debt = "${_sanitize(id)}"',
-      perPage: 500,
-    );
-    for (final payment in payments.items) {
-      await pb.collection('payments').delete(payment.id);
-    }
+    final debt = await getDebt(id);
+    final receiptPath = debt.getStringValue('receipt_image');
+
+    // payments.debt_id is ON DELETE CASCADE in Postgres, so one debt delete
+    // keeps the financial delete atomic instead of deleting payments piecemeal.
     await pb.collection('debts').delete(id);
+
+    if (receiptPath.isNotEmpty) {
+      try {
+        await client.storage.from('receipts').remove([receiptPath]);
+      } catch (_) {
+        // Database deletion already succeeded. A storage cleanup failure must
+        // not turn a completed financial transaction into an app-level error.
+      }
+    }
   }
 
   static Future<List<RecordModel>> getDebts({
