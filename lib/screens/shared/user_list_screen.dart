@@ -367,219 +367,179 @@ class _UserListScreenState extends State<UserListScreen> {
     final accentColor = _isEmployee
         ? const Color(0xFF4A6CF7)
         : AppColors.primary;
+    final balance = _balances[user.id] ?? 0;
+    final canManageCustomer = widget.role == 'customer' &&
+        (auth.userRole == 'admin' || auth.userRole == 'employee');
 
-    // Generate avatar colors from name
-    final avatarColors = _getAvatarGradient(name, accentColor);
-
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 400 + (index * 40).clamp(0, 600)),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, 30 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: isDark ? AppDarkColors.card : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isDark
-              ? []
-              : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.06)
+              : const Color(0xFFE9EDF3),
         ),
-        child: Material(
-          color: Colors.transparent,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => UserProfileScreen(userId: user.id),
-                ),
-              ).then((_) => _loadUsers());
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  // Avatar
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: avatarColors,
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: avatarColors[0].withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                        ),
-                      ),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => UserProfileScreen(userId: user.id),
+              ),
+            ).then((_) => _loadUsers());
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: accentColor.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      color: accentColor,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20,
                     ),
                   ),
-                  const SizedBox(width: 14),
-
-                  // Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                name,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: isDark
-                                      ? AppDarkColors.textPrimary
-                                      : Colors.black87,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                color: isDark
+                                    ? AppDarkColors.textPrimary
+                                    : const Color(0xFF1F2937),
                               ),
                             ),
-                            if (_isEmployee && approved)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  'چالاک',
-                                  style: TextStyle(
-                                    color: Colors.green,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        if (!_isEmployee) ...[
-                          const SizedBox(height: 5),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.account_balance_wallet_outlined,
-                                size: 14,
-                                color: _balances.containsKey(user.id)
-                                    ? ((_balances[user.id] ?? 0) > 0
-                                          ? Colors.red[400]
-                                          : Colors.green[400])
-                                    : Colors.grey[400],
-                              ),
-                              const SizedBox(width: 4),
-                              _balances.containsKey(user.id)
-                                  ? Text(
-                                      'ماوە: ${AppHelpers.formatCurrency(_balances[user.id] ?? 0)}',
-                                      style: TextStyle(
-                                        color: (_balances[user.id] ?? 0) > 0
-                                            ? Colors.red[500]
-                                            : Colors.green[500],
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    )
-                                  : Text(
-                                      'ماوە: ...',
-                                      style: TextStyle(
-                                        color: Colors.grey[400],
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                            ],
                           ),
+                          if (_isEmployee && approved)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.10),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'چالاک',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
                         ],
-                      ],
-                    ),
-                  ),
-
-                  // Add Debt Icon (For Employees/Admin regarding customers)
-                  if (widget.role == 'customer' &&
-                      (auth.userRole == 'admin' || auth.userRole == 'employee'))
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      icon: Icon(
-                        Icons.add_circle_outline,
-                        color: AppColors.primary.withOpacity(0.8),
-                        size: 24,
                       ),
-                      onPressed: () {
+                      if (!_isEmployee) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          _balances.containsKey(user.id)
+                              ? 'ماوە: ${AppHelpers.formatCurrency(balance)}'
+                              : 'ماوە: ...',
+                          style: TextStyle(
+                            color: !_balances.containsKey(user.id)
+                                ? Colors.grey[400]
+                                : balance > 0
+                                    ? Colors.red[500]
+                                    : Colors.green[500],
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (canManageCustomer)
+                  PopupMenuButton<String>(
+                    tooltip: 'کردارەکان',
+                    padding: EdgeInsets.zero,
+                    onSelected: (value) {
+                      if (value == 'debt') {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => AddDebtScreen(customerId: user.id),
                           ),
                         ).then((_) => _loadUsers());
-                      },
-                    ),
-
-                  // Payment Icon
-                  if (widget.role == 'customer' &&
-                      ((_balances[user.id] ?? 0) > 0) &&
-                      (auth.userRole == 'admin' || auth.userRole == 'employee'))
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4),
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        icon: Icon(
-                          Icons.payments_outlined,
-                          color: Colors.green.withOpacity(0.8),
-                          size: 24,
+                      } else if (value == 'payment') {
+                        _showPaymentDialog(user);
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      const PopupMenuItem<String>(
+                        value: 'debt',
+                        child: Row(
+                          children: [
+                            Icon(Icons.add_card_rounded, size: 20),
+                            SizedBox(width: 10),
+                            Text('قەرز زیاد بکە'),
+                          ],
                         ),
-                        onPressed: () => _showPaymentDialog(user),
+                      ),
+                      if (balance > 0)
+                        const PopupMenuItem<String>(
+                          value: 'payment',
+                          child: Row(
+                            children: [
+                              Icon(Icons.payments_outlined, size: 20),
+                              SizedBox(width: 10),
+                              Text('پارەدانەوە'),
+                            ],
+                          ),
+                        ),
+                    ],
+                    icon: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: accentColor.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.more_horiz_rounded,
+                        color: accentColor,
+                        size: 22,
                       ),
                     ),
-
-                  // Arrow
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.chevron_left,
-                      color: accentColor.withOpacity(0.5),
-                      size: 20,
-                    ),
+                  )
+                else
+                  Icon(
+                    Icons.chevron_left_rounded,
+                    color: isDark ? Colors.grey[600] : Colors.grey[350],
+                    size: 22,
                   ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
