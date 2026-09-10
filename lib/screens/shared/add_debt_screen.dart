@@ -633,7 +633,10 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       if (mounted) {
         AppHelpers.showSnackBar(
           context,
-          'هەڵە لە کردنەوەی کامێرا: $e',
+          AppHelpers.backendErrorMessage(
+            e,
+            fallback: 'نەتوانرا وێنە هەڵبژێردرێت. دووبارە هەوڵ بدە.',
+          ),
           isError: true,
         );
       }
@@ -873,7 +876,14 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       }
     } catch (e) {
       if (mounted) {
-        AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+        AppHelpers.showSnackBar(
+          context,
+          AppHelpers.backendErrorMessage(
+            e,
+            fallback: 'نەتوانرا قەرزەکە پاشەکەوت بکرێت. دووبارە هەوڵ بدە.',
+          ),
+          isError: true,
+        );
       }
     }
 
