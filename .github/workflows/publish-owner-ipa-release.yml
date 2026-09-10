@@ -1,0 +1,54 @@
+name: Publish Owner IPA Release
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/publish-owner-ipa-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish-owner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download latest owner IPA artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          ARTIFACT_ID="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${{ github.repository }}/actions/artifacts?name=zhirox-owner-unsigned-ipa&per_page=50" \
+            --jq 'first(.artifacts[] | select(.expired == false) | .id)')"
+          test -n "$ARTIFACT_ID"
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            > out/artifact.zip
+          unzip -o out/artifact.zip -d out
+          test -f out/zhirox-owner-unsigned.ipa
+
+      - name: Create or update public owner release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view owner-safari-download --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload owner-safari-download out/zhirox-owner-unsigned.ipa \
+              --repo "${{ github.repository }}" --clobber
+          else
+            gh release create owner-safari-download out/zhirox-owner-unsigned.ipa \
+              --repo "${{ github.repository }}" \
+              --target owner-source \
+              --title "ZHIROX Owner — Safari Download" \
+              --notes "Public unsigned Owner IPA. Admin creation remains protected by System Owner authentication on the backend. Sign before installing on a physical iPhone."
+          fi
+
+      - name: Print direct Safari URL
+        run: |
+          echo "https://github.com/${{ github.repository }}/releases/download/owner-safari-download/zhirox-owner-unsigned.ipa"
