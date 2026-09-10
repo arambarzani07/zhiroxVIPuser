@@ -29,6 +29,7 @@ class _UserListScreenState extends State<UserListScreen> {
   String? _loadError;
   final _searchController = TextEditingController();
   final Map<String, double> _balances = {};
+  final Set<String> _balanceErrors = <String>{};
   StreamSubscription<bool>? _connectivitySub;
 
   @override
@@ -100,8 +101,10 @@ class _UserListScreenState extends State<UserListScreen> {
         try {
           final balance = await PBService.getCustomerBalance(user.id);
           _balances[user.id] = balance;
+          _balanceErrors.remove(user.id);
         } catch (_) {
-          _balances[user.id] = 0;
+          _balances.remove(user.id);
+          _balanceErrors.add(user.id);
         }
       }),
     );
@@ -378,6 +381,7 @@ class _UserListScreenState extends State<UserListScreen> {
     final approved = user.getBoolValue('approved');
     final accentColor = AppColors.primary;
     final balance = _balances[user.id] ?? 0;
+    final balanceUnavailable = _balanceErrors.contains(user.id);
     final canManageCustomer = widget.role == 'customer' &&
         (auth.userRole == 'admin' || auth.userRole == 'employee');
 
@@ -488,15 +492,19 @@ class _UserListScreenState extends State<UserListScreen> {
                       if (!_isEmployee) ...[
                         const SizedBox(height: 5),
                         Text(
-                          _balances.containsKey(user.id)
-                              ? 'ماوە: ${AppHelpers.formatCurrency(balance)}'
-                              : 'ماوە: ...',
+                          balanceUnavailable
+                              ? 'ماوە: نەتوانرا باربکرێت'
+                              : _balances.containsKey(user.id)
+                                  ? 'ماوە: ${AppHelpers.formatCurrency(balance)}'
+                                  : 'ماوە: ...',
                           style: TextStyle(
-                            color: !_balances.containsKey(user.id)
-                                ? Colors.grey[400]
-                                : balance > 0
-                                    ? Colors.red[500]
-                                    : Colors.green[500],
+                            color: balanceUnavailable
+                                ? Colors.orange[500]
+                                : !_balances.containsKey(user.id)
+                                    ? Colors.grey[400]
+                                    : balance > 0
+                                        ? Colors.red[500]
+                                        : Colors.green[500],
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
                           ),
