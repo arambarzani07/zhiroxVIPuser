@@ -24,9 +24,8 @@ jobs:
 
           compat = Path('lib/services/supabase_compat.dart')
           text = compat.read_text()
-          anchor = """    if (logicalName == 'debts') {
-              if (result.containsKey('customer')) {"""
-          replacement = """    if (logicalName == 'debts') {
+          anchor = "    if (logicalName == 'debts') {\n"
+          insert = """    if (logicalName == 'debts') {
               // Optional PostgreSQL date/timestamp columns must receive NULL,
               // never an empty string (which raises Postgres error 22007).
               for (final key in const ['due_date', 'custom_date']) {
@@ -35,9 +34,9 @@ jobs:
                   result[key] = null;
                 }
               }
-              if (result.containsKey('customer')) {"""
+          """
           assert text.count(anchor) == 1, f'compat anchor count={text.count(anchor)}'
-          compat.write_text(text.replace(anchor, replacement, 1))
+          compat.write_text(text.replace(anchor, insert, 1))
 
           service = Path('lib/services/pb_service.dart')
           text = service.read_text()
@@ -46,9 +45,7 @@ jobs:
           assert text.count(old) == 1, f'create due_date anchor count={text.count(old)}'
           text = text.replace(old, new, 1)
 
-          old = """  static Future<void> updateDebt(String id, Map<String, dynamic> data) async {
-              await pb.collection('debts').update(id, body: data);
-            }"""
+          old = "  static Future<void> updateDebt(String id, Map<String, dynamic> data) async {\n    await pb.collection('debts').update(id, body: data);\n  }"
           new = """  static Future<void> updateDebt(String id, Map<String, dynamic> data) async {
               final normalized = Map<String, dynamic>.from(data);
               for (final key in const ['due_date', 'custom_date']) {
