@@ -24,7 +24,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
   RecordModel? _debt;
   List<RecordModel> _payments = [];
   bool _isLoading = true;
-  bool _isSaving = false;
+  String? _loadError;
   late AnimationController _animController;
 
   @override
@@ -44,13 +44,36 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
     try {
-      _debt = await PBService.getDebt(widget.debtId);
-      _payments = await PBService.getPayments(debtId: widget.debtId);
-    } catch (_) {}
-    setState(() => _isLoading = false);
-    _animController.forward(from: 0);
+      final debt = await PBService.getDebt(widget.debtId);
+      final payments = await PBService.getPayments(debtId: widget.debtId);
+      if (!mounted) return;
+
+      setState(() {
+        _debt = debt;
+        _payments = payments;
+        _isLoading = false;
+        _loadError = null;
+      });
+      _animController.forward(from: 0);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _debt = null;
+        _payments = [];
+        _isLoading = false;
+        _loadError = AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا وردەکاری قەرز لە سێرڤەر وەربگیرێت. دووبارە هەوڵ بدە.',
+        );
+      });
+    }
   }
 
   Future<void> _printDebtInvoice() async {
@@ -96,16 +119,28 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
   }
 
   Future<void> _handleDebtAction(String action) async {
-    switch (action) {
-      case 'print':
-        await _printDebtInvoice();
-        break;
-      case 'edit':
-        await _editCurrentDebt();
-        break;
-      case 'delete':
-        if (mounted) _confirmDelete();
-        break;
+    try {
+      switch (action) {
+        case 'print':
+          await _printDebtInvoice();
+          break;
+        case 'edit':
+          await _editCurrentDebt();
+          break;
+        case 'delete':
+          await _confirmDelete();
+          break;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا کردارەکە ئەنجام بدرێت. دووبارە هەوڵ بدە.',
+        ),
+        isError: true,
+      );
     }
   }
 
@@ -122,6 +157,44 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
             : const Color(0xFFF5F7FA),
         appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
         body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+
+    if (_loadError != null) {
+      return Scaffold(
+        backgroundColor: isDark
+            ? AppDarkColors.background
+            : const Color(0xFFF5F7FA),
+        appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_rounded, size: 42, color: Colors.orange),
+                const SizedBox(height: 12),
+                Text(
+                  _loadError!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    height: 1.6,
+                    color: isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF344054),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  onPressed: _loadData,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('دووبارە هەوڵ بدە'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -1032,33 +1105,39 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
 
   // ───── Actions ─────
 
-  void _confirmDelete() async {
+  Future<void> _confirmDelete() async {
     final confirm = await AppHelpers.showConfirmDialog(
       context,
       title: 'سڕینەوەی قەرز',
       message: 'دڵنیایت لە سڕینەوەی ئەم قەرزە؟',
     );
-    if (confirm) {
-      try {
-        await context.read<DebtProvider>().removeDebt(widget.debtId);
-        if (mounted) Navigator.pop(context);
-      } catch (e) {
-        if (mounted) {
-          AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
-        }
-      }
+    if (!mounted || !confirm) return;
+    try {
+      await context.read<DebtProvider>().removeDebt(widget.debtId);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا قەرزەکە بسڕدرێتەوە. دووبارە هەوڵ بدە.',
+        ),
+        isError: true,
+      );
     }
   }
 
-  void _showAddPaymentDialog() {
+  Future<void> _showAddPaymentDialog() async {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     final remaining = _debt!.getDoubleValue('remaining');
     final currency = _debt!.getStringValue('currency');
     final dollarRate = _debt!.getDoubleValue('dollar_rate');
+    bool isSubmitting = false;
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1268,11 +1347,11 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: _isSaving
+                      onPressed: isSubmitting
                           ? null
                           : () async {
                               if (!formKey.currentState!.validate()) return;
-                              setState(() => _isSaving = true);
+                              setSheetState(() => isSubmitting = true);
                               try {
                                 final auth = context.read<AuthProvider>();
                                 final inputAmount = double.parse(
@@ -1290,24 +1369,28 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                                   createdBy: auth.userId,
                                 );
 
-                                // Close dialog IMMEDIATELY
-                                if (mounted) {
+                                if (!mounted) return;
+                                if (sheetCtx.mounted) {
                                   Navigator.pop(sheetCtx);
-                                  AppHelpers.showSnackBar(
-                                    context,
-                                    'پارەدانەوە تۆمارکرا',
-                                  );
-                                  _loadData();
                                 }
+                                AppHelpers.showSnackBar(
+                                  context,
+                                  'پارەدانەوە تۆمارکرا',
+                                );
+                                await _loadData();
                               } catch (e) {
-                                _isSaving = false;
-                                if (mounted) {
-                                  AppHelpers.showSnackBar(
-                                    context,
-                                    'هەڵە: $e',
-                                    isError: true,
-                                  );
+                                if (sheetCtx.mounted) {
+                                  setSheetState(() => isSubmitting = false);
                                 }
+                                if (!mounted) return;
+                                AppHelpers.showSnackBar(
+                                  context,
+                                  AppHelpers.backendErrorMessage(
+                                    e,
+                                    fallback: 'نەتوانرا پارەدانەوە تۆمار بکرێت. دووبارە هەوڵ بدە.',
+                                  ),
+                                  isError: true,
+                                );
                               }
                             },
                       style: ElevatedButton.styleFrom(
@@ -1335,6 +1418,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
         },
       ),
     );
+    amountController.dispose();
+    noteController.dispose();
   }
 
   Widget _buildQuickPayBtn(

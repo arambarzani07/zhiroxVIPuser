@@ -52,9 +52,7 @@ for marker in ('_customerLoadError', '_buildCustomerPicker', 'دووبارە ه�
     if marker not in add_debt:
         fail(f'lib/screens/shared/add_debt_screen.dart: fail-closed customer loading marker missing: {marker}')
 load_match = re.search(
-    r'Future<void>\s+_loadCustomers\(\)\s+async\s*\{(.*?)(?=
-\s*@override
-\s*void dispose)',
+    r'Future<void>\s+_loadCustomers\(\)\s+async\s*\{(.*?)(?=\s*@override\s*void dispose)',
     add_debt,
     re.S,
 )
@@ -63,8 +61,7 @@ if not load_match or '_customerLoadError =' not in load_match.group(1):
 
 compat = (LIB / 'services/supabase_compat.dart').read_text(encoding='utf-8')
 ctx_match = re.search(
-    r'Future<_RelationContext>\s+_contextFor\([^)]*\)\s+async\s*\{(.*?)(?=
-\s*Map<String, dynamic>\s+_writeMap)',
+    r'Future<_RelationContext>\s+_contextFor\([^)]*\)\s+async\s*\{(.*?)(?=\s*Map<String, dynamic>\s+_writeMap)',
     compat,
     re.S,
 )
@@ -91,6 +88,21 @@ else:
 add_debt = (LIB / 'screens/shared/add_debt_screen.dart').read_text(encoding='utf-8')
 if 'PBService.getCustomerBalance' not in add_debt:
     fail('lib/screens/shared/add_debt_screen.dart: debt-limit flow must verify live customer balance')
+
+
+# User-facing screens must not expose raw backend exception text, and debt detail
+# must preserve an explicit retryable load-error state.
+detail = (LIB / 'screens/shared/debt_detail_screen.dart').read_text(encoding='utf-8')
+for rel, source in (
+    ('lib/screens/shared/add_debt_screen.dart', add_debt),
+    ('lib/screens/shared/debt_detail_screen.dart', detail),
+):
+    for raw_marker in ("'هەڵە: $e'", "هەڵە لە کردنەوەی کامێرا: $e"):
+        if raw_marker in source:
+            fail(f'{rel}: raw backend exception text must not be shown to users')
+for marker in ('String? _loadError', 'AppHelpers.backendErrorMessage', 'دووبارە هەوڵ بدە'):
+    if marker not in detail:
+        fail(f'lib/screens/shared/debt_detail_screen.dart: lifecycle/error marker missing: {marker}')
 
 
 if violations:
