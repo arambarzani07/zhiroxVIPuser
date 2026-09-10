@@ -40,28 +40,10 @@ jobs:
               text = path.read_text()
               text = text.replace(old_import, new_import)
               text = text.replace("getStringValue('password_text')", "''")
+              text = text.replace("data['password_text'] = _passwordController.text;", "// Plaintext password persistence removed.")
+              text = text.replace('// Update password_text if password field is not empty', '// Password changes are handled by Supabase Auth.')
+              text = text.replace('if (_passwordController.text.length < 8) {', 'if (_passwordController.text.isNotEmpty && _passwordController.text.length < 8) {')
               path.write_text(text)
-
-          profile = root / 'lib/screens/shared/user_profile_screen.dart'
-          if profile.exists():
-              text = profile.read_text()
-              text = text.replace("""    if (_passwordController.text.length < 8) {
-      AppHelpers.showSnackBar(
-        context,
-        'وشەی نهێنی لانیکەم ٨ پیت بێت',
-        isError: true,
-      );
-      return;
-    }
-
-""", '')
-              text = text.replace("""      // Update password_text if password field is not empty
-      if (_passwordController.text.isNotEmpty) {
-        data['password_text'] = _passwordController.text;
-      }
-
-""", '')
-              profile.write_text(text)
 
           login = root / 'lib/screens/auth/login_screen.dart'
           if login.exists():
@@ -69,10 +51,7 @@ jobs:
               text = text.replace("import 'package:zhirox/screens/auth/admin_management_screen.dart';\n", '')
               login.write_text(text)
 
-          for rel in (
-              'lib/screens/auth/admin_management_screen.dart',
-              'lib/screens/auth/register_admin_screen.dart',
-          ):
+          for rel in ('lib/screens/auth/admin_management_screen.dart', 'lib/screens/auth/register_admin_screen.dart'):
               path = root / rel
               if path.exists():
                   path.unlink()
@@ -86,10 +65,7 @@ jobs:
 
           pbx = root / 'ios/Runner.xcodeproj/project.pbxproj'
           if pbx.exists():
-              text = pbx.read_text().replace(
-                  'IPHONEOS_DEPLOYMENT_TARGET = 13.0;',
-                  'IPHONEOS_DEPLOYMENT_TARGET = 15.0;',
-              )
+              text = pbx.read_text().replace('IPHONEOS_DEPLOYMENT_TARGET = 13.0;', 'IPHONEOS_DEPLOYMENT_TARGET = 15.0;')
               pbx.write_text(text)
 
           legacy_imports = []
