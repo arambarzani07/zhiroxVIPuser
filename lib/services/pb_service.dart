@@ -479,15 +479,11 @@ class PBService {
   // ==================== Debts ====================
 
   static Future<double> getCustomerBalance(String customerId) async {
-    try {
-      final debts = await getDebts(customerId: customerId);
-      return debts.fold<double>(
-        0,
-        (sum, debt) => sum + debt.getDoubleValue('remaining'),
-      );
-    } catch (_) {
-      return 0;
-    }
+    final debts = await getDebts(customerId: customerId);
+    return debts.fold<double>(
+      0,
+      (sum, debt) => sum + debt.getDoubleValue('remaining'),
+    );
   }
 
   static String _mimeForPath(String path) {

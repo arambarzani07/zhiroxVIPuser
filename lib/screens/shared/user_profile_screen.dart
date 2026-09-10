@@ -2455,11 +2455,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           }
           return;
         }
-      } catch (e) {
+      } catch (_) {
         if (mounted) {
           AppHelpers.showSnackBar(
             context,
-            'هەڵە لە پشکنینی باڵانس: $e',
+            'نەتوانرا باڵانسی کڕیار پشتڕاست بکرێتەوە. کڕیار ناسڕدرێتەوە تا پەیوەندی سێرڤەر دروست بێت.',
             isError: true,
           );
         }
