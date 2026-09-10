@@ -1,0 +1,118 @@
+name: Patch Admin Dashboard Lifecycle Once
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - '.github/workflows/patch-admin-dashboard-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout user-source
+        uses: actions/checkout@v4
+        with:
+          ref: user-source
+          fetch-depth: 0
+
+      - name: Harden async dialog lifecycle
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/screens/admin/admin_dashboard.dart')
+          text = path.read_text()
+
+          old = '''                          if (existing.items.isNotEmpty) {
+                            setDialogState(() => isSaving = false);'''
+          new = '''                          if (!ctx.mounted || !mounted) return;
+                          if (existing.items.isNotEmpty) {
+                            setDialogState(() => isSaving = false);'''
+          assert text.count(old) == 1, f'phone uniqueness guard target count={text.count(old)}'
+          text = text.replace(old, new, 1)
+
+          old = '''                          await auth.refreshUser();
+                          if (mounted) {
+                            Navigator.pop(ctx);
+                            AppHelpers.showSnackBar(
+                              context,
+                              'ژمارە مۆبایل گۆڕا ✅',
+                            );
+                          }'''
+          new = '''                          await auth.refreshUser();
+                          if (!ctx.mounted || !mounted) return;
+                          Navigator.pop(ctx);
+                          AppHelpers.showSnackBar(
+                            context,
+                            'ژمارە مۆبایل گۆڕا ✅',
+                          );'''
+          assert text.count(old) == 1, f'phone success target count={text.count(old)}'
+          text = text.replace(old, new, 1)
+
+          old = '''                          await PBService.changePassword(
+                            userId: auth.userId,
+                            oldPassword: oldPassController.text,
+                            newPassword: passController.text,
+                          );
+                          if (mounted) {
+                            Navigator.pop(ctx);
+                            AppHelpers.showSnackBar(
+                              context,
+                              'وشەی نهێنی گۆڕا ✅',
+                            );
+                          }'''
+          new = '''                          await PBService.changePassword(
+                            userId: auth.userId,
+                            oldPassword: oldPassController.text,
+                            newPassword: passController.text,
+                          );
+                          if (!ctx.mounted || !mounted) return;
+                          Navigator.pop(ctx);
+                          AppHelpers.showSnackBar(
+                            context,
+                            'وشەی نهێنی گۆڕا ✅',
+                          );'''
+          assert text.count(old) == 1, f'password success target count={text.count(old)}'
+          text = text.replace(old, new, 1)
+
+          old = '''                        } catch (e) {
+                          setDialogState(() => isSaving = false);
+                          if (mounted) {
+                            AppHelpers.showSnackBar(
+                              context,
+                              'هەڵە: $e',
+                              isError: true,
+                            );
+                          }
+                        }'''
+          new = '''                        } catch (e) {
+                          if (ctx.mounted) {
+                            setDialogState(() => isSaving = false);
+                          }
+                          if (mounted) {
+                            AppHelpers.showSnackBar(
+                              context,
+                              'هەڵە: $e',
+                              isError: true,
+                            );
+                          }
+                        }'''
+          count = text.count(old)
+          assert count == 2, f'catch guard target count={count}'
+          text = text.replace(old, new)
+
+          path.write_text(text)
+          PY
+
+      - name: Commit hardening
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/screens/admin/admin_dashboard.dart
+          git diff --cached --quiet && exit 0
+          git commit -m 'Harden admin dashboard async dialog lifecycle'
+          git push origin user-source
