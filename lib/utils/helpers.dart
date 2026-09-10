@@ -95,6 +95,51 @@ class AppHelpers {
     return '$days ڕۆژ ماوە';
   }
 
+  // هەڵەی backend/network بە پەیامێکی ڕوون و بێ وردەکاریی ناوخۆیی دەگۆڕێت.
+  static String backendErrorMessage(
+    Object error, {
+    String fallback = 'کردارەکە سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+  }) {
+    final text = error.toString().toLowerCase();
+
+    if (text.contains('socket') ||
+        text.contains('network') ||
+        text.contains('connection') ||
+        text.contains('clientexception') ||
+        text.contains('failed host lookup') ||
+        text.contains('timeout') ||
+        text.contains('timed out')) {
+      return 'پەیوەندی بە سێرڤەر نەکرا. ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.';
+    }
+
+    if (text.contains('401') ||
+        text.contains('jwt') ||
+        text.contains('unauthorized') ||
+        text.contains('not authenticated')) {
+      return 'دانیشتنەکەت بەسەرچووە. تکایە دووبارە بچۆ ژوورەوە.';
+    }
+
+    if (text.contains('403') ||
+        text.contains('permission') ||
+        text.contains('row-level security') ||
+        text.contains('rls')) {
+      return 'دەسەڵاتی ئەنجامدانی ئەم کردارەت نییە.';
+    }
+
+    if (text.contains('409') ||
+        text.contains('duplicate') ||
+        text.contains('unique constraint') ||
+        text.contains('already exists')) {
+      return 'ئەم زانیارییە پێشتر تۆمار کراوە.';
+    }
+
+    if (text.contains('404') || text.contains('not found')) {
+      return 'زانیاریی داواکراو نەدۆزرایەوە. پەڕەکە نوێ بکەرەوە.';
+    }
+
+    return fallback;
+  }
+
   // پیشاندانی سناکبار
   static void showSnackBar(
     BuildContext context,
@@ -140,7 +185,6 @@ class AppHelpers {
   static String formatTime(String date) {
     try {
       final parsed = DateTime.parse(date).toLocal();
-      // Format: 04:30 PM
       return DateFormat('hh:mm a').format(parsed);
     } catch (_) {
       return '';
