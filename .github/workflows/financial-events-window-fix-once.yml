@@ -1,0 +1,42 @@
+name: Financial Events Window Fix Once
+
+on:
+  push:
+    branches:
+      - owner-source
+    paths:
+      - '.github/workflows/financial-events-window-fix-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Preserve helper
+        run: cp scripts/financial_events_window_fix.py /tmp/financial_events_window_fix.py
+      - name: Patch Owner
+        run: |
+          python3 /tmp/financial_events_window_fix.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/services/pb_service.dart
+          if ! git diff --cached --quiet; then
+            git commit -m 'Keep latest Financial Chat audit window'
+            git push origin HEAD:owner-source
+          fi
+      - name: Patch User
+        run: |
+          git fetch origin user-source
+          git checkout -B user-source origin/user-source
+          python3 /tmp/financial_events_window_fix.py
+          git add lib/services/pb_service.dart
+          if ! git diff --cached --quiet; then
+            git commit -m 'Keep latest Financial Chat audit window'
+            git push origin HEAD:user-source
+          fi
