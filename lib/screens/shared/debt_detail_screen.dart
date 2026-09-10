@@ -732,8 +732,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                     final itemCurrency =
                         (item is Map ? item['currency'] : null) ??
                             _debt!.getStringValue('currency');
-                    final total = (price is num ? price.toDouble() : 0) *
-                        (qty is num ? qty.toDouble() : 1);
+                    final total = (price is num ? price.toDouble() : 0.0) *
+                        (qty is num ? qty.toDouble() : 1.0);
 
                     return Container(
                       padding: const EdgeInsets.symmetric(
