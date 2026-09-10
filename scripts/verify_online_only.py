@@ -121,6 +121,24 @@ if 'getFinancialEvents(String customerId)' not in pb:
     fail('lib/services/pb_service.dart: Financial Chat audit reader missing')
 
 
+# Financial Chat Phase 4 must remain live-only and keep its integrated search,
+# date/type filters, debt references, receipt preview and statement/share action.
+profile = (LIB / 'screens/shared/user_profile_screen.dart').read_text(encoding='utf-8')
+for marker_name in (
+    '_financialSearchController',
+    '_financialDateRange',
+    "_financialTypeFilter = 'all'",
+    '_filterFinancialTimeline',
+    'showDateRangePicker',
+    '_buildPaymentDebtReference',
+    '_buildReceiptPreview',
+    'Image.network(',
+    'کەشف / هاوبەشکردن',
+):
+    if marker_name not in profile:
+        fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat Phase 4 marker missing: {marker_name}')
+
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
