@@ -8,11 +8,9 @@ import 'package:zhirox/providers/debt_provider.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
 import 'package:zhirox/screens/shared/add_user_screen.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
-import 'dart:convert';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zhirox/services/connectivity_service.dart';
 
 class UserListScreen extends StatefulWidget {
@@ -28,6 +26,7 @@ class UserListScreen extends StatefulWidget {
 class _UserListScreenState extends State<UserListScreen> {
   List<RecordModel> _users = [];
   bool _isLoading = true;
+  String? _loadError;
   final _searchController = TextEditingController();
   final Map<String, double> _balances = {};
   StreamSubscription<bool>? _connectivitySub;
@@ -62,48 +61,35 @@ class _UserListScreenState extends State<UserListScreen> {
 
   Future<void> _loadUsers({String? search}) async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
-
-    final adminId = _adminId;
-    final cacheKey = 'cached_users_${widget.role}_$adminId';
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
 
     try {
+      final adminId = _adminId;
       final users = await PBService.getUsers(
         role: widget.role,
         search: search,
         adminId: adminId.isNotEmpty ? adminId : null,
       );
-      _users = users;
+      if (!mounted) return;
+      setState(() {
+        _users = users;
+        _isLoading = false;
+      });
 
-      // Cache data
-      if (search == null || search.isEmpty) {
-        // Only cache full list
-        final prefs = await SharedPreferences.getInstance();
-        final usersJson = _users.map((u) => u.toJson()).toList();
-        await prefs.setString(cacheKey, jsonEncode(usersJson));
+      if (widget.role == 'customer' && users.isNotEmpty) {
+        unawaited(_loadBalancesInBackground());
       }
-
-      // Show list immediately, then load balances in background
-      if (mounted) setState(() => _isLoading = false);
-
-      // Load customer balances in parallel (non-blocking)
-      if (widget.role == 'customer' && _users.isNotEmpty) {
-        _loadBalancesInBackground();
-      }
-      return; // Skip the setState below since we already did it
-    } catch (e) {
-      // Offline Mode
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final cachedString = prefs.getString(cacheKey);
-
-        if (cachedString != null) {
-          final List<dynamic> decoded = jsonDecode(cachedString);
-          _users = decoded.map((item) => RecordModel.fromJson(item)).toList();
-        }
-      } catch (_) {}
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _users = [];
+        _isLoading = false;
+        _loadError = 'نەتوانرا لیستەکە باربکرێت. پەیوەندی ئینتەرنێت بپشکنە.';
+      });
     }
-    if (mounted) setState(() => _isLoading = false);
   }
 
   /// Load all customer balances in parallel (non-blocking)
@@ -143,24 +129,19 @@ class _UserListScreenState extends State<UserListScreen> {
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: _isEmployee
-                      ? [const Color(0xFF4A6CF7), const Color(0xFF6B8CFF)]
-                      : [
-                          AppColors.primary,
-                          AppColors.primary.withOpacity(0.85),
-                        ],
+                  colors: [AppColors.primary, AppColors.primary.withOpacity(0.88)],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
                 borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(28),
-                  bottomRight: Radius.circular(28),
+                  bottomLeft: Radius.circular(20),
+                  bottomRight: Radius.circular(20),
                 ),
               ),
               child: SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -170,15 +151,15 @@ class _UserListScreenState extends State<UserListScreen> {
                           Icon(
                             _isEmployee ? Icons.badge : Icons.people,
                             color: Colors.white,
-                            size: 26,
+                            size: 22,
                           ),
                           const SizedBox(width: 10),
                           Text(
                             _isEmployee ? 'کارمەندەکان' : 'کڕیارەکان',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                           const Spacer(),
@@ -222,7 +203,7 @@ class _UserListScreenState extends State<UserListScreen> {
                           ],
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 12),
 
                       // Search Bar
                       Container(
@@ -254,9 +235,7 @@ class _UserListScreenState extends State<UserListScreen> {
                             ),
                             prefixIcon: Icon(
                               Icons.search,
-                              color: _isEmployee
-                                  ? const Color(0xFF4A6CF7)
-                                  : AppColors.primary,
+                              color: AppColors.primary,
                               size: 22,
                             ),
                             suffixIcon: _searchController.text.isNotEmpty
@@ -293,6 +272,8 @@ class _UserListScreenState extends State<UserListScreen> {
               ? const SliverFillRemaining(
                   child: Center(child: CircularProgressIndicator()),
                 )
+              : _loadError != null
+              ? SliverFillRemaining(child: _buildLoadErrorState())
               : _users.isEmpty
               ? SliverFillRemaining(child: _buildEmptyState())
               : SliverPadding(
@@ -334,6 +315,37 @@ class _UserListScreenState extends State<UserListScreen> {
     });
   }
 
+  Widget _buildLoadErrorState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cloud_off_rounded, size: 40, color: Colors.orange[400]),
+            const SizedBox(height: 12),
+            Text(
+              _loadError ?? 'نەتوانرا زانیاری باربکرێت',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.6,
+                color: isDark ? AppDarkColors.textSecondary : const Color(0xFF667085),
+              ),
+            ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: () => _loadUsers(search: _searchController.text.trim()),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('دووبارە هەوڵ بدە'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -364,9 +376,7 @@ class _UserListScreenState extends State<UserListScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final name = user.getStringValue('name');
     final approved = user.getBoolValue('approved');
-    final accentColor = _isEmployee
-        ? const Color(0xFF4A6CF7)
-        : AppColors.primary;
+    final accentColor = AppColors.primary;
     final balance = _balances[user.id] ?? 0;
     final canManageCustomer = widget.role == 'customer' &&
         (auth.userRole == 'admin' || auth.userRole == 'employee');
@@ -458,6 +468,23 @@ class _UserListScreenState extends State<UserListScreen> {
                             ),
                         ],
                       ),
+                      if (_isEmployee) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          user.getStringValue('phone').isEmpty
+                              ? 'ژمارە مۆبایل نەدراوە'
+                              : user.getStringValue('phone'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textDirection: TextDirection.ltr,
+                          style: TextStyle(
+                            color: isDark
+                                ? AppDarkColors.textSecondary
+                                : const Color(0xFF98A2B3),
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
                       if (!_isEmployee) ...[
                         const SizedBox(height: 5),
                         Text(
