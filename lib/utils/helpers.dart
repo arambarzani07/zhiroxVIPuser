@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 class AppHelpers {
-  // فۆرماتی پارە
   static String formatCurrency(double amount) {
     final formatter = NumberFormat('#,###', 'en');
     return '${formatter.format(amount)} د.ع';
   }
 
-  // فۆرماتی پارە بە جۆری دراو
   static String formatCurrencyWithType(
     double amount,
     String currency, {
@@ -27,7 +25,6 @@ class AppHelpers {
     return '${formatter.format(amount)} د.ع';
   }
 
-  // فۆرماتی بەروار
   static String formatDate(String date) {
     try {
       final parsed = DateTime.parse(date).toLocal();
@@ -46,7 +43,6 @@ class AppHelpers {
     }
   }
 
-  // رەنگی بارودۆخ
   static Color statusColor(String status) {
     switch (status) {
       case 'pending':
@@ -60,7 +56,6 @@ class AppHelpers {
     }
   }
 
-  // ناوی بارودۆخ بە کوردی
   static String statusName(String status) {
     switch (status) {
       case 'pending':
@@ -74,7 +69,6 @@ class AppHelpers {
     }
   }
 
-  // ناوی ڕۆڵ بە کوردی
   static String roleName(String role) {
     switch (role) {
       case 'admin':
@@ -88,14 +82,56 @@ class AppHelpers {
     }
   }
 
-  // ماوەی ماوە بە ڕۆژ
   static String remainingDays(int days) {
     if (days <= 0) return 'تەواو بووە';
     if (days == 1) return '١ ڕۆژ ماوە';
     return '$days ڕۆژ ماوە';
   }
 
-  // پیشاندانی سناکبار
+  static String backendErrorMessage(
+    Object error, {
+    String fallback = 'کردارەکە سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+  }) {
+    final text = error.toString().toLowerCase();
+
+    if (text.contains('socket') ||
+        text.contains('network') ||
+        text.contains('connection') ||
+        text.contains('clientexception') ||
+        text.contains('failed host lookup') ||
+        text.contains('timeout') ||
+        text.contains('timed out')) {
+      return 'پەیوەندی بە سێرڤەر نەکرا. ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.';
+    }
+
+    if (text.contains('401') ||
+        text.contains('jwt') ||
+        text.contains('unauthorized') ||
+        text.contains('not authenticated')) {
+      return 'دانیشتنەکەت بەسەرچووە. تکایە دووبارە بچۆ ژوورەوە.';
+    }
+
+    if (text.contains('403') ||
+        text.contains('permission') ||
+        text.contains('row-level security') ||
+        text.contains('rls')) {
+      return 'دەسەڵاتی ئەنجامدانی ئەم کردارەت نییە.';
+    }
+
+    if (text.contains('409') ||
+        text.contains('duplicate') ||
+        text.contains('unique constraint') ||
+        text.contains('already exists')) {
+      return 'ئەم زانیارییە پێشتر تۆمار کراوە.';
+    }
+
+    if (text.contains('404') || text.contains('not found')) {
+      return 'زانیاریی داواکراو نەدۆزرایەوە. پەڕەکە نوێ بکەرەوە.';
+    }
+
+    return fallback;
+  }
+
   static void showSnackBar(
     BuildContext context,
     String message, {
@@ -111,7 +147,6 @@ class AppHelpers {
     );
   }
 
-  // دیالۆگی دڵنیابوونەوە
   static Future<bool> showConfirmDialog(
     BuildContext context, {
     required String title,
@@ -140,7 +175,6 @@ class AppHelpers {
   static String formatTime(String date) {
     try {
       final parsed = DateTime.parse(date).toLocal();
-      // Format: 04:30 PM
       return DateFormat('hh:mm a').format(parsed);
     } catch (_) {
       return '';
@@ -151,7 +185,6 @@ class AppHelpers {
     try {
       final start = DateTime.parse(created).toLocal();
       final end = isPaid ? DateTime.parse(updated).toLocal() : DateTime.now();
-
       final diff = end.difference(start);
       final days = diff.inDays;
 
