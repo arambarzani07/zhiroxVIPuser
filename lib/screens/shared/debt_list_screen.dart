@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/debt_provider.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen.dart';
@@ -25,6 +23,8 @@ class _DebtListScreenState extends State<DebtListScreen> {
   List<_CustomerInfo> _customers = [];
   bool _isLoading = true;
   bool _isPaying = false;
+  bool _loadInFlight = false;
+  String? _loadError;
   Timer? _debounceTimer;
   final _searchController = TextEditingController();
   String _sortMode = 'default'; // 'default', 'name', 'amount'
@@ -43,6 +43,10 @@ class _DebtListScreenState extends State<DebtListScreen> {
   @override
   void dispose() {
     _connectivitySub?.cancel();
+    try {
+      PBService.pb.collection('debts').unsubscribe();
+      PBService.pb.collection('payments').unsubscribe();
+    } catch (_) {}
     _searchController.dispose();
     _debounceTimer?.cancel();
     super.dispose();
@@ -66,38 +70,41 @@ class _DebtListScreenState extends State<DebtListScreen> {
   }
 
   Future<void> _loadAllDebts({bool showLoading = true}) async {
-    if (!mounted) return;
-    if (showLoading) setState(() => _isLoading = true);
+    if (!mounted || _loadInFlight) return;
+    _loadInFlight = true;
 
-    final auth = context.read<AuthProvider>();
-    final cacheKey = 'cached_debts_admin_${auth.adminId}';
+    if (showLoading || _allDebts.isEmpty) {
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
+    }
 
     try {
+      final auth = context.read<AuthProvider>();
       final debts = await PBService.getDebts(
         adminId: auth.adminId,
         perPage: 500,
       );
-      _allDebts = debts;
-      _extractCustomers();
-
-      final prefs = await SharedPreferences.getInstance();
-      final debtsJson = _allDebts.take(100).map((d) => d.toJson()).toList();
-      await prefs.setString(cacheKey, jsonEncode(debtsJson));
-    } catch (e) {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final cached = prefs.getString(cacheKey);
-        if (cached != null) {
-          final List<dynamic> decoded = jsonDecode(cached);
-          _allDebts = decoded
-              .map((item) => RecordModel.fromJson(item))
-              .toList();
-          _extractCustomers();
-        }
-      } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        _allDebts = debts;
+        _loadError = null;
+        _extractCustomers();
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _allDebts = [];
+        _customers = [];
+        _isLoading = false;
+        _loadError =
+            'نەتوانرا لیستی قەرزەکان باربکرێت. پەیوەندی ئینتەرنێت بپشکنە.';
+      });
+    } finally {
+      _loadInFlight = false;
     }
-
-    if (mounted) setState(() => _isLoading = false);
   }
 
   /// Instantly updates local state, then syncs with server in background
@@ -393,6 +400,11 @@ class _DebtListScreenState extends State<DebtListScreen> {
                 const SliverFillRemaining(
                   child: Center(child: CircularProgressIndicator()),
                 )
+              else if (_loadError != null)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _buildLoadErrorState(),
+                )
               else if (visibleDebts.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -431,6 +443,39 @@ class _DebtListScreenState extends State<DebtListScreen> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadErrorState() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cloud_off_rounded, size: 42, color: Colors.orange[400]),
+            const SizedBox(height: 12),
+            Text(
+              _loadError ?? 'نەتوانرا لیستی قەرزەکان باربکرێت.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.6,
+                color: isDark
+                    ? AppDarkColors.textSecondary
+                    : const Color(0xFF667085),
+              ),
+            ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: _loadAllDebts,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('دووبارە هەوڵ بدە'),
+            ),
+          ],
         ),
       ),
     );

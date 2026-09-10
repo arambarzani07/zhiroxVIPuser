@@ -46,6 +46,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   List<RecordModel> _payments = [];
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _loadInFlight = false;
   int _customerSection = 0;
   int _employeeSection = 0;
   String? _loadError;
@@ -90,7 +91,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _loadData() async {
-    if (!mounted) return;
+    if (!mounted || _loadInFlight) return;
+    _loadInFlight = true;
     setState(() {
       _isLoading = true;
       _loadError = null;
@@ -98,39 +100,57 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     try {
       final user = await PBService.getUser(widget.userId);
-      if (!mounted) return;
-      _user = user;
-      _nameController.text = user.getStringValue('name');
-      _phoneController.text = user.getStringValue('phone');
-      _passwordController.text = user.getStringValue('password_text');
+      final role = user.getStringValue('role');
 
-      if (_isCustomer) {
-        _debts = await PBService.getDebts(customerId: widget.userId);
-        _payments = await PBService.getPayments(customerId: widget.userId);
-      } else {
-        _debts = [];
-        _payments = [];
-      }
+      List<RecordModel> debts = [];
+      List<RecordModel> payments = [];
+      Map<String, double> employeeStats = {};
 
-      if (_isEmployee) {
-        _employeeStats = await PBService.getEmployeeStats(widget.userId);
-        _canAddCustomers = user.getBoolValue('can_add_customers');
-        _canSetDebtLimit = user.getBoolValue('can_set_debt_limit');
-        _canSetDueDate = user.getBoolValue('can_set_due_date');
-        _canEditDebts = user.getBoolValue('can_edit_debts');
-        _canSendNotifications = user.getBoolValue('can_send_notifications');
-      } else {
-        _employeeStats = {};
+      if (role == 'customer') {
+        final customerData = await Future.wait<List<RecordModel>>([
+          PBService.getDebts(customerId: widget.userId),
+          PBService.getPayments(customerId: widget.userId),
+        ]);
+        debts = customerData[0];
+        payments = customerData[1];
+      } else if (role == 'employee') {
+        employeeStats = await PBService.getEmployeeStats(widget.userId);
       }
 
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _user = user;
+        _debts = debts;
+        _payments = payments;
+        _employeeStats = employeeStats;
+        _nameController.text = user.getStringValue('name');
+        _phoneController.text = user.getStringValue('phone');
+        _passwordController.text = user.getStringValue('password_text');
+
+        if (role == 'employee') {
+          _canAddCustomers = user.getBoolValue('can_add_customers');
+          _canSetDebtLimit = user.getBoolValue('can_set_debt_limit');
+          _canSetDueDate = user.getBoolValue('can_set_due_date');
+          _canEditDebts = user.getBoolValue('can_edit_debts');
+          _canSendNotifications = user.getBoolValue('can_send_notifications');
+        }
+
+        _isLoading = false;
+        _loadError = null;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
+        _user = null;
+        _debts = [];
+        _payments = [];
+        _employeeStats = {};
         _isLoading = false;
-        _loadError = 'نەتوانرا زانیارییەکانی پروفایل باربکرێن. پەیوەندی ئینتەرنێت بپشکنە.';
+        _loadError =
+            'نەتوانرا زانیارییەکانی پروفایل باربکرێن. پەیوەندی ئینتەرنێت بپشکنە.';
       });
+    } finally {
+      _loadInFlight = false;
     }
   }
 
