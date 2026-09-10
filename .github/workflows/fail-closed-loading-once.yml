@@ -1,0 +1,36 @@
+name: Fail Closed Loading Once
+
+on:
+  push:
+    branches: [owner-source]
+
+jobs:
+  patch-both:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Patch Owner
+        run: |
+          python3 scripts/fail_closed_loading_once.py .
+          git add lib/screens/shared/add_debt_screen.dart lib/services/supabase_compat.dart scripts/verify_online_only.py
+          git commit -m 'Fail closed customer and relation loading'
+          git push origin HEAD:owner-source
+
+      - name: Patch User
+        run: |
+          git worktree add /tmp/user-source origin/user-source
+          python3 "$GITHUB_WORKSPACE/scripts/fail_closed_loading_once.py" /tmp/user-source
+          cd /tmp/user-source
+          git add lib/screens/shared/add_debt_screen.dart lib/services/supabase_compat.dart scripts/verify_online_only.py
+          git commit -m 'Fail closed customer and relation loading'
+          git push origin HEAD:user-source
