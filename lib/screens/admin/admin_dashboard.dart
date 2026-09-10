@@ -542,7 +542,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                   size: 20,
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -683,14 +683,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
         top: false,
         child: Container(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(ctx).size.height * 0.82,
+            maxHeight: MediaQuery.of(ctx).size.height * 0.74,
           ),
           decoration: BoxDecoration(
             color: isDark ? AppDarkColors.card : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -706,8 +706,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Row(
                   children: [
                     Container(
-                      width: 46,
-                      height: 46,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: AppColors.primary.withOpacity(0.10),
                         borderRadius: BorderRadius.circular(14),
@@ -716,7 +716,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       child: Icon(
                         Icons.storefront_rounded,
                         color: AppColors.primary,
-                        size: 23,
+                        size: 20,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -762,7 +762,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
                 _settingsTile(
                   isDark: isDark,
                   icon: Icons.summarize_outlined,
@@ -848,7 +848,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     bool ltrSubtitle = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 2),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
@@ -856,18 +856,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
             child: Row(
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     color: iconColor.withOpacity(0.10),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, color: iconColor, size: 21),
+                  child: Icon(icon, color: iconColor, size: 19),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1057,8 +1057,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
           textDirection: TextDirection.rtl,
           child: AlertDialog(
             backgroundColor: isDark ? AppDarkColors.card : Colors.white,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
             ),
             title: Row(
               children: [
@@ -1178,7 +1179,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           if (mounted) {
                             AppHelpers.showSnackBar(
                               context,
-                              'هەڵە: $e',
+                              'نەتوانرا گۆڕانکاری پاشەکەوت بکرێت',
                               isError: true,
                             );
                           }
@@ -1227,8 +1228,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
           textDirection: TextDirection.rtl,
           child: AlertDialog(
             backgroundColor: isDark ? AppDarkColors.card : Colors.white,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
             ),
             title: Row(
               children: [
@@ -1406,7 +1408,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           if (mounted) {
                             AppHelpers.showSnackBar(
                               context,
-                              'هەڵە: $e',
+                              'نەتوانرا گۆڕانکاری پاشەکەوت بکرێت',
                               isError: true,
                             );
                           }
