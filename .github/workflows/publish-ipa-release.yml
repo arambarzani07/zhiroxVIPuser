@@ -41,7 +41,7 @@ jobs:
             unzip -o out/artifact.zip -d out
           fi
 
-          test -f out/zhiroxVIPuser-unsigned.ipa
+          test -f out/ZHIROX-User.ipa
 
       - name: Create or update public user release
         env:
@@ -49,16 +49,16 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view safari-download --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release upload safari-download out/zhiroxVIPuser-unsigned.ipa \
+            gh release upload safari-download out/ZHIROX-User.ipa \
               --repo "${{ github.repository }}" --clobber
           else
-            gh release create safari-download out/zhiroxVIPuser-unsigned.ipa \
+            gh release create safari-download out/ZHIROX-User.ipa \
               --repo "${{ github.repository }}" \
               --target user-source \
               --title "ZHIROX User — Safari Download" \
-              --notes "Public user build. Admin account creation is controlled by the system owner. Unsigned IPA; sign before installation."
+              --notes "Independent public User app. Bundle ID: com.karoxghafoor.zhirox.user. Admin account creation is controlled by the system owner. Unsigned IPA; sign before installation."
           fi
 
       - name: Print direct Safari URL
         run: |
-          echo "https://github.com/${{ github.repository }}/releases/download/safari-download/zhiroxVIPuser-unsigned.ipa"
+          echo "https://github.com/${{ github.repository }}/releases/download/safari-download/ZHIROX-User.ipa"
