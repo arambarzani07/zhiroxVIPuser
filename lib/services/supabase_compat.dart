@@ -274,10 +274,10 @@ class SupabasePBCompat {
       final customer = ctx.profiles[raw['customer_id']?.toString() ?? ''];
       final creator = ctx.profiles[raw['created_by']?.toString() ?? ''];
       if (customer != null) {
-        expand['customer'] = [_recordJson('users', customer, ctx)];
+        expand['customer'] = _recordJson('users', customer, ctx);
       }
       if (creator != null) {
-        expand['created_by'] = [_recordJson('users', creator, ctx)];
+        expand['created_by'] = _recordJson('users', creator, ctx);
       }
       if (expand.isNotEmpty) out['expand'] = expand;
       return out;
@@ -292,10 +292,10 @@ class SupabasePBCompat {
       final debt = ctx.debts[raw['debt_id']?.toString() ?? ''];
       final creator = ctx.profiles[raw['created_by']?.toString() ?? ''];
       if (debt != null) {
-        expand['debt'] = [_recordJson('debts', debt, ctx)];
+        expand['debt'] = _recordJson('debts', debt, ctx);
       }
       if (creator != null) {
-        expand['created_by'] = [_recordJson('users', creator, ctx)];
+        expand['created_by'] = _recordJson('users', creator, ctx);
       }
       if (expand.isNotEmpty) out['expand'] = expand;
       return out;
@@ -312,10 +312,10 @@ class SupabasePBCompat {
       final customer = ctx.profiles[raw['customer_id']?.toString() ?? ''];
       final sender = ctx.profiles[raw['sender_id']?.toString() ?? ''];
       if (customer != null) {
-        expand['customer'] = [_recordJson('users', customer, ctx)];
+        expand['customer'] = _recordJson('users', customer, ctx);
       }
       if (sender != null) {
-        expand['sender'] = [_recordJson('users', sender, ctx)];
+        expand['sender'] = _recordJson('users', sender, ctx);
       }
       if (expand.isNotEmpty) out['expand'] = expand;
       return out;

@@ -148,7 +148,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                 itemCount: _pendingUsers.length,
                 itemBuilder: (context, index) =>
                     _buildRequestCard(_pendingUsers[index], isDark),
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
               ),
             ),
         ],

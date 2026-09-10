@@ -248,9 +248,9 @@ class PdfService {
 
         final customDate = activity.getStringValue('custom_date');
         final created = AppHelpers.formatDate(
-          customDate.isNotEmpty ? customDate : activity.created,
+          customDate.isNotEmpty ? customDate : activity.getStringValue('created'),
         );
-        final updated = AppHelpers.formatDate(activity.updated);
+        final updated = AppHelpers.formatDate(activity.getStringValue('updated'));
 
         final status = activity.getStringValue('status');
         String statusText = status;
@@ -282,7 +282,7 @@ class PdfService {
           }
         } else {
           // Show Customer Name
-          final customer = activity.expand['customer']?.first;
+          final customer = AppHelpers.expandedRecord(activity, 'customer');
           mainColumnContent = customer?.getStringValue('name') ?? 'نەناسراو';
         }
 
@@ -370,11 +370,11 @@ class PdfService {
     final description = debt.getStringValue('description');
 
     // Customer
-    final customer = debt.expand['customer']?.first;
+    final customer = AppHelpers.expandedRecord(debt, 'customer');
     final customerName = customer?.getStringValue('name') ?? 'نەناسراو';
 
     // Date
-    final created = AppHelpers.formatDate(debt.created);
+    final created = AppHelpers.formatDate(debt.getStringValue('created'));
     final dueDate = debt.getStringValue('due_date');
     final dueDateFormatted = dueDate.isNotEmpty
         ? AppHelpers.formatDate(dueDate)
@@ -970,7 +970,7 @@ class PdfService {
     // Group debts by customer
     final Map<String, Map<String, dynamic>> customerMap = {};
     for (var debt in allDebts) {
-      final customer = debt.expand['customer']?.first;
+      final customer = AppHelpers.expandedRecord(debt, 'customer');
       final customerId = debt.getStringValue('customer');
       final customerName = customer?.getStringValue('name') ?? 'نەناسراو';
       final amount = debt.getDoubleValue('amount');
@@ -986,18 +986,18 @@ class PdfService {
           'debtCount': 0,
           'paidCount': 0,
           'activeCount': 0,
-          'firstDebtDate': debt.created,
-          'lastDebtDate': debt.created,
+          'firstDebtDate': debt.getStringValue('created'),
+          'lastDebtDate': debt.getStringValue('created'),
         };
       }
       // Track earliest and latest debt dates
-      if (debt.created.compareTo(customerMap[customerId]!['firstDebtDate']) <
+      if (debt.getStringValue('created').compareTo(customerMap[customerId]!['firstDebtDate']) <
           0) {
-        customerMap[customerId]!['firstDebtDate'] = debt.created;
+        customerMap[customerId]!['firstDebtDate'] = debt.getStringValue('created');
       }
-      if (debt.created.compareTo(customerMap[customerId]!['lastDebtDate']) >
+      if (debt.getStringValue('created').compareTo(customerMap[customerId]!['lastDebtDate']) >
           0) {
-        customerMap[customerId]!['lastDebtDate'] = debt.created;
+        customerMap[customerId]!['lastDebtDate'] = debt.getStringValue('created');
       }
       customerMap[customerId]!['totalDebt'] += amount;
       customerMap[customerId]!['totalRemaining'] += remaining;
@@ -1947,7 +1947,7 @@ class PdfService {
         final remaining = debt.getDoubleValue('remaining');
         final customDate = debt.getStringValue('custom_date');
         final created = AppHelpers.formatDate(
-          customDate.isNotEmpty ? customDate : debt.created,
+          customDate.isNotEmpty ? customDate : debt.getStringValue('created'),
         );
         final dueDate = debt.getStringValue('due_date');
         final dueDateFormatted = dueDate.isNotEmpty

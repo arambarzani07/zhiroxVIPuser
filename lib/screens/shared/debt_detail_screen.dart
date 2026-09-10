@@ -218,11 +218,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     final statusColor = AppHelpers.statusColor(status);
 
     // Customer name
-    String customerName = '';
-    final expanded = _debt!.expand;
-    if (expanded.containsKey('customer') && expanded['customer']!.isNotEmpty) {
-      customerName = expanded['customer']!.first.getStringValue('name');
-    }
+    final customer = AppHelpers.expandedRecord(_debt!, 'customer');
+    final customerName = customer?.getStringValue('name') ?? '';
 
     return Scaffold(
       backgroundColor: isDark
@@ -523,7 +520,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                           AppHelpers.formatDate(
                             _debt!.getStringValue('custom_date').isNotEmpty
                                 ? _debt!.getStringValue('custom_date')
-                                : _debt!.created,
+                                : _debt!.getStringValue('created'),
                           ),
                           Colors.purple,
                         ),
@@ -533,7 +530,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                           AppHelpers.formatTime(
                             _debt!.getStringValue('custom_date').isNotEmpty
                                 ? _debt!.getStringValue('custom_date')
-                                : _debt!.created,
+                                : _debt!.getStringValue('created'),
                           ),
                           Colors.teal,
                         ),
@@ -926,7 +923,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                       width: 58,
                       height: 58,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (_, _, _) => Container(
                         width: 58,
                         height: 58,
                         alignment: Alignment.center,

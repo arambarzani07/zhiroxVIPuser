@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
+import 'package:pocketbase/pocketbase.dart';
 
 class AppHelpers {
+  // فۆرماتی پارە
   static String formatCurrency(double amount) {
     final formatter = NumberFormat('#,###', 'en');
     return '${formatter.format(amount)} د.ع';
   }
 
+  // فۆرماتی پارە بە جۆری دراو
   static String formatCurrencyWithType(
     double amount,
     String currency, {
@@ -25,6 +28,7 @@ class AppHelpers {
     return '${formatter.format(amount)} د.ع';
   }
 
+  // فۆرماتی بەروار
   static String formatDate(String date) {
     try {
       final parsed = DateTime.parse(date).toLocal();
@@ -43,6 +47,7 @@ class AppHelpers {
     }
   }
 
+  // رەنگی بارودۆخ
   static Color statusColor(String status) {
     switch (status) {
       case 'pending':
@@ -56,6 +61,7 @@ class AppHelpers {
     }
   }
 
+  // ناوی بارودۆخ بە کوردی
   static String statusName(String status) {
     switch (status) {
       case 'pending':
@@ -69,6 +75,7 @@ class AppHelpers {
     }
   }
 
+  // ناوی ڕۆڵ بە کوردی
   static String roleName(String role) {
     switch (role) {
       case 'admin':
@@ -82,12 +89,19 @@ class AppHelpers {
     }
   }
 
+  // ماوەی ماوە بە ڕۆژ
   static String remainingDays(int days) {
     if (days <= 0) return 'تەواو بووە';
     if (days == 1) return '١ ڕۆژ ماوە';
     return '$days ڕۆژ ماوە';
   }
 
+  // Modern PocketBase relation accessor. A missing or forbidden expansion stays null.
+  static RecordModel? expandedRecord(RecordModel record, String relation) {
+    return record.get<RecordModel>('expand.$relation', null);
+  }
+
+  // هەڵەی backend/network بە پەیامێکی ڕوون و بێ وردەکاریی ناوخۆیی دەگۆڕێت.
   static String backendErrorMessage(
     Object error, {
     String fallback = 'کردارەکە سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
@@ -132,6 +146,7 @@ class AppHelpers {
     return fallback;
   }
 
+  // پیشاندانی سناکبار
   static void showSnackBar(
     BuildContext context,
     String message, {
@@ -147,6 +162,7 @@ class AppHelpers {
     );
   }
 
+  // دیالۆگی دڵنیابوونەوە
   static Future<bool> showConfirmDialog(
     BuildContext context, {
     required String title,
@@ -185,6 +201,7 @@ class AppHelpers {
     try {
       final start = DateTime.parse(created).toLocal();
       final end = isPaid ? DateTime.parse(updated).toLocal() : DateTime.now();
+
       final diff = end.difference(start);
       final days = diff.inDays;
 
