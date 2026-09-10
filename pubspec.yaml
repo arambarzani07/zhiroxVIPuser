@@ -1,5 +1,5 @@
 name: zhirox
-description: "Zhirox debt management app."
+description: "Zhirox customer debt app."
 
 publish_to: 'none'
 version: 1.0.0+1
@@ -17,14 +17,9 @@ dependencies:
   intl: ^0.20.2
   flutter_local_notifications: ^18.0.1
   permission_handler: ^11.3.1
-  http: ^1.2.1
   pdf: ^3.11.3
   printing: ^5.14.2
-  arabic_reshaper: ^0.0.1
   url_launcher: ^6.3.2
-  image_picker: ^1.2.1
-  flutter_image_compress: ^2.3.0
-  path_provider: ^2.1.5
   flutter_secure_storage: ^10.0.0
   connectivity_plus: ^6.1.0
 
