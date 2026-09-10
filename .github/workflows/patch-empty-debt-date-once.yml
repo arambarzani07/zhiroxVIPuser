@@ -24,8 +24,8 @@ jobs:
 
           compat = Path('lib/services/supabase_compat.dart')
           text = compat.read_text()
-          anchor = "    if (logicalName == 'debts') {\n"
-          insert = """    if (logicalName == 'debts') {
+          anchor = "    if (logicalName == 'debts') {\n      if (result.containsKey('customer')) {"
+          replacement = """    if (logicalName == 'debts') {
               // Optional PostgreSQL date/timestamp columns must receive NULL,
               // never an empty string (which raises Postgres error 22007).
               for (final key in const ['due_date', 'custom_date']) {
@@ -34,9 +34,9 @@ jobs:
                   result[key] = null;
                 }
               }
-          """
-          assert text.count(anchor) == 1, f'compat anchor count={text.count(anchor)}'
-          compat.write_text(text.replace(anchor, insert, 1))
+              if (result.containsKey('customer')) {"""
+          assert text.count(anchor) == 1, f'write-map debt anchor count={text.count(anchor)}'
+          compat.write_text(text.replace(anchor, replacement, 1))
 
           service = Path('lib/services/pb_service.dart')
           text = service.read_text()
