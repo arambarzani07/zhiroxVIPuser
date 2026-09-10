@@ -85,7 +85,6 @@ else:
         fail('lib/services/pb_service.dart: customer balance must fail closed, never silently return zero')
 
 
-add_debt = (LIB / 'screens/shared/add_debt_screen.dart').read_text(encoding='utf-8')
 if 'PBService.getCustomerBalance' not in add_debt:
     fail('lib/screens/shared/add_debt_screen.dart: debt-limit flow must verify live customer balance')
 
@@ -123,7 +122,6 @@ if 'getFinancialEvents(String customerId)' not in pb:
 
 # Financial Chat Phase 4 must remain live-only and keep its integrated search,
 # date/type filters, debt references, receipt preview and statement/share action.
-profile = (LIB / 'screens/shared/user_profile_screen.dart').read_text(encoding='utf-8')
 for marker_name in (
     '_financialSearchController',
     '_financialDateRange',
@@ -139,21 +137,22 @@ for marker_name in (
         fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat Phase 4 marker missing: {marker_name}')
 
 
+# Financial Chat must remain the single customer debt/payment workspace.
+customer_list_source = (ROOT / 'lib/screens/shared/user_list_screen.dart').read_text(encoding='utf-8')
+if 'openFinancialChat' not in profile:
+    fail('Customer profile must support direct Financial Chat entry')
+if "openFinancialChat: widget.role == 'customer'" not in customer_list_source:
+    fail('Customer list tap must open Financial Chat directly')
+if '_showPaymentDialog(RecordModel user)' in customer_list_source:
+    fail('Customer list must not duplicate payment recording outside Financial Chat')
+if 'DebtProvider' in customer_list_source:
+    fail('Customer list must not own debt/payment mutation logic')
+
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
         print(f' - {item}')
     sys.exit(1)
-
-# Financial Chat must remain the single customer debt/payment workspace.
-profile_source = (ROOT / 'lib/screens/shared/user_profile_screen.dart').read_text(encoding='utf-8')
-customer_list_source = (ROOT / 'lib/screens/shared/user_list_screen.dart').read_text(encoding='utf-8')
-require('openFinancialChat' in profile_source, 'Customer profile must support direct Financial Chat entry')
-require('openFinancialChat: widget.role == \'customer\'' in customer_list_source,
-        'Customer list tap must open Financial Chat directly')
-require('_showPaymentDialog(RecordModel user)' not in customer_list_source,
-        'Customer list must not duplicate payment recording outside Financial Chat')
-require('DebtProvider' not in customer_list_source,
-        'Customer list must not own debt/payment mutation logic')
 
 print('Online-only policy verification passed.')
