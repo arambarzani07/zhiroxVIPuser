@@ -103,6 +103,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pendingNavCount = (_stats['pendingRequests'] as num?)?.toInt() ?? 0;
 
     final screens = [
       _buildNewDashboard(auth),
@@ -176,6 +177,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Icons.pending_actions_outlined,
                   Icons.pending_actions,
                   'داواکان',
+                  badgeCount: pendingNavCount,
                 ),
               ],
             ),
@@ -189,8 +191,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     int index,
     IconData icon,
     IconData activeIcon,
-    String label,
-  ) {
+    String label, {
+    int badgeCount = 0,
+  }) {
     final isSelected = _currentIndex == index;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final inactiveColor =
@@ -225,10 +228,44 @@ class _AdminDashboardState extends State<AdminDashboard> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    isSelected ? activeIcon : icon,
-                    size: 22,
-                    color: isSelected ? AppColors.primary : inactiveColor,
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(
+                        isSelected ? activeIcon : icon,
+                        size: 22,
+                        color: isSelected ? AppColors.primary : inactiveColor,
+                      ),
+                      if (badgeCount > 0)
+                        Positioned(
+                          top: -6,
+                          right: -9,
+                          child: Container(
+                            constraints: const BoxConstraints(minWidth: 17),
+                            height: 17,
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade600,
+                              borderRadius: BorderRadius.circular(9),
+                              border: Border.all(
+                                color: isDark ? AppDarkColors.card : Colors.white,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              badgeCount > 99 ? '99+' : '$badgeCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w800,
+                                height: 1,
+                              ),
+                              textDirection: TextDirection.ltr,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -289,7 +326,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final recentActivity = _stats['recentActivity'] as List<RecordModel>? ?? [];
-    final pendingCount = _stats['pendingRequests'] as int? ?? 0;
     final totalCustomers = (_stats['totalCustomers'] ?? 0).toDouble();
     final totalDebt = (_stats['totalDebt'] ?? 0).toDouble();
     final totalRemaining = (_stats['totalRemaining'] ?? 0).toDouble();
@@ -479,38 +515,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     // ───── Subscription Warning (inside gradient) ─────
                     if (auth.subscriptionDaysLeft <= 10)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
+                            horizontal: 12,
+                            vertical: 9,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xCCE53935),
+                            color: Colors.white.withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: Colors.red[300]!.withOpacity(0.6),
+                              color: Colors.white.withValues(alpha: 0.16),
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.red.withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
                           ),
                           child: Row(
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(10),
+                                  color: Colors.white.withOpacity(0.10),
+                                  borderRadius: BorderRadius.circular(9),
                                 ),
                                 child: const Icon(
                                   Icons.warning_amber_rounded,
-                                  color: Colors.white,
-                                  size: 22,
+                                  color: Colors.amberAccent,
+                                  size: 20,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -549,96 +578,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ),
 
-          // ───── Pending Requests Alert ─────
-          if (pendingCount > 0)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: GestureDetector(
-                  onTap: () => setState(() => _currentIndex = 4),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.purple.withOpacity(0.1),
-                          Colors.purple.withOpacity(0.05),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.purple.withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.purple.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.notifications_active,
-                            color: Colors.purple,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'داواکاری چاوەڕوانکراو',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.purple,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              Text(
-                                '$pendingCount داواکاری نوێ',
-                                style: TextStyle(
-                                  color: Colors.purple.withOpacity(0.6),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.purple,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'بینین',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
 
           // ───── Recent Activity Header ─────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
               child: Row(
                 children: [
                   Icon(
                     Icons.history,
-                    size: 20,
+                    size: 18,
                     color: isDark
                         ? AppDarkColors.textSecondary
                         : Colors.black54,
@@ -647,8 +596,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Text(
                     'چالاکییە تازەکان',
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
                       color: isDark
                           ? AppDarkColors.textPrimary
                           : Colors.black87,
@@ -686,10 +635,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
           if (recentActivity.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(40),
+                padding: const EdgeInsets.symmetric(vertical: 30),
                 child: Column(
                   children: [
-                    Icon(Icons.history, size: 48, color: Colors.grey[300]),
+                    Icon(Icons.history_rounded, size: 32, color: Colors.grey[300]),
                     const SizedBox(height: 12),
                     Text(
                       'هیچ چالاکیەک نییە',
@@ -1566,134 +1515,88 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final amount = debt.getDoubleValue('amount');
     final date = debt.getStringValue('created');
     final isByEmployee = createdBy?.getStringValue('role') == 'employee';
-    final creatorName = createdBy?.getStringValue('name') ?? 'Unknown';
+    final creatorName = createdBy?.getStringValue('name') ?? '';
     final customerName =
-        customer?.getStringValue('name') ?? 'کارمەند/کڕیار سڕدراوەتەوە';
+        customer?.getStringValue('name') ?? 'کڕیار سڕدراوەتەوە';
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isByEmployee ? Colors.orange : AppColors.primary;
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 400 + (index * 50).clamp(0, 600)),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, 20 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: isDark ? AppDarkColors.card : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isDark
-              ? []
-              : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFE9EDF3),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              // Icon
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isByEmployee
-                        ? [
-                            Colors.orange.withOpacity(0.15),
-                            Colors.orange.withOpacity(0.05),
-                          ]
-                        : [
-                            Colors.blue.withOpacity(0.15),
-                            Colors.blue.withOpacity(0.05),
-                          ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  isByEmployee ? Icons.badge : Icons.admin_panel_settings,
-                  color: isByEmployee ? Colors.orange : Colors.blue,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      customerName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: isDark
-                            ? AppDarkColors.textPrimary
-                            : Colors.black87,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        if (isByEmployee) ...[
-                          Icon(
-                            Icons.person_outline,
-                            size: 12,
-                            color: Colors.grey[400],
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            creatorName,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey[500],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        Icon(
-                          Icons.access_time,
-                          size: 12,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          AppHelpers.formatDate(date),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[400],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              // Amount
-              Text(
-                AppHelpers.formatCurrency(amount),
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: isDark ? AppDarkColors.textPrimary : Colors.black87,
-                ),
-                textDirection: TextDirection.ltr,
-              ),
-            ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              isByEmployee ? Icons.badge_outlined : Icons.receipt_long_outlined,
+              color: accent,
+              size: 18,
+            ),
           ),
-        ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  customerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF344054),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    if (isByEmployee && creatorName.isNotEmpty) creatorName,
+                    AppHelpers.formatDate(date),
+                  ].join('  •  '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: isDark
+                        ? AppDarkColors.textSecondary
+                        : const Color(0xFF98A2B3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            AppHelpers.formatCurrency(amount),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: isDark
+                  ? AppDarkColors.textPrimary
+                  : const Color(0xFF101828),
+            ),
+            textDirection: TextDirection.ltr,
+          ),
+        ],
       ),
     );
   }
