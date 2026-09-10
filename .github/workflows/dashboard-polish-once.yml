@@ -1,0 +1,37 @@
+name: Dashboard Polish Once
+'on':
+  push:
+    branches:
+      - owner-source
+    paths:
+      - .github/workflows/dashboard-polish-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-both:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Patch Owner Dashboard
+        run: |
+          python scripts/dashboard_polish_patch.py
+          git add lib/screens/admin/admin_dashboard.dart
+          git commit -m "Polish Dashboard alerts and recent activity"
+          git push origin owner-source
+      - name: Patch User Dashboard
+        run: |
+          cp scripts/dashboard_polish_patch.py /tmp/dashboard_polish_patch.py
+          git fetch origin user-source
+          git checkout user-source
+          python /tmp/dashboard_polish_patch.py
+          git add lib/screens/admin/admin_dashboard.dart
+          git commit -m "Polish Dashboard alerts and recent activity"
+          git push origin user-source
