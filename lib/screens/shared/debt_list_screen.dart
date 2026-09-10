@@ -185,11 +185,49 @@ class _DebtListScreenState extends State<DebtListScreen> {
     });
   }
 
+  List<RecordModel> _visibleDebts() {
+    final query = _searchController.text.trim().toLowerCase();
+    final debts = _allDebts.where((debt) {
+      final customer = debt.expand['customer']?.first;
+      final customerName = customer?.getStringValue('name').toLowerCase() ?? '';
+      final description = debt.getStringValue('description').toLowerCase();
+      return query.isEmpty ||
+          customerName.contains(query) ||
+          description.contains(query);
+    }).toList();
+
+    switch (_sortMode) {
+      case 'name':
+        debts.sort((a, b) {
+          final aName = a.expand['customer']?.first.getStringValue('name') ?? '';
+          final bName = b.expand['customer']?.first.getStringValue('name') ?? '';
+          return aName.compareTo(bName);
+        });
+        break;
+      case 'amount':
+        debts.sort(
+          (a, b) => b
+              .getDoubleValue('remaining')
+              .compareTo(a.getDoubleValue('remaining')),
+        );
+        break;
+      default:
+        debts.sort((a, b) {
+          final aPaid = a.getStringValue('status') == 'paid';
+          final bPaid = b.getStringValue('status') == 'paid';
+          if (aPaid != bPaid) return aPaid ? 1 : -1;
+          return b.created.compareTo(a.created);
+        });
+    }
+    return debts;
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final canPay = auth.userRole == 'admin' || auth.userRole == 'employee';
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final visibleDebts = _visibleDebts();
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -251,7 +289,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
-                                  '${_customers.length} کڕیار',
+                                  '${visibleDebts.length} قەرز',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w600,
@@ -286,8 +324,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
                                     ? AppDarkColors.textPrimary
                                     : Colors.black87,
                               ),
-                              onChanged: (_) =>
-                                  setState(() => _extractCustomers()),
+                              onChanged: (_) => setState(() {}),
                               textAlignVertical: TextAlignVertical.center,
                               decoration: InputDecoration(
                                 hintText: 'گەڕان بەدوای ناوی کڕیار...',
@@ -309,7 +346,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
                                         ),
                                         onPressed: () {
                                           _searchController.clear();
-                                          setState(() => _extractCustomers());
+                                          setState(() {});
                                         },
                                       )
                                     : null,
@@ -356,7 +393,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
                 const SliverFillRemaining(
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else if (_customers.isEmpty)
+              else if (visibleDebts.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
@@ -387,8 +424,8 @@ class _DebtListScreenState extends State<DebtListScreen> {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) =>
-                          _buildCustomerTile(_customers[index], canPay),
-                      childCount: _customers.length,
+                          _buildDebtTile(visibleDebts[index], canPay),
+                      childCount: visibleDebts.length,
                     ),
                   ),
                 ),
@@ -415,7 +452,6 @@ class _DebtListScreenState extends State<DebtListScreen> {
         if (_sortMode != mode) {
           setState(() {
             _sortMode = mode;
-            _extractCustomers();
           });
         }
       },
@@ -499,140 +535,223 @@ class _DebtListScreenState extends State<DebtListScreen> {
   }
 
   // ═══════════════════════════════════════════
-  // ── Customer Tile ──
+  // ── Direct Debt Tile ──
   // ═══════════════════════════════════════════
 
-  Widget _buildCustomerTile(_CustomerInfo customer, bool canPay) {
+  Widget _buildDebtTile(RecordModel debt, bool canPay) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final customer = debt.expand['customer']?.first;
+    final customerName = customer?.getStringValue('name').isNotEmpty == true
+        ? customer!.getStringValue('name')
+        : 'کڕیاری نەناسراو';
+    final status = debt.getStringValue('status');
+    final isPaid = status == 'paid';
+    final statusColor = status == 'paid'
+        ? Colors.green
+        : status == 'partial'
+            ? Colors.blue
+            : Colors.orange;
+    final currency = debt.getStringValue('currency').isNotEmpty
+        ? debt.getStringValue('currency')
+        : 'IQD';
+    final dollarRate = debt.getDoubleValue('dollar_rate');
+    double amount = debt.getDoubleValue('amount');
+    double remaining = debt.getDoubleValue('remaining');
+    String displayCurrency = currency;
+    if (currency == 'USD' && dollarRate > 0) {
+      amount /= dollarRate;
+      remaining /= dollarRate;
+      displayCurrency = 'USD';
+    }
+    final description = debt.getStringValue('description').trim();
+    final dateSource = debt.getStringValue('custom_date').isNotEmpty
+        ? debt.getStringValue('custom_date')
+        : debt.created;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      margin: const EdgeInsets.only(bottom: 9),
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: isDark
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-      ),
-      child: Row(
-        children: [
-          // Avatar with debt count
-          Stack(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: customer.hasUnpaid
-                      ? Colors.red.withValues(alpha: 0.1)
-                      : Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Center(
-                  child: Text(
-                    customer.name.isNotEmpty
-                        ? customer.name[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                      color: customer.hasUnpaid ? Colors.red : Colors.green,
-                    ),
-                  ),
-                ),
-              ),
-              // Debt count badge
-              Positioned(
-                top: -2,
-                left: -2,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${customer.debtCount}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 12),
-
-          // Name + amount
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  customer.name.isNotEmpty ? customer.name : 'کڕیاری نەناسراو',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? AppDarkColors.textPrimary : Colors.black87,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  AppHelpers.formatCurrency(customer.totalRemaining),
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: customer.totalRemaining > 0
-                        ? Colors.red
-                        : Colors.green,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Action buttons
-          if (canPay && customer.hasUnpaid && customer.totalRemaining > 0)
-            _actionIcon(
-              Icons.payments_outlined,
-              Colors.green,
-              () => _showPayDialog(customer),
-            ),
-          const SizedBox(width: 6),
-          _actionIcon(
-            Icons.receipt_long_outlined,
-            AppColors.primary,
-            () => _showDebtsDialog(customer, canPay),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionIcon(IconData icon, Color color, VoidCallback onTap) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFE9EDF3),
         ),
-        child: Icon(icon, color: color, size: 20),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DebtDetailScreen(debtId: debt.id),
+              ),
+            ).then((_) => _loadAllDebts(showLoading: false));
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    isPaid
+                        ? Icons.check_rounded
+                        : Icons.receipt_long_outlined,
+                    color: statusColor,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              customerName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: isDark
+                                    ? AppDarkColors.textPrimary
+                                    : const Color(0xFF1D2939),
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              AppHelpers.statusName(status),
+                              style: TextStyle(
+                                color: statusColor,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              description.isNotEmpty ? description : 'قەرز',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark
+                                    ? AppDarkColors.textSecondary
+                                    : const Color(0xFF667085),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            AppHelpers.formatDate(dateSource),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isDark
+                                  ? AppDarkColors.textSecondary
+                                  : const Color(0xFF98A2B3),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          Text(
+                            AppHelpers.formatCurrencyWithType(
+                              amount,
+                              displayCurrency,
+                              dollarRate: dollarRate,
+                              showConversion: false,
+                            ),
+                            textDirection: TextDirection.ltr,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? AppDarkColors.textSecondary
+                                  : const Color(0xFF667085),
+                            ),
+                          ),
+                          if (!isPaid) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              'ماوە ${AppHelpers.formatCurrencyWithType(
+                                remaining,
+                                displayCurrency,
+                                dollarRate: dollarRate,
+                                showConversion: false,
+                              )}',
+                              textDirection: TextDirection.ltr,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.redAccent,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (canPay && !isPaid) ...[
+                  const SizedBox(width: 6),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => _showSinglePaymentDialog(debt),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.09),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.payments_outlined,
+                        color: Colors.green,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_left_rounded,
+                  size: 20,
+                  color: isDark
+                      ? AppDarkColors.textSecondary
+                      : const Color(0xFF98A2B3),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -899,294 +1018,6 @@ class _DebtListScreenState extends State<DebtListScreen> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════
-  // ── Debts List Dialog ──
-  // ═══════════════════════════════════════════
-
-  void _showDebtsDialog(_CustomerInfo customer, bool canPay) {
-    final debts = _getDebtsForCustomer(customer.id);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 40,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        Icons.receipt_long,
-                        color: AppColors.primary,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'قەرزەکانی ${customer.name}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed: () => Navigator.pop(ctx),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 20),
-
-              // Debt list
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.5,
-                ),
-                child: debts.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(30),
-                        child: Text(
-                          'هیچ قەرزێک نییە',
-                          style: TextStyle(color: Colors.grey[400]),
-                        ),
-                      )
-                    : ListView.separated(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: debts.length,
-                        separatorBuilder: (_, _) =>
-                            Divider(height: 1, color: Colors.grey[200]),
-                        itemBuilder: (_, i) =>
-                            _buildDebtRow(debts[i], canPay, ctx),
-                      ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDebtRow(RecordModel debt, bool canPay, BuildContext dialogCtx) {
-    final currency = debt.getStringValue('currency');
-    final dollarRate = debt.getDoubleValue('dollar_rate');
-    double total = debt.getDoubleValue('total_amount');
-    if (total == 0) total = debt.getDoubleValue('amount');
-    double remaining = debt.getDoubleValue('remaining');
-
-    if (currency == 'USD' && dollarRate > 0) {
-      total = total / dollarRate;
-      remaining = remaining / dollarRate;
-    }
-
-    final status = debt.getStringValue('status');
-    final isPaid = status == 'paid';
-    final paid = total - remaining;
-    final progress = total > 0 ? (paid / total).clamp(0.0, 1.0) : 0.0;
-
-    Color statusColor = Colors.orange;
-    if (isPaid) {
-      statusColor = Colors.green;
-    } else if (status == 'partial') {
-      statusColor = Colors.blue;
-    }
-
-    String desc = debt.getStringValue('description');
-    String creatorName = '';
-    try {
-      final creator = debt.expand['created_by']?.first;
-      if (creator != null) {
-        creatorName = creator.getStringValue('name');
-      }
-    } catch (_) {}
-    try {
-      final items = debt.getStringValue('items');
-      if (items.isNotEmpty && items != '[]') {
-        final List list = jsonDecode(items);
-        if (list.isNotEmpty) {
-          desc =
-              '${list[0]['name'] ?? ''} ${list.length > 1 ? '+${list.length - 1}' : ''}';
-        }
-      }
-    } catch (_) {}
-
-    return InkWell(
-      onTap: () {
-        Navigator.pop(dialogCtx);
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DebtDetailScreen(debtId: debt.id)),
-        ).then((_) => _loadAllDebts());
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            // Status dot
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: statusColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        AppHelpers.formatCurrencyWithType(
-                          total,
-                          currency,
-                          dollarRate: dollarRate,
-                          showConversion: false,
-                        ),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? AppDarkColors.textPrimary
-                              : Colors.black87,
-                        ),
-                        textDirection: TextDirection.ltr,
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Text(
-                          AppHelpers.statusName(status),
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    desc,
-                    style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (creatorName.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.person_outline,
-                            size: 12,
-                            color: Colors.grey[400],
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            creatorName,
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (!isPaid) ...[
-                    const SizedBox(height: 4),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(3),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 3,
-                        backgroundColor: Colors.grey[100],
-                        valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (!isPaid)
-              Text(
-                AppHelpers.formatCurrencyWithType(
-                  remaining,
-                  currency,
-                  dollarRate: dollarRate,
-                  showConversion: false,
-                ),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  color: Colors.redAccent,
-                ),
-                textDirection: TextDirection.ltr,
-              ),
-            if (isPaid)
-              const Icon(Icons.check_circle, color: Colors.green, size: 18),
-            // Quick pay
-            if (canPay && !isPaid) ...[
-              const SizedBox(width: 6),
-              InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () {
-                  Navigator.pop(dialogCtx);
-                  _showSinglePaymentDialog(debt);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.payments_outlined,
-                    color: Colors.green,
-                    size: 16,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }
