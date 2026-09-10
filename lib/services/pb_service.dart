@@ -843,13 +843,14 @@ class PBService {
         .from('financial_events')
         .select()
         .eq('customer_id', customerId)
-        .order('created_at', ascending: true)
+        .order('created_at', ascending: false)
         .limit(500);
-    return (data as List)
+    final events = (data as List)
         .map((row) => _financialEventRecord(
               Map<String, dynamic>.from(row as Map),
             ))
         .toList();
+    return events.reversed.toList(growable: false);
   }
 
   // ==================== Stats ====================
