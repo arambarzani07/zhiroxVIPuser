@@ -30,6 +30,35 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
     super.dispose();
   }
 
+  String _friendlyRegistrationError(Object error) {
+    final raw = error.toString();
+    final normalized = raw.toLowerCase();
+
+    if (normalized.contains('socketexception') ||
+        normalized.contains('clientexception') ||
+        normalized.contains('failed host lookup') ||
+        normalized.contains('connection refused') ||
+        normalized.contains('network')) {
+      return 'پەیوەندی بە سێرڤەر نەکرا. تکایە ئینتەرنێت بپشکنە و دووبارە هەوڵ بدەرەوە.';
+    }
+
+    if (normalized.contains('market_exists') ||
+        normalized.contains('market already exists')) {
+      return 'ئەم ناوی مارکێتە پێشتر تۆمارکراوە.';
+    }
+
+    if (normalized.contains('phone_exists') ||
+        normalized.contains('ژمارەیە پێشتر تۆمارکراوە')) {
+      return 'ئەم ژمارە مۆبایلە پێشتر تۆمارکراوە.';
+    }
+
+    if (normalized.contains('invalid_input')) {
+      return 'زانیارییەکان تەواو یان دروست نین.';
+    }
+
+    return raw.replaceFirst(RegExp(r'^Exception:\s*'), '');
+  }
+
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -44,20 +73,26 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
         subscriptionDays: 30,
       );
 
+      if (!mounted) return;
+
+      AppHelpers.showSnackBar(
+        context,
+        'بەڕێوبەر بە سەرکەوتوویی تۆمارکرا. ئێستا داخڵ بە.',
+      );
+      Navigator.pop(context);
+    } catch (e) {
       if (mounted) {
         AppHelpers.showSnackBar(
           context,
-          'بەڕێوبەر بە سەرکەوتوویی تۆمارکرا. ئێستا داخڵ بە.',
+          _friendlyRegistrationError(e),
+          isError: true,
         );
-        Navigator.pop(context);
       }
-    } catch (e) {
+    } finally {
       if (mounted) {
-        AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+        setState(() => _isLoading = false);
       }
     }
-
-    setState(() => _isLoading = false);
   }
 
   @override
@@ -71,7 +106,6 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // لۆگۆ
               Container(
                 width: 80,
                 height: 80,
@@ -86,7 +120,6 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                   color: AppColors.primary,
                 ),
               ),
-
               TextFormField(
                 controller: _marketNameController,
                 decoration: const InputDecoration(
@@ -98,7 +131,6 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                     v == null || v.isEmpty ? 'ناوی مارکێت بنووسە' : null,
               ),
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _adminNameController,
                 decoration: const InputDecoration(
@@ -110,7 +142,6 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                     v == null || v.isEmpty ? 'ناوی بەڕێوەبەر بنووسە' : null,
               ),
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
@@ -125,7 +156,6 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                     v == null || v.isEmpty ? 'ژمارە مۆبایل بنووسە' : null,
               ),
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
@@ -150,7 +180,6 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                 },
               ),
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _confirmPasswordController,
                 obscureText: _obscurePassword,
@@ -166,7 +195,6 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                 },
               ),
               const SizedBox(height: 32),
-
               SizedBox(
                 height: 52,
                 child: ElevatedButton(
