@@ -1,4 +1,4 @@
-name: Publish existing IPA for Safari
+name: Publish crash-fixed IPA for Safari
 
 on:
   push:
@@ -13,22 +13,23 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Download successful IPA artifact
+      - name: Download crash-fixed IPA artifact
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api "/repos/${{ github.repository }}/actions/artifacts/10129213651/zip" > artifact.zip
+          gh api "/repos/${{ github.repository }}/actions/artifacts/10136751759/zip" > artifact.zip
           unzip -q artifact.zip
           test -f zhiroxVIPuser-SUPABASE-unsigned.ipa
           sha256sum zhiroxVIPuser-SUPABASE-unsigned.ipa
 
-      - name: Publish stable GitHub Release asset
+      - name: Publish Safari download release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="supabase-ios-2026-09-10"
+          TAG="supabase-ios-crashfix-2026-09-10"
+          cp zhiroxVIPuser-SUPABASE-unsigned.ipa zhiroxVIPuser-SUPABASE-crashfix.ipa
           gh release delete "$TAG" --repo "${{ github.repository }}" --yes --cleanup-tag || true
-          gh release create "$TAG" zhiroxVIPuser-SUPABASE-unsigned.ipa \
+          gh release create "$TAG" zhiroxVIPuser-SUPABASE-crashfix.ipa \
             --repo "${{ github.repository }}" \
-            --title "Zhirox User iOS - Supabase" \
-            --notes "Unsigned iOS IPA built from the Supabase-connected User App."
+            --title "Zhirox User iOS - Supabase Crash Fix" \
+            --notes "Unsigned iOS IPA with BGTaskScheduler/Workmanager launch-crash mitigation."
