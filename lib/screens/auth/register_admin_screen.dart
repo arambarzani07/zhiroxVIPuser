@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:zhirox/services/pb_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 
@@ -12,16 +12,22 @@ class RegisterAdminScreen extends StatefulWidget {
 
 class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _ownerPhoneController = TextEditingController();
+  final _ownerPasswordController = TextEditingController();
   final _marketNameController = TextEditingController();
   final _adminNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+
   bool _isLoading = false;
+  bool _obscureOwnerPassword = true;
   bool _obscurePassword = true;
 
   @override
   void dispose() {
+    _ownerPhoneController.dispose();
+    _ownerPasswordController.dispose();
     _marketNameController.dispose();
     _adminNameController.dispose();
     _phoneController.dispose();
@@ -40,6 +46,13 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
         normalized.contains('connection refused') ||
         normalized.contains('network')) {
       return 'پەیوەندی بە سێرڤەر نەکرا. تکایە ئینتەرنێت بپشکنە و دووبارە هەوڵ بدەرەوە.';
+    }
+
+    if (normalized.contains('system_owner_required') ||
+        normalized.contains('invalid login') ||
+        normalized.contains('invalid credentials') ||
+        normalized.contains('authapierror')) {
+      return 'ژمارە یان وشەی نهێنی خاوەن سیستەم هەڵەیە، یان ئەم هەژمارە دەسەڵاتی System Owner ـی نییە.';
     }
 
     if (normalized.contains('market_exists') ||
@@ -63,23 +76,55 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
+    final ownerClient = SupabaseClient(
+      SupabaseConfig.url,
+      SupabaseConfig.publishableKey,
+    );
 
     try {
-      await PBService.registerAdmin(
-        marketName: _marketNameController.text.trim(),
-        adminName: _adminNameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        password: _passwordController.text,
-        subscriptionDays: 30,
+      final ownerPhone = _ownerPhoneController.text.trim();
+      final ownerLogin = await ownerClient.auth.signInWithPassword(
+        email: '$ownerPhone@zhirox.local',
+        password: _ownerPasswordController.text,
       );
+
+      if (ownerLogin.user == null) {
+        throw Exception('invalid credentials');
+      }
+
+      final response = await ownerClient.functions.invoke(
+        'account-admin',
+        body: {
+          'action': 'create_user',
+          'role': 'admin',
+          'market_name': _marketNameController.text.trim(),
+          'name': _adminNameController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'password': _passwordController.text,
+          'subscription_days': 30,
+        },
+      );
+
+      final data = response.data;
+      if (data is! Map || data['user'] is! Map) {
+        final code = data is Map ? data['error']?.toString() : data?.toString();
+        throw Exception(code ?? 'admin creation failed');
+      }
 
       if (!mounted) return;
-
       AppHelpers.showSnackBar(
         context,
-        'بەڕێوبەر بە سەرکەوتوویی تۆمارکرا. ئێستا داخڵ بە.',
+        'هەژماری بەڕێوەبەر و مارکێتەکە بە سەرکەوتوویی درووست کرا.',
       );
       Navigator.pop(context);
+    } on AuthException catch (_) {
+      if (mounted) {
+        AppHelpers.showSnackBar(
+          context,
+          'ژمارە یان وشەی نهێنی خاوەن سیستەم هەڵەیە.',
+          isError: true,
+        );
+      }
     } catch (e) {
       if (mounted) {
         AppHelpers.showSnackBar(
@@ -89,6 +134,9 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
         );
       }
     } finally {
+      try {
+        await ownerClient.auth.signOut();
+      } catch (_) {}
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -98,7 +146,7 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text(AppStrings.registerAdmin)),
+      appBar: AppBar(title: const Text('دروستکردنی بەڕێوەبەر — Owner')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(
@@ -107,28 +155,93 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                width: 80,
-                height: 80,
+                padding: const EdgeInsets.all(16),
                 margin: const EdgeInsets.only(bottom: 24),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                  ),
                 ),
-                child: const Icon(
-                  Icons.store_rounded,
-                  size: 40,
-                  color: AppColors.primary,
+                child: const Column(
+                  children: [
+                    Icon(
+                      Icons.verified_user_rounded,
+                      size: 42,
+                      color: AppColors.primary,
+                    ),
+                    SizedBox(height: 10),
+                    Text(
+                      'پشتڕاستکردنەوەی خاوەن سیستەم',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'تەنها System Owner دەتوانێت هەژماری بەڕێوەبەری مارکێت درووست بکات.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
+              TextFormField(
+                controller: _ownerPhoneController,
+                keyboardType: TextInputType.phone,
+                textDirection: TextDirection.ltr,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                  labelText: 'ژمارە مۆبایلی خاوەن سیستەم',
+                  prefixIcon: Icon(Icons.shield_outlined),
+                  hintText: '07xxxxxxxxx',
+                ),
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'ژمارەی خاوەن سیستەم بنووسە'
+                    : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _ownerPasswordController,
+                obscureText: _obscureOwnerPassword,
+                decoration: InputDecoration(
+                  labelText: 'وشەی نهێنی خاوەن سیستەم',
+                  prefixIcon: const Icon(Icons.key_rounded),
+                  suffixIcon: IconButton(
+                    onPressed: () => setState(
+                      () => _obscureOwnerPassword = !_obscureOwnerPassword,
+                    ),
+                    icon: Icon(
+                      _obscureOwnerPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                  ),
+                ),
+                validator: (v) => v == null || v.isEmpty
+                    ? 'وشەی نهێنی خاوەن سیستەم بنووسە'
+                    : null,
+              ),
+              const SizedBox(height: 28),
+              const Divider(),
+              const SizedBox(height: 18),
+              const Text(
+                'زانیاری مارکێت و بەڕێوەبەری نوێ',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
               TextFormField(
                 controller: _marketNameController,
                 decoration: const InputDecoration(
                   labelText: AppStrings.marketName,
                   prefixIcon: Icon(Icons.store),
-                  hintText: 'ناوی مارکێتەکەت...',
+                  hintText: 'ناوی مارکێتەکە...',
                 ),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'ناوی مارکێت بنووسە' : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'ناوی مارکێت بنووسە'
+                    : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -136,10 +249,10 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                 decoration: const InputDecoration(
                   labelText: 'ناوی بەڕێوەبەر',
                   prefixIcon: Icon(Icons.person),
-                  hintText: 'ناوی خۆت...',
                 ),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'ناوی بەڕێوەبەر بنووسە' : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'ناوی بەڕێوەبەر بنووسە'
+                    : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -152,25 +265,26 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                   prefixIcon: Icon(Icons.phone),
                   hintText: '07xxxxxxxxx',
                 ),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'ژمارە مۆبایل بنووسە' : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'ژمارە مۆبایل بنووسە'
+                    : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
-                  labelText: AppStrings.password,
+                  labelText: 'وشەی نهێنی بەڕێوەبەری نوێ',
                   prefixIcon: const Icon(Icons.lock),
                   suffixIcon: IconButton(
+                    onPressed: () => setState(
+                      () => _obscurePassword = !_obscurePassword,
+                    ),
                     icon: Icon(
                       _obscurePassword
                           ? Icons.visibility_off
                           : Icons.visibility,
                     ),
-                    onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    },
                   ),
                 ),
                 validator: (v) {
@@ -196,10 +310,13 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
               ),
               const SizedBox(height: 32),
               SizedBox(
-                height: 52,
-                child: ElevatedButton(
+                height: 54,
+                child: ElevatedButton.icon(
                   onPressed: _isLoading ? null : _register,
-                  child: _isLoading
+                  icon: _isLoading
+                      ? const SizedBox.shrink()
+                      : const Icon(Icons.add_business_rounded),
+                  label: _isLoading
                       ? const SizedBox(
                           width: 24,
                           height: 24,
@@ -209,8 +326,8 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                           ),
                         )
                       : const Text(
-                          AppStrings.registerAdmin,
-                          style: TextStyle(fontSize: 18),
+                          'دروستکردنی هەژماری بەڕێوەبەر',
+                          style: TextStyle(fontSize: 17),
                         ),
                 ),
               ),
