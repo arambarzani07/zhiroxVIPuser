@@ -1,0 +1,34 @@
+name: Publish existing IPA for Safari
+
+on:
+  push:
+    branches: [publish-ipa-safari-workflow]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download successful IPA artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "/repos/${{ github.repository }}/actions/artifacts/10129213651/zip" > artifact.zip
+          unzip -q artifact.zip
+          test -f zhiroxVIPuser-SUPABASE-unsigned.ipa
+          sha256sum zhiroxVIPuser-SUPABASE-unsigned.ipa
+
+      - name: Publish stable GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="supabase-ios-2026-09-10"
+          gh release delete "$TAG" --repo "${{ github.repository }}" --yes --cleanup-tag || true
+          gh release create "$TAG" zhiroxVIPuser-SUPABASE-unsigned.ipa \
+            --repo "${{ github.repository }}" \
+            --title "Zhirox User iOS - Supabase" \
+            --notes "Unsigned iOS IPA built from the Supabase-connected User App."
