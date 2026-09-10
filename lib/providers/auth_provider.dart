@@ -1,15 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zhirox/services/pb_service.dart';
 
 class AuthProvider extends ChangeNotifier {
-  static const _secureStorage = FlutterSecureStorage();
-
   RecordModel? _user;
   bool _isLoading = false;
   bool _isInitializing = true;
@@ -113,26 +108,13 @@ class AuthProvider extends ChangeNotifier {
         }
 
         _user = updated;
-        await _cacheUser();
         if (!_disposed) notifyListeners();
       }),
     );
   }
 
-  Future<void> _cacheUser() async {
-    final current = _user;
-    if (current == null) return;
-    await _secureStorage.write(key: 'user_id', value: current.id);
-    await _secureStorage.write(
-      key: 'user_data',
-      value: jsonEncode(current.toJson()),
-    );
-  }
-
   Future<void> _clearLocalUser() async {
     _user = null;
-    await _secureStorage.delete(key: 'user_id');
-    await _secureStorage.delete(key: 'user_data');
   }
 
   Future<void> _validateSubscription() async {
@@ -171,12 +153,11 @@ class AuthProvider extends ChangeNotifier {
         return;
       }
 
-      // ZHIROX is online-only: never restore an authenticated app session
-      // from cached profile data when the server profile cannot be verified.
+      // ZHIROX is online-only: a persisted Supabase session is accepted only
+      // after the current server profile and subscription are verified online.
       try {
         _user = await PBService.getUser(authUser.id);
         await _validateSubscription();
-        await _cacheUser();
       } catch (_) {
         await PBService.logout();
         await _clearLocalUser();
@@ -196,7 +177,6 @@ class AuthProvider extends ChangeNotifier {
     try {
       _user = await PBService.getUser(current.id);
       await _validateSubscription();
-      await _cacheUser();
       if (!_disposed) notifyListeners();
     } catch (_) {
       // Keep the current screen stable on a transient refresh failure.
@@ -269,7 +249,6 @@ class AuthProvider extends ChangeNotifier {
       }
 
       if (userRole == 'employee') _subscribeToUserChanges();
-      await _cacheUser();
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(kLockoutTimeKey);
