@@ -1,30 +1,54 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:zhirox/main.dart';
+import 'package:zhirox/utils/helpers.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const ZhiroxApp());
+  group('AppHelpers finance formatting', () {
+    test('formats IQD amounts with separators', () {
+      expect(AppHelpers.formatCurrency(12500), '12,500 د.ع');
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('maps debt and user states to Kurdish labels', () {
+      expect(AppHelpers.statusName('pending'), 'چاوەڕوانە');
+      expect(AppHelpers.statusName('partial'), 'بەشێکی دراوە');
+      expect(AppHelpers.statusName('paid'), 'دراوە');
+      expect(AppHelpers.roleName('admin'), 'بەڕێوبەر');
+      expect(AppHelpers.roleName('employee'), 'کارمەند');
+      expect(AppHelpers.roleName('customer'), 'کڕیار');
+    });
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  group('AppHelpers backend error normalization', () {
+    test('normalizes network failures without leaking raw exceptions', () {
+      final message = AppHelpers.backendErrorMessage(
+        Exception('SocketException: Failed host lookup'),
+      );
+      expect(
+        message,
+        'پەیوەندی بە سێرڤەر نەکرا. ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.',
+      );
+      expect(message, isNot(contains('SocketException')));
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('normalizes auth and permission failures', () {
+      expect(
+        AppHelpers.backendErrorMessage(Exception('401 unauthorized')),
+        'دانیشتنەکەت بەسەرچووە. تکایە دووبارە بچۆ ژوورەوە.',
+      );
+      expect(
+        AppHelpers.backendErrorMessage(Exception('403 row-level security')),
+        'دەسەڵاتی ئەنجامدانی ئەم کردارەت نییە.',
+      );
+    });
+
+    test('normalizes duplicate data and keeps unknown failures generic', () {
+      expect(
+        AppHelpers.backendErrorMessage(Exception('duplicate key value')),
+        'ئەم زانیارییە پێشتر تۆمار کراوە.',
+      );
+      expect(
+        AppHelpers.backendErrorMessage(Exception('internal database detail')),
+        'کردارەکە سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+      );
+    });
   });
 }
