@@ -1,0 +1,37 @@
+name: Redesign Dashboard Header Once
+'on':
+  push:
+    branches:
+      - owner-source
+    paths:
+      - .github/workflows/redesign-dashboard-header-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-both:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Patch Owner dashboard
+        run: |
+          python3 scripts/redesign_dashboard_header_patch.py
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/screens/admin/admin_dashboard.dart
+          git diff --cached --quiet || git commit -m 'Simplify dashboard header and settings hub'
+          git push origin owner-source
+      - name: Patch User dashboard
+        run: |
+          git show origin/owner-source:scripts/redesign_dashboard_header_patch.py > /tmp/redesign_dashboard_header_patch.py
+          git checkout -B user-source origin/user-source
+          python3 /tmp/redesign_dashboard_header_patch.py
+          git diff --check
+          git add lib/screens/admin/admin_dashboard.dart
+          git diff --cached --quiet || git commit -m 'Simplify dashboard header and settings hub'
+          git push origin user-source
