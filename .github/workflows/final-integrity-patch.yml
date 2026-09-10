@@ -2,8 +2,10 @@ name: Final Integrity Patch
 
 on:
   push:
-    branches: [user-source]
-    paths: [.github/workflows/final-integrity-patch.yml]
+    branches:
+      - user-source
+    paths:
+      - '.github/workflows/final-integrity-patch.yml'
 
 permissions:
   contents: write
@@ -16,108 +18,12 @@ jobs:
         with:
           ref: user-source
       - name: Apply integrity fixes
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('lib/services/pb_service.dart')
-          text = path.read_text()
-
-          marker = '''  static String _sanitize(String value) {
-    return value.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"');
-  }
-'''
-          helper = marker + '''
-  static bool _isRetryableAuthException(AuthException error) {
-    final text = '${error.runtimeType} ${error.message}'.toLowerCase();
-    return text.contains('retryable') ||
-        text.contains('network') ||
-        text.contains('socket') ||
-        text.contains('fetch') ||
-        text.contains('connection') ||
-        text.contains('timeout') ||
-        text.contains('temporarily unavailable') ||
-        text.contains('bad gateway') ||
-        text.contains('service unavailable') ||
-        text.contains('gateway timeout') ||
-        text.contains('internal server error') ||
-        text.contains('too many requests');
-  }
-'''
-          if '_isRetryableAuthException' not in text:
-              assert marker in text, 'sanitize marker not found'
-              text = text.replace(marker, helper, 1)
-
-          old_auth = '''    } on AuthException catch (_) {
-      throw Exception('وشەی نهێنی هەڵەیە');
-    }
-'''
-          new_auth = '''    } on AuthException catch (e) {
-      if (_isRetryableAuthException(e)) {
-        throw SocketException('temporary authentication network failure');
-      }
-      throw Exception('وشەی نهێنی هەڵەیە');
-    }
-'''
-          assert old_auth in text or new_auth in text, 'login auth catch not found'
-          text = text.replace(old_auth, new_auth, 1)
-
-          old_create = '''    final created = await pb.collection('debts').create(body: body);
-'''
-          new_create = '''    RecordModel created;
-    try {
-      created = await pb.collection('debts').create(body: body);
-    } catch (error) {
-      if (receiptPath.isNotEmpty) {
-        try {
-          await client.storage.from('receipts').remove([receiptPath]);
-        } catch (_) {}
-      }
-      rethrow;
-    }
-'''
-          assert old_create in text or new_create in text, 'debt create line not found'
-          text = text.replace(old_create, new_create, 1)
-
-          old_delete = '''  static Future<void> deleteDebt(String id) async {
-    final payments = await pb.collection('payments').getList(
-      filter: 'debt = "${_sanitize(id)}"',
-      perPage: 500,
-    );
-    for (final payment in payments.items) {
-      await pb.collection('payments').delete(payment.id);
-    }
-    await pb.collection('debts').delete(id);
-  }
-'''
-          new_delete = '''  static Future<void> deleteDebt(String id) async {
-    final debt = await getDebt(id);
-    final receiptPath = debt.getStringValue('receipt_image');
-
-    // payments.debt_id is ON DELETE CASCADE in Postgres, so one debt delete
-    // keeps the financial delete atomic instead of deleting payments piecemeal.
-    await pb.collection('debts').delete(id);
-
-    if (receiptPath.isNotEmpty) {
-      try {
-        await client.storage.from('receipts').remove([receiptPath]);
-      } catch (_) {
-        // Database deletion already succeeded. A storage cleanup failure must
-        // not turn a completed financial transaction into an app-level error.
-      }
-    }
-  }
-'''
-          assert old_delete in text or new_delete in text, 'deleteDebt block not found'
-          text = text.replace(old_delete, new_delete, 1)
-
-          path.write_text(text)
-          PY
+        run: python3 scripts/final_integrity_patch.py
       - name: Commit fixes
         run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add lib/services/pb_service.dart
           git diff --cached --quiet && exit 0
-          git commit -m "Harden login and debt transaction integrity"
+          git commit -m 'Harden login and debt transaction integrity'
           git push origin HEAD:user-source
