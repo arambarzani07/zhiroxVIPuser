@@ -1,0 +1,77 @@
+name: Patch Lazy Tabs Once
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/patch-lazy-tabs-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Preserve visited dashboard tabs lazily
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('lib/screens/admin/admin_dashboard.dart')
+          t = p.read_text()
+
+          fields_old = "  int _currentIndex = 0;\n  Map<String, dynamic> _stats = {};"
+          fields_new = "  int _currentIndex = 0;\n  final Set<int> _visitedTabs = <int>{0};\n  Map<String, dynamic> _stats = {};"
+          assert fields_old in t, 'fields anchor missing'
+          t = t.replace(fields_old, fields_new, 1)
+
+          switch_old = '''      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: screens[_currentIndex],
+      ),'''
+          switch_new = '''      body: IndexedStack(
+        index: _currentIndex,
+        children: List<Widget>.generate(
+          screens.length,
+          (index) => _visitedTabs.contains(index)
+              ? screens[index]
+              : const SizedBox.shrink(),
+        ),
+      ),'''
+          assert switch_old in t, 'AnimatedSwitcher anchor missing'
+          t = t.replace(switch_old, switch_new, 1)
+
+          tap_old = '''      onTap: () {
+        if (_currentIndex == index) return;
+        setState(() => _currentIndex = index);
+        if (index == 0) unawaited(_loadStats());
+      },'''
+          tap_new = '''      onTap: () {
+        if (_currentIndex == index) return;
+        setState(() {
+          _visitedTabs.add(index);
+          _currentIndex = index;
+        });
+        if (index == 0) unawaited(_loadStats());
+      },'''
+          assert tap_old in t, 'tab tap anchor missing'
+          t = t.replace(tap_old, tap_new, 1)
+
+          assert 'body: AnimatedSwitcher(' not in t
+          assert '_visitedTabs.add(index);' in t
+          p.write_text(t)
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/screens/admin/admin_dashboard.dart
+          git diff --cached --quiet && exit 0
+          git commit -m 'Preserve admin dashboard tabs lazily'
+          git push origin owner-source
