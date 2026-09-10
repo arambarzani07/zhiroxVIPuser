@@ -1,0 +1,171 @@
+name: Patch Dashboard Loading Once
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - '.github/workflows/patch-dashboard-loading-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: user-source
+          fetch-depth: 0
+
+      - name: Make dashboard loading online-only and single-flight
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/screens/admin/admin_dashboard.dart')
+          text = path.read_text()
+
+          text = text.replace("import 'dart:convert';\n", '')
+          text = text.replace("import 'package:shared_preferences/shared_preferences.dart';\n", '')
+
+          old_fields = '''  Map<String, dynamic> _stats = {};
+  bool _isLoading = true;
+  StreamSubscription<bool>? _connectivitySub;'''
+          new_fields = '''  Map<String, dynamic> _stats = {};
+  bool _isLoading = true;
+  String? _statsError;
+  Future<void>? _statsLoad;
+  StreamSubscription<bool>? _connectivitySub;'''
+          assert old_fields in text, 'dashboard fields anchor missing'
+          text = text.replace(old_fields, new_fields, 1)
+
+          text = text.replace('''    _loadStats();
+    _connectivitySub = ConnectivityService.instance.statusStream.listen((online) {
+      if (online && mounted) _loadStats();
+    });''', '''    unawaited(_loadStats());
+    _connectivitySub = ConnectivityService.instance.statusStream.listen((online) {
+      if (online && mounted) unawaited(_loadStats());
+    });''', 1)
+
+          start = text.index('  Future<void> _loadStats() async {')
+          end = text.index('\n  @override\n  Widget build', start)
+          replacement = '''  Future<void> _loadStats() {
+    final activeLoad = _statsLoad;
+    if (activeLoad != null) return activeLoad;
+
+    final load = _loadStatsOnce();
+    _statsLoad = load;
+    unawaited(
+      load.whenComplete(() {
+        if (identical(_statsLoad, load)) _statsLoad = null;
+      }),
+    );
+    return load;
+  }
+
+  Future<void> _loadStatsOnce() async {
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    if (auth.userId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _statsError = null;
+        });
+      }
+      return;
+    }
+
+    // Only block the dashboard on the first load. Refreshes keep the current
+    // UI visible so tab changes/reconnects do not flash a full-screen spinner.
+    if (_stats.isEmpty && !_isLoading) {
+      setState(() => _isLoading = true);
+    }
+
+    Map<String, dynamic>? freshStats;
+    String? loadError;
+    try {
+      freshStats = await PBService.getDashboardStats(adminId: auth.userId);
+    } catch (_) {
+      loadError = 'نەتوانرا زانیارییەکانی داشبۆرد نوێ بکرێنەوە. پەیوەندی ئینتەرنێت بپشکنە.';
+    }
+
+    if (!mounted) return;
+    setState(() {
+      if (freshStats != null) {
+        _stats = freshStats!;
+        _statsError = null;
+      } else {
+        _statsError = loadError;
+      }
+      _isLoading = false;
+    });
+  }
+'''
+          text = text[:start] + replacement + text[end:]
+
+          old_nav = '''      onTap: () {
+        setState(() => _currentIndex = index);
+        if (index == 0) _loadStats();
+      },'''
+          new_nav = '''      onTap: () {
+        if (_currentIndex == index) return;
+        setState(() => _currentIndex = index);
+        if (index == 0) unawaited(_loadStats());
+      },'''
+          assert old_nav in text, 'navigation reload anchor missing'
+          text = text.replace(old_nav, new_nav, 1)
+
+          old_dashboard = '''  Widget _buildNewDashboard(AuthProvider auth) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final isDark = Theme.of(context).brightness == Brightness.dark;'''
+          new_dashboard = '''  Widget _buildNewDashboard(AuthProvider auth) {
+    if (_isLoading && _stats.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_stats.isEmpty && _statsError != null) {
+      return RefreshIndicator(
+        onRefresh: _loadStats,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(32),
+          children: [
+            const SizedBox(height: 120),
+            const Icon(Icons.cloud_off_rounded, size: 58, color: Colors.orange),
+            const SizedBox(height: 18),
+            Text(
+              _statsError!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, height: 1.7),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: () => _loadStats(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('دووبارە هەوڵ بدە'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final isDark = Theme.of(context).brightness == Brightness.dark;'''
+          assert old_dashboard in text, 'dashboard loading UI anchor missing'
+          text = text.replace(old_dashboard, new_dashboard, 1)
+
+          assert 'cached_admin_stats_' not in text, 'persistent dashboard cache still present'
+          path.write_text(text)
+          PY
+
+      - name: Commit dashboard loading hardening
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/screens/admin/admin_dashboard.dart
+          git diff --cached --quiet && exit 0
+          git commit -m 'Make admin dashboard loading online-only and single-flight'
+          git push origin user-source
