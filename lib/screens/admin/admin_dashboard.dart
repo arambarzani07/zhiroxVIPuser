@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
@@ -27,14 +25,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int _currentIndex = 0;
   Map<String, dynamic> _stats = {};
   bool _isLoading = true;
+  String? _statsError;
+  Future<void>? _statsLoad;
   StreamSubscription<bool>? _connectivitySub;
 
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    unawaited(_loadStats());
     _connectivitySub = ConnectivityService.instance.statusStream.listen((online) {
-      if (online && mounted) _loadStats();
+      if (online && mounted) unawaited(_loadStats());
     });
   }
 
@@ -44,52 +44,58 @@ class _AdminDashboardState extends State<AdminDashboard> {
     super.dispose();
   }
 
-  Future<void> _loadStats() async {
+  Future<void> _loadStats() {
+    final activeLoad = _statsLoad;
+    if (activeLoad != null) return activeLoad;
+
+    final load = _loadStatsOnce();
+    _statsLoad = load;
+    unawaited(
+      load.whenComplete(() {
+        if (identical(_statsLoad, load)) _statsLoad = null;
+      }),
+    );
+    return load;
+  }
+
+  Future<void> _loadStatsOnce() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
     final auth = context.read<AuthProvider>();
     if (auth.userId.isEmpty) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _statsError = null;
+        });
+      }
       return;
     }
-    final cacheKey = 'cached_admin_stats_${auth.userId}';
 
-    try {
-      _stats = await PBService.getDashboardStats(adminId: auth.userId);
-
-      // Cache Stats
-      final prefs = await SharedPreferences.getInstance();
-
-      // Convert complex objects to JSON-encodable maps
-      final statsJson = Map<String, dynamic>.from(_stats);
-      if (statsJson['recentActivity'] is List) {
-        statsJson['recentActivity'] = (statsJson['recentActivity'] as List)
-            .map((e) => (e as RecordModel).toJson())
-            .toList();
-      }
-
-      await prefs.setString(cacheKey, jsonEncode(statsJson));
-    } catch (e) {
-      // Offline fallback
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final cachedString = prefs.getString(cacheKey);
-
-        if (cachedString != null) {
-          final decoded = jsonDecode(cachedString) as Map<String, dynamic>;
-
-          // Restore RecordModel list
-          if (decoded['recentActivity'] != null) {
-            decoded['recentActivity'] = (decoded['recentActivity'] as List)
-                .map((e) => RecordModel.fromJson(e))
-                .toList();
-          }
-
-          _stats = decoded;
-        }
-      } catch (_) {}
+    // Only block the dashboard on the first load. Refreshes keep the current
+    // UI visible so tab changes/reconnects do not flash a full-screen spinner.
+    if (_stats.isEmpty && !_isLoading) {
+      setState(() => _isLoading = true);
     }
-    if (mounted) setState(() => _isLoading = false);
+
+    Map<String, dynamic>? freshStats;
+    String? loadError;
+    try {
+      freshStats = await PBService.getDashboardStats(adminId: auth.userId);
+    } catch (_) {
+      loadError =
+          'نەتوانرا زانیارییەکانی داشبۆرد نوێ بکرێنەوە. پەیوەندی ئینتەرنێت بپشکنە.';
+    }
+
+    if (!mounted) return;
+    setState(() {
+      if (freshStats != null) {
+        _stats = freshStats!;
+        _statsError = null;
+      } else {
+        _statsError = loadError;
+      }
+      _isLoading = false;
+    });
   }
 
   @override
@@ -185,8 +191,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: () {
+        if (_currentIndex == index) return;
         setState(() => _currentIndex = index);
-        if (index == 0) _loadStats();
+        if (index == 0) unawaited(_loadStats());
       },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
@@ -258,8 +265,39 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildNewDashboard(AuthProvider auth) {
-    if (_isLoading) {
+    if (_isLoading && _stats.isEmpty) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (_stats.isEmpty && _statsError != null) {
+      return RefreshIndicator(
+        onRefresh: _loadStats,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(32),
+          children: [
+            const SizedBox(height: 120),
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 58,
+              color: Colors.orange,
+            ),
+            const SizedBox(height: 18),
+            Text(
+              _statsError!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, height: 1.7),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: () => _loadStats(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('دووبارە هەوڵ بدە'),
+              ),
+            ),
+          ],
+        ),
+      );
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
