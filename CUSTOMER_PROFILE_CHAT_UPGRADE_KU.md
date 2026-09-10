@@ -1,41 +1,28 @@
-# ZHIROX Customer Profile Chat Upgrade
+# ZHIROX Customer Profile — Online Only
 
-ئەم وەشانە تایبەتمەندی **Customer Profile بە شێوەی چات** زیاد دەکات.
+ئەم فایلە دۆخی ئێستای Customer Profile ڕوون دەکاتەوە.
 
-## چی گۆڕاوە؟
+## دیزاینی ئێستا
 
-- لە `UserProfileScreen` ـدا timeline/card ـی نوێ زیادکرا.
-- قەرز پێدانەکان لای ڕاست وەک bubble/card دەردەکەون.
-- پارەدانەوەکان لای چەپ وەک bubble/card دەردەکەون.
-- Debt Health strip زیادکرا بۆ نیشاندانی دۆخی کڕیار.
-- داتا لە `debts` و `payments` دەخوێندرێتەوە؛ collection نوێ پێویست نییە.
-- Offline cache بۆ payments ـیش زیادکرا.
+- پڕۆفایلی کڕیار بە سێ بەش ڕێکخراوە: `پوختە`، `مامەڵەکان` و `دەستکاری`.
+- قەرز و پارەدانەوەکان لە timeline/list ـێکی compact نیشان دەدرێن؛ chat bubble ـی کۆن بەکارناهێنرێت.
+- status color تەنها بۆ واتای دارایی/دۆخ بەکاردێت، نە بۆ هەموو card ـەکە.
 
-## فایلە گۆڕاوەکان
+## Online-only policy
 
-- `lib/screens/shared/user_profile_screen.dart`
-- `lib/services/pb_service.dart`
+- داتای `profiles/users`، `debts`، `payments` و `notifications` لە backend ـی live دەخوێندرێتەوە.
+- هیچ business-data offline cache ـێک لە Customer Profile بەکارناهێنرێت.
+- ئەگەر network/server fetch سەرکەوتوو نەبێت، stale data نابێتە جێگرەوە؛ error/Retry نیشان دەدرێت.
+- global online-only gate لە `lib/main.dart` بەکارهێنانی ئەپ لە کاتی نەبوونی network ڕادەگرێت.
 
 ## پێویستی داتابەیس
 
-هەمان schema ـی ئێستا بەسە:
-
-- `users`
-- `debts`
-- `payments`
-- `notifications`
-
-هیچ collection ـی نوێ زیاد نەکراوە.
-
-## گرنگ
-
-بۆ ئەوەی پارەدانەوەکان لە پڕۆفایلی کڕیاردا دەربکەون، `payments.debt` دەبێت relation بێت بۆ `debts` و `debts.customer` relation بێت بۆ `users`.
+هەمان schema ـی ئێستا بەسە: `profiles/users`، `debts`، `payments` و `notifications`. هیچ collection/table ـی نوێ بۆ ئەم UI ـە پێویست نییە.
 
 ## تاقیکردنەوە
 
-1. بە admin login بکە.
-2. کڕیارێک درووست بکە.
-3. قەرزێک زیاد بکە.
-4. پارەدانەوە بۆ هەمان قەرز زیاد بکە.
-5. بڕۆ پڕۆفایلی کڕیار.
-6. قەرز دەبێت لای ڕاست و پارەدانەوە لای چەپ دەربکەون.
+1. بە هەژماری ڕێپێدراو بچۆ ژوورەوە.
+2. کڕیارێک هەڵبژێرە.
+3. قەرز و پارەدانەوە زیاد بکە.
+4. لە `مامەڵەکان` دڵنیابە لە نیشاندانی داتای live.
+5. network ببڕە و پشتڕاست بکە کە ئەپ business data ـی cacheکراو پیشان نادات.
