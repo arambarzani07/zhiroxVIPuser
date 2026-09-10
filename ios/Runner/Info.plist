@@ -53,17 +53,5 @@
 	<string>This app needs permission to save generated receipts and selected images.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app may request microphone access if the camera flow records media.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>processing</string>
-	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>checkNotifications</string>
-		<string>checkOverdueDebts</string>
-		<string>com.karoxghafoor.zhirox.overdueDebtsCheck</string>
-		<string>overdueDebtsCheck</string>
-	</array>
 </dict>
 </plist>
