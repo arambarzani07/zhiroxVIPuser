@@ -1,0 +1,37 @@
+name: Add Debt Compact Redesign Once
+'on':
+  push:
+    branches:
+      - owner-source
+    paths:
+      - .github/workflows/add-debt-compact-redesign-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-both:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Patch Owner New Debt
+        run: |
+          python scripts/add_debt_compact_redesign.py
+          git add lib/screens/shared/add_debt_screen.dart
+          git commit -m "Compact New Debt form and sticky save action"
+          git push origin owner-source
+      - name: Patch User New Debt
+        run: |
+          cp scripts/add_debt_compact_redesign.py /tmp/add_debt_compact_redesign.py
+          git fetch origin user-source
+          git checkout user-source
+          python /tmp/add_debt_compact_redesign.py
+          git add lib/screens/shared/add_debt_screen.dart
+          git commit -m "Compact New Debt form and sticky save action"
+          git push origin user-source
