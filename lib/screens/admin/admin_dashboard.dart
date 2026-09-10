@@ -1126,8 +1126,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                     'phone = "$newPhone" && id != "${auth.userId}"',
                                 perPage: 1,
                               );
+                          if (!ctx.mounted || !mounted) return;
                           if (existing.items.isNotEmpty) {
-                            setDialogState(() => isSaving = false);
+                            if (ctx.mounted) setDialogState(() => isSaving = false);
                             if (mounted) {
                               AppHelpers.showSnackBar(
                                 context,
@@ -1142,6 +1143,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           });
                           // Refresh auth user data
                           await auth.refreshUser();
+                          if (!ctx.mounted || !mounted) return;
                           if (mounted) {
                             Navigator.pop(ctx);
                             AppHelpers.showSnackBar(
@@ -1150,7 +1152,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             );
                           }
                         } catch (e) {
-                          setDialogState(() => isSaving = false);
+                          if (ctx.mounted) setDialogState(() => isSaving = false);
                           if (mounted) {
                             AppHelpers.showSnackBar(
                               context,
@@ -1369,6 +1371,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             oldPassword: oldPassController.text,
                             newPassword: passController.text,
                           );
+                          if (!ctx.mounted || !mounted) return;
                           if (mounted) {
                             Navigator.pop(ctx);
                             AppHelpers.showSnackBar(
@@ -1377,7 +1380,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             );
                           }
                         } catch (e) {
-                          setDialogState(() => isSaving = false);
+                          if (ctx.mounted) setDialogState(() => isSaving = false);
                           if (mounted) {
                             AppHelpers.showSnackBar(
                               context,
