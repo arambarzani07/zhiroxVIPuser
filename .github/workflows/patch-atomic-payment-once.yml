@@ -24,23 +24,9 @@ jobs:
 
           path = Path('lib/services/pb_service.dart')
           text = path.read_text()
-          old = """    final payment = await pb.collection('payments').create(
-              body: {
-                'debt': debtId,
-                'amount': amount,
-                'note': note ?? '',
-                'created_by': createdBy,
-              },
-            );
-
-            final debt = await getDebt(debtId);
-            final remaining = debt.getDoubleValue('remaining') - amount;
-            final newRemaining = remaining <= 0 ? 0.0 : remaining;
-            final newStatus = remaining <= 0 ? 'paid' : 'partial';
-            await pb.collection('debts').update(
-              debtId,
-              body: {'remaining': newRemaining, 'status': newStatus},
-            );"""
+          function_start = text.index('  static Future<RecordModel> createPayment({')
+          block_start = text.index("    final payment = await pb.collection('payments').create(", function_start)
+          block_end = text.index("    try {\n      final customerId = debt.getStringValue('customer');", block_start)
           new = """    await ensureInitialized();
             final rpcResult = await client.rpc(
               'record_payment',
@@ -64,10 +50,10 @@ jobs:
 
             final payment = await pb.collection('payments').getOne(paymentId);
             final debt = await getDebt(debtId);
-            final newRemaining = debt.getDoubleValue('remaining');"""
-          if text.count(old) != 1:
-              raise SystemExit(f'atomic payment anchor count={text.count(old)}')
-          path.write_text(text.replace(old, new, 1))
+            final newRemaining = debt.getDoubleValue('remaining');
+
+"""
+          path.write_text(text[:block_start] + new + text[block_end:])
           PY
       - name: Commit fix
         run: |
