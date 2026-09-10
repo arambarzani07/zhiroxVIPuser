@@ -655,25 +655,32 @@ class PBService {
     required String createdBy,
     String? createdByName,
   }) async {
-    final payment = await pb.collection('payments').create(
-      body: {
-        'debt': debtId,
-        'amount': amount,
-        'note': note ?? '',
-        'created_by': createdBy,
-      },
-    );
+    await ensureInitialized();
+  final rpcResult = await client.rpc(
+    'record_payment',
+    params: {
+      'p_debt_id': debtId,
+      'p_amount': amount,
+      'p_note': note ?? '',
+    },
+  );
 
-    final debt = await getDebt(debtId);
-    final remaining = debt.getDoubleValue('remaining') - amount;
-    final newRemaining = remaining <= 0 ? 0.0 : remaining;
-    final newStatus = remaining <= 0 ? 'paid' : 'partial';
-    await pb.collection('debts').update(
-      debtId,
-      body: {'remaining': newRemaining, 'status': newStatus},
-    );
+  Map<String, dynamic>? paymentRow;
+  if (rpcResult is Map) {
+    paymentRow = Map<String, dynamic>.from(rpcResult);
+  } else if (rpcResult is List && rpcResult.isNotEmpty && rpcResult.first is Map) {
+    paymentRow = Map<String, dynamic>.from(rpcResult.first as Map);
+  }
+  final paymentId = paymentRow?['id']?.toString() ?? '';
+  if (paymentId.isEmpty) {
+    throw Exception('پارەدانەوە تۆمار نەکرا');
+  }
 
-    try {
+  final payment = await pb.collection('payments').getOne(paymentId);
+  final debt = await getDebt(debtId);
+  final newRemaining = debt.getDoubleValue('remaining');
+
+      try {
       final customerId = debt.getStringValue('customer');
       if (customerId.isNotEmpty) {
         String senderName = createdByName ?? '';
