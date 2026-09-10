@@ -35,7 +35,11 @@ class AuthProvider extends ChangeNotifier {
     final subEnd = _user!.getStringValue('subscription_end');
     if (subEnd.isEmpty) return 9999;
     final date = DateTime.tryParse(subEnd);
-    return date == null ? 9999 : date.difference(DateTime.now()).inDays;
+    if (date == null) return 9999;
+
+    final now = DateTime.now();
+    if (!date.isAfter(now)) return 0;
+    return date.difference(now).inDays + 1;
   }
 
   String get userFullName {
@@ -135,7 +139,7 @@ class AuthProvider extends ChangeNotifier {
     if (userRole == 'admin') {
       final subEnd = current.getStringValue('subscription_end');
       final date = DateTime.tryParse(subEnd);
-      if (date != null && date.isBefore(DateTime.now())) {
+      if (date != null && !date.isAfter(DateTime.now())) {
         throw 'ماوەی ڕێکەوتنی بەشداریت تەواو بووە. تکایە پەیوەندی بکە بۆ نوێکردنەوە.';
       }
       return;
@@ -147,7 +151,7 @@ class AuthProvider extends ChangeNotifier {
       final admin = await PBService.getUser(aId);
       final subEnd = admin.getStringValue('subscription_end');
       final date = DateTime.tryParse(subEnd);
-      if (date != null && date.isBefore(DateTime.now())) {
+      if (date != null && !date.isAfter(DateTime.now())) {
         throw 'ماوەی ڕێکەوتنی بەڕێوەبەرەکەت تەواو بووە. تکایە پەیوەندی بکە بە بەڕێوەبەرەکەت.';
       }
     }
@@ -157,7 +161,9 @@ class AuthProvider extends ChangeNotifier {
     try {
       await PBService.ensureInitialized();
       final authUser = PBService.client.auth.currentUser;
-      if (authUser == null) {
+      final session = PBService.client.auth.currentSession;
+
+      if (authUser == null || session == null) {
         await _clearLocalUser();
         return;
       }
@@ -167,19 +173,9 @@ class AuthProvider extends ChangeNotifier {
         await _validateSubscription();
         await _cacheUser();
       } catch (_) {
-        // Network fallback is allowed only while a real Supabase session exists.
-        final cached = await _secureStorage.read(key: 'user_data');
-        if (PBService.client.auth.currentSession != null && cached != null) {
-          try {
-            _user = RecordModel.fromJson(
-              Map<String, dynamic>.from(jsonDecode(cached) as Map),
-            );
-          } catch (_) {
-            await _clearLocalUser();
-          }
-        } else {
-          await _clearLocalUser();
-        }
+        await PBService.logout();
+        await _clearLocalUser();
+        return;
       }
 
       if (userRole == 'employee') _subscribeToUserChanges();
@@ -194,6 +190,7 @@ class AuthProvider extends ChangeNotifier {
     if (current == null) return;
     try {
       _user = await PBService.getUser(current.id);
+      await _validateSubscription();
       await _cacheUser();
       if (!_disposed) notifyListeners();
     } catch (_) {}
@@ -228,9 +225,21 @@ class AuthProvider extends ChangeNotifier {
     await prefs.setInt(kFailedAttemptsKey, attempts);
   }
 
+  bool _isConnectivityError(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('socketexception') ||
+        text.contains('clientexception') ||
+        text.contains('failed host lookup') ||
+        text.contains('connection refused') ||
+        text.contains('connection reset') ||
+        text.contains('network is unreachable') ||
+        text.contains('timed out') ||
+        text.contains('timeoutexception');
+  }
+
   Future<bool> login(String phone, String password) async {
     _isLoading = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     try {
       await _checkLockout();
@@ -240,7 +249,12 @@ class AuthProvider extends ChangeNotifier {
       } catch (e) {
         await PBService.logout();
         await _clearLocalUser();
+
         if (e is String) rethrow;
+        if (_isConnectivityError(e)) {
+          throw 'پەیوەندی بە سێرڤەر نەکرا. تکایە ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.';
+        }
+
         await _handleLoginFailure();
         throw 'وشەی نهێنی یان ژمارە مۆبایل هەڵەیە';
       }
@@ -267,7 +281,7 @@ class AuthProvider extends ChangeNotifier {
     required int subscriptionDays,
   }) async {
     _isLoading = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     try {
       await PBService.registerAdmin(
         marketName: marketName,
@@ -289,7 +303,7 @@ class AuthProvider extends ChangeNotifier {
     required String adminId,
   }) async {
     _isLoading = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     try {
       await PBService.registerCustomer(
         name: name,
