@@ -39,7 +39,7 @@ jobs:
           for path in (root / 'lib').rglob('*.dart'):
               text = path.read_text()
               text = text.replace(old_import, new_import)
-              text = text.replace("getStringValue('password_text')", "''")
+              text = text.replace("_user!.getStringValue('password_text')", "''")
               text = text.replace("data['password_text'] = _passwordController.text;", "// Plaintext password persistence removed.")
               text = text.replace('// Update password_text if password field is not empty', '// Password changes are handled by Supabase Auth.')
               text = text.replace('if (_passwordController.text.length < 8) {', 'if (_passwordController.text.isNotEmpty && _passwordController.text.length < 8) {')
