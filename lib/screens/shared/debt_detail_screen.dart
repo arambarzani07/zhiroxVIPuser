@@ -53,6 +53,62 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     _animController.forward(from: 0);
   }
 
+  Future<void> _printDebtInvoice() async {
+    if (_debt == null) return;
+    final auth = context.read<AuthProvider>();
+    String marketName = auth.marketName;
+    String adminPhone = '';
+
+    if (marketName.isEmpty) {
+      try {
+        final admin = await PBService.getUser(auth.adminId);
+        marketName = admin.getStringValue('market_name');
+        adminPhone = admin.getStringValue('phone');
+      } catch (_) {
+        marketName = 'Zhirox System';
+      }
+    } else {
+      adminPhone = auth.user?.getStringValue('phone') ?? '';
+    }
+
+    await PdfService.generateInvoice(
+      debt: _debt!,
+      marketName: marketName,
+      adminName: auth.userName,
+      adminPhone: adminPhone,
+    );
+  }
+
+  Future<void> _editCurrentDebt() async {
+    if (_debt == null) return;
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddDebtScreen(
+          debt: _debt,
+          customerId: _debt!.getStringValue('customer'),
+        ),
+      ),
+    );
+    if (result == true && mounted) {
+      await _loadData();
+    }
+  }
+
+  Future<void> _handleDebtAction(String action) async {
+    switch (action) {
+      case 'print':
+        await _printDebtInvoice();
+        break;
+      case 'edit':
+        await _editCurrentDebt();
+        break;
+      case 'delete':
+        if (mounted) _confirmDelete();
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -84,7 +140,6 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     final remaining = _debt!.getDoubleValue('remaining');
     final currency = _debt!.getStringValue('currency');
     final dollarRate = _debt!.getDoubleValue('dollar_rate');
-    final amountUsd = _debt!.getDoubleValue('amount_usd');
     final paid = amount - remaining;
     final paidPercent = amount > 0 ? paid / amount : 0.0;
     final statusColor = AppHelpers.statusColor(status);
@@ -102,333 +157,317 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
           : const Color(0xFFF5F7FA),
       body: CustomScrollView(
         slivers: [
-          // ───── Gradient Header ─────
+          // ───── Compact Debt Header ─────
           SliverToBoxAdapter(
             child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    statusColor.withOpacity(0.9),
-                    statusColor.withOpacity(0.6),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
-              ),
+              color: isDark ? AppDarkColors.background : const Color(0xFFF5F7FA),
               child: SafeArea(
                 bottom: false,
-                child: Column(
-                  children: [
-                    // Nav Bar
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      child: Row(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Column(
+                    children: [
+                      Row(
                         children: [
                           IconButton(
-                            icon: const Icon(
-                              Icons.arrow_back_ios,
-                              color: Colors.white,
-                              size: 22,
+                            tooltip: 'گەڕانەوە',
+                            icon: Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 20,
+                              color: isDark
+                                  ? AppDarkColors.textPrimary
+                                  : const Color(0xFF344054),
                             ),
                             onPressed: () => Navigator.pop(context),
                           ),
-                          const Spacer(),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: IconButton(
-                              icon: const Icon(
-                                Icons.print_outlined,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              onPressed: () async {
-                                final auth = context.read<AuthProvider>();
-                                String marketName = auth.marketName;
-                                String adminPhone = '';
-                                if (marketName.isEmpty) {
-                                  try {
-                                    final admin = await PBService.getUser(
-                                      auth.adminId,
-                                    );
-                                    marketName = admin.getStringValue(
-                                      'market_name',
-                                    );
-                                    adminPhone = admin.getStringValue('phone');
-                                  } catch (_) {
-                                    marketName = 'Zhirox System';
-                                  }
-                                } else {
-                                  adminPhone =
-                                      auth.user?.getStringValue('phone') ?? '';
-                                }
-                                await PdfService.generateInvoice(
-                                  debt: _debt!,
-                                  marketName: marketName,
-                                  adminName: auth.userName,
-                                  adminPhone: adminPhone,
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
+                          Expanded(
                             child: Text(
-                              AppHelpers.statusName(status),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
+                              'وردەکاری قەرز',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: isDark
+                                    ? AppDarkColors.textPrimary
+                                    : const Color(0xFF101828),
                               ),
                             ),
                           ),
-                          if (!isCustomer && auth.canEditDebts) ...[
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: Icon(
-                                Icons.edit,
-                                color: Colors.white.withOpacity(0.9),
-                                size: 22,
+                          PopupMenuButton<String>(
+                            tooltip: 'کردارەکان',
+                            onSelected: _handleDebtAction,
+                            icon: Icon(
+                              Icons.more_horiz_rounded,
+                              color: isDark
+                                  ? AppDarkColors.textPrimary
+                                  : const Color(0xFF344054),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'print',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.print_outlined, size: 19),
+                                    SizedBox(width: 10),
+                                    Text('چاپ / وەصڵ'),
+                                  ],
+                                ),
                               ),
-                              onPressed: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => AddDebtScreen(
-                                      debt: _debt,
-                                      customerId: _debt!.getStringValue(
-                                        'customer',
-                                      ),
-                                    ),
+                              if (!isCustomer && auth.canEditDebts)
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit_outlined, size: 19),
+                                      SizedBox(width: 10),
+                                      Text('دەستکاری'),
+                                    ],
                                   ),
-                                );
-                                if (result == true) _loadData();
-                              },
-                            ),
-                          ],
-                          if (!isCustomer && auth.userRole == 'admin') ...[
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: Icon(
-                                Icons.delete_outline,
-                                color: Colors.white.withOpacity(0.8),
-                                size: 22,
-                              ),
-                              onPressed: () => _confirmDelete(),
-                            ),
-                          ],
+                                ),
+                              if (!isCustomer && auth.userRole == 'admin')
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 19,
+                                        color: Colors.red,
+                                      ),
+                                      SizedBox(width: 10),
+                                      Text(
+                                        'سڕینەوە',
+                                        style: TextStyle(color: Colors.red),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
-                    ),
-
-                    // Main Amount
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                      child: Column(
-                        children: [
-                          Text(
-                            _debt!.getStringValue('description').isNotEmpty
-                                ? _debt!.getStringValue('description')
-                                : 'قەرز',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.85),
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            AppHelpers.formatCurrency(
-                              status == 'paid' ? amount : remaining,
-                            ),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1,
-                            ),
-                            textDirection: TextDirection.ltr,
-                          ),
-                          if (currency == 'USD' && amountUsd > 0) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              '\$${(amount > 0 ? (remaining / amount) * amountUsd : 0).toStringAsFixed(2)}',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textDirection: TextDirection.ltr,
-                            ),
-                          ],
-                          const SizedBox(height: 4),
-                          Text(
-                            'ماوە لە ${AppHelpers.formatCurrency(amount)}',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 13,
-                            ),
-                            textDirection: TextDirection.ltr,
-                          ),
-                          if (customerName.isNotEmpty) ...[
-                            const SizedBox(height: 10),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  Icons.person_outline,
-                                  size: 16,
-                                  color: Colors.white.withOpacity(0.7),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  customerName,
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.8),
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          // Progress
-                          const SizedBox(height: 20),
-                          TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 0, end: paidPercent),
-                            duration: const Duration(milliseconds: 1000),
-                            curve: Curves.easeOutCubic,
-                            builder: (context, val, _) {
-                              return Column(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: LinearProgressIndicator(
-                                      value: val,
-                                      minHeight: 8,
-                                      backgroundColor: Colors.white.withOpacity(
-                                        0.2,
-                                      ),
-                                      valueColor:
-                                          const AlwaysStoppedAnimation<Color>(
-                                            Colors.white,
-                                          ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${(val * 100).toStringAsFixed(0)}% دراوە',
+                                        status == 'paid' ? 'کۆی قەرز' : 'ماوەی قەرز',
                                         style: TextStyle(
-                                          color: Colors.white.withOpacity(0.8),
+                                          color: Colors.white.withValues(alpha: 0.78),
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
+                                      const SizedBox(height: 4),
                                       Text(
                                         AppHelpers.formatCurrencyWithType(
                                           (currency == 'USD' && dollarRate > 0)
-                                              ? paid / dollarRate
-                                              : paid,
+                                              ? (status == 'paid' ? amount : remaining) /
+                                                  dollarRate
+                                              : (status == 'paid' ? amount : remaining),
                                           (currency == 'USD' && dollarRate > 0)
                                               ? 'USD'
                                               : 'IQD',
                                           dollarRate: dollarRate,
                                           showConversion: false,
                                         ),
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.8),
-                                          fontSize: 12,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w900,
+                                          height: 1.1,
                                         ),
                                         textDirection: TextDirection.ltr,
                                       ),
                                     ],
                                   ),
-                                ],
-                              );
-                            },
-                          ),
-                        ],
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.16),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 7,
+                                        height: 7,
+                                        decoration: BoxDecoration(
+                                          color: statusColor,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 1,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        AppHelpers.statusName(status),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (customerName.isNotEmpty ||
+                                _debt!.getStringValue('description').isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                [
+                                  if (customerName.isNotEmpty) customerName,
+                                  if (_debt!.getStringValue('description').isNotEmpty)
+                                    _debt!.getStringValue('description'),
+                                ].join('  •  '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.82),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                value: paidPercent.clamp(0.0, 1.0),
+                                minHeight: 5,
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.20),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Text(
+                                  '${(paidPercent.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}% دراوە',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.76),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  'دراوە: ${AppHelpers.formatCurrency(paid)}',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.76),
+                                    fontSize: 10.5,
+                                  ),
+                                  textDirection: TextDirection.ltr,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
 
-          // ───── Info Cards ─────
+          // ───── Compact Metadata ─────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      _buildInfoChip(
-                        Icons.monetization_on_outlined,
-                        'کۆی قەرز',
-                        AppHelpers.formatCurrency(amount),
-                        Colors.blue,
-                      ),
-                      const SizedBox(width: 10),
-                      _buildInfoChip(
-                        Icons.calendar_today_outlined,
-                        'دوایین بەروار',
-                        AppHelpers.formatDate(
-                          _debt!.getStringValue('due_date'),
-                        ),
-                        Colors.orange,
-                      ),
-                    ],
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: isDark ? AppDarkColors.card : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : const Color(0xFFE9EDF3),
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      _buildInfoChip(
-                        Icons.edit_calendar_outlined,
-                        'بەرواری پێدانی قەرز',
-                        AppHelpers.formatDate(
-                          _debt!.getStringValue('custom_date').isNotEmpty
-                              ? _debt!.getStringValue('custom_date')
-                              : _debt!.created,
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        _buildMetaCell(
+                          Icons.monetization_on_outlined,
+                          'کۆی قەرز',
+                          AppHelpers.formatCurrency(amount),
+                          AppColors.primary,
                         ),
-                        Colors.purple,
-                      ),
-                      const SizedBox(width: 10),
-                      _buildInfoChip(
-                        Icons.access_time_rounded,
-                        'کاتژمێر',
-                        AppHelpers.formatTime(
-                          _debt!.getStringValue('custom_date').isNotEmpty
-                              ? _debt!.getStringValue('custom_date')
-                              : _debt!.created,
+                        _buildMetaCell(
+                          Icons.event_outlined,
+                          'بەرواری دانەوە',
+                          _debt!.getStringValue('due_date').isEmpty
+                              ? 'دیاری نەکراوە'
+                              : AppHelpers.formatDate(
+                                  _debt!.getStringValue('due_date'),
+                                ),
+                          Colors.orange,
                         ),
-                        Colors.teal,
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                    Divider(
+                      height: 1,
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : const Color(0xFFF0F2F5),
+                    ),
+                    Row(
+                      children: [
+                        _buildMetaCell(
+                          Icons.calendar_month_outlined,
+                          'بەرواری قەرز',
+                          AppHelpers.formatDate(
+                            _debt!.getStringValue('custom_date').isNotEmpty
+                                ? _debt!.getStringValue('custom_date')
+                                : _debt!.created,
+                          ),
+                          Colors.purple,
+                        ),
+                        _buildMetaCell(
+                          Icons.schedule_outlined,
+                          'کاتژمێر',
+                          AppHelpers.formatTime(
+                            _debt!.getStringValue('custom_date').isNotEmpty
+                                ? _debt!.getStringValue('custom_date')
+                                : _debt!.created,
+                          ),
+                          Colors.teal,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -712,7 +751,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
   // ── Widgets ──
   // ═══════════════════════════════════════════
 
-  Widget _buildInfoChip(
+  Widget _buildMetaCell(
     IconData icon,
     String label,
     String value,
@@ -720,53 +759,45 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDark ? AppDarkColors.card : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isDark
-              ? []
-              : [
-                  BoxShadow(
-                    color: color.withOpacity(0.08),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              width: 34,
+              height: 34,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.09),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: color, size: 20),
+              child: Icon(icon, color: color, size: 18),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 9),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     label,
-                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: isDark
+                          ? AppDarkColors.textSecondary
+                          : const Color(0xFF98A2B3),
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     value,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: isDark
-                          ? AppDarkColors.textPrimary
-                          : Colors.black87,
-                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.ltr,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? AppDarkColors.textPrimary
+                          : const Color(0xFF344054),
+                    ),
                   ),
                 ],
               ),
