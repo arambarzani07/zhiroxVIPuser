@@ -47,6 +47,33 @@ for forbidden in ('List<RecordModel> _debts', 'List<RecordModel> _payments', 'Fu
         fail(f'lib/providers/debt_provider.dart: stale provider cache API remains: {forbidden}')
 
 
+add_debt = (LIB / 'screens/shared/add_debt_screen.dart').read_text(encoding='utf-8')
+for marker in ('_customerLoadError', '_buildCustomerPicker', 'دووبارە هەوڵ بدە'):
+    if marker not in add_debt:
+        fail(f'lib/screens/shared/add_debt_screen.dart: fail-closed customer loading marker missing: {marker}')
+load_match = re.search(
+    r'Future<void>\s+_loadCustomers\(\)\s+async\s*\{(.*?)(?=
+\s*@override
+\s*void dispose)',
+    add_debt,
+    re.S,
+)
+if not load_match or '_customerLoadError =' not in load_match.group(1):
+    fail('lib/screens/shared/add_debt_screen.dart: customer load failures must become an explicit error state')
+
+compat = (LIB / 'services/supabase_compat.dart').read_text(encoding='utf-8')
+ctx_match = re.search(
+    r'Future<_RelationContext>\s+_contextFor\([^)]*\)\s+async\s*\{(.*?)(?=
+\s*Map<String, dynamic>\s+_writeMap)',
+    compat,
+    re.S,
+)
+if not ctx_match:
+    fail('lib/services/supabase_compat.dart: relation context loader not found')
+elif 'catch' in ctx_match.group(1):
+    fail('lib/services/supabase_compat.dart: relation context must not swallow live backend failures')
+
+
 pb = (LIB / 'services/pb_service.dart').read_text(encoding='utf-8')
 match = re.search(
     r'static\s+Future<double>\s+getCustomerBalance\([^)]*\)\s+async\s*\{(.*?)(?=\n\s*static\s+)',

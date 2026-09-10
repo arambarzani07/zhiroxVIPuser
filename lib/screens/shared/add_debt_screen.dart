@@ -43,6 +43,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   List<RecordModel> _customers = [];
   String? _selectedCustomerId;
   bool _loadingCustomers = true;
+  String? _customerLoadError;
 
   @override
   void initState() {
@@ -74,20 +75,42 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   }
 
   Future<void> _loadCustomers() async {
+    if (mounted) {
+      setState(() {
+        _loadingCustomers = true;
+        _customerLoadError = null;
+      });
+    }
+
     try {
       final auth = context.read<AuthProvider>();
-      _customers = await PBService.getUsers(
+      final customers = await PBService.getUsers(
         role: 'customer',
         adminId: auth.adminId,
         approved: true,
       );
-      // If creating new debt and user can't set due date, ensure it's off
-      if (widget.debt == null && !auth.canSetDueDate) {
-        _dueDate = null;
-        _hasDueDate = false;
-      }
-    } catch (_) {}
-    if (mounted) setState(() => _loadingCustomers = false);
+      if (!mounted) return;
+
+      setState(() {
+        _customers = customers;
+        _loadingCustomers = false;
+        _customerLoadError = null;
+
+        // If creating new debt and user can't set due date, ensure it's off.
+        if (widget.debt == null && !auth.canSetDueDate) {
+          _dueDate = null;
+          _hasDueDate = false;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _customers = [];
+        _loadingCustomers = false;
+        _customerLoadError =
+            'نەتوانرا لیستی کڕیاران لە سێرڤەر وەربگیرێت. ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.';
+      });
+    }
   }
 
   @override
@@ -618,6 +641,14 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   }
 
   Future<void> _save() async {
+    if (_loadingCustomers || _customerLoadError != null) {
+      AppHelpers.showSnackBar(
+        context,
+        'سەرەتا زانیاریی کڕیاران بە سەرکەوتوویی بار بکە.',
+        isError: true,
+      );
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCustomerId == null) {
       AppHelpers.showSnackBar(context, 'تکایە کڕیارێک هەڵبژێرە', isError: true);
@@ -962,74 +993,158 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          _loadingCustomers
-              ? const Center(child: CircularProgressIndicator())
-              : DropdownButtonFormField<String>(
-                  initialValue: _selectedCustomerId,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: isDark
-                        ? AppDarkColors.inputFill
-                        : Colors.grey.shade50,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: isDark
-                          ? BorderSide(color: AppDarkColors.cardBorder)
-                          : BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                  ),
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                  dropdownColor: isDark ? AppDarkColors.card : Colors.white,
-                  hint: Text(
-                    'کڕیارێک دیاری بکە',
-                    style: TextStyle(
-                      color: isDark
-                          ? AppDarkColors.textSecondary
-                          : Colors.black54,
-                    ),
-                  ),
-                  items: _customers.map((c) {
-                    final isOverLimit = _isOverLimit(c);
-                    return DropdownMenuItem<String>(
-                      value: c.id,
-                      child: Row(
-                        children: [
-                          Text(
-                            '${c.getStringValue('name')} ${c.getStringValue('father_name')}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                              color: isOverLimit
-                                  ? Colors.red
-                                  : (isDark
-                                        ? AppDarkColors.textPrimary
-                                        : Colors.black87),
-                            ),
-                          ),
-                          if (isOverLimit) ...[
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.warning_amber_rounded,
-                              size: 16,
-                              color: Colors.red,
-                            ),
-                          ],
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: widget.debt == null
-                      ? (v) => setState(() => _selectedCustomerId = v)
-                      : null,
-                  validator: (v) => v == null ? 'کڕیارێک هەڵبژێرە' : null,
-                ),
+          _buildCustomerPicker(isDark),
           // Show limit warning if selected
           if (_selectedCustomerId != null) _buildLimitWarning(),
         ],
       ),
+    );
+  }
+
+  Widget _buildCustomerPicker(bool isDark) {
+    if (_loadingCustomers) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 18),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+      );
+    }
+
+    if (_customerLoadError != null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.cloud_off_rounded, color: Colors.orange, size: 20),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    _customerLoadError!,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.5,
+                      color: isDark
+                          ? AppDarkColors.textPrimary
+                          : const Color(0xFF344054),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _loadCustomers,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('دووبارە هەوڵ بدە'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_customers.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? AppDarkColors.surface : const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE4E7EC),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.person_off_outlined,
+              size: 20,
+              color: isDark ? AppDarkColors.textSecondary : Colors.grey.shade600,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                'هیچ کڕیارێکی پەسەندکراو بەردەست نییە.',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: isDark
+                      ? AppDarkColors.textSecondary
+                      : const Color(0xFF667085),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final selectedValue = _customers.any((c) => c.id == _selectedCustomerId)
+        ? _selectedCustomerId
+        : null;
+
+    return DropdownButtonFormField<String>(
+      initialValue: selectedValue,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: isDark ? AppDarkColors.inputFill : Colors.grey.shade50,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: isDark
+              ? BorderSide(color: AppDarkColors.cardBorder)
+              : BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      dropdownColor: isDark ? AppDarkColors.card : Colors.white,
+      hint: Text(
+        'کڕیارێک دیاری بکە',
+        style: TextStyle(
+          color: isDark ? AppDarkColors.textSecondary : Colors.black54,
+        ),
+      ),
+      items: _customers.map((c) {
+        final isOverLimit = _isOverLimit(c);
+        return DropdownMenuItem<String>(
+          value: c.id,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${c.getStringValue('name')} ${c.getStringValue('father_name')}',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: isOverLimit
+                        ? Colors.red
+                        : (isDark ? AppDarkColors.textPrimary : Colors.black87),
+                  ),
+                ),
+              ),
+              if (isOverLimit) ...[
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  size: 16,
+                  color: Colors.red,
+                ),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
+      onChanged: widget.debt == null
+          ? (v) => setState(() => _selectedCustomerId = v)
+          : null,
+      validator: (v) => v == null ? 'کڕیارێک هەڵبژێرە' : null,
     );
   }
 
@@ -1081,15 +1196,20 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                 color: Colors.orange.withValues(alpha: 0.24),
               ),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.cloud_off_rounded, size: 18, color: Colors.orange),
-                SizedBox(width: 8),
-                Expanded(
+                const Icon(Icons.cloud_off_rounded, size: 18, color: Colors.orange),
+                const SizedBox(width: 8),
+                const Expanded(
                   child: Text(
-                    'نەتوانرا باڵانسی کڕیار پشتڕاست بکرێتەوە. پاشەکەوتکردن تا گەڕانەوەی پەیوەندی ڕادەوەستێت.',
+                    'نەتوانرا باڵانسی کڕیار پشتڕاست بکرێتەوە. پاشەکەوتکردن تا پشتڕاستکردنەوە ڕادەوەستێت.',
                     style: TextStyle(fontSize: 11.5, height: 1.5),
                   ),
+                ),
+                IconButton(
+                  tooltip: 'دووبارە هەوڵ بدە',
+                  onPressed: () => setState(() {}),
+                  icon: const Icon(Icons.refresh_rounded, size: 19),
                 ),
               ],
             ),
