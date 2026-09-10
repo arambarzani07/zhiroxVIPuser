@@ -776,86 +776,69 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isDark ? AppDarkColors.card : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: isDark
-                ? []
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        Icons.chat_bubble_outline_rounded,
-                        color: AppColors.primary,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'پڕۆفایلی مامەڵەکان بە شێوەی چات',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: isDark
-                                  ? AppDarkColors.textPrimary
-                                  : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'قەرز پێدان لای ڕاست، پارەدانەوە لای چەپ',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark
-                                  ? AppDarkColors.textSecondary
-                                  : Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.receipt_long_outlined,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
                 ),
-                const SizedBox(height: 14),
-                _buildDebtHealthStrip(
-                  label: health.$1,
-                  color: health.$2,
-                  totalRemaining: totalRemaining,
-                  totalPaid: totalPaid,
-                ),
-                const SizedBox(height: 14),
-                if (timelineItems.isEmpty)
-                  _buildEmptyTimelineState(isDark)
-                else
-                  ...timelineItems.asMap().entries.map(
-                        (entry) => _buildTimelineBubble(entry.value, entry.key),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'مامەڵەکان',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: isDark
+                              ? AppDarkColors.textPrimary
+                              : const Color(0xFF111827),
+                        ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${timelineItems.length} تۆمار',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark
+                              ? AppDarkColors.textSecondary
+                              : const Color(0xFF98A2B3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ),
+            const SizedBox(height: 12),
+            _buildDebtHealthStrip(
+              label: health.$1,
+              color: health.$2,
+              totalRemaining: totalRemaining,
+              totalPaid: totalPaid,
+            ),
+            const SizedBox(height: 10),
+            if (timelineItems.isEmpty)
+              _buildEmptyTimelineState(isDark)
+            else
+              ...timelineItems.asMap().entries.map(
+                    (entry) => _buildTimelineBubble(entry.value, entry.key),
+                  ),
+          ],
         ),
       ),
     );
@@ -881,54 +864,38 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.22)),
+        color: color.withOpacity(isDark ? 0.08 : 0.06),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: color.withOpacity(0.16)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(Icons.health_and_safety_outlined, color: color, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
+          Icon(Icons.shield_outlined, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'ماوە: ${AppHelpers.formatCurrency(totalRemaining)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppDarkColors.textSecondary : Colors.grey[700],
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  'دراوە: ${AppHelpers.formatCurrency(totalPaid)}',
-                  textAlign: TextAlign.left,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppDarkColors.textSecondary : Colors.grey[700],
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(width: 8),
+          Text(
+            'ماوە ${AppHelpers.formatCurrency(totalRemaining)}',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF667085),
+            ),
           ),
         ],
       ),
@@ -937,33 +904,29 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Widget _buildEmptyTimelineState(bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 26),
       decoration: BoxDecoration(
-        color: isDark ? AppDarkColors.background : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.06)
+              : const Color(0xFFE9EDF3),
+        ),
       ),
       child: Column(
         children: [
           Icon(
-            Icons.forum_outlined,
-            color: isDark ? AppDarkColors.textSecondary : Colors.grey[500],
-            size: 34,
+            Icons.receipt_long_outlined,
+            color: isDark ? AppDarkColors.textSecondary : Colors.grey[400],
+            size: 30,
           ),
           const SizedBox(height: 8),
           Text(
             'هێشتا هیچ مامەڵەیەک نییە',
             style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isDark ? AppDarkColors.textPrimary : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'کاتێک قەرز یان پارەدانەوە زیاد بکرێت، لێرە وەک چات دەردەکەوێت.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? AppDarkColors.textSecondary : Colors.grey[600],
+              fontWeight: FontWeight.w700,
+              color: isDark ? AppDarkColors.textPrimary : const Color(0xFF344054),
             ),
           ),
         ],
@@ -991,122 +954,137 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ? record.getStringValue('note')
         : record.getStringValue('description');
     final status = isPayment ? '' : record.getStringValue('status');
-    final title = isPayment ? 'پارە وەرگرتنەوە' : 'قەرز پێدان';
+    final title = isPayment ? 'پارەدانەوە' : 'قەرز';
     final color = isPayment ? Colors.green : Colors.orange;
-    final icon = isPayment ? Icons.south_west_rounded : Icons.north_east_rounded;
-    final align = isPayment ? Alignment.centerLeft : Alignment.centerRight;
-    final bubbleRadius = BorderRadius.only(
-      topLeft: const Radius.circular(18),
-      topRight: const Radius.circular(18),
-      bottomLeft: Radius.circular(isPayment ? 6 : 18),
-      bottomRight: Radius.circular(isPayment ? 18 : 6),
+    final icon = isPayment
+        ? Icons.south_west_rounded
+        : Icons.north_east_rounded;
+    final formattedAmount = AppHelpers.formatCurrencyWithType(
+      amount,
+      currency,
+      dollarRate: dollarRate,
+      showConversion: currency == 'USD',
     );
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 260 + (index * 35).clamp(0, 420)),
+      duration: Duration(milliseconds: 180 + (index * 20).clamp(0, 220)),
       curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, 12 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Align(
-        alignment: align,
-        child: Container(
-          width: MediaQuery.of(context).size.width * 0.74,
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(13),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isPayment
-                  ? [Colors.green.shade600, Colors.green.shade400]
-                  : [Colors.orange.shade700, Colors.orange.shade500],
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-            ),
-            borderRadius: bubbleRadius,
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(isDark ? 0.10 : 0.22),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 6 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? AppDarkColors.card : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.06)
+                : const Color(0xFFE9EDF3),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(icon, color: Colors.white, size: 18),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          color: isDark
+                              ? AppDarkColors.textPrimary
+                              : const Color(0xFF1D2939),
+                        ),
                       ),
-                    ),
+                      if (!isPayment && status.isNotEmpty) ...[
+                        const SizedBox(width: 7),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.09),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            AppHelpers.statusName(status),
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
+                  const SizedBox(height: 3),
                   Text(
                     AppHelpers.formatDateTime(item.date.toIso8601String()),
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.78),
-                      fontSize: 10,
+                      fontSize: 10.5,
+                      color: isDark
+                          ? AppDarkColors.textSecondary
+                          : const Color(0xFF98A2B3),
                     ),
                   ),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark
+                            ? AppDarkColors.textSecondary
+                            : const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                AppHelpers.formatCurrencyWithType(
-                  amount,
-                  currency,
-                  dollarRate: dollarRate,
-                  showConversion: currency == 'USD',
-                ),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
+            ),
+            const SizedBox(width: 10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 122),
+              child: Text(
+                formattedAmount,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 15.5,
                   fontWeight: FontWeight.w900,
+                  height: 1.15,
                 ),
                 textDirection: TextDirection.ltr,
               ),
-              if (description.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  description,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.92),
-                    fontSize: 12,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-              if (!isPayment && status.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    AppHelpers.statusName(status),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
