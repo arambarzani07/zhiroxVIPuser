@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
+import 'package:pocketbase/pocketbase.dart';
 
 class AppHelpers {
   // فۆرماتی پارە
@@ -93,6 +94,11 @@ class AppHelpers {
     if (days <= 0) return 'تەواو بووە';
     if (days == 1) return '١ ڕۆژ ماوە';
     return '$days ڕۆژ ماوە';
+  }
+
+  // Modern PocketBase relation accessor. A missing or forbidden expansion stays null.
+  static RecordModel? expandedRecord(RecordModel record, String relation) {
+    return record.get<RecordModel>('expand.$relation', null);
   }
 
   // هەڵەی backend/network بە پەیامێکی ڕوون و بێ وردەکاریی ناوخۆیی دەگۆڕێت.

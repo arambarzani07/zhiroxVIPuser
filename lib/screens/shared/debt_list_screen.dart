@@ -20,9 +20,7 @@ class DebtListScreen extends StatefulWidget {
 
 class _DebtListScreenState extends State<DebtListScreen> {
   List<RecordModel> _allDebts = [];
-  List<_CustomerInfo> _customers = [];
   bool _isLoading = true;
-  bool _isPaying = false;
   bool _loadInFlight = false;
   String? _loadError;
   Timer? _debounceTimer;
@@ -62,10 +60,10 @@ class _DebtListScreenState extends State<DebtListScreen> {
   }
 
   void _debouncedReload() {
-    if (_isPaying || !mounted) return;
+    if (!mounted) return;
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 800), () {
-      if (mounted && !_isPaying) _loadAllDebts();
+      if (mounted) _loadAllDebts();
     });
   }
 
@@ -90,14 +88,12 @@ class _DebtListScreenState extends State<DebtListScreen> {
       setState(() {
         _allDebts = debts;
         _loadError = null;
-        _extractCustomers();
         _isLoading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _allDebts = [];
-        _customers = [];
         _isLoading = false;
         _loadError =
             'نەتوانرا لیستی قەرزەکان باربکرێت. پەیوەندی ئینتەرنێت بپشکنە.';
@@ -107,95 +103,10 @@ class _DebtListScreenState extends State<DebtListScreen> {
     }
   }
 
-  /// Instantly updates local state, then syncs with server in background
-  void _applyOptimisticUpdate(
-    String customerId,
-    double paidAmount, {
-    int fullyPaidCount = 0,
-  }) {
-    final idx = _customers.indexWhere((c) => c.id == customerId);
-    if (idx != -1) {
-      final c = _customers[idx];
-      c.totalRemaining = (c.totalRemaining - paidAmount).clamp(
-        0,
-        double.infinity,
-      );
-      c.debtCount = (c.debtCount - fullyPaidCount).clamp(0, c.debtCount);
-      if (c.totalRemaining <= 0) {
-        c.totalRemaining = 0;
-        c.hasUnpaid = false;
-        c.debtCount = 0;
-      }
-    }
-    if (mounted) setState(() {});
-
-    // Sync with server in background
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) _loadAllDebts(showLoading: false);
-    });
-  }
-
-  void _extractCustomers() {
-    final Map<String, _CustomerInfo> map = {};
-
-    for (final debt in _allDebts) {
-      final customer = debt.expand['customer']?.first;
-      if (customer == null) continue;
-      final id = customer.id;
-      final name = customer.getStringValue('name');
-      final status = debt.getStringValue('status');
-
-      if (!map.containsKey(id)) {
-        map[id] = _CustomerInfo(id: id, name: name.isNotEmpty ? name : '—');
-      }
-      if (status != 'paid') {
-        map[id]!.debtCount++;
-        map[id]!.hasUnpaid = true;
-      }
-      map[id]!.totalRemaining += debt.getDoubleValue('remaining');
-    }
-
-    _customers = map.values.toList();
-
-    // Apply sort mode
-    switch (_sortMode) {
-      case 'name':
-        _customers.sort((a, b) => a.name.compareTo(b.name));
-        break;
-      case 'amount':
-        _customers.sort((a, b) => b.totalRemaining.compareTo(a.totalRemaining));
-        break;
-      default:
-        _customers.sort((a, b) {
-          if (a.hasUnpaid != b.hasUnpaid) return a.hasUnpaid ? -1 : 1;
-          return b.totalRemaining.compareTo(a.totalRemaining);
-        });
-    }
-
-    final q = _searchController.text.trim().toLowerCase();
-    if (q.isNotEmpty) {
-      _customers = _customers
-          .where((c) => c.name.toLowerCase().contains(q))
-          .toList();
-    }
-  }
-
-  List<RecordModel> _getDebtsForCustomer(String customerId) {
-    return _allDebts.where((d) {
-      final c = d.expand['customer']?.first;
-      return c?.id == customerId;
-    }).toList()..sort((a, b) {
-      final aP = a.getStringValue('status') == 'paid' ? 1 : 0;
-      final bP = b.getStringValue('status') == 'paid' ? 1 : 0;
-      if (aP != bP) return aP - bP;
-      return b.created.compareTo(a.created);
-    });
-  }
-
   List<RecordModel> _visibleDebts() {
     final query = _searchController.text.trim().toLowerCase();
     final debts = _allDebts.where((debt) {
-      final customer = debt.expand['customer']?.first;
+      final customer = AppHelpers.expandedRecord(debt, 'customer');
       final customerName = customer?.getStringValue('name').toLowerCase() ?? '';
       final description = debt.getStringValue('description').toLowerCase();
       return query.isEmpty ||
@@ -206,8 +117,8 @@ class _DebtListScreenState extends State<DebtListScreen> {
     switch (_sortMode) {
       case 'name':
         debts.sort((a, b) {
-          final aName = a.expand['customer']?.first.getStringValue('name') ?? '';
-          final bName = b.expand['customer']?.first.getStringValue('name') ?? '';
+          final aName = AppHelpers.expandedRecord(a, 'customer')?.getStringValue('name') ?? '';
+          final bName = AppHelpers.expandedRecord(b, 'customer')?.getStringValue('name') ?? '';
           return aName.compareTo(bName);
         });
         break;
@@ -223,7 +134,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
           final aPaid = a.getStringValue('status') == 'paid';
           final bPaid = b.getStringValue('status') == 'paid';
           if (aPaid != bPaid) return aPaid ? 1 : -1;
-          return b.created.compareTo(a.created);
+          return b.getStringValue('created').compareTo(a.getStringValue('created'));
         });
     }
     return debts;
@@ -585,7 +496,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
 
   Widget _buildDebtTile(RecordModel debt, bool canPay) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final customer = debt.expand['customer']?.first;
+    final customer = AppHelpers.expandedRecord(debt, 'customer');
     final customerName = customer?.getStringValue('name').isNotEmpty == true
         ? customer!.getStringValue('name')
         : 'کڕیاری نەناسراو';
@@ -611,7 +522,7 @@ class _DebtListScreenState extends State<DebtListScreen> {
     final description = debt.getStringValue('description').trim();
     final dateSource = debt.getStringValue('custom_date').isNotEmpty
         ? debt.getStringValue('custom_date')
-        : debt.created;
+        : debt.getStringValue('created');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 9),
@@ -802,272 +713,6 @@ class _DebtListScreenState extends State<DebtListScreen> {
   }
 
   // ═══════════════════════════════════════════
-  // ── Pay Dialog (centered) ──
-  // ═══════════════════════════════════════════
-
-  void _showPayDialog(_CustomerInfo customer) {
-    final debts = _getDebtsForCustomer(
-      customer.id,
-    ).where((d) => d.getStringValue('status') != 'paid').toList();
-    final totalRemaining = customer.totalRemaining;
-    final amountController = TextEditingController(
-      text: _formatWithCommas(totalRemaining),
-    );
-    final formKey = GlobalKey<FormState>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final rawText = amountController.text.replaceAll(',', '').trim();
-          final inputAmount = double.tryParse(rawText) ?? 0;
-          final distribution = _calculateDistribution(debts, inputAmount);
-          final fullyPaid = distribution.where((d) => d.fullyPaid).length;
-          final partial = distribution.where((d) => !d.fullyPaid).length;
-
-          return Directionality(
-            textDirection: TextDirection.rtl,
-            child: Dialog(
-              backgroundColor: isDark ? AppDarkColors.card : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              insetPadding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 40,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Icon
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.payments,
-                          color: Colors.green,
-                          size: 32,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        'پارەدانەوە بۆ ${customer.name}',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: isDark
-                              ? AppDarkColors.textPrimary
-                              : Colors.black87,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'کۆی ماوە: ${AppHelpers.formatCurrency(totalRemaining)}  ·  ${debts.length} قەرز',
-                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Quick buttons
-                      Row(
-                        children: [
-                          _qBtn(
-                            '25%',
-                            totalRemaining * 0.25,
-                            amountController,
-                            () => setDialogState(() {}),
-                          ),
-                          const SizedBox(width: 6),
-                          _qBtn(
-                            '50%',
-                            totalRemaining * 0.50,
-                            amountController,
-                            () => setDialogState(() {}),
-                          ),
-                          const SizedBox(width: 6),
-                          _qBtn(
-                            '75%',
-                            totalRemaining * 0.75,
-                            amountController,
-                            () => setDialogState(() {}),
-                          ),
-                          const SizedBox(width: 6),
-                          _qBtn(
-                            '100%',
-                            totalRemaining,
-                            amountController,
-                            () => setDialogState(() {}),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Amount field
-                      TextFormField(
-                        controller: amountController,
-                        keyboardType: TextInputType.number,
-                        textDirection: TextDirection.ltr,
-                        textAlign: TextAlign.center,
-                        autofocus: true,
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: isDark
-                              ? AppDarkColors.textPrimary
-                              : Colors.black87,
-                        ),
-                        inputFormatters: [_ThousandsFormatter()],
-                        onChanged: (_) => setDialogState(() {}),
-                        decoration: InputDecoration(
-                          hintText: '0',
-                          hintStyle: TextStyle(
-                            color: Colors.grey[300],
-                            fontSize: 26,
-                          ),
-                          filled: true,
-                          fillColor: isDark
-                              ? AppDarkColors.inputFill
-                              : Colors.grey[50],
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: isDark
-                                  ? AppDarkColors.cardBorder
-                                  : Colors.grey[200]!,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: isDark
-                                  ? AppDarkColors.cardBorder
-                                  : Colors.grey[200]!,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: isDark ? AppColors.primary : Colors.green,
-                              width: 1.5,
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 14,
-                            horizontal: 16,
-                          ),
-                          suffixText: 'د.ع',
-                          suffixStyle: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 14,
-                          ),
-                        ),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return 'بڕ بنووسە';
-                          final a = double.tryParse(v.replaceAll(',', ''));
-                          if (a == null) return 'ژمارەیەکی دروست بنووسە';
-                          if (a <= 0) return 'بڕ دەبێت لە سفر زیاتر بێت';
-                          if (a > totalRemaining + 10) {
-                            return 'لە کۆی قەرزەکان زیاترە';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 10),
-
-                      // Distribution preview
-                      if (inputAmount > 0 && distribution.isNotEmpty)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.blue.withValues(alpha: 0.15),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (fullyPaid > 0)
-                                Text(
-                                  '✓ $fullyPaid قەرز تەواو دەدرێتەوە',
-                                  style: TextStyle(
-                                    color: Colors.green[700],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              if (partial > 0)
-                                Text(
-                                  '◐ $partial قەرز بەشێکی دەدرێتەوە',
-                                  style: TextStyle(
-                                    color: Colors.orange[700],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              if (inputAmount < totalRemaining)
-                                Text(
-                                  'ماوە: ${AppHelpers.formatCurrency(totalRemaining - inputAmount)}',
-                                  style: TextStyle(
-                                    color: Colors.red[400],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      const SizedBox(height: 18),
-
-                      // Save
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            if (!formKey.currentState!.validate()) return;
-                            final amount = double.parse(
-                              amountController.text.replaceAll(',', '').trim(),
-                            );
-                            Navigator.pop(ctx);
-                            await _payAllDebts(debts, customer, amount);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: const Text(
-                            'تۆمارکردن',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════
   // ── Single Payment Dialog (centered) ──
   // ═══════════════════════════════════════════
 
@@ -1086,8 +731,6 @@ class _DebtListScreenState extends State<DebtListScreen> {
     final displayCurrency = (currency == 'USD' && dollarRate > 0)
         ? 'USD'
         : 'IQD';
-
-    String customerId = debt.getStringValue('customer');
 
     showDialog(
       context: context,
@@ -1296,29 +939,23 @@ class _DebtListScreenState extends State<DebtListScreen> {
                             createdBy: auth.userId,
                           );
 
-                          // Instantly update UI
-                          if (mounted) {
-                            Navigator.pop(ctx);
-                            AppHelpers.showSnackBar(
-                              context,
-                              'پارەدانەوە تۆمارکرا',
-                            );
-                            _applyOptimisticUpdate(
-                              customerId,
-                              storageAmount,
-                              fullyPaidCount: storageAmount >= remaining
-                                  ? 1
-                                  : 0,
-                            );
-                          }
+                          if (!mounted) return;
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          AppHelpers.showSnackBar(
+                            context,
+                            'پارەدانەوە تۆمارکرا',
+                          );
+                          await _loadAllDebts(showLoading: false);
                         } catch (e) {
-                          if (mounted) {
-                            AppHelpers.showSnackBar(
-                              context,
-                              'هەڵە: $e',
-                              isError: true,
-                            );
-                          }
+                          if (!mounted) return;
+                          AppHelpers.showSnackBar(
+                            context,
+                            AppHelpers.backendErrorMessage(
+                              e,
+                              fallback: 'نەتوانرا پارەدانەوە تۆمار بکرێت. دووبارە هەوڵ بدە.',
+                            ),
+                            isError: true,
+                          );
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -1345,79 +982,6 @@ class _DebtListScreenState extends State<DebtListScreen> {
         ),
       ),
     );
-  }
-
-  // ═══════════════════════════════════════════
-  // ── Smart Distribution Logic ──
-  // ═══════════════════════════════════════════
-
-  List<_PayDistribution> _calculateDistribution(
-    List<RecordModel> debts,
-    double amount,
-  ) {
-    final result = <_PayDistribution>[];
-    double left = amount;
-
-    final sorted = List<RecordModel>.from(debts)
-      ..sort((a, b) => a.created.compareTo(b.created));
-
-    for (final debt in sorted) {
-      if (left <= 0) break;
-      final remaining = debt.getDoubleValue('remaining');
-      if (remaining <= 0) continue;
-
-      final pay = left >= remaining ? remaining : left;
-      result.add(
-        _PayDistribution(
-          debtId: debt.id,
-          payAmount: pay,
-          fullyPaid: pay >= remaining,
-        ),
-      );
-      left -= pay;
-    }
-    return result;
-  }
-
-  Future<void> _payAllDebts(
-    List<RecordModel> debts,
-    _CustomerInfo customer,
-    double totalAmount,
-  ) async {
-    _isPaying = true;
-    try {
-      final auth = context.read<AuthProvider>();
-      final debtProvider = context.read<DebtProvider>();
-      final distribution = _calculateDistribution(debts, totalAmount);
-
-      for (final dist in distribution) {
-        await debtProvider.addPayment(
-          debtId: dist.debtId,
-          amount: dist.payAmount,
-          note: 'پارەدانەوەی کۆمەڵ',
-          createdBy: auth.userId,
-        );
-      }
-
-      // Instantly update UI
-      _isPaying = false;
-      if (mounted) {
-        AppHelpers.showSnackBar(
-          context,
-          'پارەدانەوە تۆمارکرا (${distribution.length} قەرز) ✓',
-        );
-        _applyOptimisticUpdate(
-          customer.id,
-          totalAmount,
-          fullyPaidCount: distribution.where((d) => d.fullyPaid).length,
-        );
-      }
-    } catch (e) {
-      _isPaying = false;
-      if (mounted) {
-        AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
-      }
-    }
   }
 
   // ═══════════════════════════════════════════
@@ -1484,31 +1048,6 @@ class _DebtListScreenState extends State<DebtListScreen> {
 // ═══════════════════════════════════════════
 // ── Models ──
 // ═══════════════════════════════════════════
-
-class _CustomerInfo {
-  final String id;
-  final String name;
-  double totalRemaining;
-  int debtCount;
-  bool hasUnpaid;
-
-  _CustomerInfo({required this.id, required this.name})
-    : totalRemaining = 0,
-      debtCount = 0,
-      hasUnpaid = false;
-}
-
-class _PayDistribution {
-  final String debtId;
-  final double payAmount;
-  final bool fullyPaid;
-
-  _PayDistribution({
-    required this.debtId,
-    required this.payAmount,
-    required this.fullyPaid,
-  });
-}
 
 /// Formats number input with thousand separators (commas)
 class _ThousandsFormatter extends TextInputFormatter {

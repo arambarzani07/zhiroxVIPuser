@@ -1505,14 +1505,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildActivityCard(RecordModel debt, int index) {
-    final customers = debt.expand['customer'];
-    final customer = (customers != null && customers.isNotEmpty)
-        ? customers.first
-        : null;
-    final creators = debt.expand['created_by'];
-    final createdBy = (creators != null && creators.isNotEmpty)
-        ? creators.first
-        : null;
+    final customer = AppHelpers.expandedRecord(debt, 'customer');
+    final createdBy = AppHelpers.expandedRecord(debt, 'created_by');
 
     final amount = debt.getDoubleValue('amount');
     final date = debt.getStringValue('created');

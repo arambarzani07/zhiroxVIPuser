@@ -747,9 +747,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   DateTime _timelineDate(RecordModel record) {
     final customDate = record.getStringValue('custom_date');
-    final created = record.getStringValue('created').isNotEmpty
-        ? record.getStringValue('created')
-        : record.created;
+    final created = record.getStringValue('created');
     for (final candidate in [customDate, created]) {
       if (candidate.isEmpty) continue;
       try {
@@ -2216,11 +2214,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 // Remove limit
                 try {
                   await PBService.updateUser(widget.userId, {'debt_limit': 0});
-                  if (mounted) {
-                    Navigator.pop(dialogContext);
-                    AppHelpers.showSnackBar(context, 'سنوری قەرز لابرا');
-                    _loadData();
-                  }
+                  if (!mounted || !dialogContext.mounted) return;
+                  Navigator.pop(dialogContext);
+                  AppHelpers.showSnackBar(context, 'سنوری قەرز لابرا');
+                  _loadData();
                 } catch (e) {
                   if (mounted) {
                     AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
@@ -2241,16 +2238,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 await PBService.updateUser(widget.userId, {
                   'debt_limit': newLimit,
                 });
-                if (mounted) {
-                  Navigator.pop(dialogContext);
-                  AppHelpers.showSnackBar(
-                    context,
-                    newLimit > 0
-                        ? 'سنوری قەرز دانرا: ${AppHelpers.formatCurrency(newLimit)}'
-                        : 'سنوری قەرز لابرا',
-                  );
-                  _loadData();
-                }
+                if (!mounted || !dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                AppHelpers.showSnackBar(
+                  context,
+                  newLimit > 0
+                      ? 'سنوری قەرز دانرا: ${AppHelpers.formatCurrency(newLimit)}'
+                      : 'سنوری قەرز لابرا',
+                );
+                _loadData();
               } catch (e) {
                 if (mounted) {
                   AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
@@ -2429,6 +2425,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
     }
 
+    if (!mounted) return;
     final confirm = await AppHelpers.showConfirmDialog(
       context,
       title: _isCustomer ? 'سڕینەوەی کڕیار' : 'سڕینەوەی کارمەند',
@@ -2452,7 +2449,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('ناردنی ئاگادارکردنەوە'),
         content: TextField(
           controller: controller,
@@ -2464,28 +2461,29 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('پاشگەزبوونەوە'),
           ),
           ElevatedButton(
             onPressed: () async {
               if (controller.text.trim().isEmpty) return;
+              final senderId = context.read<AuthProvider>().userId;
               try {
-                // Remove await to not block UI, or keep it if we want to show snackbar after success
-                // Using await for better UX feedback
                 await PBService.createNotification(
                   customerId: widget.userId,
                   message: controller.text.trim(),
-                  senderId: context.read<AuthProvider>().userId,
+                  senderId: senderId,
                 );
-                if (mounted) {
-                  Navigator.pop(context);
-                  AppHelpers.showSnackBar(context, 'ئاگادارکردنەوە نێردرا');
-                }
+                if (!mounted || !dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                AppHelpers.showSnackBar(context, 'ئاگادارکردنەوە نێردرا');
               } catch (e) {
-                if (mounted) {
-                  AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
-                }
+                if (!mounted) return;
+                AppHelpers.showSnackBar(
+                  context,
+                  AppHelpers.backendErrorMessage(e),
+                  isError: true,
+                );
               }
             },
             child: const Text('ناردن'),
