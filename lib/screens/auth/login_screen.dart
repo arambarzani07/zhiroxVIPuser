@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
-import 'package:zhirox/screens/auth/register_admin_screen.dart';
 import 'package:zhirox/screens/auth/register_customer_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -48,10 +48,101 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _openAdminRegistration() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const RegisterAdminScreen()),
+  Future<void> _launchExternal(String url) async {
+    final uri = Uri.parse(url);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      AppHelpers.showSnackBar(
+        context,
+        'نەتوانرا پەیوەندییەکە بکرێتەوە',
+        isError: true,
+      );
+    }
+  }
+
+  void _showOwnerContactDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
+        return AlertDialog(
+          backgroundColor: isDark ? AppDarkColors.card : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.admin_panel_settings_rounded, color: AppColors.primary),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'دروستکردنی هەژماری بەڕێوەبەر',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'بۆ درووستکردنی هەژماری بەڕێوەبەر پەیوەندی بە خاوەن سیستەمی ژیرۆکس بکە. هەژماری بەڕێوەبەر تەنها لەلایەن خاوەن سیستەمەوە درووست دەکرێت.',
+                style: TextStyle(
+                  height: 1.6,
+                  color: isDark
+                      ? AppDarkColors.textPrimary
+                      : AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 18),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF25D366),
+                  child: Icon(Icons.chat_rounded, color: Colors.white),
+                ),
+                title: const Text('واتس ئەپ'),
+                subtitle: const Text(
+                  '0750 371 3171',
+                  textDirection: TextDirection.ltr,
+                ),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _launchExternal('https://wa.me/9647503713171');
+                },
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  child: Icon(Icons.video_library_rounded),
+                ),
+                title: const Text('تیکتۆک'),
+                subtitle: const Text('@zhiroxdebt'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _launchExternal('https://www.tiktok.com/@zhiroxdebt');
+                },
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  child: Icon(Icons.camera_alt_rounded),
+                ),
+                title: const Text('سناپ چات'),
+                subtitle: const Text('@aram.barzani00'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _launchExternal('https://www.snapchat.com/add/aram.barzani00');
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('داخستن'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -183,7 +274,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 28),
                     OutlinedButton.icon(
-                      onPressed: _openAdminRegistration,
+                      onPressed: _showOwnerContactDialog,
                       icon: const Icon(Icons.admin_panel_settings_rounded),
                       label: const Text(
                         'دروستکردنی هەژماری بەڕێوەبەر',
