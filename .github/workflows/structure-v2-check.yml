@@ -29,6 +29,26 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      - name: Verify customer-only source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -d lib/screens/admin
+          test ! -d lib/screens/employee
+          test ! -e lib/screens/shared/add_debt_screen.dart
+
+          forbidden='package:pocketbase|password_text|telegram_bot_token|telegram_chat_id'
+          if grep -R -n -E "$forbidden" lib; then
+            echo 'Forbidden legacy/secret surface found in customer source' >&2
+            exit 1
+          fi
+
+          privileged='PBService\.(registerAdmin|createUser|deleteUser|createDebt|updateDebt|deleteDebt|createPayment|approveCustomer|rejectCustomer|renewAdminSubscription|deleteAdminWithData)'
+          if grep -R -n -E "$privileged" lib/screens; then
+            echo 'Privileged C-Panel action referenced by customer UI' >&2
+            exit 1
+          fi
+
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
