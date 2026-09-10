@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
-import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -27,6 +26,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   // History debts (paid) - loaded with pagination
   List<RecordModel> _historyDebts = [];
   bool _isLoading = true;
+  bool _loadInFlight = false;
+  String? _loadError;
   int _selectedTab = 0; // 0: Active, 1: History
   int _unreadCount = 0;
 
@@ -138,16 +139,24 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Future<void> _loadDebts() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+    if (!mounted || _loadInFlight) return;
+    _loadInFlight = true;
+    final showInitialLoading = _activeDebts.isEmpty && _historyDebts.isEmpty;
+    if (showInitialLoading) {
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
+    }
+
     final auth = context.read<AuthProvider>();
     if (auth.userId.isEmpty) {
       if (mounted) setState(() => _isLoading = false);
+      _loadInFlight = false;
       return;
     }
 
     try {
-      // Fetch admin's market name
       if (_marketName.isEmpty && auth.adminId.isNotEmpty) {
         try {
           final admin = await PBService.getUser(auth.adminId);
@@ -155,23 +164,17 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         } catch (_) {}
       }
 
-      // Load ALL debts once for accurate stats
       final allDebts = await PBService.getDebts(customerId: auth.userId);
-
-      // Calculate stats from all debts
       double totalDebt = 0;
       double totalRemaining = 0;
-      for (var d in allDebts) {
-        totalDebt += d.getDoubleValue('amount');
-        totalRemaining += d.getDoubleValue('remaining');
+      for (final debt in allDebts) {
+        totalDebt += debt.getDoubleValue('amount');
+        totalRemaining += debt.getDoubleValue('remaining');
       }
 
-      // Separate active debts for display
       final activeDebts = allDebts
-          .where((d) => d.getStringValue('status') != 'paid')
+          .where((debt) => debt.getStringValue('status') != 'paid')
           .toList();
-
-      // Load first page of history debts for display
       final historyResult = await PBService.getDebtsPaginated(
         customerId: auth.userId,
         status: 'paid',
@@ -179,32 +182,28 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         perPage: _pageSize,
       );
 
-      if (mounted) {
-        setState(() {
-          // Stats
-          _totalDebtAmount = totalDebt;
-          _totalRemainingAmount = totalRemaining;
-
-          // Display lists
-          _activeDebts = activeDebts;
-          _historyDebts = historyResult['items'] as List<RecordModel>;
-          _historyTotalItems = historyResult['totalItems'] as int;
-          _historyPage = 1;
-          _hasMoreHistory = _historyDebts.length < _historyTotalItems;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        if (ConnectivityService.instance.isOnline) {
-          AppHelpers.showSnackBar(
-            context,
-            'هەڵە لە باردانی قەرزەکان: $e',
-            isError: true,
-          );
-        }
-      }
+      if (!mounted) return;
+      setState(() {
+        _totalDebtAmount = totalDebt;
+        _totalRemainingAmount = totalRemaining;
+        _activeDebts = activeDebts;
+        _historyDebts = historyResult['items'] as List<RecordModel>;
+        _historyTotalItems = historyResult['totalItems'] as int;
+        _historyPage = 1;
+        _hasMoreHistory = _historyDebts.length < _historyTotalItems;
+        _loadError = null;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _loadError = ConnectivityService.instance.isOnline
+            ? 'نەتوانرا زانیارییەکان بار بکرێن. دووبارە هەوڵ بدە.'
+            : 'پەیوەندی ئینتەرنێت نییە. پەیوەندییەکەت بپشکنە.';
+      });
+    } finally {
+      _loadInFlight = false;
     }
   }
 
@@ -298,625 +297,427 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     final auth = context.read<AuthProvider>();
     final totalPaid = _totalDebt - _totalRemaining;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppDarkColors.card : Colors.white;
+    final border = isDark ? AppDarkColors.cardBorder : const Color(0xFFEAECF0);
+    final textPrimary = isDark ? AppDarkColors.textPrimary : const Color(0xFF1D2939);
+    final textSecondary = isDark ? AppDarkColors.textSecondary : const Color(0xFF667085);
 
     return Scaffold(
-      backgroundColor: isDark ? AppDarkColors.background : Colors.grey[50],
-      body: CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          // ───── Gradient Header ─────
-          SliverAppBar(
-            expandedHeight: 280,
-            floating: false,
-            pinned: true,
-            backgroundColor: AppColors.primary,
-            elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.primary, Color(0xFF673AB7)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    // Decorative Circles
-                    Positioned(
-                      top: -50,
-                      right: -50,
-                      child: Container(
-                        width: 200,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 50,
-                      left: -30,
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-
-                    // Header Content
-                    SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 10),
-                            // Top Bar (Avatar/Name + Actions)
-                            Row(
+      backgroundColor: isDark ? AppDarkColors.background : const Color(0xFFF7F8FA),
+      body: RefreshIndicator(
+        onRefresh: _loadDebts,
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => UserProfileScreen(userId: auth.userId),
+                              ),
+                            ).then((_) {
+                              if (mounted) setState(() {});
+                            });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
                               children: [
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => UserProfileScreen(
-                                            userId: auth.userId,
-                                          ),
-                                        ),
-                                      ).then((_) {
-                                        if (mounted) setState(() {});
-                                      });
-                                    },
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.08),
                                     borderRadius: BorderRadius.circular(12),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            shape: BoxShape.circle,
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(
-                                                  0.1,
-                                                ),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: CircleAvatar(
-                                            radius: 22,
-                                            backgroundColor: Colors.grey[100],
-                                            child: const Icon(
-                                              Icons.person,
-                                              color: AppColors.primary,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                _marketName.isNotEmpty
-                                                    ? _marketName
-                                                    : 'بەخێربێیت،',
-                                                style: TextStyle(
-                                                  color: Colors.white
-                                                      .withOpacity(0.8),
-                                                  fontSize:
-                                                      _marketName.isNotEmpty
-                                                      ? 16
-                                                      : 14,
-                                                  fontWeight:
-                                                      _marketName.isNotEmpty
-                                                      ? FontWeight.w600
-                                                      : FontWeight.normal,
-                                                ),
-                                              ),
-                                              Text(
-                                                auth.userName,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Icon(
+                                    Icons.person_outline_rounded,
+                                    size: 20,
+                                    color: AppColors.primary,
                                   ),
                                 ),
-                                // Notifications Icon
-                                Stack(
-                                  children: [
-                                    IconButton(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const NotificationsScreen(),
-                                          ),
-                                        ).then((_) => _checkNotifications());
-                                      },
-                                      icon: Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.notifications_outlined,
-                                          color: Colors.white,
-                                          size: 20,
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _marketName.isNotEmpty ? _marketName : 'ZHIROX',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: textSecondary,
                                         ),
                                       ),
-                                    ),
-                                    if (_unreadCount > 0)
-                                      Positioned(
-                                        right: 8,
-                                        top: 8,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
-                                            color: Colors.red,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          constraints: const BoxConstraints(
-                                            minWidth: 16,
-                                            minHeight: 16,
-                                          ),
-                                          child: Text(
-                                            '$_unreadCount',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
+                                      const SizedBox(height: 1),
+                                      Text(
+                                        auth.userName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                          color: textPrimary,
                                         ),
                                       ),
-                                  ],
-                                ),
-
-                                // Print Statement Icon
-                                IconButton(
-                                  onPressed: _printStatement,
-                                  icon: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(
-                                      Icons.print_outlined,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                  ),
-                                ),
-
-                                // Dark Mode Toggle
-                                IconButton(
-                                  onPressed: () {
-                                    context.read<ThemeProvider>().toggleTheme();
-                                  },
-                                  icon: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(
-                                      isDark
-                                          ? Icons.light_mode_rounded
-                                          : Icons.dark_mode_rounded,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-
-                            const SizedBox(height: 30),
-
-                            // Total Debt Big Display
-                            Center(
-                              child: Column(
-                                children: [
-                                  Text(
-                                    'کۆی گشتی قەرز',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
-                                      fontSize: 14,
-                                    ),
+                          ),
+                        ),
+                      ),
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          IconButton(
+                            tooltip: 'ئاگادارکردنەوەکان',
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const NotificationsScreen(),
+                                ),
+                              ).then((_) => _checkNotifications());
+                            },
+                            icon: Icon(
+                              Icons.notifications_none_rounded,
+                              color: textPrimary,
+                            ),
+                          ),
+                          if (_unreadCount > 0)
+                            Positioned(
+                              right: 4,
+                              top: 3,
+                              child: Container(
+                                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                alignment: Alignment.center,
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  _unreadCount > 99 ? '99+' : '$_unreadCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    AppHelpers.formatCurrency(_totalRemaining),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 36,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1,
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
-                          ],
-                        ),
+                        ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(80),
+            SliverToBoxAdapter(
               child: Container(
-                height: 80,
-                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                transform: Matrix4.translationValues(0, 40, 0),
+                margin: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isDark ? AppDarkColors.card : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(isDark ? 0.2 : 0.08),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
+                  color: surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: border),
                 ),
-                child: Row(
-                  children: [
-                    _buildStatItem(
-                      'دراوە',
-                      AppHelpers.formatCurrency(totalPaid),
-                      Colors.green,
-                      Icons.check_circle_outline,
-                    ),
-                    Container(
-                      width: 1,
-                      height: 40,
-                      color: isDark ? AppDarkColors.divider : Colors.grey[200],
-                    ),
-                    _buildStatItem(
-                      'ژمارەی قەرز',
-                      '${_activeCount + _historyCount}',
-                      Colors.orange,
-                      Icons.receipt_long_rounded,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 60)),
-
-          // ───── Tabs ─────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark ? AppDarkColors.card : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: const EdgeInsets.all(4),
-                child: Row(
-                  children: [
-                    // Active Debts Tab
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _selectedTab = 0),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _selectedTab == 0
-                                ? Colors.orange
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: _selectedTab == 0
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.orange.withOpacity(0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.receipt_long_rounded,
-                                color: _selectedTab == 0
-                                    ? Colors.white
-                                    : Colors.grey,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'قەرزەکانت',
-                                style: TextStyle(
-                                  color: _selectedTab == 0
-                                      ? Colors.white
-                                      : Colors.grey[600],
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _selectedTab == 0
-                                      ? Colors.white.withOpacity(0.2)
-                                      : Colors.grey.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '$_activeCount',
-                                  style: TextStyle(
-                                    color: _selectedTab == 0
-                                        ? Colors.white
-                                        : isDark
-                                        ? AppDarkColors.textSecondary
-                                        : Colors.black54,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-
-                    // History Tab
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _selectedTab = 1),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _selectedTab == 1
-                                ? Colors.green
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: _selectedTab == 1
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.green.withOpacity(0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.history_rounded,
-                                color: _selectedTab == 1
-                                    ? Colors.white
-                                    : Colors.grey,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'مێژوو',
-                                style: TextStyle(
-                                  color: _selectedTab == 1
-                                      ? Colors.white
-                                      : Colors.grey[600],
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _selectedTab == 1
-                                      ? Colors.white.withOpacity(0.2)
-                                      : Colors.grey.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '$_historyCount',
-                                  style: TextStyle(
-                                    color: _selectedTab == 1
-                                        ? Colors.white
-                                        : isDark
-                                        ? AppDarkColors.textSecondary
-                                        : Colors.black54,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // ───── Debts List ─────
-          if (_isLoading)
-            const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_filteredDebts.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: _selectedTab == 0
-                            ? Colors.orange.withOpacity(0.08)
-                            : Colors.green.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(
-                        _selectedTab == 0
-                            ? Icons.receipt_long_rounded
-                            : Icons.history_rounded,
-                        size: 56,
-                        color: _selectedTab == 0
-                            ? Colors.orange.withOpacity(0.4)
-                            : Colors.green.withOpacity(0.4),
+                    Text(
+                      'ماوەی قەرز',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: textSecondary,
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 4),
                     Text(
-                      _selectedTab == 0
-                          ? 'هیچ قەرزێکت نییە 🎉'
-                          : 'هیچ مێژوویەکت نییە',
+                      AppHelpers.formatCurrency(_totalRemaining),
+                      textDirection: TextDirection.ltr,
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? AppDarkColors.textSecondary
-                            : Colors.black54,
+                        fontSize: 28,
+                        height: 1.15,
+                        fontWeight: FontWeight.w900,
+                        color: textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildSummaryMetric(
+                            label: 'دراوە',
+                            value: AppHelpers.formatCurrency(totalPaid),
+                            icon: Icons.check_circle_outline_rounded,
+                            accent: Colors.green,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildSummaryMetric(
+                            label: 'هەموو قەرزەکان',
+                            value: '${_activeCount + _historyCount}',
+                            icon: Icons.receipt_long_outlined,
+                            accent: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _activeDebts.isEmpty ? null : _printStatement,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          minimumSize: const Size.fromHeight(44),
+                          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.22)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.description_outlined, size: 18),
+                        label: const Text(
+                          'کەشفی حیساب',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) =>
-                      _buildDebtCard(_filteredDebts[index], index),
-                  childCount: _filteredDebts.length,
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppDarkColors.surface : const Color(0xFFF0F2F5),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildTab(
+                        index: 0,
+                        label: 'قەرزە چالاکەکان',
+                        count: _activeCount,
+                        icon: Icons.receipt_long_outlined,
+                      ),
+                      _buildTab(
+                        index: 1,
+                        label: 'مێژوو',
+                        count: _historyCount,
+                        icon: Icons.history_rounded,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 40)),
-
-          // ───── Loading More Indicator (History Tab) ─────
-          if (_selectedTab == 1 && _isLoadingMore)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+            if (_isLoading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_loadError != null)
+              SliverFillRemaining(
+                hasScrollBody: false,
                 child: Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.green.withOpacity(0.6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(
+                            Icons.wifi_off_rounded,
+                            color: Colors.orange,
+                            size: 25,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _loadError!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: textSecondary,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: _loadDebts,
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          label: const Text('دووبارە هەوڵ بدە'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else if (_filteredDebts.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.07),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          _selectedTab == 0
+                              ? Icons.receipt_long_outlined
+                              : Icons.history_rounded,
+                          color: AppColors.primary,
+                          size: 24,
+                        ),
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _selectedTab == 0
+                            ? 'هیچ قەرزێکی چالاک نییە'
+                            : 'هێشتا مێژووی قەرز نییە',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => _buildDebtCard(_filteredDebts[index]),
+                    childCount: _filteredDebts.length,
+                  ),
+                ),
+              ),
+            if (_selectedTab == 1 && _isLoadingMore)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
                 ),
               ),
-            ),
-
-          // ───── End of History Info ─────
-          if (_selectedTab == 1 &&
-              !_isLoadingMore &&
-              !_hasMoreHistory &&
-              _historyDebts.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 24, top: 8),
-                child: Center(
-                  child: Text(
-                    'هەموو مێژووەکان نیشان درا • ${_historyDebts.length}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+            if (_selectedTab == 1 &&
+                !_isLoadingMore &&
+                !_hasMoreHistory &&
+                _historyDebts.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  child: Center(
+                    child: Text(
+                      '${_historyDebts.length} مامەڵە نیشان درا',
+                      style: TextStyle(fontSize: 11.5, color: textSecondary),
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatItem(
-    String label,
-    String value,
-    Color color,
-    IconData icon,
-  ) {
+  Widget _buildSummaryMetric({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color accent,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Expanded(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.surface : const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark
-                      ? AppDarkColors.textSecondary
-                      : Colors.grey[600],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: accent, size: 16),
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: isDark
+                        ? AppDarkColors.textSecondary
+                        : const Color(0xFF667085),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textDirection: TextDirection.ltr,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF1D2939),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -924,192 +725,222 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     );
   }
 
-  Widget _buildDebtCard(RecordModel debt, int index) {
+  Widget _buildTab({
+    required int index,
+    required String label,
+    required int count,
+    required IconData icon,
+  }) {
+    final selected = _selectedTab == index;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = selected
+        ? AppColors.primary
+        : isDark
+            ? AppDarkColors.textSecondary
+            : const Color(0xFF667085);
+    return Expanded(
+      child: Material(
+        color: selected
+            ? (isDark
+                ? AppColors.primary.withValues(alpha: 0.12)
+                : Colors.white)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(11),
+          onTap: () => setState(() => _selectedTab = index),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 17, color: textColor),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.primary.withValues(alpha: 0.09)
+                        : (isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : const Color(0xFFE4E7EC)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDebtCard(RecordModel debt) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final status = debt.getStringValue('status');
     final remaining = debt.getDoubleValue('remaining');
     final amount = debt.getDoubleValue('amount');
     final currency = debt.getStringValue('currency');
     final dollarRate = debt.getDoubleValue('dollar_rate');
-    final description = debt.getStringValue('description');
+    final description = debt.getStringValue('description').trim();
     final customDate = debt.getStringValue('custom_date');
-    final date = customDate.isNotEmpty
-        ? customDate
-        : debt.getStringValue('created');
+    final date = customDate.isNotEmpty ? customDate : debt.getStringValue('created');
     final updated = debt.getStringValue('updated');
     final isPaid = status == 'paid';
+    final statusColor = AppHelpers.statusColor(status);
+    final displayAmount = (currency == 'USD' && dollarRate > 0)
+        ? (isPaid ? amount : remaining) / dollarRate
+        : (isPaid ? amount : remaining);
+    final displayCurrency =
+        (currency == 'USD' && dollarRate > 0) ? 'USD' : 'IQD';
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 400 + (index * 100).clamp(0, 600)),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, 20 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: isDark ? AppDarkColors.card : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? AppDarkColors.cardBorder : const Color(0xFFEAECF0),
         ),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => DebtDetailScreen(debtId: debt.id),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DebtDetailScreen(debtId: debt.id),
+              ),
+            ).then((_) => _loadDebts());
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(
+                    isPaid ? Icons.check_rounded : Icons.receipt_long_outlined,
+                    color: statusColor,
+                    size: 19,
+                  ),
                 ),
-              ).then((_) => _loadDebts());
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Icon Container
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppHelpers.statusColor(status).withOpacity(0.2),
-                          AppHelpers.statusColor(status).withOpacity(0.1),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.receipt_long_rounded,
-                      color: AppHelpers.statusColor(status),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          description,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 14,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              AppHelpers.formatDate(date),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              AppHelpers.formatTime(date),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[400],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isPaid
-                                ? Colors.green.withOpacity(0.1)
-                                : Colors.orange.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            AppHelpers.getDaysCounter(date, updated, isPaid),
-                            style: TextStyle(
-                              color: isPaid ? Colors.green : Colors.orange,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Amount & Status
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        AppHelpers.formatCurrencyWithType(
-                          (currency == 'USD' && dollarRate > 0)
-                              ? (isPaid ? amount : remaining) / dollarRate
-                              : (isPaid ? amount : remaining),
-                          (currency == 'USD' && dollarRate > 0) ? 'USD' : 'IQD',
-                          dollarRate: dollarRate,
-                          showConversion: false,
-                        ),
+                        description.isEmpty ? 'قەرز' : description,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: remaining > 0
-                              ? Colors.red[400]
-                              : Colors.green[600],
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? AppDarkColors.textPrimary
+                              : const Color(0xFF344054),
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppHelpers.statusColor(
-                            status,
-                          ).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          AppHelpers.statusName(status),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: AppHelpers.statusColor(status),
+                      Row(
+                        children: [
+                          Text(
+                            AppHelpers.formatDate(date),
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: isDark
+                                  ? AppDarkColors.textSecondary
+                                  : const Color(0xFF98A2B3),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 7),
+                          Flexible(
+                            child: Text(
+                              AppHelpers.getDaysCounter(date, updated, isPaid),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: statusColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      AppHelpers.formatCurrencyWithType(
+                        displayAmount,
+                        displayCurrency,
+                        dollarRate: dollarRate,
+                        showConversion: false,
+                      ),
+                      textDirection: TextDirection.ltr,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: isDark
+                            ? AppDarkColors.textPrimary
+                            : const Color(0xFF1D2939),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: Text(
+                        AppHelpers.statusName(status),
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: statusColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
