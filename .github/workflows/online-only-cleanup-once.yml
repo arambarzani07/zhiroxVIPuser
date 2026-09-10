@@ -1,0 +1,42 @@
+name: Online Only Cleanup Once
+'on':
+  push:
+    branches:
+      - owner-source
+    paths:
+      - .github/workflows/online-only-cleanup-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-both:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Patch Owner online-only screens
+        run: |
+          cp scripts/online_only_cleanup.py /tmp/online_only_cleanup.py
+          python scripts/online_only_cleanup.py
+          git add lib/screens/shared/user_list_screen.dart lib/screens/shared/user_profile_screen.dart lib/screens/shared/debt_list_screen.dart
+          if ! git diff --cached --quiet; then
+            git commit -m "Enforce online-only customer and debt screens"
+            git push origin owner-source
+          fi
+      - name: Patch User online-only screens
+        run: |
+          git fetch origin user-source
+          git checkout user-source
+          python /tmp/online_only_cleanup.py
+          git add lib/screens/shared/user_list_screen.dart lib/screens/shared/user_profile_screen.dart lib/screens/shared/debt_list_screen.dart
+          if ! git diff --cached --quiet; then
+            git commit -m "Enforce online-only customer and debt screens"
+            git push origin user-source
+          fi
