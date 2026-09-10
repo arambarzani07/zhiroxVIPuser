@@ -148,6 +148,16 @@ if '_showPaymentDialog(RecordModel user)' in customer_list_source:
 if 'DebtProvider' in customer_list_source:
     fail('Customer list must not own debt/payment mutation logic')
 
+for marker in (
+    '_showFinancialTransactionActions',
+    '_openFinancialReceiptViewer',
+    'InteractiveViewer(',
+    'PdfService.generateInvoice(',
+    'onTap: () => _showFinancialTransactionActions(item)',
+):
+    if marker not in profile:
+        fail(f'Financial Chat Phase 6 marker missing: {marker}')
+
 
 if violations:
     print('ONLINE-ONLY POLICY FAILED')

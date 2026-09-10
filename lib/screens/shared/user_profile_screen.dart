@@ -2070,7 +2070,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               bottomRight: Radius.circular(isPayment ? 17 : 5),
             ),
             child: InkWell(
-              onTap: () => _openTimelineItem(item),
+              onTap: () => _showFinancialTransactionActions(item),
+              onLongPress: () => _showFinancialTransactionActions(item),
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(17),
                 topRight: const Radius.circular(17),
@@ -2375,6 +2376,202 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _showFinancialTransactionActions(
+    _ProfileTimelineItem item,
+  ) async {
+    if (item.isSystem || !mounted) return;
+
+    final debt = item.isPayment ? item.relatedDebt : item.record;
+    final receiptPath = debt?.getStringValue('receipt_image').trim() ?? '';
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+        final amount = item.record.getDoubleValue('amount');
+        final currency = debt?.getStringValue('currency').isNotEmpty == true
+            ? debt!.getStringValue('currency')
+            : 'IQD';
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppDarkColors.card : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD0D5DD),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                leading: CircleAvatar(
+                  backgroundColor: (item.isPayment ? Colors.green : Colors.orange)
+                      .withValues(alpha: 0.10),
+                  child: Icon(
+                    item.isPayment
+                        ? Icons.south_west_rounded
+                        : Icons.north_east_rounded,
+                    color: item.isPayment ? Colors.green.shade700 : Colors.orange.shade800,
+                    size: 19,
+                  ),
+                ),
+                title: Text(
+                  item.isPayment ? 'پارەدانەوە' : 'قەرز',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: Text(
+                  AppHelpers.formatCurrencyWithType(amount, currency),
+                  textDirection: TextDirection.ltr,
+                ),
+              ),
+              const Divider(height: 12),
+              ListTile(
+                leading: const Icon(Icons.open_in_new_rounded),
+                title: const Text('وردەکاری مامەڵە'),
+                onTap: () => Navigator.pop(sheetContext, 'details'),
+              ),
+              if (receiptPath.isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.image_outlined),
+                  title: const Text('بینینی وەصڵ'),
+                  subtitle: const Text('گەورەکردن و جوڵاندنی وێنە'),
+                  onTap: () => Navigator.pop(sheetContext, 'receipt'),
+                ),
+              if (debt != null)
+                ListTile(
+                  leading: const Icon(Icons.print_outlined),
+                  title: const Text('چاپکردنی وەصڵ / Invoice'),
+                  onTap: () => Navigator.pop(sheetContext, 'invoice'),
+                ),
+              ListTile(
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: const Text('کەشف حیساب'),
+                onTap: () => Navigator.pop(sheetContext, 'statement'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'details':
+        await _openTimelineItem(item);
+        break;
+      case 'receipt':
+        if (debt != null && receiptPath.isNotEmpty) {
+          await _openFinancialReceiptViewer(debt, receiptPath);
+        }
+        break;
+      case 'invoice':
+        if (debt != null) await _generateFinancialInvoice(debt);
+        break;
+      case 'statement':
+        await _generateCurrentFinancialStatement();
+        break;
+    }
+  }
+
+  Future<void> _openFinancialReceiptViewer(
+    RecordModel debt,
+    String receiptPath,
+  ) async {
+    if (!mounted || receiptPath.isEmpty) return;
+    final imageUrl = PBService.pb.getFileUrl(debt, receiptPath).toString();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (viewerContext) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            title: const Text('وەصڵ'),
+          ),
+          body: SafeArea(
+            child: Center(
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 5,
+                boundaryMargin: const EdgeInsets.all(48),
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return const SizedBox(
+                      width: 42,
+                      height: 42,
+                      child: CircularProgressIndicator(color: Colors.white),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'وێنەی وەصڵ بار نەبوو. پەیوەندی ئینتەرنێت بپشکنە.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _generateFinancialInvoice(RecordModel debt) async {
+    final auth = context.read<AuthProvider>();
+    try {
+      await PdfService.generateInvoice(
+        debt: debt,
+        marketName: auth.marketName,
+        adminName: auth.userName,
+        adminPhone: auth.user?.getStringValue('phone') ?? '',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'وەصڵ دروست نەکرا. دووبارە هەوڵ بدە.',
+        ),
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _generateCurrentFinancialStatement() async {
+    final totalDebt = _debts.fold<double>(
+      0,
+      (sum, debt) => sum + debt.getDoubleValue('amount'),
+    );
+    final totalRemaining = _debts.fold<double>(
+      0,
+      (sum, debt) => sum + debt.getDoubleValue('remaining'),
+    );
+    await _generateAccountStatement(
+      totalDebt: totalDebt,
+      totalRemaining: totalRemaining,
+      totalPaid: totalDebt - totalRemaining,
     );
   }
 
