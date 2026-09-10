@@ -1,6 +1,9 @@
 name: Publish IPA Release
 
 on:
+  workflow_run:
+    workflows: ["iOS Unsigned IPA"]
+    types: [completed]
   push:
     branches: [main]
     paths:
@@ -13,24 +16,35 @@ permissions:
 
 jobs:
   publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Download latest IPA artifact
+      - name: Download IPA artifact
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p out
-          ARTIFACT_ID="$(gh api \
-            -H 'Accept: application/vnd.github+json' \
-            "/repos/${{ github.repository }}/actions/artifacts?name=zhiroxVIPuser-unsigned-ipa&per_page=20" \
-            --jq '.artifacts[] | select(.expired == false) | .id' | head -n 1)"
-          test -n "$ARTIFACT_ID"
-          gh api \
-            -H 'Accept: application/vnd.github+json' \
-            "/repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip" \
-            > out/artifact.zip
-          unzip -o out/artifact.zip -d out
+
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            gh run download "$RUN_ID" \
+              --repo "${{ github.repository }}" \
+              --name zhiroxVIPuser-unsigned-ipa \
+              --dir out
+          else
+            ARTIFACT_ID="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/${{ github.repository }}/actions/artifacts?name=zhiroxVIPuser-unsigned-ipa&per_page=20" \
+              --jq '.artifacts[] | select(.expired == false) | .id' | head -n 1)"
+            test -n "$ARTIFACT_ID"
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip" \
+              > out/artifact.zip
+            unzip -o out/artifact.zip -d out
+          fi
+
           test -f out/zhiroxVIPuser-unsigned.ipa
 
       - name: Create or update public release
@@ -52,5 +66,3 @@ jobs:
       - name: Print direct Safari URL
         run: |
           echo "https://github.com/${{ github.repository }}/releases/download/safari-download/zhiroxVIPuser-unsigned.ipa"
-
-# Refreshed after iOS startup-crash fix: f6ef77a
