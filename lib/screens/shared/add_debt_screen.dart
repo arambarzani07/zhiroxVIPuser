@@ -503,14 +503,6 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
     );
   }
 
-  double get _totalAmount {
-    double total = 0;
-    for (var item in _items) {
-      total += (item['price'] as double) * (item['qty'] as int);
-    }
-    return total;
-  }
-
   Future<void> _selectDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -559,7 +551,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.camera_alt, color: Colors.blue),
@@ -583,7 +575,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.photo_library, color: Colors.green),
@@ -986,7 +978,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.person, color: AppColors.primary),
@@ -1379,7 +1371,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.monetization_on, color: Colors.orange),
@@ -1418,7 +1410,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                         boxShadow: _currency == 'IQD'
                             ? [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
+                                  color: Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 4,
                                 ),
                               ]
@@ -1455,7 +1447,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                         boxShadow: _currency == 'USD'
                             ? [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
+                                  color: Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 4,
                                 ),
                               ]
@@ -1540,7 +1532,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.shopping_bag, color: Colors.blue),
@@ -1555,7 +1547,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               IconButton(
                 onPressed: _addItem,
                 style: IconButton.styleFrom(
-                  backgroundColor: AppColors.primary.withOpacity(0.1),
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                   foregroundColor: AppColors.primary,
                 ),
                 icon: const Icon(Icons.add),
@@ -1858,7 +1850,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.purple.withOpacity(0.1),
+                  color: Colors.purple.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -1915,12 +1907,12 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
                 color: _hasCustomDebtDate
-                    ? Colors.orange.withOpacity(0.06)
+                    ? Colors.orange.withValues(alpha: 0.06)
                     : (isDark ? AppDarkColors.surface : Colors.grey.shade50),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: _hasCustomDebtDate
-                      ? Colors.orange.withOpacity(0.2)
+                      ? Colors.orange.withValues(alpha: 0.2)
                       : Colors.transparent,
                 ),
               ),
@@ -2008,7 +2000,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                                 : Colors.grey.shade50,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: Colors.orange.withOpacity(0.15),
+                              color: Colors.orange.withValues(alpha: 0.15),
                             ),
                           ),
                           child: Row(
@@ -2062,12 +2054,12 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
                 color: _hasDueDate
-                    ? AppColors.primary.withOpacity(0.06)
+                    ? AppColors.primary.withValues(alpha: 0.06)
                     : (isDark ? AppDarkColors.surface : Colors.grey.shade50),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: _hasDueDate
-                      ? AppColors.primary.withOpacity(0.2)
+                      ? AppColors.primary.withValues(alpha: 0.2)
                       : Colors.transparent,
                 ),
               ),
@@ -2136,7 +2128,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                                 : Colors.grey.shade50,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: AppColors.primary.withOpacity(0.15),
+                              color: AppColors.primary.withValues(alpha: 0.15),
                             ),
                           ),
                           child: Row(
@@ -2209,7 +2201,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.teal.withOpacity(0.1),
+                  color: Colors.teal.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -2263,7 +2255,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                             blurRadius: 4,
                           ),
                         ],
@@ -2286,7 +2278,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -2357,7 +2349,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                       style: TextStyle(
                         fontSize: 12,
                         color: isDark
-                            ? AppDarkColors.textSecondary.withOpacity(0.6)
+                            ? AppDarkColors.textSecondary.withValues(alpha: 0.6)
                             : Colors.grey.shade400,
                       ),
                     ),

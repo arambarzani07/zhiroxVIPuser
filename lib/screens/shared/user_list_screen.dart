@@ -132,7 +132,7 @@ class _UserListScreenState extends State<UserListScreen> {
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AppColors.primary, AppColors.primary.withOpacity(0.88)],
+                  colors: [AppColors.primary, AppColors.primary.withValues(alpha: 0.88)],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -173,7 +173,7 @@ class _UserListScreenState extends State<UserListScreen> {
                                 vertical: 5,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
@@ -189,7 +189,7 @@ class _UserListScreenState extends State<UserListScreen> {
                             const SizedBox(width: 8),
                             Container(
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: IconButton(
@@ -217,7 +217,7 @@ class _UserListScreenState extends State<UserListScreen> {
                               ? []
                               : [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.08),
+                                    color: Colors.black.withValues(alpha: 0.08),
                                     blurRadius: 12,
                                     offset: const Offset(0, 4),
                                   ),
@@ -392,7 +392,7 @@ class _UserListScreenState extends State<UserListScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.06)
+              ? Colors.white.withValues(alpha: 0.06)
               : const Color(0xFFE9EDF3),
         ),
       ),
@@ -417,7 +417,7 @@ class _UserListScreenState extends State<UserListScreen> {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.10),
+                    color: accentColor.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   alignment: Alignment.center,
@@ -458,7 +458,7 @@ class _UserListScreenState extends State<UserListScreen> {
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.10),
+                                color: Colors.green.withValues(alpha: 0.10),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Text(
@@ -557,7 +557,7 @@ class _UserListScreenState extends State<UserListScreen> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.08),
+                        color: accentColor.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(11),
                       ),
                       alignment: Alignment.center,
@@ -580,22 +580,6 @@ class _UserListScreenState extends State<UserListScreen> {
         ),
       ),
     );
-  }
-
-  List<Color> _getAvatarGradient(String name, Color fallback) {
-    if (name.isEmpty) return [fallback, fallback.withOpacity(0.7)];
-    final hash = name.codeUnits.fold(0, (prev, c) => prev + c);
-    final gradients = [
-      [const Color(0xFF667EEA), const Color(0xFF764BA2)],
-      [const Color(0xFFF093FB), const Color(0xFFF5576C)],
-      [const Color(0xFF4FACFE), const Color(0xFF00F2FE)],
-      [const Color(0xFF43E97B), const Color(0xFF38F9D7)],
-      [const Color(0xFFFA709A), const Color(0xFFFEE140)],
-      [const Color(0xFFA18CD1), const Color(0xFFFBC2EB)],
-      [const Color(0xFFFF9A9E), const Color(0xFFFECFEF)],
-      [const Color(0xFF6991C7), const Color(0xFFA3BDED)],
-    ];
-    return gradients[hash % gradients.length];
   }
 
   Future<void> _showPaymentDialog(RecordModel user) async {
@@ -714,7 +698,7 @@ class _UserListScreenState extends State<UserListScreen> {
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 side: BorderSide(
-                                  color: Colors.green.withOpacity(0.3),
+                                  color: Colors.green.withValues(alpha: 0.3),
                                 ),
                               ),
                               child: Text(
@@ -844,8 +828,16 @@ class _UserListScreenState extends State<UserListScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) Navigator.pop(context); // Dismiss loading on error
-      AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
+      if (!mounted) return;
+      Navigator.pop(context); // Dismiss loading on error
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا پارەدانەوە ئامادە بکرێت. دووبارە هەوڵ بدە.',
+        ),
+        isError: true,
+      );
     }
   }
 }
