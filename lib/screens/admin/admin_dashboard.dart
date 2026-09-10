@@ -321,250 +321,44 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 bottom: false,
                 child: Column(
                   children: [
-                    // Top Bar
+                    // Compact top bar: secondary actions live in Settings.
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
                       child: Row(
                         children: [
                           Text(
                             AppStrings.appName,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 14,
+                              color: Colors.white.withOpacity(0.72),
+                              fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           const Spacer(),
-                          IconButton(
-                            icon: Icon(
-                              Icons.print_rounded,
-                              color: Colors.white.withOpacity(0.7),
-                              size: 22,
-                            ),
-                            tooltip: 'چاپکردنی ڕاپۆرت',
-                            onPressed: () async {
-                              final choice = await showDialog<String>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  title: const Row(
-                                    children: [
-                                      Icon(
-                                        Icons.print_rounded,
-                                        color: Colors.blueGrey,
-                                      ),
-                                      SizedBox(width: 10),
-                                      Text(
-                                        'کەشفی حیساب',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      ListTile(
-                                        leading: Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primary
-                                                .withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: Icon(
-                                            Icons.select_all,
-                                            color: AppColors.primary,
-                                          ),
-                                        ),
-                                        title: const Text(
-                                          'هەمووی',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        subtitle: const Text(
-                                          'ڕاپۆرتی تەواوی قەرزەکان',
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        onTap: () => Navigator.pop(ctx, 'all'),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ListTile(
-                                        leading: Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: Colors.orange.withOpacity(
-                                              0.1,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: const Icon(
-                                            Icons.date_range,
-                                            color: Colors.orange,
-                                          ),
-                                        ),
-                                        title: const Text(
-                                          'بە دەستی',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        subtitle: const Text(
-                                          'بەرواری ئەوەندە بۆ ئەوەندە',
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        onTap: () =>
-                                            Navigator.pop(ctx, 'custom'),
-                                      ),
-                                    ],
+                          Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => _showAdminProfileMenu(auth),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.14),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.16),
                                   ),
                                 ),
-                              );
-                              if (choice == null || !mounted) return;
-
-                              DateTime? fromDate;
-                              DateTime? toDate;
-                              String? dateFilter;
-
-                              if (choice == 'custom') {
-                                final now = DateTime.now();
-                                final picked = await showDateRangePicker(
-                                  context: context,
-                                  firstDate: DateTime(2020),
-                                  lastDate: now,
-                                  initialDateRange: DateTimeRange(
-                                    start: DateTime(now.year, now.month, 1),
-                                    end: now,
-                                  ),
-                                  builder: (context, child) {
-                                    return Theme(
-                                      data: Theme.of(context).copyWith(
-                                        colorScheme: ColorScheme.light(
-                                          primary: AppColors.primary,
-                                        ),
-                                      ),
-                                      child: child!,
-                                    );
-                                  },
-                                );
-                                if (picked == null || !mounted) return;
-                                fromDate = picked.start;
-                                toDate = picked.end;
-                                final fromStr = DateFormat(
-                                  'yyyy-MM-dd',
-                                ).format(fromDate);
-                                final toStr = DateFormat(
-                                  'yyyy-MM-dd',
-                                ).format(toDate.add(const Duration(days: 1)));
-                                dateFilter =
-                                    'created >= "$fromStr 00:00:00" && created <= "$toStr 00:00:00"';
-                              }
-
-                              setState(() => _isLoading = true);
-                              try {
-                                final allDebts = await PBService.getDebts(
-                                  adminId: auth.userId,
-                                  filter: dateFilter,
-                                );
-
-                                // Recalculate totals from fetched debts
-                                double totalDebt = 0;
-                                double totalRemaining = 0;
-                                double totalPaid = 0;
-                                final Set<String> customerIds = {};
-                                for (var debt in allDebts) {
-                                  totalDebt += debt.getDoubleValue('amount');
-                                  totalRemaining += debt.getDoubleValue(
-                                    'remaining',
-                                  );
-                                  totalPaid +=
-                                      debt.getDoubleValue('amount') -
-                                      debt.getDoubleValue('remaining');
-                                  customerIds.add(
-                                    debt.getStringValue('customer'),
-                                  );
-                                }
-
-                                final adminPhone =
-                                    auth.user?.getStringValue('phone') ?? '';
-
-                                await PdfService.generateAdminReport(
-                                  allDebts: allDebts,
-                                  marketName: AppStrings.appName,
-                                  adminName: auth.userName,
-                                  adminPhone: adminPhone,
-                                  totalDebt: totalDebt,
-                                  totalRemaining: totalRemaining,
-                                  totalPaid: totalPaid,
-                                  totalCustomers: customerIds.length,
-                                  fromDate: fromDate,
-                                  toDate: toDate,
-                                );
-                              } catch (e) {
-                                if (mounted) {
-                                  AppHelpers.showSnackBar(
-                                    context,
-                                    'هەڵە لە دروستکردنی ڕاپۆرت: $e',
-                                    isError: true,
-                                  );
-                                }
-                              } finally {
-                                if (mounted) setState(() => _isLoading = false);
-                              }
-                            },
-                          ),
-                          // Dark Mode Toggle
-                          IconButton(
-                            onPressed: () {
-                              context.read<ThemeProvider>().toggleTheme();
-                            },
-                            icon: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                isDark
-                                    ? Icons.light_mode_rounded
-                                    : Icons.dark_mode_rounded,
-                                color: Colors.white,
-                                size: 20,
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.tune_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                               ),
                             ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              Icons.logout_rounded,
-                              color: Colors.white.withOpacity(0.7),
-                              size: 22,
-                            ),
-                            onPressed: () async {
-                              final confirm =
-                                  await AppHelpers.showConfirmDialog(
-                                    context,
-                                    title: AppStrings.logout,
-                                    message: 'دڵنیایت لە چوونەدەرەوە؟',
-                                  );
-                              if (confirm) auth.logout();
-                            },
                           ),
                         ],
                       ),
@@ -574,7 +368,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     GestureDetector(
                       onTap: () => _showAdminProfileMenu(auth),
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                         child: Row(
                           children: [
                             // Avatar
@@ -640,7 +434,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
                     // Stats Grid inside header
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
                       child: Column(
                         children: [
                           Row(
@@ -929,120 +723,374 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   void _showAdminProfileMenu(AuthProvider auth) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final marketName = auth.user?.getStringValue('market_name') ?? AppStrings.appName;
+    final phone = auth.user?.getStringValue('phone') ?? 'نەدراوە';
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppDarkColors.card : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: isDark ? AppDarkColors.cardBorder : Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.82,
+          ),
+          decoration: BoxDecoration(
+            color: isDark ? AppDarkColors.card : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppDarkColors.cardBorder : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.storefront_rounded,
+                        color: AppColors.primary,
+                        size: 23,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            marketName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: isDark
+                                  ? AppDarkColors.textPrimary
+                                  : const Color(0xFF1F2937),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            phone,
+                            textDirection: TextDirection.ltr,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark
+                                  ? AppDarkColors.textSecondary
+                                  : Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      'ڕێکخستنەکان',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: isDark
+                            ? AppDarkColors.textSecondary
+                            : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _settingsTile(
+                  isDark: isDark,
+                  icon: Icons.summarize_outlined,
+                  iconColor: AppColors.primary,
+                  title: 'کەشفی حیساب و ڕاپۆرت',
+                  subtitle: 'ڕاپۆرتی قەرز و پارەدانەوە چاپ بکە',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    unawaited(_showReportMenu(auth));
+                  },
+                ),
+                _settingsTile(
+                  isDark: isDark,
+                  icon: isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  iconColor: Colors.indigo,
+                  title: isDark ? 'ڕووناکی' : 'دۆخی تاریک',
+                  subtitle: 'ڕووکار و ڕەنگی ئەپ بگۆڕە',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.read<ThemeProvider>().toggleTheme();
+                  },
+                ),
+                const Divider(height: 24),
+                _settingsTile(
+                  isDark: isDark,
+                  icon: Icons.phone_android_rounded,
+                  iconColor: Colors.blue,
+                  title: 'گۆڕینی ژمارە مۆبایل',
+                  subtitle: phone,
+                  ltrSubtitle: true,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showChangePhoneDialog(auth);
+                  },
+                ),
+                _settingsTile(
+                  isDark: isDark,
+                  icon: Icons.lock_outline_rounded,
+                  iconColor: Colors.orange,
+                  title: 'گۆڕینی وشەی نهێنی',
+                  subtitle: 'وشەی نهێنیی نوێ دابنێ',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showChangePasswordDialog(auth);
+                  },
+                ),
+                const Divider(height: 24),
+                _settingsTile(
+                  isDark: isDark,
+                  icon: Icons.logout_rounded,
+                  iconColor: Colors.red,
+                  title: AppStrings.logout,
+                  subtitle: 'لە هەژمارەکەت بچۆ دەرەوە',
+                  destructive: true,
+                  showChevron: false,
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final confirm = await AppHelpers.showConfirmDialog(
+                      context,
+                      title: AppStrings.logout,
+                      message: 'دڵنیایت لە چوونەدەرەوە؟',
+                    );
+                    if (confirm && mounted) auth.logout();
+                  },
+                ),
+              ],
             ),
-            // Title
-            Text(
-              'تەنزیماتی هەژمار',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDark ? AppDarkColors.textPrimary : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Change Phone
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.phone_android, color: Colors.blue),
-              ),
-              title: Text(
-                'گۆڕینی ژمارە مۆبایل',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? AppDarkColors.textPrimary : Colors.black87,
-                ),
-              ),
-              subtitle: Text(
-                auth.user?.getStringValue('phone') ?? 'نەدراوە',
-                style: TextStyle(
-                  color: isDark
-                      ? AppDarkColors.textSecondary
-                      : Colors.grey[500],
-                  fontSize: 12,
-                ),
-                textDirection: TextDirection.ltr,
-              ),
-              trailing: Icon(
-                Icons.chevron_left,
-                color: isDark ? AppDarkColors.textSecondary : Colors.grey,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showChangePhoneDialog(auth);
-              },
-            ),
-            const SizedBox(height: 8),
-            // Change Password
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.lock_outline, color: Colors.orange),
-              ),
-              title: Text(
-                'گۆڕینی وشەی نهێنی',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? AppDarkColors.textPrimary : Colors.black87,
-                ),
-              ),
-              subtitle: Text(
-                'وشەی نهێنیی نوێ دابنێ',
-                style: TextStyle(
-                  color: isDark
-                      ? AppDarkColors.textSecondary
-                      : Colors.grey[500],
-                  fontSize: 12,
-                ),
-              ),
-              trailing: Icon(
-                Icons.chevron_left,
-                color: isDark ? AppDarkColors.textSecondary : Colors.grey,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showChangePasswordDialog(auth);
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _settingsTile({
+    required bool isDark,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool destructive = false,
+    bool showChevron = true,
+    bool ltrSubtitle = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, color: iconColor, size: 21),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: destructive
+                              ? Colors.red
+                              : isDark
+                                  ? AppDarkColors.textPrimary
+                                  : const Color(0xFF1F2937),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        textDirection:
+                            ltrSubtitle ? TextDirection.ltr : TextDirection.rtl,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark
+                              ? AppDarkColors.textSecondary
+                              : Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (showChevron)
+                  Icon(
+                    Icons.chevron_left_rounded,
+                    size: 20,
+                    color: isDark ? Colors.grey[600] : Colors.grey[350],
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showReportMenu(AuthProvider auth) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).brightness == Brightness.dark
+                ? AppDarkColors.card
+                : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 18),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text(
+                'کەشفی حیساب',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 14),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                leading: Icon(Icons.select_all_rounded, color: AppColors.primary),
+                title: const Text(
+                  'هەموو ماوەکان',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text('ڕاپۆرتی تەواوی قەرزەکان'),
+                onTap: () => Navigator.pop(ctx, 'all'),
+              ),
+              ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                leading: const Icon(Icons.date_range_rounded, color: Colors.orange),
+                title: const Text(
+                  'دیاریکردنی بەروار',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text('لە بەروارێکەوە تا بەروارێکی تر'),
+                onTap: () => Navigator.pop(ctx, 'custom'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+
+    DateTime? fromDate;
+    DateTime? toDate;
+    String? dateFilter;
+    if (choice == 'custom') {
+      final now = DateTime.now();
+      final picked = await showDateRangePicker(
+        context: context,
+        firstDate: DateTime(2020),
+        lastDate: now,
+        initialDateRange: DateTimeRange(
+          start: DateTime(now.year, now.month, 1),
+          end: now,
+        ),
+      );
+      if (picked == null || !mounted) return;
+      fromDate = picked.start;
+      toDate = picked.end;
+      final fromStr = DateFormat('yyyy-MM-dd').format(fromDate);
+      final toStr = DateFormat(
+        'yyyy-MM-dd',
+      ).format(toDate.add(const Duration(days: 1)));
+      dateFilter =
+          'created >= "$fromStr 00:00:00" && created <= "$toStr 00:00:00"';
+    }
+
+    try {
+      final allDebts = await PBService.getDebts(
+        adminId: auth.userId,
+        filter: dateFilter,
+      );
+      double reportDebt = 0;
+      double reportRemaining = 0;
+      double reportPaid = 0;
+      final customerIds = <String>{};
+      for (final debt in allDebts) {
+        final amount = debt.getDoubleValue('amount');
+        final remaining = debt.getDoubleValue('remaining');
+        reportDebt += amount;
+        reportRemaining += remaining;
+        reportPaid += amount - remaining;
+        customerIds.add(debt.getStringValue('customer'));
+      }
+      await PdfService.generateAdminReport(
+        allDebts: allDebts,
+        marketName: AppStrings.appName,
+        adminName: auth.userName,
+        adminPhone: auth.user?.getStringValue('phone') ?? '',
+        totalDebt: reportDebt,
+        totalRemaining: reportRemaining,
+        totalPaid: reportPaid,
+        totalCustomers: customerIds.length,
+        fromDate: fromDate,
+        toDate: toDate,
+      );
+    } catch (e) {
+      if (mounted) {
+        AppHelpers.showSnackBar(
+          context,
+          'نەتوانرا ڕاپۆرت دروست بکرێت',
+          isError: true,
+        );
+      }
+    }
   }
 
   void _showChangePhoneDialog(AuthProvider auth) {
@@ -1448,53 +1496,53 @@ class _AdminDashboardState extends State<AdminDashboard> {
   ) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(14),
+        height: 82,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+          color: Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.white.withOpacity(0.14)),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withOpacity(0.16),
                 borderRadius: BorderRadius.circular(10),
               ),
+              alignment: Alignment.center,
               child: Icon(icon, color: Colors.white, size: 18),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 9),
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.72),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: value),
-                    duration: const Duration(milliseconds: 1500),
-                    curve: Curves.easeOut,
-                    builder: (context, val, _) {
-                      return Text(
-                        isCurrency
-                            ? AppHelpers.formatCurrency(val)
-                            : val.toInt().toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      );
-                    },
+                  const SizedBox(height: 3),
+                  Text(
+                    isCurrency
+                        ? AppHelpers.formatCurrency(value)
+                        : value.toInt().toString(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
                   ),
                 ],
               ),
