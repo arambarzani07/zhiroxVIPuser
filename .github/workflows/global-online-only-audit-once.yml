@@ -1,0 +1,25 @@
+name: Global Online Only Audit Once
+'on':
+  push:
+    branches:
+      - owner-source
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Audit Owner source
+        shell: bash
+        run: |
+          echo '=== OWNER: SharedPreferences/cache/offline/local persistence references ==='
+          grep -RniE "SharedPreferences|shared_preferences|offline|cache|cached_|local fallback|localStorage|persist|storage" lib --include='*.dart' || true
+      - name: Audit User source
+        shell: bash
+        run: |
+          git worktree add /tmp/user-source origin/user-source
+          echo '=== USER: SharedPreferences/cache/offline/local persistence references ==='
+          grep -RniE "SharedPreferences|shared_preferences|offline|cache|cached_|local fallback|localStorage|persist|storage" /tmp/user-source/lib --include='*.dart' || true
