@@ -825,6 +825,33 @@ class PBService {
     };
   }
 
+  static RecordModel _financialEventRecord(Map<String, dynamic> row) {
+    final created = row['created_at']?.toString() ?? '';
+    return RecordModel.fromJson({
+      ...row,
+      'id': row['id']?.toString() ?? '',
+      'collectionId': '',
+      'collectionName': 'financial_events',
+      'created': created,
+      'updated': created,
+    });
+  }
+
+  static Future<List<RecordModel>> getFinancialEvents(String customerId) async {
+    await ensureInitialized();
+    final data = await client
+        .from('financial_events')
+        .select()
+        .eq('customer_id', customerId)
+        .order('created_at', ascending: true)
+        .limit(500);
+    return (data as List)
+        .map((row) => _financialEventRecord(
+              Map<String, dynamic>.from(row as Map),
+            ))
+        .toList();
+  }
+
   // ==================== Stats ====================
 
   static Future<Map<String, dynamic>> getDashboardStats({String? adminId}) async {

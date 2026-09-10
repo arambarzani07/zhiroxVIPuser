@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pocketbase/pocketbase.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
@@ -38,6 +39,7 @@ class _ProfileTimelineItem {
   });
 
   bool get isPayment => kind == 'payment';
+  bool get isSystem => kind == 'system';
 }
 
 
@@ -45,12 +47,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   RecordModel? _user;
   List<RecordModel> _debts = [];
   List<RecordModel> _payments = [];
+  List<RecordModel> _financialEvents = [];
   bool _isLoading = true;
   bool _isSaving = false;
   bool _loadInFlight = false;
+  bool _financialRefreshInFlight = false;
+  bool _financialRefreshPending = false;
+  bool _financialAutoJumpPending = false;
   int _customerSection = 0;
   int _employeeSection = 0;
   String? _loadError;
+  bool _hasNewFinancialActivity = false;
 
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -65,6 +72,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _canEditDebts = false;
   bool _canSendNotifications = false;
   StreamSubscription<bool>? _connectivitySub;
+  final ScrollController _profileScrollController = ScrollController();
+  RealtimeChannel? _financialRealtimeChannel;
+  Timer? _financialRealtimeDebounce;
 
   bool get _isCustomer => _user?.getStringValue('role') == 'customer';
   bool get _isEmployee => _user?.getStringValue('role') == 'employee';
@@ -74,6 +84,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   void initState() {
     super.initState();
     _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_subscribeFinancialRealtime());
+    });
     _connectivitySub = ConnectivityService.instance.statusStream.listen((online) {
       if (online && mounted) _loadData();
     });
@@ -81,6 +94,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   @override
   void dispose() {
+    _financialRealtimeDebounce?.cancel();
+    final financialChannel = _financialRealtimeChannel;
+    if (financialChannel != null) {
+      unawaited(PBService.client.removeChannel(financialChannel));
+    }
+    _profileScrollController.dispose();
     _connectivitySub?.cancel();
     _nameController.dispose();
     _phoneController.dispose();
@@ -102,15 +121,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
       List<RecordModel> debts = [];
       List<RecordModel> payments = [];
+      List<RecordModel> financialEvents = [];
       Map<String, double> employeeStats = {};
 
       if (role == 'customer') {
         final customerData = await Future.wait<List<RecordModel>>([
           PBService.getDebts(customerId: widget.userId),
           PBService.getPayments(customerId: widget.userId),
+          PBService.getFinancialEvents(widget.userId),
         ]);
         debts = customerData[0];
         payments = customerData[1];
+        financialEvents = customerData[2];
       } else if (role == 'employee') {
         employeeStats = await PBService.getEmployeeStats(widget.userId);
       }
@@ -120,6 +142,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _user = user;
         _debts = debts;
         _payments = payments;
+        _financialEvents = financialEvents;
         _employeeStats = employeeStats;
         _nameController.text = user.getStringValue('name');
         _phoneController.text = user.getStringValue('phone');
@@ -141,6 +164,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _user = null;
         _debts = [];
         _payments = [];
+        _financialEvents = [];
         _employeeStats = {};
         _isLoading = false;
         _loadError =
@@ -149,6 +173,144 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     } finally {
       _loadInFlight = false;
     }
+  }
+
+  Future<void> _subscribeFinancialRealtime() async {
+    try {
+      await PBService.ensureInitialized();
+      if (!mounted) return;
+
+      final previous = _financialRealtimeChannel;
+      if (previous != null) {
+        try {
+          await PBService.client.removeChannel(previous);
+        } catch (_) {}
+      }
+
+      final channel = PBService.client
+          .channel(
+            'financial-chat:${widget.userId}:${DateTime.now().microsecondsSinceEpoch}',
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'financial_events',
+            callback: (payload) {
+              final raw = payload.newRecord.isNotEmpty
+                  ? payload.newRecord
+                  : payload.oldRecord;
+              if (raw['customer_id']?.toString() != widget.userId) return;
+              _handleFinancialRealtimeEvent();
+            },
+          )
+          .subscribe();
+
+      if (!mounted) {
+        try {
+          await PBService.client.removeChannel(channel);
+        } catch (_) {}
+        return;
+      }
+      _financialRealtimeChannel = channel;
+    } catch (_) {
+      // Reconnect and explicit manual refresh remain available if realtime
+      // cannot be established. Never make live data look successfully cached.
+    }
+  }
+
+  bool get _isNearFinancialEnd {
+    if (!_profileScrollController.hasClients) return false;
+    final position = _profileScrollController.position;
+    return position.maxScrollExtent - position.pixels < 150;
+  }
+
+  void _handleFinancialRealtimeEvent() {
+    if (!mounted) return;
+    final autoJump = _customerSection == 1 && _isNearFinancialEnd;
+    if (!autoJump && !_hasNewFinancialActivity) {
+      setState(() => _hasNewFinancialActivity = true);
+    }
+
+    _financialRealtimeDebounce?.cancel();
+    _financialRealtimeDebounce = Timer(const Duration(milliseconds: 280), () {
+      if (!mounted) return;
+      unawaited(_refreshFinancialData(autoJump: autoJump));
+    });
+  }
+
+  Future<void> _refreshFinancialData({
+    bool autoJump = false,
+    bool showError = false,
+  }) async {
+    if (!mounted) return;
+    if (_financialRefreshInFlight) {
+      _financialRefreshPending = true;
+      _financialAutoJumpPending = _financialAutoJumpPending || autoJump;
+      return;
+    }
+
+    _financialRefreshInFlight = true;
+    try {
+      final customerData = await Future.wait<List<RecordModel>>([
+        PBService.getDebts(customerId: widget.userId),
+        PBService.getPayments(customerId: widget.userId),
+        PBService.getFinancialEvents(widget.userId),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _debts = customerData[0];
+        _payments = customerData[1];
+        _financialEvents = customerData[2];
+      });
+      if (autoJump && _customerSection == 1) {
+        _jumpToLatest();
+      }
+    } catch (e) {
+      if (showError && mounted) {
+        AppHelpers.showSnackBar(
+          context,
+          AppHelpers.backendErrorMessage(
+            e,
+            fallback: 'نەتوانرا چاتی دارایی نوێ بکرێتەوە. دووبارە هەوڵ بدە.',
+          ),
+          isError: true,
+        );
+      }
+    } finally {
+      _financialRefreshInFlight = false;
+      if (_financialRefreshPending && mounted) {
+        final pendingAutoJump = _financialAutoJumpPending;
+        _financialRefreshPending = false;
+        _financialAutoJumpPending = false;
+        Future<void>.delayed(const Duration(milliseconds: 80), () async {
+          if (mounted) {
+            await _refreshFinancialData(autoJump: pendingAutoJump);
+          }
+        });
+      }
+    }
+  }
+
+  void _jumpToLatest({bool animated = true}) {
+    if (!mounted) return;
+    if (_hasNewFinancialActivity) {
+      setState(() => _hasNewFinancialActivity = false);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_profileScrollController.hasClients) return;
+      final target = _profileScrollController.position.maxScrollExtent;
+      if (animated) {
+        unawaited(
+          _profileScrollController.animateTo(
+            target,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+          ),
+        );
+      } else {
+        _profileScrollController.jumpTo(target);
+      }
+    });
   }
 
   Future<void> _toggleActive() async {
@@ -279,6 +441,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ? AppDarkColors.background
           : const Color(0xFFF5F7FA),
       body: CustomScrollView(
+        controller: _profileScrollController,
         slivers: [
           // ───── Gradient Header ─────
           SliverToBoxAdapter(
@@ -560,6 +723,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           const SliverPadding(padding: EdgeInsets.only(bottom: 40)),
         ],
       ),
+      floatingActionButton: _isCustomer &&
+              _customerSection == 1 &&
+              _hasNewFinancialActivity
+          ? FloatingActionButton.extended(
+              onPressed: _jumpToLatest,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              label: const Text('مامەڵەی نوێ'),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: _isCustomer &&
               _customerSection == 1 &&
               auth.userRole != 'customer'
@@ -684,6 +859,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     onTap: () {
                       if (_customerSection == index) return;
                       setState(() => _customerSection = index);
+                      if (index == 1) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) _jumpToLatest(animated: false);
+                        });
+                      }
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
@@ -779,6 +959,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           relatedDebt: debtsById[payment.getStringValue('debt')],
           date: _timelineDate(payment),
         ),
+      for (final event in _financialEvents)
+        if (const <String>{
+          'debt_updated',
+          'debt_deleted',
+          'payment_updated',
+          'payment_deleted',
+        }.contains(event.getStringValue('event_type')))
+          _ProfileTimelineItem(
+            kind: 'system',
+            record: event,
+            date: _timelineDate(event),
+          ),
     ];
 
     // Oldest first gives a natural chat/timeline flow.
@@ -861,7 +1053,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                       IconButton(
                         tooltip: 'نوێکردنەوە',
-                        onPressed: _loadInFlight ? null : _loadData,
+                        onPressed: _financialRefreshInFlight
+                            ? null
+                            : () => _refreshFinancialData(showError: true),
                         icon: const Icon(Icons.refresh_rounded, size: 20),
                         color: AppColors.primary,
                       ),
@@ -970,7 +1164,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         widgets.add(_buildChatDaySeparator(item.date));
         previousDay = day;
       }
-      widgets.add(_buildTimelineBubble(item, index));
+      widgets.add(
+        item.isSystem
+            ? _buildFinancialSystemMessage(item)
+            : _buildTimelineBubble(item, index),
+      );
     }
     return widgets;
   }
@@ -1009,6 +1207,89 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFinancialSystemMessage(_ProfileTimelineItem item) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final record = item.record;
+    final type = record.getStringValue('event_type');
+    final actor = record.getStringValue('actor_name').trim();
+    final amount = record.getDoubleValue('amount');
+    final currency = record.getStringValue('currency').isEmpty
+        ? 'IQD'
+        : record.getStringValue('currency');
+    final amountText = amount > 0
+        ? AppHelpers.formatCurrencyWithType(amount, currency)
+        : '';
+
+    final (icon, message) = switch (type) {
+      'debt_deleted' => (
+          Icons.delete_outline_rounded,
+          amountText.isEmpty ? 'قەرزێک سڕایەوە' : 'قەرزی $amountText سڕایەوە',
+        ),
+      'payment_updated' => (
+          Icons.edit_note_rounded,
+          'پارەدانەوە دەستکاری کرا',
+        ),
+      'payment_deleted' => (
+          Icons.remove_circle_outline_rounded,
+          amountText.isEmpty
+              ? 'پارەدانەوەیەک سڕایەوە'
+              : 'پارەدانەوەی $amountText سڕایەوە',
+        ),
+      _ => (Icons.edit_outlined, 'قەرز دەستکاری کرا'),
+    };
+
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.055)
+              : const Color(0xFFF2F4F7),
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF667085),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                actor.isEmpty ? message : '$message • $actor',
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? AppDarkColors.textSecondary
+                      : const Color(0xFF667085),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              DateFormat('HH:mm').format(item.date),
+              style: TextStyle(
+                fontSize: 9.5,
+                color: isDark
+                    ? AppDarkColors.textSecondary
+                    : const Color(0xFF98A2B3),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1091,7 +1372,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       ),
     );
     if (result == true && mounted) {
-      await _loadData();
+      await _refreshFinancialData(autoJump: true);
     }
   }
 
@@ -1104,7 +1385,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       context,
       MaterialPageRoute(builder: (_) => DebtDetailScreen(debtId: debtId)),
     );
-    if (mounted) await _loadData();
+    if (mounted) await _refreshFinancialData();
   }
 
   Future<void> _showFinancialPaymentSheet(AuthProvider auth) async {
@@ -1299,7 +1580,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     context,
                                     'پارەدانەوە بە سەرکەوتوویی تۆمارکرا',
                                   );
-                                  await _loadData();
+                                  await _refreshFinancialData(autoJump: true);
                                 } catch (e) {
                                   if (!sheetContext.mounted) return;
                                   setSheetState(() {
