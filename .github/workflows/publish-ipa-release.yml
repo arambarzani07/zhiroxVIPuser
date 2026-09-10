@@ -11,8 +11,8 @@ permissions:
   actions: read
 
 jobs:
-  publish:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'user-source'
+  publish-user:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'user-source' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Download user-source IPA artifact
@@ -43,7 +43,7 @@ jobs:
 
           test -f out/ZHIROX-User.ipa
 
-      - name: Create or update public user release
+      - name: Create or update public User release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -59,6 +59,56 @@ jobs:
               --notes "Independent public User app. Bundle ID: com.karoxghafoor.zhirox.user. Admin account creation is controlled by the system owner. Unsigned IPA; sign before installation."
           fi
 
-      - name: Print direct Safari URL
+      - name: Print User Safari URL
+        run: echo "https://github.com/${{ github.repository }}/releases/download/safari-download/ZHIROX-User.ipa"
+
+  publish-owner:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'owner-source' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download owner-source IPA artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "https://github.com/${{ github.repository }}/releases/download/safari-download/ZHIROX-User.ipa"
+          set -euo pipefail
+          mkdir -p out
+
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            gh run download "$RUN_ID" \
+              --repo "${{ github.repository }}" \
+              --name zhirox-owner-unsigned-ipa \
+              --dir out
+          else
+            ARTIFACT_ID="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/${{ github.repository }}/actions/artifacts?name=zhirox-owner-unsigned-ipa&per_page=50" \
+              --jq 'first(.artifacts[] | select(.expired == false and .workflow_run.head_branch == "owner-source") | .id)')"
+            test -n "$ARTIFACT_ID"
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip" \
+              > out/artifact.zip
+            unzip -o out/artifact.zip -d out
+          fi
+
+          test -f out/ZHIROX-Owner.ipa
+
+      - name: Create or update public Owner release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view owner-safari-download --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload owner-safari-download out/ZHIROX-Owner.ipa \
+              --repo "${{ github.repository }}" --clobber
+          else
+            gh release create owner-safari-download out/ZHIROX-Owner.ipa \
+              --repo "${{ github.repository }}" \
+              --target owner-source \
+              --title "ZHIROX Owner — Safari Download" \
+              --notes "Independent public Owner app. Bundle ID: com.karoxghafoor.zhirox.owner. Admin creation remains protected by System Owner authentication. Unsigned IPA; sign before installation."
+          fi
+
+      - name: Print Owner Safari URL
+        run: echo "https://github.com/${{ github.repository }}/releases/download/owner-safari-download/ZHIROX-Owner.ipa"
