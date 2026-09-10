@@ -2,17 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:zhirox/models/record_model.dart';
 import 'package:zhirox/services/pb_service.dart';
 
+/// Read-only debt state for the customer application.
+///
+/// Debt/payment mutations belong to C-Panel. Keeping this provider read-only
+/// prevents privileged write flows from being exposed through customer state.
 class DebtProvider extends ChangeNotifier {
-  List<RecordModel> _debts = [];
-  List<RecordModel> _payments = [];
+  List<RecordModel> _debts = const [];
+  List<RecordModel> _payments = const [];
   bool _isLoading = false;
+  String? _error;
 
-  List<RecordModel> get debts => _debts;
-  List<RecordModel> get payments => _payments;
+  List<RecordModel> get debts => List.unmodifiable(_debts);
+  List<RecordModel> get payments => List.unmodifiable(_payments);
   bool get isLoading => _isLoading;
+  String? get error => _error;
 
-  Future<void> loadDebts({String? customerId, String? status}) async {
+  Future<void> loadDebts({required String customerId, String? status}) async {
+    if (customerId.isEmpty) return;
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
     try {
@@ -20,60 +28,34 @@ class DebtProvider extends ChangeNotifier {
         customerId: customerId,
         status: status,
       );
-    } catch (_) {}
-
-    _isLoading = false;
-    notifyListeners();
+    } catch (_) {
+      _error = 'قەرزەکان بار نەبوون';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  Future<void> loadPayments({String? debtId}) async {
+  Future<void> loadPayments({required String debtId}) async {
+    if (debtId.isEmpty) return;
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
     try {
       _payments = await PBService.getPayments(debtId: debtId);
-    } catch (_) {}
+    } catch (_) {
+      _error = 'پارەدانەوەکان بار نەبوون';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
-    _isLoading = false;
+  void clear() {
+    _debts = const [];
+    _payments = const [];
+    _error = null;
     notifyListeners();
-  }
-
-  Future<RecordModel> addDebt({
-    required String customerId,
-    required String description,
-    required double amount,
-    required String dueDate,
-    required String createdBy,
-  }) async {
-    final debt = await PBService.createDebt(
-      customerId: customerId,
-      description: description,
-      amount: amount,
-      dueDate: dueDate,
-      createdBy: createdBy,
-    );
-    await loadDebts();
-    return debt;
-  }
-
-  Future<RecordModel> addPayment({
-    required String debtId,
-    required double amount,
-    String? note,
-    required String createdBy,
-  }) async {
-    final payment = await PBService.createPayment(
-      debtId: debtId,
-      amount: amount,
-      note: note,
-      createdBy: createdBy,
-    );
-    await loadDebts();
-    return payment;
-  }
-
-  Future<void> removeDebt(String id) async {
-    await PBService.deleteDebt(id);
-    await loadDebts();
   }
 }
