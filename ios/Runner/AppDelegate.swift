@@ -1,6 +1,5 @@
 import Flutter
 import UIKit
-import workmanager_apple
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -8,15 +7,10 @@ import workmanager_apple
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // iOS/UIScene requires Workmanager launch handlers to be registered
-    // before application launch finishes, otherwise BGTaskScheduler can
-    // terminate the app with NSInternalInconsistencyException.
-    WorkmanagerPlugin.registerLaunchHandlers()
-
-    WorkmanagerPlugin.setPluginRegistrantCallback { registry in
-      GeneratedPluginRegistrant.register(with: registry)
-    }
-
+    // Keep iOS startup minimal and deterministic. Background Workmanager
+    // registration is intentionally disabled on iOS because BGTaskScheduler
+    // launch-handler state can survive app updates/re-signing and terminate
+    // the app before Flutter renders the first frame.
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
