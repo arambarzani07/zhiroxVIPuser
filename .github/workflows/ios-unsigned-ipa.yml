@@ -28,6 +28,12 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Prepare independent User iOS identity
+        run: |
+          sed -i '' 's/com.karoxghafoor.zhirox/com.karoxghafoor.zhirox.user/g' ios/Runner.xcodeproj/project.pbxproj
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ZHIROX User" ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName zhirox_user" ios/Runner/Info.plist
+
       - name: Prepare iOS 15 deployment target
         run: |
           sed -i '' "s/platform :ios, '13.0'/platform :ios, '15.0'/" ios/Podfile
@@ -50,17 +56,22 @@ jobs:
       - name: Build iOS without signing
         run: flutter build ios --release --no-codesign
 
+      - name: Verify User app identity
+        run: |
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx 'com.karoxghafoor.zhirox.user'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx 'ZHIROX User'
+
       - name: Package public user unsigned IPA
         run: |
           rm -rf Payload
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
-          ditto -c -k --sequesterRsrc --keepParent Payload zhiroxVIPuser-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload ZHIROX-User.ipa
 
       - name: Upload public user IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: zhiroxVIPuser-unsigned-ipa
-          path: zhiroxVIPuser-unsigned.ipa
+          path: ZHIROX-User.ipa
           if-no-files-found: error
           retention-days: 7
