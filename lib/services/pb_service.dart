@@ -516,7 +516,7 @@ class PBService {
       'description': description,
       'amount': amount,
       'remaining': amount,
-      'due_date': dueDate,
+      'due_date': dueDate.trim().isEmpty ? null : dueDate,
       'status': 'pending',
       'created_by': createdBy,
       'currency': currency,
@@ -567,7 +567,14 @@ class PBService {
   }
 
   static Future<void> updateDebt(String id, Map<String, dynamic> data) async {
-    await pb.collection('debts').update(id, body: data);
+    final normalized = Map<String, dynamic>.from(data);
+    for (final key in const ['due_date', 'custom_date']) {
+      final value = normalized[key];
+      if (value is String && value.trim().isEmpty) {
+        normalized[key] = null;
+      }
+    }
+    await pb.collection('debts').update(id, body: normalized);
   }
 
   static Future<void> deleteDebt(String id) async {

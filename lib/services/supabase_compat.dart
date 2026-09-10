@@ -206,7 +206,15 @@ class SupabasePBCompat {
     }
 
     if (logicalName == 'debts') {
-      if (result.containsKey('customer')) {
+    // Optional PostgreSQL date/timestamp columns must receive NULL,
+    // never an empty string (which raises Postgres error 22007).
+    for (final key in const ['due_date', 'custom_date']) {
+      final value = result[key];
+      if (value is String && value.trim().isEmpty) {
+        result[key] = null;
+      }
+    }
+    if (result.containsKey('customer')) {
         result['customer_id'] = result.remove('customer');
       }
       if (result.containsKey('receipt_image')) {
