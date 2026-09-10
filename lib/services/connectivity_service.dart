@@ -1,10 +1,8 @@
-﻿import 'dart:async';
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 
-/// Lightweight connectivity monitor.
-/// Uses only system network state (WiFi / mobile data).
-/// Does NOT ping the server - avoids false offline on slow mobile.
-/// When connectivity returns, notifies listeners so screens auto-reload.
+/// Lightweight connectivity monitor for the online-only ZHIROX app.
 class ConnectivityService {
   static final ConnectivityService instance = ConnectivityService._();
   ConnectivityService._();
@@ -21,36 +19,54 @@ class ConnectivityService {
   Stream<bool> get statusStream => _statusController.stream;
 
   Future<void> init() async {
-    if (_initialized) return;
+    if (_initialized) {
+      await checkNow();
+      return;
+    }
     _initialized = true;
 
-    // Initial check
-    final results = await _connectivity.checkConnectivity();
-    _isOnline = results.any((r) => r != ConnectivityResult.none);
+    try {
+      final results = await _connectivity.checkConnectivity();
+      _setOnline(
+        results.any((r) => r != ConnectivityResult.none),
+        forceNotify: true,
+      );
 
-    // Listen for changes
-    _connectivitySub = _connectivity.onConnectivityChanged.listen((results) {
-      final online = results.any((r) => r != ConnectivityResult.none);
-      if (_isOnline != online) {
-        _isOnline = online;
-        _statusController.add(online);
-      }
-    });
+      _connectivitySub = _connectivity.onConnectivityChanged.listen(
+        (results) {
+          _setOnline(results.any((r) => r != ConnectivityResult.none));
+        },
+        onError: (_) => _setOnline(false),
+      );
+    } catch (_) {
+      _initialized = false;
+      _setOnline(false, forceNotify: true);
+      rethrow;
+    }
   }
 
-  /// Force a connectivity check right now
-  Future<bool> checkNow() async {
-    final results = await _connectivity.checkConnectivity();
-    final online = results.any((r) => r != ConnectivityResult.none);
-    if (_isOnline != online) {
-      _isOnline = online;
+  void _setOnline(bool online, {bool forceNotify = false}) {
+    final changed = _isOnline != online;
+    _isOnline = online;
+    if ((changed || forceNotify) && !_statusController.isClosed) {
       _statusController.add(online);
+    }
+  }
+
+  Future<bool> checkNow() async {
+    try {
+      final results = await _connectivity.checkConnectivity();
+      _setOnline(results.any((r) => r != ConnectivityResult.none));
+    } catch (_) {
+      _setOnline(false);
     }
     return _isOnline;
   }
 
-  void dispose() {
-    _connectivitySub?.cancel();
-    _statusController.close();
+  Future<void> dispose() async {
+    await _connectivitySub?.cancel();
+    if (!_statusController.isClosed) {
+      await _statusController.close();
+    }
   }
 }
