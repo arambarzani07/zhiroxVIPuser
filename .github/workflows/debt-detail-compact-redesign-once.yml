@@ -1,0 +1,42 @@
+name: Debt Detail Compact Redesign Once
+'on':
+  push:
+    branches:
+      - owner-source
+    paths:
+      - .github/workflows/debt-detail-compact-redesign-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-both:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Patch Owner debt detail
+        run: |
+          python3 scripts/debt_detail_compact_redesign.py
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/screens/shared/debt_detail_screen.dart
+          if ! git diff --cached --quiet; then
+            git commit -m 'Compact debt detail layout and actions'
+            git push origin owner-source
+          fi
+          cp scripts/debt_detail_compact_redesign.py /tmp/debt_detail_compact_redesign.py
+      - name: Patch User debt detail
+        run: |
+          git fetch origin user-source
+          git checkout -B user-source origin/user-source
+          python3 /tmp/debt_detail_compact_redesign.py
+          git diff --check
+          git add lib/screens/shared/debt_detail_screen.dart
+          if ! git diff --cached --quiet; then
+            git commit -m 'Compact debt detail layout and actions'
+            git push origin user-source
+          fi
