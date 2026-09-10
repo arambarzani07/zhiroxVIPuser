@@ -246,18 +246,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: _isEmployee
-                      ? [const Color(0xFF4A6CF7), const Color(0xFF6B8CFF)]
-                      : [
-                          AppColors.primary,
-                          AppColors.primary.withOpacity(0.85),
-                        ],
+                  colors: [AppColors.primary, AppColors.primary.withOpacity(0.88)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
+                  bottomLeft: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
                 ),
               ),
               child: SafeArea(
@@ -300,77 +295,117 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                             ),
                           ),
-
-                          if (_isCustomer &&
-                              auth.userId != widget.userId &&
-                              auth.canSendNotifications) ...[
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: Icon(
-                                Icons.notifications_active_outlined,
-                                color: Colors.white.withOpacity(0.8),
-                                size: 22,
+                          if ((_isCustomer &&
+                                  auth.userId != widget.userId &&
+                                  auth.canSendNotifications) ||
+                              (auth.userId == widget.userId && _isEmployee) ||
+                              auth.userId == widget.userId ||
+                              (auth.userRole == 'admin' &&
+                                  auth.userId != widget.userId)) ...[
+                            const SizedBox(width: 6),
+                            PopupMenuButton<String>(
+                              tooltip: 'کردارەکان',
+                              color: isDark ? AppDarkColors.card : Colors.white,
+                              surfaceTintColor: Colors.transparent,
+                              elevation: 6,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
                               ),
-                              onPressed: _showNotificationDialog,
-                            ),
-                          ],
-
-                          // Theme toggle (own profile, employees only)
-                          if (auth.userId == widget.userId && _isEmployee) ...[
-                            const SizedBox(width: 4),
-                            IconButton(
                               icon: Container(
-                                padding: const EdgeInsets.all(6),
+                                width: 36,
+                                height: 36,
+                                alignment: Alignment.center,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(10),
+                                  color: Colors.white.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(11),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.14),
+                                  ),
                                 ),
-                                child: Icon(
-                                  isDark
-                                      ? Icons.light_mode_rounded
-                                      : Icons.dark_mode_rounded,
+                                child: const Icon(
+                                  Icons.more_horiz_rounded,
                                   color: Colors.white,
-                                  size: 18,
+                                  size: 21,
                                 ),
                               ),
-                              onPressed: () {
-                                context.read<ThemeProvider>().toggleTheme();
+                              onSelected: (value) async {
+                                if (value == 'notify') {
+                                  _showNotificationDialog();
+                                  return;
+                                }
+                                if (value == 'theme') {
+                                  context.read<ThemeProvider>().toggleTheme();
+                                  return;
+                                }
+                                if (value == 'logout') {
+                                  final confirm = await AppHelpers.showConfirmDialog(
+                                    context,
+                                    title: AppStrings.logout,
+                                    message: 'دڵنیایت لە چوونەدەرەوە؟',
+                                  );
+                                  if (confirm && mounted) await auth.logout();
+                                  return;
+                                }
+                                if (value == 'delete') {
+                                  _confirmDelete();
+                                }
                               },
-                            ),
-                          ],
-
-                          // Logout button (own profile)
-                          if (auth.userId == widget.userId) ...[
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: Icon(
-                                Icons.logout,
-                                color: Colors.white.withOpacity(0.8),
-                                size: 22,
-                              ),
-                              onPressed: () {
-                                AppHelpers.showConfirmDialog(
-                                  context,
-                                  title: AppStrings.logout,
-                                  message: 'دڵنیایت لە چوونەدەرەوە؟',
-                                ).then((confirm) async {
-                                  if (confirm && mounted) {
-                                    await auth.logout();
-                                  }
-                                });
-                              },
-                            ),
-                          ]
-                          // Delete button (admin only, viewing other profiles)
-                          else if (auth.userRole == 'admin') ...[
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: Icon(
-                                Icons.delete_outline,
-                                color: Colors.white.withOpacity(0.8),
-                                size: 22,
-                              ),
-                              onPressed: _confirmDelete,
+                              itemBuilder: (_) => [
+                                if (_isCustomer &&
+                                    auth.userId != widget.userId &&
+                                    auth.canSendNotifications)
+                                  const PopupMenuItem<String>(
+                                    value: 'notify',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.notifications_none_rounded, size: 19),
+                                        SizedBox(width: 10),
+                                        Text('ناردنی ئاگادارکردنەوە'),
+                                      ],
+                                    ),
+                                  ),
+                                if (auth.userId == widget.userId && _isEmployee)
+                                  PopupMenuItem<String>(
+                                    value: 'theme',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          isDark
+                                              ? Icons.light_mode_outlined
+                                              : Icons.dark_mode_outlined,
+                                          size: 19,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Text(isDark ? 'ڕووناکی' : 'دۆخی تاریک'),
+                                      ],
+                                    ),
+                                  ),
+                                if (auth.userId == widget.userId)
+                                  const PopupMenuItem<String>(
+                                    value: 'logout',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.logout_rounded, size: 19),
+                                        SizedBox(width: 10),
+                                        Text('چوونەدەرەوە'),
+                                      ],
+                                    ),
+                                  ),
+                                if (auth.userRole == 'admin' &&
+                                    auth.userId != widget.userId)
+                                  const PopupMenuItem<String>(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline_rounded,
+                                            size: 19, color: Colors.red),
+                                        SizedBox(width: 10),
+                                        Text('سڕینەوە',
+                                            style: TextStyle(color: Colors.red)),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             ),
                           ],
                         ],
@@ -379,16 +414,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                     // Avatar + Name
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
+                      padding: const EdgeInsets.fromLTRB(20, 2, 20, 20),
                       child: Column(
                         children: [
                           // Avatar
                           Container(
-                            width: 80,
-                            height: 80,
+                            width: 68,
+                            height: 68,
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(24),
+                              borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: Colors.white.withOpacity(0.3),
                                 width: 2,
@@ -399,19 +434,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 name.isNotEmpty ? name[0].toUpperCase() : '?',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 34,
+                                  fontSize: 28,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 10),
                           Text(
                             name,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                           const SizedBox(height: 4),
