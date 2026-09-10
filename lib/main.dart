@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
-import 'package:zhirox/providers/debt_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/auth/login_screen.dart';
 import 'package:zhirox/screens/customer/customer_dashboard.dart';
@@ -14,11 +13,13 @@ import 'package:zhirox/utils/constants.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Notifications are optional. Failure to initialize them must never prevent
-  // the application from reaching the login screen.
+  // Notification permission must never block login if the OS/plugin is not
+  // available. In-app notifications remain available through Supabase.
   try {
     await NotificationService.init();
-    await NotificationService.requestPermission();
+    if (!await NotificationService.isPermissionGranted()) {
+      await NotificationService.requestPermission();
+    }
   } catch (_) {}
 
   await ConnectivityService.instance.init();
@@ -33,7 +34,6 @@ class ZhiroxApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => DebtProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: Consumer<ThemeProvider>(
@@ -46,7 +46,9 @@ class ZhiroxApp extends StatelessWidget {
           darkTheme: _buildDarkTheme(),
           builder: (context, child) => Directionality(
             textDirection: TextDirection.rtl,
-            child: _ConnectivityBanner(child: child ?? const SizedBox.shrink()),
+            child: _ConnectivityBanner(
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
           home: const AuthWrapper(),
         ),
@@ -181,60 +183,20 @@ class AuthWrapper extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-
         if (!auth.isLoggedIn) return const LoginScreen();
 
-        // This repository builds the end-user/customer application only.
-        // Admin, employee and platform-owner accounts belong to C-Panel and
-        // are intentionally not routed to privileged screens from this binary.
+        // AuthProvider/PBService accept customer sessions only. This check is a
+        // final fail-closed guard rather than an alternate role route.
         if (auth.userRole != 'customer') {
-          return _WrongApplicationScreen(role: auth.userRole);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (auth.isLoggedIn) auth.logout();
+          });
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
-
         return const CustomerDashboard();
       },
-    );
-  }
-}
-
-class _WrongApplicationScreen extends StatelessWidget {
-  const _WrongApplicationScreen({required this.role});
-
-  final String role;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.admin_panel_settings_outlined, size: 58),
-                const SizedBox(height: 18),
-                const Text(
-                  'ئەم هەژمارە بۆ ئەپی بەکارهێنەر نییە',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'ڕۆڵ: $role\nبۆ بەڕێوبەر و کارمەند C-Panel بەکاربهێنە.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: () => context.read<AuthProvider>().logout(),
-                  icon: const Icon(Icons.logout),
-                  label: const Text('چوونەدەرەوە'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -289,7 +251,7 @@ class _ConnectivityBannerState extends State<_ConnectivityBanner> {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'ئۆفلاین — زانیارییەکان لەوانەیە نوێ نەبن',
+                          'ئینتەرنێت بەردەست نییە — زانیاری نوێ ناکرێتەوە',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 12,
