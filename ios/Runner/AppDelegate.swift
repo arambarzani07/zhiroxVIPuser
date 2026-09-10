@@ -1,6 +1,5 @@
 import Flutter
 import UIKit
-import workmanager_apple
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -8,15 +7,9 @@ import workmanager_apple
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // iOS/UIScene requires Workmanager launch handlers to be registered
-    // before application launch finishes, otherwise BGTaskScheduler can
-    // terminate the app with NSInternalInconsistencyException.
-    WorkmanagerPlugin.registerLaunchHandlers()
-
-    WorkmanagerPlugin.setPluginRegistrantCallback { registry in
-      GeneratedPluginRegistrant.register(with: registry)
-    }
-
+    // Background debt checks are handled by the backend. Do not register
+    // BGTaskScheduler / Workmanager launch handlers here: native NSExceptions
+    // during BGTask registration can terminate the app before Flutter starts.
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
