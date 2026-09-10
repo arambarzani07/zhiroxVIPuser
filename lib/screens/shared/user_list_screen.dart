@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
-import 'package:zhirox/providers/debt_provider.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
 import 'package:zhirox/screens/shared/add_user_screen.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
@@ -405,7 +403,10 @@ class _UserListScreenState extends State<UserListScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => UserProfileScreen(userId: user.id),
+                builder: (_) => UserProfileScreen(
+                  userId: user.id,
+                  openFinancialChat: widget.role == 'customer',
+                ),
               ),
             ).then((_) => _loadUsers());
           },
@@ -527,7 +528,15 @@ class _UserListScreenState extends State<UserListScreen> {
                           ),
                         ).then((_) => _loadUsers());
                       } else if (value == 'payment') {
-                        _showPaymentDialog(user);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(
+                              userId: user.id,
+                              openFinancialChat: true,
+                            ),
+                          ),
+                        ).then((_) => _loadUsers());
                       }
                     },
                     itemBuilder: (_) => [
@@ -582,283 +591,4 @@ class _UserListScreenState extends State<UserListScreen> {
     );
   }
 
-  Future<void> _showPaymentDialog(RecordModel user) async {
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final debts = await PBService.getDebts(
-        customerId: user.id,
-        // We fetch all to be safe and filter locally,
-        // to ensure we only get unpaid ones.
-      );
-
-      final unpaidDebts =
-          debts.where((d) => d.getStringValue('status') != 'paid').toList()
-            ..sort(
-              (a, b) => a
-                  .getStringValue('created')
-                  .compareTo(b.getStringValue('created')),
-            );
-
-      if (!mounted) return;
-      Navigator.pop(context); // Dismiss loading
-
-      if (unpaidDebts.isEmpty) {
-        AppHelpers.showSnackBar(context, 'هیچ قەرزێک نەماوە');
-        return;
-      }
-
-      final totalRemaining = _balances[user.id] ?? 0;
-      final amountController = TextEditingController();
-      final formKey = GlobalKey<FormState>();
-
-      String addCommas(String s) {
-        final parts = s.split('.');
-        final intPart = parts[0].replaceAll(RegExp(r'[^0-9]'), '');
-        if (intPart.isEmpty) return s;
-        final buf = StringBuffer();
-        for (int i = 0; i < intPart.length; i++) {
-          if (i > 0 && (intPart.length - i) % 3 == 0) buf.write(',');
-          buf.write(intPart[i]);
-        }
-        if (parts.length > 1) buf.write('.${parts[1]}');
-        return buf.toString();
-      }
-
-      await showDialog(
-        context: context,
-        builder: (ctx) => Directionality(
-          textDirection: TextDirection.rtl,
-          child: Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            insetPadding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 60,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.payments_outlined,
-                      color: Colors.green,
-                      size: 40,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'پارەدانەوە',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'خاوەن قەرز: ${user.getStringValue('name')}',
-                      style: const TextStyle(fontSize: 14, color: Colors.grey),
-                    ),
-                    Text(
-                      'کۆی ماوە: ${AppHelpers.formatCurrency(totalRemaining)}',
-                      style: TextStyle(
-                        color: Colors.red[400],
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Quick buttons
-                    Row(
-                      children: [25, 50, 75, 100].map((pct) {
-                        final val = (totalRemaining * pct / 100);
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 3),
-                            child: OutlinedButton(
-                              onPressed: () {
-                                amountController.text = addCommas(
-                                  val.toStringAsFixed(0),
-                                );
-                              },
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                side: BorderSide(
-                                  color: Colors.green.withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: Text(
-                                '$pct%',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Amount input
-                    TextFormField(
-                      controller: amountController,
-                      keyboardType: TextInputType.number,
-                      textDirection: TextDirection.ltr,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        _ThousandsInputFormatter(),
-                      ],
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'بڕ بنووسە';
-                        final n = double.tryParse(v.replaceAll(',', ''));
-                        if (n == null || n <= 0) return 'بڕ نادروستە';
-                        if (n > totalRemaining) return 'زیاترە لە ماوە';
-                        return null;
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'بڕی پارەدانەوە',
-                        prefixIcon: const Icon(Icons.attach_money),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Save button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          if (!formKey.currentState!.validate()) return;
-                          final amount = double.parse(
-                            amountController.text.replaceAll(',', '').trim(),
-                          );
-                          Navigator.pop(ctx);
-
-                          // Show loading again while processing
-                          if (mounted) {
-                            showDialog(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (_) => const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            );
-                          }
-
-                          try {
-                            final auth = context.read<AuthProvider>();
-                            final debtProvider = context.read<DebtProvider>();
-                            double left = amount;
-
-                            for (final debt in unpaidDebts) {
-                              if (left <= 0) break;
-                              final rem = debt.getDoubleValue('remaining');
-                              if (rem <= 0) continue;
-                              final pay = left >= rem ? rem : left;
-                              await debtProvider.addPayment(
-                                debtId: debt.id,
-                                amount: pay,
-                                note: 'پارەدانەوەی خێرا (Admin/Employee)',
-                                createdBy: auth.userId,
-                              );
-                              left -= pay;
-                            }
-
-                            if (mounted) {
-                              Navigator.pop(context); // Dismiss loading
-                              AppHelpers.showSnackBar(
-                                context,
-                                'پارەدانەوە تۆمارکرا ✓',
-                              );
-                              // Updates balance locally and fetches from server
-                              _loadBalancesInBackground();
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              Navigator.pop(context); // Dismiss loading
-                              AppHelpers.showSnackBar(
-                                context,
-                                'هەڵە: $e',
-                                isError: true,
-                              );
-                            }
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: const Text(
-                          'تۆمارکردن',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context); // Dismiss loading on error
-      AppHelpers.showSnackBar(
-        context,
-        AppHelpers.backendErrorMessage(
-          e,
-          fallback: 'نەتوانرا پارەدانەوە ئامادە بکرێت. دووبارە هەوڵ بدە.',
-        ),
-        isError: true,
-      );
-    }
-  }
-}
-
-class _ThousandsInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final text = newValue.text.replaceAll(',', '');
-    if (text.isEmpty) return newValue;
-    final number = int.tryParse(text);
-    if (number == null) return oldValue;
-    final formatted = number.toString().replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]},',
-    );
-    return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
-  }
 }

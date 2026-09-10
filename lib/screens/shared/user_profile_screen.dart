@@ -18,8 +18,13 @@ import 'package:zhirox/services/connectivity_service.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
+  final bool openFinancialChat;
 
-  const UserProfileScreen({super.key, required this.userId});
+  const UserProfileScreen({
+    super.key,
+    required this.userId,
+    this.openFinancialChat = false,
+  });
 
   @override
   State<UserProfileScreen> createState() => _UserProfileScreenState();
@@ -54,7 +59,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _financialRefreshInFlight = false;
   bool _financialRefreshPending = false;
   bool _financialAutoJumpPending = false;
-  int _customerSection = 0;
+  late int _customerSection;
   int _employeeSection = 0;
   String? _loadError;
   bool _hasNewFinancialActivity = false;
@@ -86,6 +91,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _customerSection = widget.openFinancialChat ? 1 : 0;
     _loadData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_subscribeFinancialRealtime());
@@ -162,6 +168,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _isLoading = false;
         _loadError = null;
       });
+      if (role == 'customer' && _customerSection == 1) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _jumpToLatest(animated: false);
+        });
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {

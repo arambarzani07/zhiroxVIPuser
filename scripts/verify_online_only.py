@@ -145,4 +145,15 @@ if violations:
         print(f' - {item}')
     sys.exit(1)
 
+# Financial Chat must remain the single customer debt/payment workspace.
+profile_source = (ROOT / 'lib/screens/shared/user_profile_screen.dart').read_text(encoding='utf-8')
+customer_list_source = (ROOT / 'lib/screens/shared/user_list_screen.dart').read_text(encoding='utf-8')
+require('openFinancialChat' in profile_source, 'Customer profile must support direct Financial Chat entry')
+require('openFinancialChat: widget.role == \'customer\'' in customer_list_source,
+        'Customer list tap must open Financial Chat directly')
+require('_showPaymentDialog(RecordModel user)' not in customer_list_source,
+        'Customer list must not duplicate payment recording outside Financial Chat')
+require('DebtProvider' not in customer_list_source,
+        'Customer list must not own debt/payment mutation logic')
+
 print('Online-only policy verification passed.')
