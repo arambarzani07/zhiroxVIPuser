@@ -52,3 +52,5 @@ jobs:
       - name: Print direct Safari URL
         run: |
           echo "https://github.com/${{ github.repository }}/releases/download/safari-download/zhiroxVIPuser-unsigned.ipa"
+
+# Refreshed after iOS startup-crash fix: f6ef77a
