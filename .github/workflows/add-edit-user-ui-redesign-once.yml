@@ -1,0 +1,37 @@
+name: Add Edit User UI Redesign Once
+'on':
+  push:
+    branches:
+      - owner-source
+    paths:
+      - .github/workflows/add-edit-user-ui-redesign-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-both:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Patch Owner forms
+        run: |
+          python scripts/add_edit_user_ui_redesign.py
+          git add lib/screens/shared/add_user_screen.dart lib/screens/shared/user_profile_screen.dart
+          git commit -m "Organize add and edit user forms"
+          git push origin owner-source
+      - name: Patch User forms
+        run: |
+          cp scripts/add_edit_user_ui_redesign.py /tmp/add_edit_user_ui_redesign.py
+          git fetch origin user-source
+          git checkout user-source
+          python /tmp/add_edit_user_ui_redesign.py
+          git add lib/screens/shared/add_user_screen.dart lib/screens/shared/user_profile_screen.dart
+          git commit -m "Organize add and edit user forms"
+          git push origin user-source
