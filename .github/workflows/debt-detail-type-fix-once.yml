@@ -1,0 +1,37 @@
+name: Debt Detail Type Fix Once
+'on':
+  push:
+    branches:
+      - owner-source
+    paths:
+      - .github/workflows/debt-detail-type-fix-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-both:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Patch Owner debt detail type
+        run: |
+          python scripts/debt_detail_type_fix.py
+          git add lib/screens/shared/debt_detail_screen.dart
+          git commit -m "Fix debt detail item total type"
+          git push origin owner-source
+      - name: Patch User debt detail type
+        run: |
+          cp scripts/debt_detail_type_fix.py /tmp/debt_detail_type_fix.py
+          git fetch origin user-source
+          git checkout user-source
+          python /tmp/debt_detail_type_fix.py
+          git add lib/screens/shared/debt_detail_screen.dart
+          git commit -m "Fix debt detail item total type"
+          git push origin user-source
