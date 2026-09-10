@@ -38,43 +38,51 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   }
 
   Future<void> _loadPending() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+
     final cacheKey = 'cached_pending_${widget.adminId}';
+    var loadedUsers = <RecordModel>[];
 
     try {
-      _pendingUsers = await PBService.getUsers(
+      loadedUsers = await PBService.getUsers(
         role: 'customer',
         adminId: widget.adminId,
         approved: false,
       );
 
-      // Cache
       final prefs = await SharedPreferences.getInstance();
-      final usersJson = _pendingUsers.map((u) => u.toJson()).toList();
+      final usersJson = loadedUsers.map((u) => u.toJson()).toList();
       await prefs.setString(cacheKey, jsonEncode(usersJson));
-    } catch (e) {
-      // Offline fallback
+    } catch (_) {
       try {
         final prefs = await SharedPreferences.getInstance();
         final cachedString = prefs.getString(cacheKey);
 
         if (cachedString != null) {
           final List<dynamic> decoded = jsonDecode(cachedString);
-          _pendingUsers = decoded
+          loadedUsers = decoded
               .map((item) => RecordModel.fromJson(item))
               .toList();
         }
       } catch (_) {}
     }
-    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+    setState(() {
+      _pendingUsers = loadedUsers;
+      _isLoading = false;
+    });
   }
 
   Future<void> _approve(RecordModel user) async {
     try {
       await PBService.updateUser(user.id, {'approved': true});
+      if (!mounted) return;
       AppHelpers.showSnackBar(context, 'کڕیار قبوڵ کرا ✅');
-      _loadPending();
+      await _loadPending();
     } catch (e) {
+      if (!mounted) return;
       AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
     }
   }
@@ -85,13 +93,15 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       title: AppStrings.reject,
       message: 'دڵنیایت لە ڕەتکردنەوەی ئەم داواکاریە؟',
     );
-    if (!confirm) return;
+    if (!mounted || !confirm) return;
 
     try {
       await PBService.deleteUser(user.id);
+      if (!mounted) return;
       AppHelpers.showSnackBar(context, 'داواکاری ڕەتکرایەوە');
-      _loadPending();
+      await _loadPending();
     } catch (e) {
+      if (!mounted) return;
       AppHelpers.showSnackBar(context, 'هەڵە: $e', isError: true);
     }
   }
@@ -127,7 +137,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: const Icon(
@@ -154,7 +164,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                                   ? '...'
                                   : '${_pendingUsers.length} داواکاری',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                                 fontSize: 13,
                               ),
                             ),
@@ -183,13 +193,13 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.08),
+                      color: Colors.green.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Icon(
                       Icons.check_circle_outline,
                       size: 56,
-                      color: Colors.green.withOpacity(0.4),
+                      color: Colors.green.withValues(alpha: 0.4),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -259,7 +269,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
               ? []
               : [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -278,7 +288,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                     height: 50,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [avatarColor, avatarColor.withOpacity(0.7)],
+                        colors: [
+                          avatarColor,
+                          avatarColor.withValues(alpha: 0.7),
+                        ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -341,7 +354,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
+                      color: Colors.orange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -385,7 +398,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.green.withOpacity(0.25),
+                              color: Colors.green.withValues(alpha: 0.25),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -421,10 +434,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                       child: Container(
                         height: 42,
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.08),
+                          color: Colors.red.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: Colors.red.withOpacity(0.2),
+                            color: Colors.red.withValues(alpha: 0.2),
                           ),
                         ),
                         child: Row(
