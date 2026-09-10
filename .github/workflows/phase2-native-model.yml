@@ -3,193 +3,102 @@ name: Zhirox Phase 2 Native Model Migration
 on:
   push:
     branches: [zhirox-user-structure-v2]
+    paths: [.phase2-trigger]
 
 permissions:
   contents: write
 
 jobs:
   migrate:
-    if: github.event.head_commit.message == 'Run phase 2 native model migration'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout structure branch
+        uses: actions/checkout@v4
         with:
           ref: zhirox-user-structure-v2
           fetch-depth: 0
 
-      - uses: subosito/flutter-action@v2
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Migrate legacy compatibility surface
+      - name: Remove legacy PocketBase compatibility surface
         shell: bash
         run: |
-          python3 <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
           import re
 
           root = Path('.')
-          model = root / 'lib/models/record_model.dart'
-          model.parent.mkdir(parents=True, exist_ok=True)
-          model.write_text(r'''import 'dart:convert';
-
-/// Lightweight record used by Zhirox UI while all I/O is handled by Supabase.
-/// This is intentionally application-owned so the customer binary has no
-/// dependency on the legacy PocketBase SDK.
-class RecordModel {
-  final Map<String, dynamic> data;
-  final Map<String, List<RecordModel>> expand;
-
-  RecordModel({Map<String, dynamic>? data, Map<String, List<RecordModel>>? expand})
-      : data = Map<String, dynamic>.from(data ?? const {}),
-        expand = Map<String, List<RecordModel>>.from(expand ?? const {});
-
-  factory RecordModel.fromJson(Map<String, dynamic> json) {
-    final raw = Map<String, dynamic>.from(json);
-    final expansion = <String, List<RecordModel>>{};
-    final rawExpand = raw.remove('expand');
-    if (rawExpand is Map) {
-      for (final entry in rawExpand.entries) {
-        final value = entry.value;
-        if (value is List) {
-          expansion[entry.key.toString()] = value
-              .whereType<Map>()
-              .map((e) => RecordModel.fromJson(Map<String, dynamic>.from(e)))
-              .toList();
-        } else if (value is Map) {
-          expansion[entry.key.toString()] = [
-            RecordModel.fromJson(Map<String, dynamic>.from(value)),
-          ];
-        }
-      }
-    }
-    return RecordModel(data: raw, expand: expansion);
-  }
-
-  String get id => getStringValue('id');
-  String get created => getStringValue('created');
-  String get updated => getStringValue('updated');
-  String get collectionId => getStringValue('collectionId');
-  String get collectionName => getStringValue('collectionName');
-
-  String getStringValue(String key) {
-    final value = data[key];
-    if (value == null) return '';
-    if (value is String) return value;
-    if (value is DateTime) return value.toUtc().toIso8601String();
-    if (value is Map || value is List) return jsonEncode(value);
-    return value.toString();
-  }
-
-  bool getBoolValue(String key) {
-    final value = data[key];
-    if (value is bool) return value;
-    if (value is num) return value != 0;
-    if (value is String) {
-      final normalized = value.toLowerCase().trim();
-      return normalized == 'true' || normalized == '1' || normalized == 'yes';
-    }
-    return false;
-  }
-
-  double getDoubleValue(String key) {
-    final value = data[key];
-    if (value is num) return value.toDouble();
-    return double.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  int getIntValue(String key) {
-    final value = data[key];
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  Map<String, dynamic> toJson() {
-    final out = Map<String, dynamic>.from(data);
-    if (expand.isNotEmpty) {
-      out['expand'] = expand.map(
-        (key, value) => MapEntry(key, value.map((e) => e.toJson()).toList()),
-      );
-    }
-    return out;
-  }
-}
-''')
+          old_import = "import 'package:pocketbase/pocketbase.dart';"
+          new_import = "import 'package:zhirox/models/record_model.dart';"
 
           for path in (root / 'lib').rglob('*.dart'):
-            text = path.read_text()
-            text = text.replace(
-              "import 'package:pocketbase/pocketbase.dart';",
-              "import 'package:zhirox/models/record_model.dart';",
-            )
-            # Plaintext passwords are not part of the Supabase profile model.
-            text = text.replace("getStringValue('password_text')", "''")
-            path.write_text(text)
+              text = path.read_text()
+              text = text.replace(old_import, new_import)
+              text = text.replace("getStringValue('password_text')", "''")
+              path.write_text(text)
 
           login = root / 'lib/screens/auth/login_screen.dart'
           if login.exists():
-            text = login.read_text()
-            text = text.replace(
-              "import 'package:zhirox/screens/auth/admin_management_screen.dart';\n",
-              '',
-            )
-            text = re.sub(
-              r'\n\s*/\*\s*TextButton\(.*?child:\s*const Text\([^\n]*بەڕێوبردنی بەڕێوبەرەکان[^\n]*\),\s*\),\s*\*/\s*',
-              '\n',
-              text,
-              flags=re.S,
-            )
-            login.write_text(text)
+              text = login.read_text()
+              text = text.replace("import 'package:zhirox/screens/auth/admin_management_screen.dart';\n", '')
+              login.write_text(text)
 
-          for rel in [
-            'lib/screens/auth/admin_management_screen.dart',
-            'lib/screens/auth/register_admin_screen.dart',
-          ]:
-            p = root / rel
-            if p.exists():
-              p.unlink()
+          for rel in (
+              'lib/screens/auth/admin_management_screen.dart',
+              'lib/screens/auth/register_admin_screen.dart',
+          ):
+              path = root / rel
+              if path.exists():
+                  path.unlink()
 
           pubspec = root / 'pubspec.yaml'
           text = pubspec.read_text()
+          text = re.sub(r'(?m)^\s*pocketbase:\s*[^\n]+\n', '', text)
           text = re.sub(r'(?m)^\s*# Temporary UI compatibility type only.*\n', '', text)
           text = re.sub(r'(?m)^\s*# Phase 2 replaces this.*\n', '', text)
-          text = re.sub(r'(?m)^\s*pocketbase:\s*[^\n]+\n', '', text)
           pubspec.write_text(text)
 
           pbx = root / 'ios/Runner.xcodeproj/project.pbxproj'
           if pbx.exists():
-            text = pbx.read_text()
-            text = text.replace('IPHONEOS_DEPLOYMENT_TARGET = 13.0;',
-                                'IPHONEOS_DEPLOYMENT_TARGET = 15.0;')
-            pbx.write_text(text)
+              text = pbx.read_text().replace(
+                  'IPHONEOS_DEPLOYMENT_TARGET = 13.0;',
+                  'IPHONEOS_DEPLOYMENT_TARGET = 15.0;',
+              )
+              pbx.write_text(text)
 
-          # The migration must leave no legacy SDK import or plaintext password field.
           legacy_imports = []
           password_refs = []
           for path in (root / 'lib').rglob('*.dart'):
-            text = path.read_text()
-            if 'package:pocketbase/' in text:
-              legacy_imports.append(str(path))
-            if 'password_text' in text:
-              password_refs.append(str(path))
+              text = path.read_text()
+              if 'package:pocketbase/' in text:
+                  legacy_imports.append(str(path))
+              if 'password_text' in text:
+                  password_refs.append(str(path))
+
           if legacy_imports:
-            raise SystemExit('Legacy PocketBase imports remain: ' + ', '.join(legacy_imports))
+              raise SystemExit('Legacy PocketBase imports remain: ' + ', '.join(legacy_imports))
           if password_refs:
-            raise SystemExit('password_text references remain: ' + ', '.join(password_refs))
+              raise SystemExit('password_text references remain: ' + ', '.join(password_refs))
           PY
 
-      - name: Refresh lockfile
+      - name: Refresh dependencies
         run: flutter pub get
 
-      - name: Compile-check migrated source
+      - name: Analyze migrated source
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Remove one-time migration workflow
-        run: rm .github/workflows/phase2-native-model.yml
+      - name: Run tests
+        run: flutter test
 
-      - name: Commit migration
+      - name: Remove one-time trigger and workflow
+        run: rm -f .phase2-trigger .github/workflows/phase2-native-model.yml
+
+      - name: Commit phase 2
         run: |
           git config user.name 'zhirox-structure-bot'
           git config user.email 'actions@users.noreply.github.com'
