@@ -28,6 +28,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Verify online-only policy
+        run: python3 scripts/verify_online_only.py
+
       - name: Prepare independent User iOS identity
         run: |
           sed -i '' 's/com.karoxghafoor.zhirox/com.karoxghafoor.zhirox.user/g' ios/Runner.xcodeproj/project.pbxproj
