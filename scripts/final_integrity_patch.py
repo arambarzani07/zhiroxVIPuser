@@ -3,12 +3,7 @@ from pathlib import Path
 path = Path('lib/services/pb_service.dart')
 text = path.read_text()
 
-marker = """  static String _sanitize(String value) {
-    return value.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\"');
-  }
-"""
-helper = marker + """
-  static bool _isRetryableAuthException(AuthException error) {
+helper = """  static bool _isRetryableAuthException(AuthException error) {
     final text = '${error.runtimeType} ${error.message}'.toLowerCase();
     return text.contains('retryable') ||
         text.contains('network') ||
@@ -23,11 +18,13 @@ helper = marker + """
         text.contains('internal server error') ||
         text.contains('too many requests');
   }
+
 """
 if '_isRetryableAuthException' not in text:
-    if marker not in text:
-        raise SystemExit('sanitize marker not found')
-    text = text.replace(marker, helper, 1)
+    anchor = '  static RecordModel _profileRecord('
+    if anchor not in text:
+        raise SystemExit('profileRecord anchor not found')
+    text = text.replace(anchor, helper + anchor, 1)
 
 old_auth = """    } on AuthException catch (_) {
       throw Exception('وشەی نهێنی هەڵەیە');
