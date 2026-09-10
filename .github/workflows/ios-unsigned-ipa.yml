@@ -2,7 +2,7 @@ name: iOS Unsigned IPA
 
 on:
   push:
-    branches: [main]
+    branches: [main, owner-source, user-source]
   workflow_dispatch:
 
 permissions:
