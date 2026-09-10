@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
-import 'package:zhirox/screens/shared/debt_list_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -45,9 +44,6 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                 )
               : const SizedBox.shrink(),
           _visitedTabs.contains(1)
-              ? const DebtListScreen(key: ValueKey('employee-debts'))
-              : const SizedBox.shrink(),
-          _visitedTabs.contains(2)
               ? UserProfileScreen(
                   key: const ValueKey('employee-profile'),
                   userId: auth.userId,
@@ -80,12 +76,6 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                 ),
                 _buildNavItem(
                   index: 1,
-                  icon: Icons.receipt_long_outlined,
-                  activeIcon: Icons.receipt_long_rounded,
-                  label: 'قەرز',
-                ),
-                _buildNavItem(
-                  index: 2,
                   icon: Icons.person_outline_rounded,
                   activeIcon: Icons.person_rounded,
                   label: 'پرۆفایل',

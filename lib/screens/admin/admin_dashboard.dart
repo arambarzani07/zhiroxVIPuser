@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
-import 'package:zhirox/screens/shared/debt_list_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/pdf_service.dart';
@@ -117,7 +116,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
         role: 'employee',
         adminId: auth.userId,
       ),
-      DebtListScreen(key: const ValueKey('debts')),
       PendingRequestsScreen(
         key: ValueKey('pending_${auth.userId}'),
         adminId: auth.userId,
@@ -168,12 +166,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 _buildNavItem(2, Icons.badge_outlined, Icons.badge, 'کارمەند'),
                 _buildNavItem(
                   3,
-                  Icons.receipt_long_outlined,
-                  Icons.receipt_long,
-                  'قەرز',
-                ),
-                _buildNavItem(
-                  4,
                   Icons.pending_actions_outlined,
                   Icons.pending_actions,
                   'داواکان',
