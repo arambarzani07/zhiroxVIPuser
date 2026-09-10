@@ -309,7 +309,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               surfaceTintColor: Colors.transparent,
                               elevation: 6,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(12),
                               ),
                               icon: Container(
                                 width: 36,
@@ -1465,19 +1465,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         child: Container(
           decoration: BoxDecoration(
             color: isDark ? AppDarkColors.card : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: isDark
-                ? []
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : const Color(0xFFE4E7EC),
+            ),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1486,10 +1482,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     Icon(Icons.edit_outlined, size: 20, color: _accentColor),
                     const SizedBox(width: 8),
                     Text(
-                      'گۆڕانکاری لە زانیارییەکان',
+                      'زانیاری هەژمار',
                       style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
                         color: isDark
                             ? AppDarkColors.textPrimary
                             : Colors.black87,
@@ -1497,14 +1493,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
                 _buildTextField(
                   controller: _nameController,
                   label: AppStrings.name,
                   icon: Icons.person_outline,
                   readOnly: !canEditInfo,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 _buildTextField(
                   controller: _phoneController,
                   label: AppStrings.phone,
@@ -1515,7 +1511,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
                 // Password field: hide from employees viewing other users' profiles
                 if (!isEmployeeView || auth.userId == widget.userId) ...[
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                   _buildTextField(
                     controller: _passwordController,
                     label: AppStrings.password,
@@ -1533,7 +1529,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ],
                 SizedBox(
                   width: double.infinity,
-                  height: 50,
+                  height: 46,
                   child: ElevatedButton(
                     onPressed: _isSaving ? null : _saveProfileChanges,
                     style: ElevatedButton.styleFrom(
