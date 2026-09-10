@@ -1,0 +1,52 @@
+name: Zhirox User Structure V2 Check
+
+on:
+  push:
+    branches: [zhirox-user-structure-v2]
+  workflow_dispatch:
+
+concurrency:
+  group: zhirox-user-structure-v2
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-user-app:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Test
+        run: flutter test
+
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install
+
+      - name: Build iOS release without signing
+        run: flutter build ios --release --no-codesign
+
+      - name: Verify backend identity
+        run: |
+          APP=build/ios/iphoneos/Runner.app
+          grep -R -a -q 'zfuvnczdqifihsnrhqzj' "$APP"
+          if grep -R -a -q 'zhirox.duckdns.org' "$APP"; then
+            echo 'Legacy PocketBase backend detected' >&2
+            exit 1
+          fi
