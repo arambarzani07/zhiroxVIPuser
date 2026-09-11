@@ -185,7 +185,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
                   Expanded(
                     child: _metricCard(
                       isDark: isDark,
-                      icon: Icons.event_upcoming_rounded,
+                      icon: Icons.event_note_rounded,
                       title: 'تا ٧ ڕۆژ',
                       value: AppHelpers.formatCurrency(snapshot.due7Amount),
                       subtitle: '${snapshot.due7Count} قەرز',
