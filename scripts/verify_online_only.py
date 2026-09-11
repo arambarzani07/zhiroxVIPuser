@@ -655,6 +655,18 @@ if edition == 'owner-source':
         fail('lib/screens/auth/admin_management_screen.dart: load-more lock must always release in finally')
     if owner_management.count("return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';") < 2:
         fail('lib/screens/auth/admin_management_screen.dart: subscription day validation must match backend bounds')
+    for marker in (
+        "_SubscriptionPlan('monthly',",
+        "_SubscriptionPlan('quarterly',",
+        "_SubscriptionPlan('semiannual',",
+        "_SubscriptionPlan('annual',",
+        "_SubscriptionPlan('custom',",
+        "labelText: 'پلانی بەشداری'",
+        'subscriptionPlan: selectedPlan',
+        '_subscriptionPlanLabel(subscriptionPlan)',
+    ):
+        if marker not in owner_management:
+            fail(f'lib/screens/auth/admin_management_screen.dart: subscription-plan marker missing: {marker}')
 
 if violations:
     print('ONLINE-ONLY POLICY FAILED')

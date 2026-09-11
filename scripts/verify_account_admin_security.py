@@ -8,6 +8,9 @@ update_text = (ROOT / 'supabase/functions/update-account/index.ts').read_text(en
 migration_text = (
     ROOT / 'supabase/migrations/20260911133708_enforce_operational_access_and_audit_privileges.sql'
 ).read_text(encoding='utf-8')
+subscription_plan_migration = (
+    ROOT / 'supabase/migrations/20260911160000_add_admin_subscription_plans.sql'
+).read_text(encoding='utf-8')
 
 required = (
     'let debtLimit = 0;',
@@ -28,6 +31,10 @@ required = (
     'async function isOperational(',
     '.select("receipt_image_path")',
     'row.receipt_image_path',
+    'const subscriptionPlanDays: Record<string, number>',
+    'function resolveSubscriptionPlan(',
+    'subscription_plan: resolvedSubscription?.plan ?? null,',
+    'subscription_plan: resolvedSubscription.plan,',
 )
 for marker in required:
     if marker not in text:
@@ -59,5 +66,17 @@ for marker in (
 ):
     if marker not in migration_text:
         raise SystemExit(f'operational access migration marker missing: {marker}')
+
+for marker in (
+    'add column if not exists subscription_plan text',
+    'profiles_subscription_plan_check',
+    "'monthly'",
+    "'quarterly'",
+    "'semiannual'",
+    "'annual'",
+    "'custom'",
+):
+    if marker not in subscription_plan_migration:
+        raise SystemExit(f'subscription-plan migration marker missing: {marker}')
 
 print('account-admin security boundaries verified')

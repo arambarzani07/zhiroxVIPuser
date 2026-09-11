@@ -22,6 +22,7 @@ create table if not exists public.profiles (
   can_edit_debts boolean default false not null,
   can_send_notifications boolean default false not null,
   subscription_end timestamp with time zone,
+  subscription_plan text,
   telegram_chat_id text default ''::text not null,
   created_at timestamp with time zone default now() not null,
   updated_at timestamp with time zone default now() not null,
@@ -1158,4 +1159,3 @@ grant execute on function public.set_my_telegram_credentials(text, text) to auth
 grant execute on function public.set_my_telegram_credentials(text, text) to service_role;
 
 insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types) values ('receipts','receipts',false,10485760,array['image/jpeg','image/png','image/webp','application/pdf']::text[]) on conflict (id) do update set name=excluded.name, public=excluded.public, file_size_limit=excluded.file_size_limit, allowed_mime_types=excluded.allowed_mime_types;
-

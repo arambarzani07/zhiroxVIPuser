@@ -7,6 +7,29 @@ import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 
+class _SubscriptionPlan {
+  const _SubscriptionPlan(this.code, this.label, this.days);
+
+  final String code;
+  final String label;
+  final int? days;
+}
+
+const _subscriptionPlans = <_SubscriptionPlan>[
+  _SubscriptionPlan('monthly', 'مانگانە — ٣٠ ڕۆژ', 30),
+  _SubscriptionPlan('quarterly', '٣ مانگ — ٩٠ ڕۆژ', 90),
+  _SubscriptionPlan('semiannual', '٦ مانگ — ١٨٠ ڕۆژ', 180),
+  _SubscriptionPlan('annual', 'ساڵانە — ٣٦٥ ڕۆژ', 365),
+  _SubscriptionPlan('custom', 'ماوەی تایبەت', null),
+];
+
+String _subscriptionPlanLabel(String code) {
+  for (final plan in _subscriptionPlans) {
+    if (plan.code == code) return plan.label;
+  }
+  return 'ماوەی تایبەت';
+}
+
 class AdminManagementScreen extends StatefulWidget {
   const AdminManagementScreen({super.key});
 
@@ -355,6 +378,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     final formKey = GlobalKey<FormState>();
     bool loading = false;
     bool obscure = true;
+    String selectedPlan = 'monthly';
 
     try {
       await showDialog<void>(
@@ -475,21 +499,51 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                           ),
                         ),
                         const SizedBox(height: 9),
-                        _buildField(
-                          daysCtrl,
-                          'ماوەی بەشداری (ڕۆژ)',
-                          Icons.event_available_outlined,
-                          isDark: isDark,
-                          keyboardType: TextInputType.number,
-                          isLtr: true,
-                          validator: (value) {
-                            final days = int.tryParse(value?.trim() ?? '');
-                            if (days == null || days < 1 || days > 3650) {
-                              return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';
-                            }
-                            return null;
-                          },
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedPlan,
+                          decoration: const InputDecoration(
+                            labelText: 'پلانی بەشداری',
+                            prefixIcon: Icon(Icons.workspace_premium_outlined),
+                          ),
+                          items: _subscriptionPlans
+                              .map(
+                                (plan) => DropdownMenuItem(
+                                  value: plan.code,
+                                  child: Text(plan.label),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: loading
+                              ? null
+                              : (value) {
+                                  if (value == null) return;
+                                  final plan = _subscriptionPlans.firstWhere(
+                                    (item) => item.code == value,
+                                  );
+                                  setDialogState(() => selectedPlan = value);
+                                  if (plan.days != null) {
+                                    daysCtrl.text = plan.days.toString();
+                                  }
+                                },
                         ),
+                        if (selectedPlan == 'custom') ...[
+                          const SizedBox(height: 12),
+                          _buildField(
+                            daysCtrl,
+                            'ماوەی بەشداری (ڕۆژ)',
+                            Icons.event_available_outlined,
+                            isDark: isDark,
+                            keyboardType: TextInputType.number,
+                            isLtr: true,
+                            validator: (value) {
+                              final days = int.tryParse(value?.trim() ?? '');
+                              if (days == null || days < 1 || days > 3650) {
+                                return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -514,6 +568,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                               adminName: adminNameCtrl.text.trim(),
                               phone: phoneCtrl.text.trim(),
                               password: passCtrl.text,
+                              subscriptionPlan: selectedPlan,
                               subscriptionDays:
                                   int.parse(daysCtrl.text.trim()),
                             );
@@ -563,10 +618,20 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     }
   }
 
-  Future<void> _showRenewDialog(String adminId) async {
-    final daysCtrl = TextEditingController(text: '30');
+  Future<void> _showRenewDialog(String adminId, String currentPlan) async {
+    final hasCurrentPlan = _subscriptionPlans.any(
+      (plan) => plan.code == currentPlan,
+    );
+    final selectedCurrentPlan = hasCurrentPlan ? currentPlan : 'custom';
+    final currentPlanDays = _subscriptionPlans
+        .firstWhere((plan) => plan.code == selectedCurrentPlan)
+        .days;
+    final daysCtrl = TextEditingController(
+      text: (currentPlanDays ?? 30).toString(),
+    );
     final formKey = GlobalKey<FormState>();
     bool loading = false;
+    String selectedPlan = selectedCurrentPlan;
 
     try {
       await showDialog<void>(
@@ -586,20 +651,55 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
               ),
               content: Form(
                 key: formKey,
-                child: _buildField(
-                  daysCtrl,
-                  'ژمارەی ڕۆژ',
-                  Icons.event_repeat_rounded,
-                  isDark: isDark,
-                  keyboardType: TextInputType.number,
-                  isLtr: true,
-                  validator: (value) {
-                    final days = int.tryParse(value?.trim() ?? '');
-                    if (days == null || days < 1 || days > 3650) {
-                      return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';
-                    }
-                    return null;
-                  },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedPlan,
+                      decoration: const InputDecoration(
+                        labelText: 'پلانی بەشداری',
+                        prefixIcon: Icon(Icons.workspace_premium_outlined),
+                      ),
+                      items: _subscriptionPlans
+                          .map(
+                            (plan) => DropdownMenuItem(
+                              value: plan.code,
+                              child: Text(plan.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: loading
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              final plan = _subscriptionPlans.firstWhere(
+                                (item) => item.code == value,
+                              );
+                              setDialogState(() => selectedPlan = value);
+                              if (plan.days != null) {
+                                daysCtrl.text = plan.days.toString();
+                              }
+                            },
+                    ),
+                    if (selectedPlan == 'custom') ...[
+                      const SizedBox(height: 12),
+                      _buildField(
+                        daysCtrl,
+                        'ژمارەی ڕۆژ',
+                        Icons.event_repeat_rounded,
+                        isDark: isDark,
+                        keyboardType: TextInputType.number,
+                        isLtr: true,
+                        validator: (value) {
+                          final days = int.tryParse(value?.trim() ?? '');
+                          if (days == null || days < 1 || days > 3650) {
+                            return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ],
                 ),
               ),
               actions: [
@@ -618,6 +718,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                           try {
                             await PBService.renewAdminSubscription(
                               adminId,
+                              selectedPlan,
                               days,
                             );
                             if (!ctx.mounted || !mounted) return;
@@ -828,7 +929,7 @@ class _AdminCard extends StatelessWidget {
 
   final Map<String, dynamic> data;
   final bool isDark;
-  final void Function(String) onRenew;
+  final void Function(String, String) onRenew;
   final void Function(String, String, int) onDelete;
 
   @override
@@ -840,6 +941,7 @@ class _AdminCard extends StatelessWidget {
     final adminName = admin.getStringValue('name');
     final phone = admin.getStringValue('phone');
     final subscriptionEnd = admin.getStringValue('subscription_end');
+    final subscriptionPlan = admin.getStringValue('subscription_plan');
     final endDate = DateTime.tryParse(subscriptionEnd);
 
     final status = _subscriptionStatus(endDate);
@@ -948,7 +1050,10 @@ class _AdminCard extends StatelessWidget {
                   ),
                   onSelected: (value) {
                     if (value == 'renew') {
-                      onRenew(admin.id);
+                      onRenew(
+                        admin.id,
+                        subscriptionPlan.isEmpty ? 'custom' : subscriptionPlan,
+                      );
                     } else if (value == 'delete') {
                       onDelete(
                         admin.id,
@@ -1005,6 +1110,11 @@ class _AdminCard extends StatelessWidget {
                 _meta(
                   Icons.people_outline_rounded,
                   '$customerCount کڕیار',
+                  textSecondary,
+                ),
+                _meta(
+                  Icons.workspace_premium_outlined,
+                  _subscriptionPlanLabel(subscriptionPlan),
                   textSecondary,
                 ),
                 _meta(

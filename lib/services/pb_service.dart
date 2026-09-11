@@ -199,6 +199,7 @@ class PBService {
     required String adminName,
     required String phone,
     required String password,
+    required String subscriptionPlan,
     required int subscriptionDays,
   }) {
     return _invokeCreateAccount({
@@ -207,6 +208,7 @@ class PBService {
       'name': adminName,
       'phone': phone.trim(),
       'password': password,
+      'subscription_plan': subscriptionPlan,
       'subscription_days': subscriptionDays,
     });
   }
@@ -282,7 +284,11 @@ class PBService {
     };
   }
 
-  static Future<void> renewAdminSubscription(String adminId, int days) async {
+  static Future<void> renewAdminSubscription(
+    String adminId,
+    String subscriptionPlan,
+    int days,
+  ) async {
     if (days < 1 || days > 3650) throw Exception('invalid_input');
     await ensureInitialized();
     final response = await client.functions.invoke(
@@ -290,6 +296,7 @@ class PBService {
       body: {
         'action': 'renew_subscription',
         'admin_id': adminId,
+        'subscription_plan': subscriptionPlan,
         'days': days,
       },
     );
