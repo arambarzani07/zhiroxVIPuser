@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
-import 'package:zhirox/providers/debt_provider.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/pdf_service.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
+import 'package:zhirox/screens/shared/financial_payment_flow.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 
@@ -1110,7 +1110,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     );
     if (!mounted || !confirm) return;
     try {
-      await context.read<DebtProvider>().removeDebt(widget.debtId);
+      await PBService.deleteDebt(widget.debtId);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
@@ -1125,331 +1125,21 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     }
   }
 
-  Future<void> _showAddPaymentDialog() async {
-    final amountController = TextEditingController();
-    final noteController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final remaining = _debt!.getDoubleValue('remaining');
-    final currency = _debt!.getStringValue('currency');
-    final dollarRate = _debt!.getDoubleValue('dollar_rate');
-    bool isSubmitting = false;
-
-    await showModalBottomSheet(
+  Future<void> _showAddPaymentDialog({double? initialStorageAmount}) async {
+    final debt = _debt;
+    if (debt == null) return;
+    final auth = context.read<AuthProvider>();
+    final saved = await FinancialPaymentFlow.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (sheetCtx, setSheetState) {
-          final isDark = Theme.of(sheetCtx).brightness == Brightness.dark;
-          return Container(
-            decoration: BoxDecoration(
-              color: isDark ? AppDarkColors.card : Colors.white,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-            ),
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(sheetCtx).viewInsets.bottom,
-              left: 24,
-              right: 24,
-              top: 8,
-            ),
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Handle
-                  Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? AppDarkColors.cardBorder
-                          : Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-
-                  // Title
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.payments,
-                          color: Colors.green,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            AppStrings.addPayment,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? AppDarkColors.textPrimary : null,
-                            ),
-                          ),
-                          Text(
-                            'ماوە: ${AppHelpers.formatCurrencyWithType((currency == 'USD' && dollarRate > 0) ? remaining / dollarRate : remaining, (currency == 'USD' && dollarRate > 0) ? 'USD' : 'IQD', dollarRate: dollarRate, showConversion: false)}',
-                            style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 13,
-                            ),
-                            textDirection: TextDirection.ltr,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // ─── Quick Pay Buttons ───
-                  Row(
-                    children: [
-                      _buildQuickPayBtn(
-                        '25%',
-                        (currency == 'USD' && dollarRate > 0)
-                            ? (remaining * 0.25) / dollarRate
-                            : remaining * 0.25,
-                        amountController,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildQuickPayBtn(
-                        '50%',
-                        (currency == 'USD' && dollarRate > 0)
-                            ? (remaining * 0.50) / dollarRate
-                            : remaining * 0.50,
-                        amountController,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildQuickPayBtn(
-                        '75%',
-                        (currency == 'USD' && dollarRate > 0)
-                            ? (remaining * 0.75) / dollarRate
-                            : remaining * 0.75,
-                        amountController,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildQuickPayBtn(
-                        '100%',
-                        (currency == 'USD' && dollarRate > 0)
-                            ? remaining / dollarRate
-                            : remaining,
-                        amountController,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Amount Field
-                  Container(
-                    decoration: BoxDecoration(
-                      color: isDark ? AppDarkColors.inputFill : Colors.grey[50],
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isDark
-                            ? AppDarkColors.cardBorder
-                            : Colors.grey[200]!,
-                      ),
-                    ),
-                    child: TextFormField(
-                      controller: amountController,
-                      keyboardType: TextInputType.number,
-                      textDirection: TextDirection.ltr,
-                      textAlign: TextAlign.center,
-                      autofocus: true,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? AppDarkColors.textPrimary : null,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: '0',
-                        hintStyle: TextStyle(
-                          color: Colors.grey[300],
-                          fontSize: 24,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 16,
-                          horizontal: 16,
-                        ),
-                        suffixText: currency == 'USD' ? '\$' : 'د.ع',
-                        suffixStyle: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 16,
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'بڕ بنووسە';
-                        final amount = double.tryParse(v);
-                        if (amount == null) return 'ژمارەیەکی دروست بنووسە';
-                        if (amount <= 0) return 'بڕ دەبێت لە سفر زیاتر بێت';
-                        final equivalent = (currency == 'USD' && dollarRate > 0)
-                            ? amount * dollarRate
-                            : amount;
-                        // Allow small error margin for floating point
-                        if (equivalent > remaining + 10) {
-                          return 'لە قەرزی ماوە زیاترە';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Note Field
-                  Container(
-                    decoration: BoxDecoration(
-                      color: isDark ? AppDarkColors.inputFill : Colors.grey[50],
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isDark
-                            ? AppDarkColors.cardBorder
-                            : Colors.grey[200]!,
-                      ),
-                    ),
-                    child: TextFormField(
-                      controller: noteController,
-                      decoration: InputDecoration(
-                        hintText: 'تێبینی (ئارەزوومەندانە)...',
-                        hintStyle: TextStyle(color: Colors.grey[400]),
-                        prefixIcon: Icon(
-                          Icons.sticky_note_2_outlined,
-                          color: Colors.grey[400],
-                          size: 20,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Save Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                              if (!formKey.currentState!.validate()) return;
-                              setSheetState(() => isSubmitting = true);
-                              try {
-                                final auth = context.read<AuthProvider>();
-                                final inputAmount = double.parse(
-                                  amountController.text.trim(),
-                                );
-                                final storageAmount =
-                                    (currency == 'USD' && dollarRate > 0)
-                                    ? inputAmount * dollarRate
-                                    : inputAmount;
-
-                                await context.read<DebtProvider>().addPayment(
-                                  debtId: widget.debtId,
-                                  amount: storageAmount,
-                                  note: noteController.text.trim(),
-                                  createdBy: auth.userId,
-                                );
-
-                                if (!mounted) return;
-                                if (sheetCtx.mounted) {
-                                  Navigator.pop(sheetCtx);
-                                }
-                                AppHelpers.showSnackBar(
-                                  context,
-                                  'پارەدانەوە تۆمارکرا',
-                                );
-                                await _loadData();
-                              } catch (e) {
-                                if (sheetCtx.mounted) {
-                                  setSheetState(() => isSubmitting = false);
-                                }
-                                if (!mounted) return;
-                                AppHelpers.showSnackBar(
-                                  context,
-                                  AppHelpers.backendErrorMessage(
-                                    e,
-                                    fallback: 'نەتوانرا پارەدانەوە تۆمار بکرێت. دووبارە هەوڵ بدە.',
-                                  ),
-                                  isError: true,
-                                );
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'تۆمارکردن',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+      debts: [debt],
+      createdBy: auth.userId,
+      createdByName: auth.userName,
+      initialDebtId: widget.debtId,
+      initialStorageAmount: initialStorageAmount,
     );
-    amountController.dispose();
-    noteController.dispose();
+    if (saved && mounted) {
+      await _loadData();
+    }
   }
 
-  Widget _buildQuickPayBtn(
-    String label,
-    double amount,
-    TextEditingController controller,
-  ) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          controller.text = amount.toStringAsFixed(
-            amount == amount.roundToDouble() ? 0 : 2,
-          );
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.green.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
