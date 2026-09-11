@@ -115,6 +115,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   final ScrollController _profileScrollController = ScrollController();
   RealtimeChannel? _financialRealtimeChannel;
   Timer? _financialRealtimeDebounce;
+  Timer? _financialSearchDebounce;
 
   bool get _isCustomer => _user?.getStringValue('role') == 'customer';
   bool get _isEmployee => _user?.getStringValue('role') == 'employee';
@@ -136,6 +137,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void dispose() {
     _financialRealtimeDebounce?.cancel();
+    _financialSearchDebounce?.cancel();
     final financialChannel = _financialRealtimeChannel;
     if (financialChannel != null) {
       unawaited(PBService.client.removeChannel(financialChannel));
@@ -505,6 +507,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       _financialSearchController.text.trim().isNotEmpty ||
       _financialDateRange != null ||
       _financialTypeFilter != 'all';
+
+  void _scheduleFinancialSearchHydration() {
+    _financialSearchDebounce?.cancel();
+    if (!mounted || !_hasFinancialFilters || !_financialTimelineHasMore) return;
+    _financialSearchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      unawaited(_hydrateFinancialHistoryForFilters());
+    });
+  }
 
   Future<void> _hydrateFinancialHistoryForFilters() async {
     if (!mounted || !_hasFinancialFilters || !_financialTimelineHasMore) return;
@@ -1362,6 +1373,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _financialTypeFilter == 'all') {
       return;
     }
+    _financialSearchDebounce?.cancel();
     _financialSearchController.clear();
     setState(() {
       _financialDateRange = null;
@@ -1426,7 +1438,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           controller: _financialSearchController,
           onChanged: (_) {
             setState(() {});
-            unawaited(_hydrateFinancialHistoryForFilters());
+            _scheduleFinancialSearchHydration();
           },
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
@@ -1437,6 +1449,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 : IconButton(
                     tooltip: 'سڕینەوەی گەڕان',
                     onPressed: () {
+                      _financialSearchDebounce?.cancel();
                       _financialSearchController.clear();
                       setState(() {});
                     },
