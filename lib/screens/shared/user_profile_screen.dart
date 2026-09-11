@@ -1442,7 +1442,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           },
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: 'گەڕان لە قەرز، پارەدانەوە، بڕ یان تێبینی...',
+            hintText: 'گەڕان لە قەرز، پارە وەرگرتنەوە، بڕ یان تێبینی...',
             prefixIcon: const Icon(Icons.search_rounded, size: 19),
             suffixIcon: _financialSearchController.text.isEmpty
                 ? null
@@ -1481,7 +1481,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             children: [
               typeChip('all', 'هەموو', Icons.all_inclusive_rounded),
               typeChip('debt', 'قەرز', Icons.north_east_rounded),
-              typeChip('payment', 'پارەدانەوە', Icons.south_west_rounded),
+              typeChip('payment', 'پارە وەرگرتنەوە', Icons.south_west_rounded),
               typeChip('system', 'مێژووی گۆڕانکاری', Icons.history_rounded),
             ],
           ),
@@ -1710,7 +1710,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             Text(
                               _financialTimelineHasMore && !hasFilters
                                   ? '${allTimelineItems.length}+ مامەڵەی نوێ بارکراوە • مێژووی کۆنتر هەیە'
-                                  : '${timelineItems.length}/${allTimelineItems.length} مامەڵە • قەرز و پارەدانەوە لە یەک مێژوودا',
+                                  : '${timelineItems.length}/${allTimelineItems.length} مامەڵە • قەرز و پارە وەرگرتنەوە لە یەک مێژوودا',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -1961,13 +1961,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
       'payment_updated' => (
           Icons.edit_note_rounded,
-          'پارەدانەوە دەستکاری کرا',
+          'پارە وەرگرتنەوە دەستکاری کرا',
         ),
       'payment_deleted' => (
           Icons.remove_circle_outline_rounded,
           amountText.isEmpty
-              ? 'پارەدانەوەیەک سڕایەوە'
-              : 'پارەدانەوەی $amountText سڕایەوە',
+              ? 'پارە وەرگرتنەوەیەک سڕایەوە'
+              : 'پارە وەرگرتنەوەی $amountText سڕایەوە',
         ),
       _ => (Icons.edit_outlined, 'قەرز دەستکاری کرا'),
     };
@@ -2131,7 +2131,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ? () => _showFinancialPaymentSheet(auth)
                         : null,
                     icon: const Icon(Icons.payments_outlined, size: 18),
-                    label: const Text('پارەدانەوە'),
+                    label: const Text('پارە وەرگرتنەوە'),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(46),
                       foregroundColor: Colors.green.shade700,
@@ -2219,9 +2219,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       return ('مەترسیدار — سنووری قەرز تێپەڕیوە', Colors.red);
     }
     final ratio = totalDebt <= 0 ? 0.0 : totalRemaining / totalDebt;
-    if (ratio >= 0.75) return ('ئاگاداری — پارەدانەوە کەمە', Colors.orange);
+    if (ratio >= 0.75) return ('ئاگاداری — پارە وەرگرتنەوە کەمە', Colors.orange);
     if (ratio >= 0.35) return ('مامناوەند — پێویستی بە چاودێرییە', Colors.blue);
-    return ('باش — پارەدانەوە ڕێکوپێکە', Colors.green);
+    return ('باش — پارە وەرگرتنەوە ڕێکوپێکە', Colors.green);
   }
 
   Widget _buildDebtHealthStrip({
@@ -2411,7 +2411,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            isPayment ? 'پارەدانەوە' : 'قەرز',
+                            isPayment ? 'پارە وەرگرتنەوە' : 'قەرز',
                             style: TextStyle(
                               color: isDark
                                   ? AppDarkColors.textPrimary
@@ -2570,7 +2570,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             ),
                           ),
                           icon: const Icon(Icons.payments_outlined, size: 14),
-                          label: const Text('پارەدانەوەی تەواو'),
+                          label: const Text('پارە وەرگرتنەوەی تەواو'),
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.green.shade700,
                             visualDensity: VisualDensity.compact,
@@ -2733,7 +2733,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       dollarRate: dollarRate,
       showConversion: currency == 'USD',
     );
-    final prefix = isPayment ? 'پارەدانەوە' : 'قەرز';
+    final prefix = isPayment ? 'پارە وەرگرتنەوە' : 'قەرز';
     return text.isEmpty ? '$prefix • $amountText' : '$prefix • $amountText • $text';
   }
 
@@ -2753,7 +2753,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final text = snapshot['text']?.toString().trim() ?? '';
     final dollarRate =
         double.tryParse('${snapshot['dollar_rate'] ?? 0}') ?? 0;
-    final label = kind == 'payment' ? 'وەڵام بۆ پارەدانەوە' : 'وەڵام بۆ قەرز';
+    final label = kind == 'payment' ? 'وەڵام بۆ پارە وەرگرتنەوە' : 'وەڵام بۆ قەرز';
     final amountText = AppHelpers.formatStoredFinancialAmount(
       amount,
       currency,
@@ -2948,7 +2948,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                 ),
                 title: Text(
-                  item.isPayment ? 'پارەدانەوە' : 'قەرز',
+                  item.isPayment ? 'پارە وەرگرتنەوە' : 'قەرز',
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 subtitle: Text(
@@ -2982,7 +2982,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     Icons.done_all_rounded,
                     color: Colors.green.shade700,
                   ),
-                  title: const Text('پارەدانەوەی تەواوی ماوە'),
+                  title: const Text('پارە وەرگرتنەوەی تەواوی ماوە'),
                   subtitle: Text(
                     AppHelpers.formatStoredFinancialAmount(
                       debt.getDoubleValue('remaining'),
@@ -3078,8 +3078,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       final actor = record.getStringValue('actor_name').trim();
       final base = switch (type) {
         'debt_deleted' => 'قەرز سڕایەوە',
-        'payment_updated' => 'پارەدانەوە دەستکاری کرا',
-        'payment_deleted' => 'پارەدانەوە سڕایەوە',
+        'payment_updated' => 'پارە وەرگرتنەوە دەستکاری کرا',
+        'payment_deleted' => 'پارە وەرگرتنەوە سڕایەوە',
         _ => 'قەرز دەستکاری کرا',
       };
       return actor.isEmpty ? base : '$base • $actor';
@@ -3119,7 +3119,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
     final typeLabel = switch (_financialTypeFilter) {
       'debt' => 'قەرز',
-      'payment' => 'پارەدانەوە',
+      'payment' => 'پارە وەرگرتنەوە',
       'system' => 'مێژووی گۆڕانکاری',
       _ => '',
     };
@@ -3424,7 +3424,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
               _permissionTile(
                 icon: Icons.account_balance_wallet_outlined,
-                title: 'دانانی سنوری قەرز',
+                title: 'دانانی سنووری قەرز',
                 value: _canSetDebtLimit,
                 enabled: canEdit,
                 onChanged: (v) => setState(() => _canSetDebtLimit = v),
@@ -4032,7 +4032,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'سنوری قەرز',
+                            'سنووری قەرز',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
@@ -4202,7 +4202,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
             const SizedBox(width: 10),
             const Text(
-              'سنوری قەرز',
+              'سنووری قەرز',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ],
@@ -4286,7 +4286,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   await PBService.updateUser(widget.userId, {'debt_limit': 0});
                   if (!mounted || !dialogContext.mounted) return;
                   Navigator.pop(dialogContext);
-                  AppHelpers.showSnackBar(context, 'سنوری قەرز لابرا');
+                  AppHelpers.showSnackBar(context, 'سنووری قەرز لابرا');
                   _loadData();
                 } catch (e) {
                   if (mounted) {
@@ -4313,8 +4313,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 AppHelpers.showSnackBar(
                   context,
                   newLimit > 0
-                      ? 'سنوری قەرز دانرا: ${AppHelpers.formatCurrency(newLimit)}'
-                      : 'سنوری قەرز لابرا',
+                      ? 'سنووری قەرز دانرا: ${AppHelpers.formatCurrency(newLimit)}'
+                      : 'سنووری قەرز لابرا',
                 );
                 _loadData();
               } catch (e) {

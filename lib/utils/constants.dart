@@ -68,7 +68,7 @@ class AppStrings {
 
   static const String debt = 'قەرز';
   static const String debts = 'قەرزەکان';
-  static const String addDebt = 'قەرزی نوێ';
+  static const String addDebt = 'قەرز پێدان';
   static const String amount = 'بڕی پارە';
   static const String description = 'تێچوون';
   static const String dueDate = 'بەرواری دوایین';
@@ -89,10 +89,10 @@ class AppStrings {
   static const String items = 'کاڵاکان';
   static const String total = 'کۆی گشتی';
 
-  static const String payment = 'پارەدانەوە';
-  static const String payments = 'پارەدانەوەکان';
-  static const String addPayment = 'پارەدانەوەی نوێ';
-  static const String paymentAmount = 'بڕی پارەدانەوە';
+  static const String payment = 'پارە وەرگرتنەوە';
+  static const String payments = 'پارە وەرگرتنەوەکان';
+  static const String addPayment = 'پارە وەرگرتنەوەی نوێ';
+  static const String paymentAmount = 'بڕی پارەی وەرگیراو';
   static const String note = 'تێبینی';
 
   static const String dashboard = 'داشبۆرد';
@@ -102,7 +102,7 @@ class AppStrings {
   static const String addEmployee = 'کارمەندی نوێ';
   static const String totalCustomers = 'کۆی کڕیارەکان';
   static const String totalDebts = 'کۆی قەرزەکان';
-  static const String totalPayments = 'کۆی پارەدانەوەکان';
+  static const String totalPayments = 'کۆی پارە وەرگرتنەوەکان';
 }
 
 class SupabaseConfig {

@@ -22,6 +22,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
   final _debtLimitController = TextEditingController(text: '0');
 
   bool _isLoading = false;
+  bool _showPassword = false;
   int _employeeSection = 0;
   bool _canAddCustomers = false;
   bool _canSetDebtLimit = false;
@@ -400,8 +401,8 @@ class _AddUserDialogState extends State<AddUserDialog> {
           const SizedBox(height: 10),
           _buildTextField(
             controller: _debtLimitController,
-            label: 'سنوری قەرز',
-            hint: '0 = بێ سنور',
+            label: 'سنووری قەرز',
+            hint: '0 = بێ سنوور',
             icon: Icons.account_balance_wallet_outlined,
             isPhone: true,
           ),
@@ -449,7 +450,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
                 (v) => setState(() => _canAddCustomers = v),
               ),
               _buildSwitch(
-                'دانانی سنوری قەرز',
+                'دانانی سنووری قەرز',
                 _canSetDebtLimit,
                 (v) => setState(() => _canSetDebtLimit = v),
               ),
@@ -544,9 +545,11 @@ class _AddUserDialogState extends State<AddUserDialog> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return TextFormField(
       controller: controller,
-      obscureText: isObscure,
+      obscureText: isObscure && !_showPassword,
       keyboardType: isPhone ? TextInputType.number : TextInputType.text,
-      textDirection: isPhone ? TextDirection.ltr : TextDirection.rtl,
+      textDirection: (isPhone || isObscure)
+          ? TextDirection.ltr
+          : TextDirection.rtl,
       textAlign: isPhone ? TextAlign.center : TextAlign.start,
       style: TextStyle(color: isDark ? AppDarkColors.textPrimary : null),
       validator:
@@ -562,6 +565,22 @@ class _AddUserDialogState extends State<AddUserDialog> {
           color: isDark ? AppDarkColors.textSecondary : Colors.grey[400],
         ),
         prefixIcon: Icon(icon, color: AppColors.primary),
+        suffixIcon: isObscure
+            ? IconButton(
+                tooltip: _showPassword
+                    ? 'شاردنەوەی وشەی نهێنی'
+                    : 'نیشاندانی وشەی نهێنی',
+                onPressed: () => setState(() => _showPassword = !_showPassword),
+                icon: Icon(
+                  _showPassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: isDark
+                      ? AppDarkColors.textSecondary
+                      : const Color(0xFF667085),
+                ),
+              )
+            : null,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
