@@ -20,6 +20,61 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Apply debt restore source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          detail_path = Path('lib/screens/shared/debt_detail_screen.dart')
+          detail = detail_path.read_text()
+          old_message = "message: 'دڵنیایت لە سڕینەوەی ئەم قەرزە؟',"
+          new_message = "message: 'قەرزەکە دەخرێتە سەبەتە و دەتوانیت دواتر بیگەڕێنیتەوە. دڵنیایت؟',"
+          if old_message in detail:
+              detail = detail.replace(old_message, new_message, 1)
+          old_call = "      await PBService.deleteDebt(widget.debtId);"
+          new_call = """      final response = await PBService.client.functions.invoke(
+                'debt-restore-admin',
+                body: {'action': 'delete', 'debt_id': widget.debtId},
+              );
+              final data = response.data;
+              if (data is! Map || data['deleted'] != true) {
+                final code = data is Map ? data['error']?.toString() : null;
+                throw Exception(code ?? 'delete_failed');
+              }"""
+          if old_call in detail:
+              detail = detail.replace(old_call, new_call, 1)
+          elif "'action': 'delete'" not in detail:
+              raise SystemExit('debt delete marker not found')
+          detail_path.write_text(detail)
+
+          restore_path = Path('lib/screens/admin/debt_restore_screen.dart')
+          restore = restore_path.read_text()
+          confirm_block = """    final customerName = item['customer_name']?.toString().trim() ?? '';
+              final confirm = await AppHelpers.showConfirmDialog(
+                context,
+                title: 'گەڕاندنەوەی قەرز',
+                message: customerName.isEmpty
+                    ? 'دڵنیایت دەتەوێت ئەم قەرزە بگەڕێنیتەوە؟'
+                    : 'دڵنیایت دەتەوێت قەرزی $customerName بگەڕێنیتەوە؟',
+              );
+              if (!mounted || !confirm) return;
+
+          """
+          if confirm_block in restore:
+              restore = restore.replace(confirm_block, '', 1)
+          restore_path.write_text(restore)
+          PY
+
+          if ! git diff --quiet -- lib/screens/shared/debt_detail_screen.dart lib/screens/admin/debt_restore_screen.dart; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add lib/screens/shared/debt_detail_screen.dart lib/screens/admin/debt_restore_screen.dart
+            git commit -m "Finish admin debt restore flow"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
       - name: Resolve app edition
         shell: bash
         run: |
