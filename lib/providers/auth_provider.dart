@@ -273,6 +273,7 @@ class AuthProvider extends ChangeNotifier {
     required String adminName,
     required String phone,
     required String password,
+    String subscriptionPlan = 'custom',
     required int subscriptionDays,
   }) async {
     _isLoading = true;
@@ -283,6 +284,7 @@ class AuthProvider extends ChangeNotifier {
         adminName: adminName,
         phone: phone,
         password: password,
+        subscriptionPlan: subscriptionPlan,
         subscriptionDays: subscriptionDays,
       );
     } finally {
