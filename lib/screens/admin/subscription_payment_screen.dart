@@ -1,4 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:zhirox/providers/auth_provider.dart';
@@ -32,11 +38,94 @@ class SubscriptionPaymentScreen extends StatefulWidget {
       _SubscriptionPaymentScreenState();
 }
 
-class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen> {
+class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen>
+    with WidgetsBindingObserver {
   String _selectedPlan = 'annual';
   bool _loading = false;
   String? _localPaymentId;
   String? _readableCode;
+  String? _paymentStatus;
+  int? _amountIqd;
+  DateTime? _validUntil;
+  Uint8List? _qrBytes;
+  Timer? _pollTimer;
+  int _pollAttempts = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _localPaymentId != null &&
+        !_loading) {
+      Future<void>.delayed(const Duration(milliseconds: 350), () {
+        if (mounted && !_loading) _checkPayment(silent: true);
+      });
+    }
+  }
+
+  Uint8List? _decodeQr(dynamic value) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return null;
+    final comma = raw.indexOf(',');
+    final payload = comma >= 0 ? raw.substring(comma + 1) : raw;
+    try {
+      return base64Decode(payload.replaceAll(RegExp(r'\s+'), ''));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollAttempts = 0;
+    _pollTimer = Timer.periodic(const Duration(seconds: 8), (timer) {
+      if (!mounted || _localPaymentId == null) {
+        timer.cancel();
+        return;
+      }
+      _pollAttempts += 1;
+      if (_pollAttempts > 15) {
+        timer.cancel();
+        return;
+      }
+      if (!_loading) _checkPayment(silent: true);
+    });
+  }
+
+  String _statusText(String? status) {
+    switch (status) {
+      case 'paid':
+        return 'پارەدراوە';
+      case 'declined':
+        return 'ڕەتکرایەوە';
+      case 'expired':
+        return 'بەسەرچووە';
+      case 'cancelled':
+        return 'هەڵوەشاوەتەوە';
+      default:
+        return 'چاوەڕوانی پارەدان';
+    }
+  }
+
+  Future<void> _copyReadableCode() async {
+    final code = _readableCode;
+    if (code == null || code.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
+    AppHelpers.showSnackBar(context, 'کۆدی پارەدان کۆپی کرا.');
+  }
 
   Future<void> _startPayment() async {
     setState(() => _loading = true);
@@ -44,20 +133,56 @@ class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen> {
       final payment = await PBService.createFibSubscriptionPayment(
         _selectedPlan,
       );
-      _localPaymentId = payment['local_payment_id']?.toString();
-      _readableCode = payment['readable_code']?.toString();
-      final rawLink =
-          payment['personal_app_link']?.toString().trim().isNotEmpty == true
-          ? payment['personal_app_link'].toString()
-          : payment['business_app_link']?.toString().trim().isNotEmpty == true
-          ? payment['business_app_link'].toString()
-          : payment['corporate_app_link']?.toString() ?? '';
-      final uri = Uri.tryParse(rawLink);
-      if (uri == null ||
-          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        throw 'نەتوانرا ئەپی FIB بکرێتەوە';
+      final localPaymentId = payment['local_payment_id']?.toString() ?? '';
+      if (localPaymentId.isEmpty) throw 'پارەدان دروست نەکرا';
+
+      final amount = payment['amount_iqd'];
+      final amountIqd = amount is int
+          ? amount
+          : int.tryParse(amount?.toString() ?? '');
+      final validUntil = DateTime.tryParse(
+        payment['valid_until']?.toString() ?? '',
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _localPaymentId = localPaymentId;
+        _readableCode = payment['readable_code']?.toString();
+        _amountIqd = amountIqd;
+        _validUntil = validUntil;
+        _qrBytes = _decodeQr(payment['qr_code']);
+        _paymentStatus = 'pending';
+      });
+      _startPolling();
+
+      final links = <String>[
+        payment['personal_app_link']?.toString() ?? '',
+        payment['business_app_link']?.toString() ?? '',
+        payment['corporate_app_link']?.toString() ?? '',
+      ].where((value) => value.trim().isNotEmpty);
+
+      var opened = false;
+      for (final rawLink in links) {
+        final uri = Uri.tryParse(rawLink);
+        if (uri == null) continue;
+        try {
+          if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+            opened = true;
+            break;
+          }
+        } catch (_) {}
       }
-      if (mounted) setState(() {});
+
+      if (!opened && mounted) {
+        if (_qrBytes != null || _readableCode?.isNotEmpty == true) {
+          AppHelpers.showSnackBar(
+            context,
+            'ئەپی FIB خۆکار نەکرایەوە؛ QR یان کۆدی پارەدان بەکاربهێنە.',
+          );
+        } else {
+          throw 'نەتوانرا ئەپی FIB بکرێتەوە';
+        }
+      }
     } catch (error) {
       if (mounted) {
         AppHelpers.showSnackBar(
@@ -71,14 +196,18 @@ class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen> {
     }
   }
 
-  Future<void> _checkPayment() async {
+  Future<void> _checkPayment({bool silent = false}) async {
     final paymentId = _localPaymentId;
-    if (paymentId == null) return;
+    if (paymentId == null || _loading) return;
     final auth = context.read<AuthProvider>();
     setState(() => _loading = true);
     try {
       final status = await PBService.checkFibSubscriptionPayment(paymentId);
+      if (!mounted) return;
+      setState(() => _paymentStatus = status);
+
       if (status == 'paid') {
+        _pollTimer?.cancel();
         await auth.refreshCurrentProfile();
         if (!mounted) return;
         AppHelpers.showSnackBar(
@@ -86,20 +215,35 @@ class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen> {
           'پارەدان سەرکەوتوو بوو و بەشداری چالاک کرایەوە.',
         );
         if (Navigator.canPop(context)) Navigator.pop(context);
-      } else {
-        if (mounted) {
-          AppHelpers.showSnackBar(
-            context,
-            status == 'pending'
-                ? 'هێشتا پارەدان تەواو نەبووە.'
-                : 'پارەدان سەرکەوتوو نەبوو؛ دووبارە هەوڵ بدە.',
-            isError: status != 'pending',
-          );
+        return;
+      }
+
+      if (status == 'pending') {
+        if (!silent && mounted) {
+          AppHelpers.showSnackBar(context, 'هێشتا پارەدان تەواو نەبووە.');
         }
+        return;
+      }
+
+      _pollTimer?.cancel();
+      if (mounted) {
+        AppHelpers.showSnackBar(
+          context,
+          status == 'expired'
+              ? 'کاتی ئەم پارەدانە بەسەرچووە؛ پارەدانێکی نوێ دروست بکە.'
+              : status == 'cancelled'
+              ? 'پارەدانەکە هەڵوەشاوەتەوە؛ دەتوانیت دووبارە هەوڵ بدەیت.'
+              : 'پارەدان ڕەتکرایەوە؛ دووبارە هەوڵ بدە.',
+          isError: true,
+        );
       }
     } catch (error) {
-      if (mounted) {
-        AppHelpers.showSnackBar(context, error.toString(), isError: true);
+      if (!silent && mounted) {
+        AppHelpers.showSnackBar(
+          context,
+          error.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -109,6 +253,13 @@ class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final amountText = _amountIqd == null
+        ? null
+        : '${NumberFormat('#,##0', 'en_US').format(_amountIqd)} د.ع';
+    final validUntilText = _validUntil == null
+        ? null
+        : DateFormat('yyyy/MM/dd – HH:mm').format(_validUntil!.toLocal());
+
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: !widget.restricted,
@@ -188,19 +339,87 @@ class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen> {
                       ),
                     )
                   : const Icon(Icons.account_balance_wallet_outlined),
-              label: const Text('پارەدان بە FIB'),
+              label: Text(
+                _localPaymentId == null
+                    ? 'پارەدان بە FIB'
+                    : 'دروستکردنی پارەدانێکی نوێ',
+              ),
             ),
             if (_localPaymentId != null) ...[
               const SizedBox(height: 14),
-              if (_readableCode?.isNotEmpty == true)
-                Text(
-                  'کۆدی پارەدان: $_readableCode',
-                  textAlign: TextAlign.center,
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.verified_user_outlined, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            _statusText(_paymentStatus),
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ],
+                      ),
+                      if (amountText != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'کۆی پارەدان: $amountText',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                      if (_qrBytes != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          color: Colors.white,
+                          padding: const EdgeInsets.all(10),
+                          child: Image.memory(
+                            _qrBytes!,
+                            width: 210,
+                            height: 210,
+                            fit: BoxFit.contain,
+                            gaplessPlayback: true,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'QR ـەکە بە ئەپی FIB بسکەنە.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ],
+                      if (_readableCode?.isNotEmpty == true) ...[
+                        const SizedBox(height: 12),
+                        SelectableText(
+                          'کۆدی پارەدان: $_readableCode',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        TextButton.icon(
+                          onPressed: _copyReadableCode,
+                          icon: const Icon(Icons.copy_rounded, size: 18),
+                          label: const Text('کۆپیکردنی کۆد'),
+                        ),
+                      ],
+                      if (validUntilText != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'کاتی بەسەرچوون: $validUntilText',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: _loading ? null : () => _checkPayment(),
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('پشکنینی دۆخی پارەدان'),
+                      ),
+                    ],
+                  ),
                 ),
-              OutlinedButton.icon(
-                onPressed: _loading ? null : _checkPayment,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('پشکنینی دۆخی پارەدان'),
               ),
             ],
           ],
