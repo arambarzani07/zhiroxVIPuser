@@ -38,19 +38,18 @@ if finally_anchor in text:
 elif finally_replacement not in text:
     raise SystemExit('loadMore unlock anchor missing')
 
-old_validator = '''                            if (days == null || days <= 0) {
-                              return 'ژمارەی ڕۆژێکی دروست بنووسە';
-                            }
-'''
-new_validator = '''                            if (days == null || days < 1 || days > 3650) {
-                              return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';
-                            }
-'''
-count = text.count(old_validator)
-if count:
-    text = text.replace(old_validator, new_validator)
-if text.count(new_validator) < 2:
-    raise SystemExit(f'subscription validator count={text.count(new_validator)}')
+old_condition = 'if (days == null || days <= 0) {'
+new_condition = 'if (days == null || days < 1 || days > 3650) {'
+if old_condition in text:
+    text = text.replace(old_condition, new_condition)
+old_message = "return 'ژمارەی ڕۆژێکی دروست بنووسە';"
+new_message = "return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';"
+if old_message in text:
+    text = text.replace(old_message, new_message)
+if text.count(new_condition) < 2 or text.count(new_message) < 2:
+    raise SystemExit(
+        f'subscription validators condition={text.count(new_condition)} message={text.count(new_message)}'
+    )
 
 path.write_text(text, encoding='utf-8')
 
