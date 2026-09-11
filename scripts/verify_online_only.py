@@ -343,9 +343,17 @@ profile_source = (LIB / 'screens/shared/user_profile_screen.dart').read_text(enc
 for marker in ('_financialReplyTarget', 'referenceKind:', 'referenceId:', 'reference_snapshot', 'وەک وەڵام / پەیوەستکردن'):
     if marker not in profile_source:
         fail(f'lib/screens/shared/user_profile_screen.dart: persistent Financial Chat reference marker missing: {marker}')
-for marker in ('referenceKind', 'referenceId', "'p_reference_kind'", "'p_reference_id'"):
+for marker in ('referenceKind', 'referenceId', "'reference_kind'", "'reference_id'"):
     if marker not in pb:
         fail(f'lib/services/pb_service.dart: persistent financial reference marker missing: {marker}')
+record_payment_edge = ROOT / 'supabase/functions/record-payment/index.ts'
+if not record_payment_edge.exists():
+    fail('supabase/functions/record-payment/index.ts: persistent payment reference gateway missing')
+else:
+    record_payment_source = record_payment_edge.read_text(encoding='utf-8')
+    for marker in ('p_reference_kind', 'p_reference_id'):
+        if marker not in record_payment_source:
+            fail(f'supabase/functions/record-payment/index.ts: persistent payment reference marker missing: {marker}')
 for marker in ('referenceKind', 'referenceId'):
     if marker not in add_debt:
         fail(f'lib/screens/shared/add_debt_screen.dart: debt reference pass-through missing: {marker}')
@@ -483,10 +491,11 @@ if 'if (online && mounted) _loadUsers();' in customer_list_source:
 if "_loadUsers(search: _searchController.text.trim());" not in customer_list_source:
     fail('lib/screens/shared/user_list_screen.dart: reconnect/search-preserving reload marker missing')
 
-# System Owner admin management must use the set-based, owner-checked RPCs.
+# System Owner admin management must use the set-based, owner-checked Edge gateway.
 for marker in (
-    "'get_system_owner_admins_page'",
-    "'renew_system_owner_admin_subscription'",
+    "'account-admin'",
+    "'action': 'list_admins'",
+    "'action': 'renew_subscription'",
     "'employeeCount': asInt(row['employee_count'])",
     "'customerCount': asInt(row['customer_count'])",
 ):
@@ -498,6 +507,21 @@ if 'for (final admin in result.items)' in admin_section:
     fail('lib/services/pb_service.dart: Admin management must not restore per-admin N+1 queries')
 if 'admin_id = "$adminId" && role = "employee"' in admin_section or 'admin_id = "$adminId" && role = "customer"' in admin_section:
     fail('lib/services/pb_service.dart: Admin management counts must stay set-based')
+account_admin_edge = ROOT / 'supabase/functions/account-admin/index.ts'
+if not account_admin_edge.exists():
+    fail('supabase/functions/account-admin/index.ts: System Owner admin-management gateway must be tracked')
+else:
+    account_admin_management_source = account_admin_edge.read_text(encoding='utf-8')
+    for marker in (
+        'action === "list_admins"',
+        'action === "renew_subscription"',
+        'requesterProfile.is_system_owner !== true',
+        '.eq("is_system_owner", false)',
+        'employee_count',
+        'customer_count',
+    ):
+        if marker not in account_admin_management_source:
+            fail(f'supabase/functions/account-admin/index.ts: System Owner admin-management marker missing: {marker}')
 admin_rpc_migration = ROOT / 'supabase/migrations/20260911102326_system_owner_admin_management_rpcs.sql'
 if not admin_rpc_migration.exists():
     fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner admin-management migration must be tracked')
