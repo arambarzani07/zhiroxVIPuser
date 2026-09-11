@@ -159,15 +159,20 @@ for marker in (
         fail(f'Financial Chat Phase 6 marker missing: {marker}')
 
 
-# Financial Chat Phase 7: ledger intelligence, overdue visibility, targeted
-# quick-pay and filter-aware PDF export must stay integrated in the customer chat.
+# Financial Chat ledger intelligence, overdue visibility, targeted payment
+# and filter-aware PDF export must stay integrated in the customer chat.
 for marker in (
     '_financialRunningBalances',
     '_timelineAmountInIqd',
     '_overdueDebtLabel',
     'ماوەی هەژمار',
-    'پارەدانەوەی خێرا',
+    'پارەدانەوەی تەواو',
     'initialDebtId',
+    'initialAmount',
+    "const Text('25%')",
+    "const Text('50%')",
+    "const Text('تەواو')",
+    "case 'pay_full':",
     '_generateFilteredFinancialChatStatement',
     'PdfService.generateFinancialChatStatement',
 ):
