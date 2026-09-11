@@ -19,108 +19,15 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
-      - name: Normalize UI and password field
+      - name: Apply cleanup
+        run: python3 scripts/system_cleanup_once.py
+
+      - name: Commit cleanup
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          ui_files = [
-              Path('lib/utils/constants.dart'),
-              Path('lib/screens/shared/add_debt_screen.dart'),
-              Path('lib/screens/shared/add_user_screen.dart'),
-              Path('lib/screens/shared/user_profile_screen.dart'),
-          ]
-          replacements = [
-              ('قەرزی نوێ', 'قەرز پێدان'),
-              ('پارەدانەوە', 'پارە وەرگرتنەوە'),
-              ('بڕی پارە وەرگرتنەوە', 'بڕی پارەی وەرگیراو'),
-              ('سنوری قەرز', 'سنووری قەرز'),
-              ('بێ سنور', 'بێ سنوور'),
-              ('قەرز بە سەرکەوتوویی زیادکرا', 'قەرز پێدان تۆمار کرا ✅'),
-          ]
-
-          for path in ui_files:
-              text = path.read_text()
-              for old, new in replacements:
-                  text = text.replace(old, new)
-              path.write_text(text)
-
-          path = Path('lib/screens/shared/add_user_screen.dart')
-          text = path.read_text()
-          anchors = {
-              'state': '  bool _isLoading = false;\n  int _employeeSection = 0;',
-              'obscure': '      obscureText: isObscure,',
-              'direction': '      textDirection: isPhone ? TextDirection.ltr : TextDirection.rtl,',
-              'prefix': '        prefixIcon: Icon(icon, color: AppColors.primary),',
-          }
-          for name, anchor in anchors.items():
-              if anchor not in text:
-                  raise SystemExit(f'AddUserDialog anchor not found: {name}')
-
-          text = text.replace(
-              anchors['state'],
-              '  bool _isLoading = false;\n  bool _showPassword = false;\n  int _employeeSection = 0;',
-              1,
-          )
-          text = text.replace(
-              anchors['obscure'],
-              '      obscureText: isObscure && !_showPassword,',
-              1,
-          )
-          text = text.replace(
-              anchors['direction'],
-              '      textDirection: (isPhone || isObscure)\n'
-              '          ? TextDirection.ltr\n'
-              '          : TextDirection.rtl,',
-              1,
-          )
-          text = text.replace(
-              anchors['prefix'],
-              '''        prefixIcon: Icon(icon, color: AppColors.primary),
-        suffixIcon: isObscure
-            ? IconButton(
-                tooltip: _showPassword
-                    ? 'شاردنەوەی وشەی نهێنی'
-                    : 'نیشاندانی وشەی نهێنی',
-                onPressed: () => setState(() => _showPassword = !_showPassword),
-                icon: Icon(
-                  _showPassword
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  color: isDark
-                      ? AppDarkColors.textSecondary
-                      : const Color(0xFF667085),
-                ),
-              )
-            : null,''',
-              1,
-          )
-          path.write_text(text)
-
-          combined = '\n'.join(item.read_text() for item in ui_files)
-          for stale in ('قەرزی نوێ', 'پارەدانەوە', 'سنوری قەرز', 'بێ سنور'):
-              if stale in combined:
-                  raise SystemExit(f'stale UI wording remains: {stale}')
-          if 'bool _showPassword = false;' not in text:
-              raise SystemExit('password visibility state missing')
-          if 'isPhone || isObscure' not in text:
-              raise SystemExit('password LTR guard missing')
-          if 'Icons.visibility_outlined' not in text:
-              raise SystemExit('password visibility button missing')
-          print('System cleanup checks passed.')
-          PY
-
-      - name: Commit cleanup and remove one-time workflow
-        shell: bash
-        run: |
-          set -euo pipefail
-          git rm .github/workflows/system-cleanup-once.yml
-          git add lib/utils/constants.dart \
-                  lib/screens/shared/add_debt_screen.dart \
-                  lib/screens/shared/add_user_screen.dart \
-                  lib/screens/shared/user_profile_screen.dart
+          git rm .github/workflows/system-cleanup-once.yml scripts/system_cleanup_once.py
+          git add lib/utils/constants.dart lib/screens/shared/add_debt_screen.dart lib/screens/shared/add_user_screen.dart lib/screens/shared/user_profile_screen.dart
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Polish system UI consistency'
