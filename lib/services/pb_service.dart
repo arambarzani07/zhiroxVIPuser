@@ -869,6 +869,177 @@ class PBService {
     return events.reversed.toList(growable: false);
   }
 
+  static double _financeDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static RecordModel _debtRecordFromRaw(Map<String, dynamic> row) {
+    final items = row['items'];
+    final created = row['created_at']?.toString() ?? row['created']?.toString() ?? '';
+    final updated = row['updated_at']?.toString() ?? row['updated']?.toString() ?? created;
+    return RecordModel.fromJson({
+      ...row,
+      'id': row['id']?.toString() ?? '',
+      'collectionId': '',
+      'collectionName': 'debts',
+      'customer': row['customer_id']?.toString() ?? row['customer']?.toString() ?? '',
+      'receipt_image': row['receipt_image_path']?.toString() ??
+          row['receipt_image']?.toString() ??
+          '',
+      'items': items is String ? items : jsonEncode(items ?? const <dynamic>[]),
+      'created': created,
+      'updated': updated,
+    });
+  }
+
+  static RecordModel _paymentRecordFromRaw(
+    Map<String, dynamic> row, {
+    Map<String, dynamic>? relatedDebt,
+  }) {
+    final created = row['created_at']?.toString() ?? row['created']?.toString() ?? '';
+    final json = <String, dynamic>{
+      ...row,
+      'id': row['id']?.toString() ?? '',
+      'collectionId': '',
+      'collectionName': 'payments',
+      'debt': row['debt_id']?.toString() ?? row['debt']?.toString() ?? '',
+      'created': created,
+      'updated': row['updated_at']?.toString() ?? created,
+    };
+    if (relatedDebt != null) {
+      json['expand'] = <String, dynamic>{
+        'debt': _debtRecordFromRaw(relatedDebt).toJson(),
+      };
+    }
+    return RecordModel.fromJson(json);
+  }
+
+  static Future<Map<String, dynamic>> getCustomerFinanceSnapshot(
+    String customerId,
+  ) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_customer_finance_snapshot',
+      params: {'p_customer_id': customerId},
+    );
+    if (raw is! Map) throw Exception('invalid finance snapshot');
+    final data = Map<String, dynamic>.from(raw);
+    final openRaw = data['open_debts'];
+    final openDebts = <RecordModel>[];
+    if (openRaw is List) {
+      for (final item in openRaw) {
+        if (item is Map) {
+          openDebts.add(
+            _debtRecordFromRaw(Map<String, dynamic>.from(item)),
+          );
+        }
+      }
+    }
+    return {
+      'totalDebtIqd': _financeDouble(data['total_debt_iqd']),
+      'totalRemainingIqd': _financeDouble(data['total_remaining_iqd']),
+      'totalPaidIqd': _financeDouble(data['total_paid_iqd']),
+      'openDebtCount': int.tryParse('${data['open_debt_count'] ?? 0}') ?? 0,
+      'openDebts': openDebts,
+      'complete': data['complete'] == true,
+    };
+  }
+
+  static Future<Map<String, dynamic>> getCustomerFinancialTimelinePage({
+    required String customerId,
+    int limit = 50,
+    Map<String, dynamic>? cursor,
+  }) async {
+    await ensureInitialized();
+    final params = <String, dynamic>{
+      'p_customer_id': customerId,
+      'p_limit': limit.clamp(1, 100),
+    };
+    if (cursor != null) {
+      final at = cursor['at']?.toString() ?? '';
+      final kind = int.tryParse('${cursor['kind_rank'] ?? ''}');
+      final id = cursor['id']?.toString() ?? '';
+      if (at.isNotEmpty && kind != null && id.isNotEmpty) {
+        params['p_cursor_at'] = at;
+        params['p_cursor_kind'] = kind;
+        params['p_cursor_id'] = id;
+      }
+    }
+
+    final raw = await client.rpc(
+      'get_customer_financial_timeline_page',
+      params: params,
+    );
+    if (raw is! Map) throw Exception('invalid financial timeline page');
+    final data = Map<String, dynamic>.from(raw);
+    final debts = <RecordModel>[];
+    final payments = <RecordModel>[];
+    final financialEvents = <RecordModel>[];
+    final rawItems = data['items'];
+    if (rawItems is List) {
+      for (final rawItem in rawItems) {
+        if (rawItem is! Map) continue;
+        final item = Map<String, dynamic>.from(rawItem);
+        final kind = item['kind']?.toString() ?? '';
+        final recordRaw = item['record'];
+        if (recordRaw is! Map) continue;
+        final record = Map<String, dynamic>.from(recordRaw);
+        if (kind == 'debt') {
+          debts.add(_debtRecordFromRaw(record));
+        } else if (kind == 'payment') {
+          Map<String, dynamic>? related;
+          final relatedRaw = item['related_debt'];
+          if (relatedRaw is Map) {
+            related = Map<String, dynamic>.from(relatedRaw);
+          }
+          payments.add(
+            _paymentRecordFromRaw(record, relatedDebt: related),
+          );
+        } else if (kind == 'system') {
+          financialEvents.add(_financialEventRecord(record));
+        }
+      }
+    }
+
+    final nextRaw = data['next_cursor'];
+    return {
+      'debts': debts,
+      'payments': payments,
+      'financialEvents': financialEvents,
+      'hasMore': data['has_more'] == true,
+      'nextCursor': nextRaw is Map
+          ? Map<String, dynamic>.from(nextRaw)
+          : null,
+      'loadedCount': rawItems is List ? rawItems.length : 0,
+    };
+  }
+
+  static Future<List<RecordModel>> getAllCustomerDebtsLive(
+    String customerId,
+  ) async {
+    await ensureInitialized();
+    const pageSize = 500;
+    var offset = 0;
+    final records = <RecordModel>[];
+    while (true) {
+      final data = await client
+          .from('debts')
+          .select()
+          .eq('customer_id', customerId)
+          .order('created_at', ascending: false)
+          .range(offset, offset + pageSize - 1);
+      final rows = (data as List)
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
+      records.addAll(rows.map(_debtRecordFromRaw));
+      if (rows.length < pageSize) break;
+      offset += pageSize;
+    }
+    return records;
+  }
+
   // ==================== Stats ====================
 
   static Future<Map<String, dynamic>> getDashboardStats({String? adminId}) async {

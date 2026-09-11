@@ -69,9 +69,21 @@ class _FinancialChatRenderEntry {
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
   RecordModel? _user;
+  // Timeline records contain only server pages already loaded into Financial Chat.
   List<RecordModel> _debts = [];
   List<RecordModel> _payments = [];
   List<RecordModel> _financialEvents = [];
+  // Payment actions need all currently-open debts, not the historical timeline.
+  List<RecordModel> _openDebts = [];
+  double _financeTotalDebtIqd = 0;
+  double _financeTotalRemainingIqd = 0;
+  double _financeTotalPaidIqd = 0;
+  bool _financeSummaryComplete = false;
+  bool _financialTimelineHasMore = false;
+  Map<String, dynamic>? _financialTimelineCursor;
+  bool _financialHistoryLoading = false;
+  bool _financialFilterHydrating = false;
+  String? _financialHistoryError;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _loadInFlight = false;
@@ -152,17 +164,42 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       List<RecordModel> debts = [];
       List<RecordModel> payments = [];
       List<RecordModel> financialEvents = [];
+      List<RecordModel> openDebts = [];
+      var totalDebtIqd = 0.0;
+      var totalRemainingIqd = 0.0;
+      var totalPaidIqd = 0.0;
+      var summaryComplete = false;
+      var timelineHasMore = false;
+      Map<String, dynamic>? timelineCursor;
       Map<String, double> employeeStats = {};
 
       if (role == 'customer') {
-        final customerData = await Future.wait<List<RecordModel>>([
-          PBService.getDebts(customerId: widget.userId),
-          PBService.getPayments(customerId: widget.userId),
-          PBService.getFinancialEvents(widget.userId),
+        final customerData = await Future.wait<Map<String, dynamic>>([
+          PBService.getCustomerFinanceSnapshot(widget.userId),
+          PBService.getCustomerFinancialTimelinePage(
+            customerId: widget.userId,
+            limit: 50,
+          ),
         ]);
-        debts = customerData[0];
-        payments = customerData[1];
-        financialEvents = customerData[2];
+        final snapshot = customerData[0];
+        final page = customerData[1];
+        debts = List<RecordModel>.from(page['debts'] as List? ?? const []);
+        payments = List<RecordModel>.from(page['payments'] as List? ?? const []);
+        financialEvents = List<RecordModel>.from(
+          page['financialEvents'] as List? ?? const [],
+        );
+        openDebts = List<RecordModel>.from(
+          snapshot['openDebts'] as List? ?? const [],
+        );
+        totalDebtIqd = (snapshot['totalDebtIqd'] as num?)?.toDouble() ?? 0;
+        totalRemainingIqd =
+            (snapshot['totalRemainingIqd'] as num?)?.toDouble() ?? 0;
+        totalPaidIqd = (snapshot['totalPaidIqd'] as num?)?.toDouble() ?? 0;
+        summaryComplete = snapshot['complete'] == true;
+        timelineHasMore = page['hasMore'] == true;
+        timelineCursor = page['nextCursor'] is Map
+            ? Map<String, dynamic>.from(page['nextCursor'] as Map)
+            : null;
       } else if (role == 'employee') {
         employeeStats = await PBService.getEmployeeStats(widget.userId);
       }
@@ -173,6 +210,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _debts = debts;
         _payments = payments;
         _financialEvents = financialEvents;
+        _openDebts = openDebts;
+        _financeTotalDebtIqd = totalDebtIqd;
+        _financeTotalRemainingIqd = totalRemainingIqd;
+        _financeTotalPaidIqd = totalPaidIqd;
+        _financeSummaryComplete = summaryComplete;
+        _financialTimelineHasMore = timelineHasMore;
+        _financialTimelineCursor = timelineCursor;
+        _financialHistoryError = null;
+        _financialHistoryLoading = false;
+        _financialFilterHydrating = false;
         _employeeStats = employeeStats;
         _nameController.text = user.getStringValue('name');
         _phoneController.text = user.getStringValue('phone');
@@ -200,6 +247,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _debts = [];
         _payments = [];
         _financialEvents = [];
+        _openDebts = [];
+        _financeTotalDebtIqd = 0;
+        _financeTotalRemainingIqd = 0;
+        _financeTotalPaidIqd = 0;
+        _financeSummaryComplete = false;
+        _financialTimelineHasMore = false;
+        _financialTimelineCursor = null;
+        _financialHistoryError = null;
         _employeeStats = {};
         _isLoading = false;
         _loadError =
@@ -286,17 +341,41 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     _financialRefreshInFlight = true;
     try {
-      final customerData = await Future.wait<List<RecordModel>>([
-        PBService.getDebts(customerId: widget.userId),
-        PBService.getPayments(customerId: widget.userId),
-        PBService.getFinancialEvents(widget.userId),
+      final customerData = await Future.wait<Map<String, dynamic>>([
+        PBService.getCustomerFinanceSnapshot(widget.userId),
+        PBService.getCustomerFinancialTimelinePage(
+          customerId: widget.userId,
+          limit: 50,
+        ),
       ]);
+      final snapshot = customerData[0];
+      final page = customerData[1];
       if (!mounted) return;
       setState(() {
-        _debts = customerData[0];
-        _payments = customerData[1];
-        _financialEvents = customerData[2];
+        _debts = List<RecordModel>.from(page['debts'] as List? ?? const []);
+        _payments = List<RecordModel>.from(page['payments'] as List? ?? const []);
+        _financialEvents = List<RecordModel>.from(
+          page['financialEvents'] as List? ?? const [],
+        );
+        _openDebts = List<RecordModel>.from(
+          snapshot['openDebts'] as List? ?? const [],
+        );
+        _financeTotalDebtIqd =
+            (snapshot['totalDebtIqd'] as num?)?.toDouble() ?? 0;
+        _financeTotalRemainingIqd =
+            (snapshot['totalRemainingIqd'] as num?)?.toDouble() ?? 0;
+        _financeTotalPaidIqd =
+            (snapshot['totalPaidIqd'] as num?)?.toDouble() ?? 0;
+        _financeSummaryComplete = snapshot['complete'] == true;
+        _financialTimelineHasMore = page['hasMore'] == true;
+        _financialTimelineCursor = page['nextCursor'] is Map
+            ? Map<String, dynamic>.from(page['nextCursor'] as Map)
+            : null;
+        _financialHistoryError = null;
       });
+      if (_hasFinancialFilters && _financialTimelineHasMore) {
+        unawaited(_hydrateFinancialHistoryForFilters());
+      }
       if (autoJump && _customerSection == 1) {
         _jumpToLatest();
       }
@@ -323,6 +402,121 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           }
         });
       }
+    }
+  }
+
+  List<RecordModel> _mergeFinancialRecords(
+    List<RecordModel> current,
+    List<RecordModel> incoming,
+  ) {
+    final byId = <String, RecordModel>{for (final item in current) item.id: item};
+    for (final item in incoming) {
+      byId[item.id] = item;
+    }
+    return byId.values.toList(growable: false);
+  }
+
+  Future<bool> _loadOlderFinancialHistory({
+    bool preserveScroll = true,
+    bool showError = true,
+  }) async {
+    if (!mounted || !_financialTimelineHasMore) return true;
+    if (_financialHistoryLoading || _financialTimelineCursor == null) return false;
+
+    final hadScroll = preserveScroll && _profileScrollController.hasClients;
+    final oldPixels = hadScroll ? _profileScrollController.position.pixels : 0.0;
+    final oldMax = hadScroll ? _profileScrollController.position.maxScrollExtent : 0.0;
+    setState(() {
+      _financialHistoryLoading = true;
+      _financialHistoryError = null;
+    });
+
+    try {
+      final page = await PBService.getCustomerFinancialTimelinePage(
+        customerId: widget.userId,
+        limit: 50,
+        cursor: _financialTimelineCursor,
+      );
+      if (!mounted) return false;
+      setState(() {
+        _debts = _mergeFinancialRecords(
+          _debts,
+          List<RecordModel>.from(page['debts'] as List? ?? const []),
+        );
+        _payments = _mergeFinancialRecords(
+          _payments,
+          List<RecordModel>.from(page['payments'] as List? ?? const []),
+        );
+        _financialEvents = _mergeFinancialRecords(
+          _financialEvents,
+          List<RecordModel>.from(page['financialEvents'] as List? ?? const []),
+        );
+        _financialTimelineHasMore = page['hasMore'] == true;
+        _financialTimelineCursor = page['nextCursor'] is Map
+            ? Map<String, dynamic>.from(page['nextCursor'] as Map)
+            : null;
+        _financialHistoryError = null;
+      });
+
+      if (hadScroll) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_profileScrollController.hasClients) return;
+          final position = _profileScrollController.position;
+          final delta = position.maxScrollExtent - oldMax;
+          final target = (oldPixels + delta)
+              .clamp(position.minScrollExtent, position.maxScrollExtent)
+              .toDouble();
+          _profileScrollController.jumpTo(target);
+        });
+      }
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      final message = AppHelpers.backendErrorMessage(
+        e,
+        fallback: 'نەتوانرا مامەڵە کۆنەکان باربکرێن. دووبارە هەوڵ بدە.',
+      );
+      setState(() => _financialHistoryError = message);
+      if (showError) {
+        AppHelpers.showSnackBar(context, message, isError: true);
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _financialHistoryLoading = false);
+    }
+  }
+
+  Future<bool> _ensureAllFinancialHistoryLoaded({
+    bool showError = true,
+  }) async {
+    var pages = 0;
+    while (mounted && _financialTimelineHasMore) {
+      if (pages++ > 10000) return false;
+      final loaded = await _loadOlderFinancialHistory(
+        preserveScroll: false,
+        showError: showError,
+      );
+      if (!loaded) return false;
+    }
+    return mounted;
+  }
+
+  bool get _hasFinancialFilters =>
+      _financialSearchController.text.trim().isNotEmpty ||
+      _financialDateRange != null ||
+      _financialTypeFilter != 'all';
+
+  Future<void> _hydrateFinancialHistoryForFilters() async {
+    if (!mounted || !_hasFinancialFilters || !_financialTimelineHasMore) return;
+    if (_financialFilterHydrating) return;
+    setState(() {
+      _financialFilterHydrating = true;
+      _financialHistoryError = null;
+    });
+    try {
+      await _ensureAllFinancialHistoryLoaded(showError: false);
+    } finally {
+      if (mounted) setState(() => _financialFilterHydrating = false);
     }
   }
 
@@ -783,11 +977,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   // ═══════════════════════════════════════════
 
   List<Widget> _buildCustomerBody() {
-    final summary = AppHelpers.debtSummaryInIqd(_debts);
-    final totalDebt = summary.totalDebt;
-    final totalRemaining = summary.totalRemaining;
-    final totalPaid = summary.totalPaid;
-    final totalsComplete = summary.complete;
+    final totalDebt = _financeTotalDebtIqd;
+    final totalRemaining = _financeTotalRemainingIqd;
+    final totalPaid = _financeTotalPaidIqd;
+    final totalsComplete = _financeSummaryComplete;
     final auth = context.read<AuthProvider>();
 
     final overview = <Widget>[
@@ -819,11 +1012,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
             child: OutlinedButton.icon(
               onPressed: totalsComplete
-                  ? () => _generateAccountStatement(
-                        totalDebt: totalDebt,
-                        totalRemaining: totalRemaining,
-                        totalPaid: totalPaid,
-                      )
+                  ? _generateCurrentFinancialStatement
                   : _showIncompleteCurrencySummaryMessage,
               icon: const Icon(Icons.receipt_long_rounded, size: 19),
               label: const Text('کەشف حیساب'),
@@ -990,7 +1179,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _ProfileTimelineItem(
           kind: 'payment',
           record: payment,
-          relatedDebt: debtsById[payment.getStringValue('debt')],
+          relatedDebt: debtsById[payment.getStringValue('debt')] ??
+              AppHelpers.expandedRecord(payment, 'debt'),
           date: _timelineDate(payment),
         ),
       for (final event in _financialEvents)
@@ -1163,6 +1353,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
     if (!mounted || picked == null) return;
     setState(() => _financialDateRange = picked);
+    unawaited(_hydrateFinancialHistoryForFilters());
   }
 
   void _clearFinancialFilters() {
@@ -1184,9 +1375,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     required double totalPaid,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasFilters = _financialSearchController.text.trim().isNotEmpty ||
-        _financialDateRange != null ||
-        _financialTypeFilter != 'all';
+    final hasFilters = _hasFinancialFilters;
     final dateLabel = _financialDateRange == null
         ? 'بەروار'
         : '${DateFormat('yyyy/MM/dd').format(_financialDateRange!.start)} — '
@@ -1198,7 +1387,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         padding: const EdgeInsetsDirectional.only(end: 7),
         child: ChoiceChip(
           selected: selected,
-          onSelected: (_) => setState(() => _financialTypeFilter = value),
+          onSelected: (_) {
+            setState(() => _financialTypeFilter = value);
+            unawaited(_hydrateFinancialHistoryForFilters());
+          },
           avatar: Icon(
             icon,
             size: 15,
@@ -1232,7 +1424,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       children: [
         TextField(
           controller: _financialSearchController,
-          onChanged: (_) => setState(() {}),
+          onChanged: (_) {
+            setState(() {});
+            unawaited(_hydrateFinancialHistoryForFilters());
+          },
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
             hintText: 'گەڕان لە قەرز، پارەدانەوە، بڕ یان تێبینی...',
@@ -1375,6 +1570,56 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  Widget _buildFinancialHistoryLoadingState(bool isDark) {
+    final error = _financialHistoryError;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFE9EDF3),
+        ),
+      ),
+      child: Column(
+        children: [
+          if (error == null)
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2.3),
+            )
+          else
+            const Icon(Icons.cloud_off_rounded, color: Colors.orange, size: 28),
+          const SizedBox(height: 9),
+          Text(
+            error ?? 'بۆ گەڕان و فلتەری تەواو، مێژووی کۆنتر لە سێرڤەر بار دەکرێت...',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF667085),
+            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 7),
+            TextButton.icon(
+              onPressed: _financialFilterHydrating
+                  ? null
+                  : () => unawaited(_hydrateFinancialHistoryForFilters()),
+              icon: const Icon(Icons.refresh_rounded, size: 17),
+              label: const Text('دووبارە هەوڵ بدە'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildCustomerChatTimelineCard({
     required double totalDebt,
     required double totalRemaining,
@@ -1384,8 +1629,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final allTimelineItems = _buildTimelineItems();
     final timelineItems = _filterFinancialTimeline(allTimelineItems);
     final runningBalances = _financialRunningBalances(allTimelineItems);
-    final renderEntries = _buildFinancialChatRenderEntries(timelineItems);
-    final totalsComplete = AppHelpers.debtSummaryInIqd(_debts).complete;
+    final hasFilters = _hasFinancialFilters;
+    final waitingForFullFilterHistory = hasFilters &&
+        (_financialTimelineHasMore || _financialFilterHydrating);
+    final renderEntries = _buildFinancialChatRenderEntries(
+      waitingForFullFilterHistory
+          ? const <_ProfileTimelineItem>[]
+          : timelineItems,
+    );
+    final totalsComplete = _financeSummaryComplete;
     final health = _debtHealth(totalRemaining, totalDebt);
 
     Widget buildHeader() {
@@ -1439,7 +1691,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${timelineItems.length}/${allTimelineItems.length} مامەڵە • قەرز و پارەدانەوە لە یەک مێژوودا',
+                              _financialTimelineHasMore && !hasFilters
+                                  ? '${allTimelineItems.length}+ مامەڵەی نوێ بارکراوە • مێژووی کۆنتر هەیە'
+                                  : '${timelineItems.length}/${allTimelineItems.length} مامەڵە • قەرز و پارەدانەوە لە یەک مێژوودا',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -1509,7 +1763,29 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             else
               _buildCurrencySummaryWarning(compact: true),
             const SizedBox(height: 12),
-            if (timelineItems.isEmpty)
+            if (!hasFilters && _financialTimelineHasMore) ...[
+              OutlinedButton.icon(
+                onPressed: _financialHistoryLoading
+                    ? null
+                    : () => _loadOlderFinancialHistory(),
+                icon: _financialHistoryLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.history_rounded, size: 18),
+                label: Text(
+                  _financialHistoryLoading
+                      ? 'بارکردنی مامەڵە کۆنەکان...'
+                      : 'مامەڵە کۆنەکان باربکە',
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (waitingForFullFilterHistory)
+              _buildFinancialHistoryLoadingState(isDark)
+            else if (timelineItems.isEmpty)
               allTimelineItems.isEmpty
                   ? _buildEmptyTimelineState(isDark)
                   : _buildFilteredTimelineEmptyState(isDark),
@@ -1732,8 +2008,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Widget _buildFinancialChatComposer(AuthProvider auth, bool isDark) {
-    final hasOutstandingDebt =
-        _debts.any((debt) => debt.getDoubleValue('remaining') > 0);
+    final hasOutstandingDebt = _openDebts.isNotEmpty;
     final replyTarget = _financialReplyTarget;
 
     return SafeArea(
@@ -1903,7 +2178,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final replyTarget = _financialReplyTarget;
     final saved = await FinancialPaymentFlow.show(
       context: context,
-      debts: _debts,
+      debts: _openDebts,
       createdBy: auth.userId,
       createdByName: auth.userName,
       initialDebtId: initialDebtId,
@@ -2767,6 +3042,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _generateFilteredFinancialChatStatement() async {
+    final hydrated = await _ensureAllFinancialHistoryLoaded(showError: true);
+    if (!hydrated || !mounted) return;
     final allItems = _buildTimelineItems();
     final visibleItems = _filterFinancialTimeline(allItems);
     if (visibleItems.isEmpty) {
@@ -2856,19 +3133,34 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _generateCurrentFinancialStatement() async {
-    final summary = AppHelpers.debtSummaryInIqd(_debts);
-    if (!summary.complete) {
+    if (!_financeSummaryComplete) {
       _showIncompleteCurrencySummaryMessage();
       return;
     }
-    await _generateAccountStatement(
-      totalDebt: summary.totalDebt,
-      totalRemaining: summary.totalRemaining,
-      totalPaid: summary.totalPaid,
-    );
+    try {
+      final fullDebts = await PBService.getAllCustomerDebtsLive(widget.userId);
+      if (!mounted) return;
+      await _generateAccountStatement(
+        debts: fullDebts,
+        totalDebt: _financeTotalDebtIqd,
+        totalRemaining: _financeTotalRemainingIqd,
+        totalPaid: _financeTotalPaidIqd,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'کەشف حیساب دروست نەکرا. دووبارە هەوڵ بدە.',
+        ),
+        isError: true,
+      );
+    }
   }
 
   Future<void> _generateAccountStatement({
+    required List<RecordModel> debts,
     required double totalDebt,
     required double totalRemaining,
     required double totalPaid,
@@ -2878,7 +3170,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     try {
       await PdfService.generateCustomerStatement(
-        activeDebts: _debts,
+        activeDebts: debts,
         customerName: customerName,
         marketName: auth.marketName,
         adminName: auth.userName,
@@ -3663,9 +3955,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final limit = _user!.getDoubleValue('debt_limit');
     final hasLimit = limit > 0;
     final canEdit = auth.canSetDebtLimit;
-    final debtSummary = AppHelpers.debtSummaryInIqd(_debts);
-    final totalRemaining = debtSummary.totalRemaining;
-    final totalsComplete = debtSummary.complete;
+    final totalRemaining = _financeTotalRemainingIqd;
+    final totalsComplete = _financeSummaryComplete;
     final remainingLimit =
         hasLimit && totalsComplete ? limit - totalRemaining : 0.0;
     final isOverLimit = hasLimit && totalsComplete && remainingLimit < 0;
