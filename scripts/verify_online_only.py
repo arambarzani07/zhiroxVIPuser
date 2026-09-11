@@ -514,6 +514,36 @@ else:
         if marker not in admin_rpc_source.lower():
             fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner RPC security marker missing: {marker}')
 
+# System Owner admin deletion must use its JWT-verified dedicated Edge Function.
+admin_section = pb.split('// ==================== Admin Subscription Management ====================', 1)[-1]
+admin_section = admin_section.split('// ==================== Admin Approval ====================', 1)[0]
+if "'delete-account'" not in admin_section:
+    fail('lib/services/pb_service.dart: System Owner admin deletion must use delete-account')
+if "'account-admin'" in admin_section and "'action': 'delete_user'" in admin_section:
+    fail('lib/services/pb_service.dart: System Owner admin deletion must not use the legacy account-admin delete path')
+secure_delete_edge = ROOT / 'supabase/functions/delete-account/index.ts'
+if not secure_delete_edge.exists():
+    fail('supabase/functions/delete-account/index.ts: secure admin deletion Edge Function must be tracked')
+else:
+    secure_delete_source = secure_delete_edge.read_text(encoding='utf-8')
+    for marker in (
+        'requesterProfile.is_system_owner !== true',
+        'target.role !== "admin"',
+        'target.is_system_owner === true',
+        'admin.auth.admin.deleteUser(userId)',
+        'admin.auth.admin.deleteUser(targetId)',
+        'admin.storage.from("receipts").remove(batch)',
+    ):
+        if marker not in secure_delete_source:
+            fail(f'supabase/functions/delete-account/index.ts: secure deletion marker missing: {marker}')
+    for forbidden in (
+        '.from("payments").delete()',
+        '.from("debts").delete()',
+        '.from("notifications").delete()',
+    ):
+        if forbidden in secure_delete_source:
+            fail(f'supabase/functions/delete-account/index.ts: relational cleanup must stay FK-cascade driven, found {forbidden}')
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:

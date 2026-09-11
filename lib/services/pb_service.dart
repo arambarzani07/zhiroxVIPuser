@@ -99,6 +99,16 @@ class PBService {
         return 'دەسەڵاتی ئەم کردارەت نییە';
       case 'missing_permission':
         return 'مۆڵەتی ئەم کردارەت نییە';
+      case 'system_owner_required':
+        return 'تەنها خاوەنی سیستەم دەتوانێت ئەم کردارە ئەنجام بدات';
+      case 'cannot_delete_system_owner':
+        return 'هەژماری خاوەنی سیستەم ناتوانرێت بسڕدرێتەوە';
+      case 'admin_not_found':
+        return 'هەژماری بەڕێوەبەر نەدۆزرایەوە';
+      case 'tenant_member_delete_failed':
+        return 'سڕینەوەی هەندێک هەژماری ناو مارکێت سەرکەوتوو نەبوو؛ دووبارە هەوڵ بدەرەوە';
+      case 'admin_delete_failed':
+        return 'سڕینەوەی هەژماری بەڕێوەبەر سەرکەوتوو نەبوو';
       case 'invalid_input':
         return 'زانیارییەکان تەواو یان دروست نین';
       default:
@@ -283,8 +293,8 @@ class PBService {
     await ensureInitialized();
     try {
       final response = await client.functions.invoke(
-        'account-admin',
-        body: {'action': 'delete_user', 'user_id': adminId},
+        'delete-account',
+        body: {'user_id': adminId},
       );
       if (response.data is Map && response.data['error'] != null) {
         throw _functionError(response.data);
