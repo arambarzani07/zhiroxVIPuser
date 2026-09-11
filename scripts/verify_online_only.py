@@ -617,7 +617,7 @@ if not update_account_edge.exists():
 else:
     update_account_source = update_account_edge.read_text(encoding='utf-8')
     for required in (
-        'requester.active !== true',
+        'await isOperational(admin, requester)',
         'sameTenantMember',
         'target.role === "employee" || target.role === "customer"',
         'targetAuthData',

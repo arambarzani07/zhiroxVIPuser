@@ -23,6 +23,29 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function isOperational(admin: any, profile: any): Promise<boolean> {
+  if (!profile || profile.active !== true || profile.approved !== true) return false;
+  if (profile.is_system_owner === true) return true;
+
+  const tenantId = profile.role === "admin" ? profile.id : profile.admin_id;
+  if (!tenantId) return false;
+  const tenant = profile.role === "admin"
+    ? profile
+    : (await admin
+        .from("profiles")
+        .select("id, active, approved, subscription_end")
+        .eq("id", tenantId)
+        .eq("role", "admin")
+        .maybeSingle()).data;
+  if (!tenant || tenant.active !== true || tenant.approved !== true) return false;
+
+  const subscriptionEnd = tenant.subscription_end
+    ? Date.parse(String(tenant.subscription_end))
+    : null;
+  return subscriptionEnd === null ||
+    (Number.isFinite(subscriptionEnd) && subscriptionEnd >= Date.now());
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -57,7 +80,9 @@ Deno.serve(async (req) => {
     if (requesterError) return json({ error: requesterError.message }, 400);
     if (targetError) return json({ error: targetError.message }, 400);
     if (!requester || !target) return json({ error: "profile_not_found" }, 404);
-    if (requester.active !== true) return json({ error: "forbidden" }, 403);
+    if (!(await isOperational(admin, requester))) {
+      return json({ error: "forbidden" }, 403);
+    }
 
     const isSelf = requester.id === target.id;
     const sameTenantMember =

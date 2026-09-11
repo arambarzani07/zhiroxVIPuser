@@ -31,6 +31,29 @@ function chunks<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+async function isOperational(admin: any, profile: any): Promise<boolean> {
+  if (!profile || profile.active !== true || profile.approved !== true) return false;
+  if (profile.is_system_owner === true) return true;
+
+  const tenantId = profile.role === "admin" ? profile.id : profile.admin_id;
+  if (!tenantId) return false;
+  const tenant = profile.role === "admin"
+    ? profile
+    : (await admin
+        .from("profiles")
+        .select("id, active, approved, subscription_end")
+        .eq("id", tenantId)
+        .eq("role", "admin")
+        .maybeSingle()).data;
+  if (!tenant || tenant.active !== true || tenant.approved !== true) return false;
+
+  const subscriptionEnd = tenant.subscription_end
+    ? Date.parse(String(tenant.subscription_end))
+    : null;
+  return subscriptionEnd === null ||
+    (Number.isFinite(subscriptionEnd) && subscriptionEnd >= Date.now());
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -122,7 +145,11 @@ Deno.serve(async (req) => {
           return json({ error: "market_exists" }, 409);
         }
       } else if (role === "employee") {
-        if (!requesterProfile || requesterProfile.role !== "admin" || requesterProfile.active !== true) {
+        if (
+          !requesterProfile ||
+          requesterProfile.role !== "admin" ||
+          !(await isOperational(admin, requesterProfile))
+        ) {
           return json({ error: "employee_creation_requires_admin" }, 403);
         }
         adminId = requester.id;
@@ -135,16 +162,22 @@ Deno.serve(async (req) => {
         if (!adminId) return json({ error: "admin_id_required" }, 400);
         const { data: targetAdmin, error: targetAdminError } = await admin
           .from("profiles")
-          .select("id, role, active")
+          .select("id, role, active, approved, subscription_end")
           .eq("id", adminId)
           .maybeSingle();
         if (targetAdminError) return json({ error: targetAdminError.message }, 400);
-        if (!targetAdmin || targetAdmin.role !== "admin" || targetAdmin.active !== true) {
+        if (
+          !targetAdmin ||
+          targetAdmin.role !== "admin" ||
+          !(await isOperational(admin, targetAdmin))
+        ) {
           return json({ error: "invalid_admin" }, 400);
         }
 
         if (requesterProfile) {
-          if (requesterProfile.active !== true) return json({ error: "forbidden" }, 403);
+          if (!(await isOperational(admin, requesterProfile))) {
+            return json({ error: "forbidden" }, 403);
+          }
           const tenantId = requesterProfile.role === "admin"
             ? requesterProfile.id
             : requesterProfile.admin_id;
@@ -231,7 +264,7 @@ Deno.serve(async (req) => {
     if (!requester || !requesterProfile) {
       return json({ error: "authentication_required" }, 401);
     }
-    if (requesterProfile.active !== true) {
+    if (!(await isOperational(admin, requesterProfile))) {
       return json({ error: "forbidden" }, 403);
     }
 
@@ -298,11 +331,11 @@ Deno.serve(async (req) => {
       if (target.role === "customer") {
         const { data: receiptRows, error: receiptError } = await admin
           .from("debts")
-          .select("receipt_image")
+          .select("receipt_image_path")
           .eq("customer_id", targetId);
         if (receiptError) return json({ error: receiptError.message }, 400);
         for (const row of receiptRows ?? []) {
-          const path = String(row.receipt_image ?? "").trim();
+          const path = String(row.receipt_image_path ?? "").trim();
           if (path && !receiptPaths.includes(path)) receiptPaths.push(path);
         }
       }
