@@ -23,6 +23,14 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function chunks<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    out.push(items.slice(index, index + size));
+  }
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -64,7 +72,9 @@ Deno.serve(async (req) => {
       const fatherName = String(body.father_name ?? "").trim();
       const grandfatherName = String(body.grandfather_name ?? "").trim();
       let adminId = body.admin_id ? String(body.admin_id) : null;
-      const createdBy = requester?.id ?? (body.created_by ? String(body.created_by) : null);
+      // Audit ownership is authoritative: authenticated calls use the requester;
+      // public customer registrations never get to spoof created_by.
+      const createdBy = requester?.id ?? null;
 
       if (!phone || password.length < 8 || !name) {
         return json({ error: "invalid_input" }, 400);
@@ -73,15 +83,16 @@ Deno.serve(async (req) => {
         return json({ error: "invalid_role" }, 400);
       }
 
-      const { data: existing } = await admin
+      const { data: existing, error: existingError } = await admin
         .from("profiles")
         .select("id")
         .eq("phone", phone)
         .maybeSingle();
+      if (existingError) return json({ error: existingError.message }, 400);
       if (existing) return json({ error: "phone_exists" }, 409);
 
       let approved = true;
-      let active = true;
+      const active = true;
       let marketName = "";
 
       if (role === "admin") {
@@ -110,11 +121,12 @@ Deno.serve(async (req) => {
         adminId = requester.id;
       } else {
         if (!adminId) return json({ error: "admin_id_required" }, 400);
-        const { data: targetAdmin } = await admin
+        const { data: targetAdmin, error: targetAdminError } = await admin
           .from("profiles")
           .select("id, role, active")
           .eq("id", adminId)
           .maybeSingle();
+        if (targetAdminError) return json({ error: targetAdminError.message }, 400);
         if (!targetAdmin || targetAdmin.role !== "admin" || targetAdmin.active !== true) {
           return json({ error: "invalid_admin" }, 400);
         }
@@ -199,17 +211,18 @@ Deno.serve(async (req) => {
     }
 
     if (action === "reset_password") {
-      const targetId = String(body.user_id ?? "");
+      const targetId = String(body.user_id ?? "").trim();
       const newPassword = String(body.new_password ?? "");
       if (!targetId || newPassword.length < 8) {
         return json({ error: "invalid_input" }, 400);
       }
 
-      const { data: target } = await admin
+      const { data: target, error: targetError } = await admin
         .from("profiles")
         .select("id, role, admin_id, is_system_owner")
         .eq("id", targetId)
         .maybeSingle();
+      if (targetError) return json({ error: targetError.message }, 400);
       if (!target) return json({ error: "not_found" }, 404);
       if (target.is_system_owner) return json({ error: "cannot_reset_system_owner" }, 403);
       if (targetId === requester.id) {
@@ -231,55 +244,55 @@ Deno.serve(async (req) => {
     }
 
     if (action === "delete_user") {
-      const targetId = String(body.user_id ?? "");
-      const { data: target } = await admin
+      const targetId = String(body.user_id ?? "").trim();
+      if (!targetId) return json({ error: "invalid_input" }, 400);
+
+      const { data: target, error: targetError } = await admin
         .from("profiles")
-        .select("*")
+        .select("id, role, admin_id, is_system_owner")
         .eq("id", targetId)
         .maybeSingle();
+      if (targetError) return json({ error: targetError.message }, 400);
       if (!target) return json({ error: "not_found" }, 404);
       if (target.is_system_owner) return json({ error: "cannot_delete_system_owner" }, 403);
       if (target.role === "admin") {
         return json({ error: "admin_delete_requires_dedicated_endpoint" }, 409);
       }
 
-      const requesterTenant = requesterProfile.role === "admin"
-        ? requesterProfile.id
-        : requesterProfile.admin_id;
-      const targetTenant = target.role === "admin" ? target.id : target.admin_id;
       const isOwner = requesterProfile.is_system_owner === true;
+      const isTenantAdmin =
+        requesterProfile.role === "admin" &&
+        (target.role === "employee" || target.role === "customer") &&
+        target.admin_id === requester.id;
+      if (!isOwner && !isTenantAdmin) return json({ error: "forbidden" }, 403);
 
-      if (!isOwner && (
-        requesterProfile.role !== "admin" ||
-        (targetId !== requester.id && requesterTenant !== targetTenant)
-      )) {
-        return json({ error: "forbidden" }, 403);
-      }
-      if (!isOwner && target.role === "admin" && targetId !== requester.id) {
-        return json({ error: "cannot_delete_peer_admin" }, 403);
-      }
-
+      // Public relational data is intentionally FK-driven: profile deletion
+      // cascades customer debt/payment/read state and SET NULLs creator fields.
+      // Capture receipt object paths first because Storage is outside Postgres.
+      const receiptPaths: string[] = [];
       if (target.role === "customer") {
-        const { data: debts } = await admin
+        const { data: receiptRows, error: receiptError } = await admin
           .from("debts")
-          .select("id")
+          .select("receipt_image")
           .eq("customer_id", targetId);
-        const debtIds = (debts ?? []).map((d: any) => d.id);
-        if (debtIds.length) await admin.from("payments").delete().in("debt_id", debtIds);
-        await admin
-          .from("notifications")
-          .delete()
-          .or(`customer_id.eq.${targetId},sender_id.eq.${targetId}`);
-        await admin.from("debts").delete().eq("customer_id", targetId);
-      } else if (target.role === "employee") {
-        await admin.from("debts").update({ created_by: null }).eq("created_by", targetId);
-        await admin.from("payments").update({ created_by: null }).eq("created_by", targetId);
-        await admin.from("notifications").update({ sender_id: null }).eq("sender_id", targetId);
+        if (receiptError) return json({ error: receiptError.message }, 400);
+        for (const row of receiptRows ?? []) {
+          const path = String(row.receipt_image ?? "").trim();
+          if (path && !receiptPaths.includes(path)) receiptPaths.push(path);
+        }
       }
 
-      const { error } = await admin.auth.admin.deleteUser(targetId);
-      if (error) return json({ error: error.message }, 400);
-      return json({ ok: true });
+      const { error: deleteError } = await admin.auth.admin.deleteUser(targetId);
+      if (deleteError) return json({ error: deleteError.message }, 400);
+
+      let receiptCleanupFailed = false;
+      for (const batch of chunks(receiptPaths, 100)) {
+        if (batch.length === 0) continue;
+        const { error } = await admin.storage.from("receipts").remove(batch);
+        if (error) receiptCleanupFailed = true;
+      }
+
+      return json({ ok: true, receipt_cleanup_failed: receiptCleanupFailed });
     }
 
     return json({ error: "unknown_action" }, 400);
