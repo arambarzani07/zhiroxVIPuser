@@ -1,0 +1,43 @@
+name: Harden Account Edge Guards
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/harden-account-edge-guards.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Patch owner-source
+        run: |
+          set -euo pipefail
+          cp scripts/harden_account_edge_guards.py /tmp/harden_account_edge_guards.py
+          python3 scripts/harden_account_edge_guards.py
+          git add supabase/functions/account-admin/index.ts scripts/verify_online_only.py
+          git commit -m 'Centralize admin deletion and verify account guards'
+          git push origin owner-source
+      - name: Patch user-source
+        run: |
+          set -euo pipefail
+          git reset --hard
+          git clean -fd
+          git fetch origin user-source
+          git checkout -B user-source origin/user-source
+          cp /tmp/harden_account_edge_guards.py scripts/.harden_account_edge_guards.tmp.py
+          REPO_ROOT="$PWD" python3 scripts/.harden_account_edge_guards.tmp.py
+          rm -f scripts/.harden_account_edge_guards.tmp.py
+          git add supabase/functions/account-admin/index.ts scripts/verify_online_only.py
+          git commit -m 'Centralize admin deletion and verify account guards'
+          git push origin user-source
