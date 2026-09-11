@@ -495,7 +495,7 @@ admin_section = pb.split('// ==================== Admin Subscription Management 
 admin_section = admin_section.split('// ==================== Admin Approval ====================', 1)[0]
 if 'for (final admin in result.items)' in admin_section:
     fail('lib/services/pb_service.dart: Admin management must not restore per-admin N+1 queries')
-if 'filter: 'admin_id = "$adminId" && role = "employee"'' in admin_section or 'filter: 'admin_id = "$adminId" && role = "customer"'' in admin_section:
+if 'admin_id = "$adminId" && role = "employee"' in admin_section or 'admin_id = "$adminId" && role = "customer"' in admin_section:
     fail('lib/services/pb_service.dart: Admin management counts must stay set-based')
 admin_rpc_migration = ROOT / 'supabase/migrations/20260911102326_system_owner_admin_management_rpcs.sql'
 if not admin_rpc_migration.exists():
