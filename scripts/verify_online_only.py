@@ -473,6 +473,15 @@ if 'if (readThrough == null) return;' not in customer_list_source:
     fail('lib/screens/shared/user_list_screen.dart: missing null read-through fail-closed guard')
 
 
+# Customer-list async loads must ignore stale failures and preserve the active
+# search query when connectivity returns.
+if 'if (!mounted || generation != _loadGeneration) return;' not in customer_list_source:
+    fail('lib/screens/shared/user_list_screen.dart: stale customer-list failures must be generation-guarded')
+if 'if (online && mounted) _loadUsers();' in customer_list_source:
+    fail('lib/screens/shared/user_list_screen.dart: reconnect must not discard the active customer search')
+if "_loadUsers(search: _searchController.text.trim());" not in customer_list_source:
+    fail('lib/screens/shared/user_list_screen.dart: reconnect/search-preserving reload marker missing')
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
