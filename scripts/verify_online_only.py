@@ -399,6 +399,39 @@ for dart_path in LIB.rglob('*.dart'):
     if 'DebtListScreen' in source:
         fail(f'{dart_path.relative_to(ROOT)}: standalone DebtListScreen must not return')
 
+# Customer Inbox read receipts must be bounded by the last activity actually
+# observed by the viewer. Marking through server now() can swallow a new event
+# that arrives between tapping a chat and the read-receipt RPC completing.
+read_receipt_migration = ROOT / 'supabase/migrations/20260911094437_mark_financial_chat_read_through_timestamp.sql'
+if not read_receipt_migration.exists():
+    fail(f'{read_receipt_migration.relative_to(ROOT)}: race-safe read-receipt migration must be tracked')
+else:
+    read_receipt_source = read_receipt_migration.read_text(encoding='utf-8')
+    for marker in (
+        'mark_financial_chat_read_through',
+        'greatest(',
+        'least(coalesce(p_read_through, now()), now())',
+        'revoke all on function public.mark_financial_chat_read_through(uuid, timestamptz) from public, anon;',
+    ):
+        if marker not in read_receipt_source:
+            fail(f'{read_receipt_migration.relative_to(ROOT)}: read-receipt marker missing: {marker}')
+for marker in (
+    "'mark_financial_chat_read_through'",
+    'DateTime? readThrough',
+    "'p_read_through'",
+):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: race-safe read-receipt marker missing: {marker}')
+for marker in (
+    '_markFinancialChatReadBestEffort(user.id, readThrough)',
+    "inbox?['last_activity_at']",
+):
+    if marker not in customer_list_source:
+        fail(f'lib/screens/shared/user_list_screen.dart: bounded read-receipt marker missing: {marker}')
+if 'PBService.markFinancialChatRead(user.id)' in customer_list_source:
+    fail('lib/screens/shared/user_list_screen.dart: unbounded read receipt must not return')
+
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
