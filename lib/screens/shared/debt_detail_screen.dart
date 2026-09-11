@@ -4,9 +4,9 @@ import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/pb_service.dart';
-import 'package:zhirox/services/pdf_service.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
 import 'package:zhirox/screens/shared/financial_payment_flow.dart';
+import 'package:zhirox/screens/shared/financial_document_actions.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 
@@ -77,29 +77,9 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
   }
 
   Future<void> _printDebtInvoice() async {
-    if (_debt == null) return;
-    final auth = context.read<AuthProvider>();
-    String marketName = auth.marketName;
-    String adminPhone = '';
-
-    if (marketName.isEmpty) {
-      try {
-        final admin = await PBService.getUser(auth.adminId);
-        marketName = admin.getStringValue('market_name');
-        adminPhone = admin.getStringValue('phone');
-      } catch (_) {
-        marketName = 'Zhirox System';
-      }
-    } else {
-      adminPhone = auth.user?.getStringValue('phone') ?? '';
-    }
-
-    await PdfService.generateInvoice(
-      debt: _debt!,
-      marketName: marketName,
-      adminName: auth.userName,
-      adminPhone: adminPhone,
-    );
+    final debt = _debt;
+    if (debt == null) return;
+    await FinancialDocumentActions.generateDebtInvoice(context, debt);
   }
 
   Future<void> _editCurrentDebt() async {
@@ -892,9 +872,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     if (_debt == null || _debt!.getStringValue('receipt_image').isEmpty) {
       return [];
     }
-    final imageUrl = PBService.pb
-        .getFileUrl(_debt!, _debt!.getStringValue('receipt_image'))
-        .toString();
+    final imageUrl = FinancialDocumentActions.receiptUrl(_debt!);
 
     return [
       SliverToBoxAdapter(
@@ -902,7 +880,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
-            onTap: () => _showReceiptPreview(imageUrl),
+            onTap: () => FinancialDocumentActions.openReceiptViewer(context, _debt!),
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -979,36 +957,6 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
         ),
       ),
     ];
-  }
-
-  void _showReceiptPreview(String imageUrl) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: Stack(
-          children: [
-            Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: InteractiveViewer(
-                  child: Image.network(imageUrl, fit: BoxFit.contain),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 0,
-              right: 0,
-              child: IconButton.filled(
-                onPressed: () => Navigator.pop(ctx),
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildPaymentCard(RecordModel payment, int index) {
