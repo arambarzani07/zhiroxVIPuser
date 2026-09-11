@@ -35,6 +35,9 @@ class _UserListScreenState extends State<UserListScreen> {
   StreamSubscription<bool>? _connectivitySub;
   RealtimeChannel? _inboxRealtimeChannel;
   Timer? _inboxRealtimeDebounce;
+  Timer? _customerSearchDebounce;
+  bool _inboxRefreshInFlight = false;
+  bool _inboxRefreshPending = false;
 
   @override
   void initState() {
@@ -55,6 +58,7 @@ class _UserListScreenState extends State<UserListScreen> {
   @override
   void dispose() {
     _inboxRealtimeDebounce?.cancel();
+    _customerSearchDebounce?.cancel();
     final channel = _inboxRealtimeChannel;
     if (channel != null) {
       unawaited(PBService.client.removeChannel(channel));
@@ -112,8 +116,14 @@ class _UserListScreenState extends State<UserListScreen> {
     List<RecordModel> users, {
     int? generation,
   }) async {
+    if (_inboxRefreshInFlight) {
+      _inboxRefreshPending = true;
+      return;
+    }
+
     final ids = users.map((user) => user.id).where((id) => id.isNotEmpty).toList();
     if (ids.isEmpty) return;
+    _inboxRefreshInFlight = true;
     try {
       final rows = await PBService.getCustomerInboxRows(ids);
       if (!mounted || (generation != null && generation != _loadGeneration)) return;
@@ -160,7 +170,31 @@ class _UserListScreenState extends State<UserListScreen> {
         _inboxError = 'نەتوانرا پوختەی چاتی کڕیاران باربکرێت';
         debugPrint(_inboxError);
       });
+    } finally {
+      _inboxRefreshInFlight = false;
+      if (_inboxRefreshPending && mounted) {
+        _inboxRefreshPending = false;
+        final currentUsers = List<RecordModel>.from(_users);
+        if (currentUsers.isNotEmpty) {
+          unawaited(
+            _loadCustomerInboxInBackground(
+              currentUsers,
+              generation: _loadGeneration,
+            ),
+          );
+        }
+      }
     }
+  }
+
+  void _scheduleCustomerSearch(String value) {
+    _customerSearchDebounce?.cancel();
+    final query = value.trim();
+    if (mounted) setState(() {});
+    _customerSearchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      unawaited(_loadUsers(search: query));
+    });
   }
 
   Future<void> _subscribeCustomerInboxRealtime() async {
@@ -264,13 +298,21 @@ class _UserListScreenState extends State<UserListScreen> {
     return '$title • $detail';
   }
 
+  Future<void> _markFinancialChatReadBestEffort(String customerId) async {
+    try {
+      await PBService.markFinancialChatRead(customerId);
+    } catch (_) {
+      if (mounted) _scheduleCustomerInboxRefresh();
+    }
+  }
+
   Future<void> _openUserProfile(RecordModel user) async {
     if (widget.role == 'customer') {
       final row = _customerInbox[user.id];
       if (row != null && row['unread'] == true) {
         setState(() => row['unread'] = false);
       }
-      unawaited(PBService.markFinancialChatRead(user.id));
+      unawaited(_markFinancialChatReadBestEffort(user.id));
     }
     await Navigator.push(
       context,
@@ -422,6 +464,7 @@ class _UserListScreenState extends State<UserListScreen> {
                                       color: Colors.grey[400],
                                     ),
                                     onPressed: () {
+                                      _customerSearchDebounce?.cancel();
                                       _searchController.clear();
                                       _loadUsers();
                                     },
@@ -433,7 +476,7 @@ class _UserListScreenState extends State<UserListScreen> {
                               vertical: 14,
                             ),
                           ),
-                          onChanged: (value) => _loadUsers(search: value),
+                          onChanged: _scheduleCustomerSearch,
                         ),
                       ),
                     ],

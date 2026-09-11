@@ -216,6 +216,41 @@ if "openFinancialChat: widget.role == 'customer'" not in customer_list_source:
     fail('Customer list tap must open Financial Chat directly')
 if '_showPaymentDialog(RecordModel user)' in customer_list_source:
     fail('Customer list must not duplicate payment recording outside Financial Chat')
+
+# Customer Inbox must batch summaries and avoid request storms from text search
+# or realtime financial-event bursts.
+for marker in (
+    'PBService.getCustomerInboxRows(ids)',
+    'Timer? _customerSearchDebounce;',
+    '_scheduleCustomerSearch',
+    'Duration(milliseconds: 300)',
+    '_inboxRefreshInFlight',
+    '_inboxRefreshPending',
+    '_markFinancialChatReadBestEffort',
+):
+    if marker not in customer_list_source:
+        fail(f'lib/screens/shared/user_list_screen.dart: Customer Inbox performance marker missing: {marker}')
+if 'onChanged: (value) => _loadUsers(search: value)' in customer_list_source:
+    fail('lib/screens/shared/user_list_screen.dart: customer search must not query on every keypress')
+for marker in ('getCustomerInboxRows(', 'markFinancialChatRead('):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: Customer Inbox RPC marker missing: {marker}')
+
+inbox_schema = ROOT / 'supabase/migrations/20260911090854_add_financial_chat_inbox.sql'
+inbox_grants = ROOT / 'supabase/migrations/20260911093112_harden_financial_chat_inbox_grants.sql'
+for migration_path in (inbox_schema, inbox_grants):
+    if not migration_path.exists():
+        fail(f'{migration_path.relative_to(ROOT)}: Customer Inbox migration must be tracked')
+if inbox_grants.exists():
+    grants_source = inbox_grants.read_text(encoding='utf-8')
+    for marker in (
+        'revoke all on table public.financial_chat_reads from anon;',
+        'grant select, insert, update on table public.financial_chat_reads to authenticated;',
+        'revoke execute on function public.get_customer_inbox_rows(uuid[]) from public, anon;',
+        'revoke execute on function public.mark_financial_chat_read(uuid) from public, anon;',
+    ):
+        if marker not in grants_source:
+            fail(f'{inbox_grants.relative_to(ROOT)}: least-privilege marker missing: {marker}')
 if 'DebtProvider' in customer_list_source:
     fail('Customer list must not own debt/payment mutation logic')
 
