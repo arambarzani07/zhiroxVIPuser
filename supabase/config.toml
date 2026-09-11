@@ -1,0 +1,2 @@
+[functions.fib-subscription-payment]
+verify_jwt = false
