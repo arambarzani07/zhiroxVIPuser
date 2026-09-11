@@ -417,7 +417,7 @@ else:
             fail(f'{read_receipt_migration.relative_to(ROOT)}: read-receipt marker missing: {marker}')
 for marker in (
     "'mark_financial_chat_read_through'",
-    'DateTime? readThrough',
+    'required DateTime readThrough',
     "'p_read_through'",
 ):
     if marker not in pb:
