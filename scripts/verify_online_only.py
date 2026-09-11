@@ -343,9 +343,17 @@ profile_source = (LIB / 'screens/shared/user_profile_screen.dart').read_text(enc
 for marker in ('_financialReplyTarget', 'referenceKind:', 'referenceId:', 'reference_snapshot', 'وەک وەڵام / پەیوەستکردن'):
     if marker not in profile_source:
         fail(f'lib/screens/shared/user_profile_screen.dart: persistent Financial Chat reference marker missing: {marker}')
-for marker in ('referenceKind', 'referenceId', "'p_reference_kind'", "'p_reference_id'"):
+for marker in ('referenceKind', 'referenceId', "'reference_kind'", "'reference_id'"):
     if marker not in pb:
         fail(f'lib/services/pb_service.dart: persistent financial reference marker missing: {marker}')
+record_payment_edge = ROOT / 'supabase/functions/record-payment/index.ts'
+if not record_payment_edge.exists():
+    fail('supabase/functions/record-payment/index.ts: persistent payment reference gateway missing')
+else:
+    record_payment_source = record_payment_edge.read_text(encoding='utf-8')
+    for marker in ('p_reference_kind', 'p_reference_id'):
+        if marker not in record_payment_source:
+            fail(f'supabase/functions/record-payment/index.ts: persistent payment reference marker missing: {marker}')
 for marker in ('referenceKind', 'referenceId'):
     if marker not in add_debt:
         fail(f'lib/screens/shared/add_debt_screen.dart: debt reference pass-through missing: {marker}')
