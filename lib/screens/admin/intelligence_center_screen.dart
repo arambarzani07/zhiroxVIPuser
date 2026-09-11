@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/screens/shared/user_profile_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -91,6 +92,18 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
             'نەتوانرا زانیارییە زیرەکەکان باربکرێن. پەیوەندی ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.';
       });
     }
+  }
+
+  Future<void> _openCustomer(_CustomerRisk risk) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => UserProfileScreen(
+          userId: risk.customerId,
+          openFinancialChat: true,
+        ),
+      ),
+    );
+    if (mounted) unawaited(_load());
   }
 
   @override
@@ -214,7 +227,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
                       icon: Icons.payments_rounded,
                       title: 'وەرگیراوی ٣٠ ڕۆژ',
                       value: AppHelpers.formatCurrency(snapshot.collected30),
-                      subtitle: '${snapshot.paymentCount30} پارەدان',
+                      subtitle: snapshot.collectionTrendLabel,
                       accent: Colors.green,
                     ),
                   ),
@@ -235,7 +248,8 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
               _buildSectionTitle(
                 icon: Icons.shield_outlined,
                 title: 'Risk Score ـی کڕیارەکان',
-                subtitle: 'نمرەی ٠ تا ١٠٠ بەپێی دواکەوتن و بڕی ماوە',
+                subtitle:
+                    'نمرەی ٠ تا ١٠٠ • لەسەر کڕیار بکە بۆ کردنەوەی هەژمار',
                 isDark: isDark,
               ),
               const SizedBox(height: 10),
@@ -246,7 +260,11 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
                 )
               else
                 ...snapshot.risks.take(8).map(
-                      (risk) => _riskCard(risk, isDark),
+                      (risk) => GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => unawaited(_openCustomer(risk)),
+                        child: _riskCard(risk, isDark),
+                      ),
                     ),
               const SizedBox(height: 12),
               Text(
@@ -531,6 +549,8 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
           const SizedBox(height: 3),
           Text(
             subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 10,
               color: isDark
@@ -705,6 +725,14 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
                       : const Color(0xFF98A2B3),
                 ),
               ),
+              const SizedBox(height: 2),
+              Icon(
+                Icons.chevron_left_rounded,
+                size: 18,
+                color: isDark
+                    ? AppDarkColors.textSecondary
+                    : const Color(0xFF98A2B3),
+              ),
             ],
           ),
         ],
@@ -747,6 +775,7 @@ class _IntelligenceSnapshot {
     required this.due30Amount,
     required this.due30Count,
     required this.collected30,
+    required this.previousCollected30,
     required this.paymentCount30,
     required this.healthScore,
     required this.risks,
@@ -762,10 +791,20 @@ class _IntelligenceSnapshot {
   final double due30Amount;
   final int due30Count;
   final double collected30;
+  final double previousCollected30;
   final int paymentCount30;
   final int healthScore;
   final List<_CustomerRisk> risks;
   final List<_SmartAlert> alerts;
+
+  String get collectionTrendLabel {
+    final countLabel = '$paymentCount30 پارەدان';
+    if (previousCollected30 <= 0) return countLabel;
+    final change =
+        ((collected30 - previousCollected30) / previousCollected30 * 100).round();
+    final prefix = change > 0 ? '+' : '';
+    return '$countLabel • $prefix$change% بەراورد بە ٣٠ ڕۆژی پێشوو';
+  }
 
   static double _number(dynamic value) {
     if (value is num) return value.toDouble();
@@ -788,6 +827,7 @@ class _IntelligenceSnapshot {
     final next7 = today.add(const Duration(days: 7));
     final next30 = today.add(const Duration(days: 30));
     final last30 = now.subtract(const Duration(days: 30));
+    final previous30Start = now.subtract(const Duration(days: 60));
 
     final customerNames = <String, String>{};
     for (final profile in profiles) {
@@ -847,12 +887,18 @@ class _IntelligenceSnapshot {
     }
 
     var collected30 = 0.0;
+    var previousCollected30 = 0.0;
     var paymentCount30 = 0;
     for (final payment in payments) {
       final created = _date(payment['created_at']);
-      if (created == null || created.isBefore(last30)) continue;
-      collected30 += _number(payment['amount']);
-      paymentCount30++;
+      if (created == null) continue;
+      final amount = _number(payment['amount']);
+      if (!created.isBefore(last30)) {
+        collected30 += amount;
+        paymentCount30++;
+      } else if (!created.isBefore(previous30Start)) {
+        previousCollected30 += amount;
+      }
     }
 
     final risks = <_CustomerRisk>[];
@@ -952,6 +998,7 @@ class _IntelligenceSnapshot {
       due30Amount: due30Amount,
       due30Count: due30Count,
       collected30: collected30,
+      previousCollected30: previousCollected30,
       paymentCount30: paymentCount30,
       healthScore: healthScore,
       risks: risks,
