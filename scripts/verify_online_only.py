@@ -482,6 +482,38 @@ if 'if (online && mounted) _loadUsers();' in customer_list_source:
 if "_loadUsers(search: _searchController.text.trim());" not in customer_list_source:
     fail('lib/screens/shared/user_list_screen.dart: reconnect/search-preserving reload marker missing')
 
+# System Owner admin management must use the set-based, owner-checked RPCs.
+for marker in (
+    "'get_system_owner_admins_page'",
+    "'renew_system_owner_admin_subscription'",
+    "'employeeCount': asInt(row['employee_count'])",
+    "'customerCount': asInt(row['customer_count'])",
+):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: System Owner admin-management marker missing: {marker}')
+admin_section = pb.split('// ==================== Admin Subscription Management ====================', 1)[-1]
+admin_section = admin_section.split('// ==================== Admin Approval ====================', 1)[0]
+if 'for (final admin in result.items)' in admin_section:
+    fail('lib/services/pb_service.dart: Admin management must not restore per-admin N+1 queries')
+if 'filter: 'admin_id = "$adminId" && role = "employee"'' in admin_section or 'filter: 'admin_id = "$adminId" && role = "customer"'' in admin_section:
+    fail('lib/services/pb_service.dart: Admin management counts must stay set-based')
+admin_rpc_migration = ROOT / 'supabase/migrations/20260911102326_system_owner_admin_management_rpcs.sql'
+if not admin_rpc_migration.exists():
+    fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner admin-management migration must be tracked')
+else:
+    admin_rpc_source = admin_rpc_migration.read_text(encoding='utf-8')
+    for marker in (
+        'security definer',
+        'p.is_system_owner = true',
+        'a.is_system_owner = false',
+        'get_system_owner_admins_page',
+        'renew_system_owner_admin_subscription',
+        'revoke all on function public.get_system_owner_admins_page(integer, integer) from public, anon;',
+        'revoke all on function public.renew_system_owner_admin_subscription(uuid, integer) from public, anon;',
+    ):
+        if marker not in admin_rpc_source.lower():
+            fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner RPC security marker missing: {marker}')
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
