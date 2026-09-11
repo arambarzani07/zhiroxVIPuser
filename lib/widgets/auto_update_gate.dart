@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/services/app_update_service.dart';
+import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 
 class AutoUpdateGate extends StatefulWidget {
@@ -22,6 +24,8 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
   bool _opening = false;
   int? _dismissedBuild;
   String? _error;
+  bool _isSystemOwner = false;
+  StreamSubscription<dynamic>? _authSub;
 
   bool get _supportedPlatform =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -32,20 +36,64 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_checkForUpdate());
+      unawaited(_startOwnerWatch());
     });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_authSub?.cancel());
     super.dispose();
+  }
+
+  Future<void> _startOwnerWatch() async {
+    if (AppUpdateService.edition != 'owner') return;
+    try {
+      await PBService.ensureInitialized();
+      if (!mounted) return;
+      await _authSub?.cancel();
+      _authSub = PBService.client.auth.onAuthStateChange.listen((_) {
+        unawaited(_refreshOwnerAccess());
+      });
+      await _refreshOwnerAccess();
+    } catch (_) {}
+  }
+
+  Future<void> _refreshOwnerAccess() async {
+    if (AppUpdateService.edition != 'owner') return;
+    try {
+      await PBService.ensureInitialized();
+      final uid = PBService.client.auth.currentUser?.id;
+      if (uid == null) {
+        if (mounted && _isSystemOwner) {
+          setState(() => _isSystemOwner = false);
+        }
+        return;
+      }
+      final row = await PBService.client
+          .from('profiles')
+          .select('is_system_owner, active, approved')
+          .eq('id', uid)
+          .maybeSingle();
+      final allowed = row != null &&
+          row['is_system_owner'] == true &&
+          row['active'] == true &&
+          row['approved'] == true;
+      if (mounted && allowed != _isSystemOwner) {
+        setState(() => _isSystemOwner = allowed);
+      }
+    } catch (_) {}
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed || !_supportedPlatform) return;
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(_refreshOwnerAccess());
+    if (!_supportedPlatform) return;
     final last = _lastCheck;
-    if (last == null || DateTime.now().difference(last) >= const Duration(minutes: 10)) {
+    if (last == null ||
+        DateTime.now().difference(last) >= const Duration(minutes: 10)) {
       unawaited(_checkForUpdate());
     }
   }
@@ -105,6 +153,16 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
     }
   }
 
+  Future<void> _openUpdateControls() async {
+    if (!_isSystemOwner) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const UpdateControlScreen()),
+    );
+    if (!mounted) return;
+    _dismissedBuild = null;
+    await _checkForUpdate();
+  }
+
   void _dismiss() {
     final info = _update;
     if (info == null || info.mandatory) return;
@@ -115,10 +173,31 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
     });
   }
 
+  Widget _ownerControlButton() {
+    return SafeArea(
+      minimum: const EdgeInsets.all(12),
+      child: Align(
+        alignment: Alignment.bottomLeft,
+        child: FloatingActionButton.small(
+          heroTag: 'system-owner-update-control',
+          tooltip: 'کۆنترۆڵی Auto Update',
+          onPressed: _openUpdateControls,
+          child: const Icon(Icons.system_update_alt_rounded),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final info = _update;
-    if (info == null) return widget.child;
+    if (info == null) {
+      if (!_isSystemOwner) return widget.child;
+      return Stack(
+        fit: StackFit.expand,
+        children: [widget.child, _ownerControlButton()],
+      );
+    }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? AppDarkColors.card : Colors.white;
@@ -309,6 +388,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
             child: card,
           ),
         ),
+        if (_isSystemOwner) _ownerControlButton(),
       ],
     );
   }
