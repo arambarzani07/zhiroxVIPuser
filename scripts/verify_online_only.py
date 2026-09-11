@@ -245,6 +245,23 @@ if '_buildQuickPayBtn' in debt_detail_source or 'DebtProvider>().addPayment' in 
     fail('Debt Detail must not retain its legacy duplicate payment form')
 
 
+
+
+# Legacy standalone debt workspace/provider must stay removed. Customer finance
+# now lives exclusively in Customer Profile -> Financial Chat.
+legacy_provider = LIB / 'providers/debt_provider.dart'
+legacy_debt_list = LIB / 'screens/shared/debt_list_screen.dart'
+if legacy_provider.exists():
+    fail('lib/providers/debt_provider.dart: legacy action-only wrapper must stay removed')
+if legacy_debt_list.exists():
+    fail('lib/screens/shared/debt_list_screen.dart: standalone debt workspace must stay removed')
+for dart_path in LIB.rglob('*.dart'):
+    source = dart_path.read_text(encoding='utf-8')
+    if 'DebtProvider' in source:
+        fail(f'{dart_path.relative_to(ROOT)}: DebtProvider must not return')
+    if 'DebtListScreen' in source:
+        fail(f'{dart_path.relative_to(ROOT)}: standalone DebtListScreen must not return')
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
