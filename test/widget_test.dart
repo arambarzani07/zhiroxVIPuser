@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pocketbase/pocketbase.dart';
 import 'package:zhirox/utils/helpers.dart';
 
 void main() {
@@ -51,4 +52,43 @@ void main() {
       );
     });
   });
+
+  group('Currency-safe debt summaries', () {
+    RecordModel debt({
+      required String id,
+      required double amount,
+      required double remaining,
+      required String currency,
+      double rate = 0,
+    }) {
+      return RecordModel.fromJson({
+        'id': id,
+        'collectionId': '',
+        'collectionName': 'debts',
+        'amount': amount,
+        'remaining': remaining,
+        'currency': currency,
+        'dollar_rate': rate,
+      });
+    }
+
+    test('normalizes mixed IQD and USD using the historical debt rate', () {
+      final summary = AppHelpers.debtSummaryInIqd([
+        debt(id: 'iqd', amount: 100000, remaining: 60000, currency: 'IQD'),
+        debt(id: 'usd', amount: 50, remaining: 20, currency: 'USD', rate: 1500),
+      ]);
+      expect(summary.complete, isTrue);
+      expect(summary.totalDebt, 175000);
+      expect(summary.totalRemaining, 90000);
+      expect(summary.totalPaid, 85000);
+    });
+
+    test('fails closed when a USD debt has no valid historical rate', () {
+      final summary = AppHelpers.debtSummaryInIqd([
+        debt(id: 'usd-no-rate', amount: 50, remaining: 20, currency: 'USD'),
+      ]);
+      expect(summary.complete, isFalse);
+    });
+  });
+
 }
