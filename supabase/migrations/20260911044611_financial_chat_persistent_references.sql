@@ -1,0 +1,3 @@
+-- Historical migration marker.
+-- Its final schema effect is folded into 20260909175038_create_zhiroxvipuser_core_schema.sql
+-- so a fresh database can be bootstrapped from the repository without production data.
