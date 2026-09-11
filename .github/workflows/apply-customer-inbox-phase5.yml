@@ -1,0 +1,45 @@
+name: Apply Customer Inbox Phase 5
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/apply-customer-inbox-phase5.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Patch owner-source
+        run: |
+          set -euo pipefail
+          cp scripts/apply_customer_inbox_phase5.py /tmp/apply_customer_inbox_phase5.py
+          sed -i 's/FontWeight\.w650/FontWeight.w600/g' scripts/apply_customer_inbox_phase5.py
+          python3 scripts/apply_customer_inbox_phase5.py
+          git add lib/services/pb_service.dart lib/screens/shared/user_list_screen.dart
+          git commit -m 'Add realtime Customer Inbox with batch finance summaries'
+          git push origin owner-source
+      - name: Patch user-source
+        run: |
+          set -euo pipefail
+          git reset --hard
+          git clean -fd
+          git fetch origin user-source
+          git checkout -B user-source origin/user-source
+          cp /tmp/apply_customer_inbox_phase5.py scripts/.apply_customer_inbox_phase5.tmp.py
+          sed -i 's/FontWeight\.w650/FontWeight.w600/g' scripts/.apply_customer_inbox_phase5.tmp.py
+          REPO_ROOT="$PWD" python3 scripts/.apply_customer_inbox_phase5.tmp.py
+          rm -f scripts/.apply_customer_inbox_phase5.tmp.py
+          git add lib/services/pb_service.dart lib/screens/shared/user_list_screen.dart
+          git commit -m 'Add realtime Customer Inbox with batch finance summaries'
+          git push origin user-source
