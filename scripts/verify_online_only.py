@@ -607,6 +607,37 @@ for forbidden in (
     if forbidden in auth_provider_source:
         fail(f'lib/providers/auth_provider.dart: User source must not expose admin registration: {forbidden}')
 
+
+# Account Edge Function privilege boundaries.
+# Admin account lifecycle is Owner-only: creation is guarded by account-admin,
+# while destructive admin deletion must stay centralized in delete-account.
+update_account_edge = ROOT / 'supabase/functions/update-account/index.ts'
+if not update_account_edge.exists():
+    fail('supabase/functions/update-account/index.ts: production update-account source must be tracked')
+else:
+    update_account_source = update_account_edge.read_text(encoding='utf-8')
+    for required in (
+        'requester.active !== true',
+        'sameTenantMember',
+        'target.role === "employee" || target.role === "customer"',
+        'targetAuthData',
+        'previousAuthMetadata',
+        'Object.hasOwn(update, "phone")',
+    ):
+        if required not in update_account_source:
+            fail(f'supabase/functions/update-account/index.ts: account hardening marker missing: {required}')
+    allowlist_area = update_account_source.split('const selfFields', 1)[-1].split('const allowed', 1)[0]
+    for forbidden in ('"role",', '"is_system_owner",', '"admin_id",'):
+        if forbidden in allowlist_area:
+            fail(f'supabase/functions/update-account/index.ts: privileged profile field entered update allowlist: {forbidden}')
+
+if account_admin_edge.exists():
+    account_admin_source = account_admin_edge.read_text(encoding='utf-8')
+    if 'admin_delete_requires_dedicated_endpoint' not in account_admin_source:
+        fail('supabase/functions/account-admin/index.ts: admin deletion must be routed to delete-account')
+    if 'const { data: tenantUsers }' in account_admin_source:
+        fail('supabase/functions/account-admin/index.ts: duplicate admin cascade deletion must stay removed')
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
