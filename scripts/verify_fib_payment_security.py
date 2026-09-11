@@ -3,6 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 edge = (ROOT / 'supabase/functions/fib-subscription-payment/index.ts').read_text(encoding='utf-8')
 migration = (ROOT / 'supabase/migrations/20260911170000_add_fib_subscription_payments.sql').read_text(encoding='utf-8')
+config = (ROOT / 'supabase/config.toml').read_text(encoding='utf-8')
 
 for marker in (
     'FIB_CLIENT_ID',
@@ -30,5 +31,9 @@ for marker in (
 ):
     if marker not in migration:
         raise SystemExit(f'FIB payment migration security marker missing: {marker}')
+
+for marker in ('[functions.fib-subscription-payment]', 'verify_jwt = false'):
+    if marker not in config:
+        raise SystemExit(f'FIB callback configuration marker missing: {marker}')
 
 print('FIB subscription payment security verified')
