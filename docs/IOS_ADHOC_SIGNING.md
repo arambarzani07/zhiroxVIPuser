@@ -17,6 +17,21 @@ Use an active paid Apple Developer Program membership. In Apple Developer, creat
 
 Export an `Apple Distribution` certificate together with its private key as a password-protected `.p12` file. Do not commit the certificate, private key, provisioning profiles, passwords, device UDIDs, or base64 values to this repository.
 
+## Local preflight before adding secrets
+
+On a Mac, validate the `.p12` and both Ad Hoc profiles before placing anything in GitHub Secrets:
+
+```bash
+P12_PASSWORD='your-p12-password' \
+  ./scripts/ios_signing_preflight.sh \
+  /path/to/distribution.p12 \
+  /path/to/ZHIROX-Owner.mobileprovision \
+  /path/to/ZHIROX-User.mobileprovision \
+  YOUR_TEAM_ID
+```
+
+The preflight checks the Apple Distribution identity, Team ID, exact Owner/User bundle IDs, profile expiry, Ad Hoc device list, and `get-task-allow=false`. It does not print certificate/profile bytes or the P12 password.
+
 ## Required GitHub Actions secrets
 
 Create these repository Actions secrets:
