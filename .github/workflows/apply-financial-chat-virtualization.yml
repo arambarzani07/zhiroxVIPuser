@@ -1,0 +1,47 @@
+name: Apply Financial Chat Virtualization
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/apply-financial-chat-virtualization.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Patch owner-source
+        run: |
+          set -euo pipefail
+          git checkout owner-source
+          python3 scripts/apply_financial_chat_virtualization.py
+          git add lib/screens/shared/user_profile_screen.dart scripts/verify_online_only.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'Virtualize Financial Chat timeline rendering'
+            git push origin owner-source
+          fi
+
+      - name: Patch user-source
+        run: |
+          set -euo pipefail
+          git show owner-source:scripts/apply_financial_chat_virtualization.py > /tmp/apply_financial_chat_virtualization.py
+          git checkout user-source
+          python3 /tmp/apply_financial_chat_virtualization.py
+          git add lib/screens/shared/user_profile_screen.dart scripts/verify_online_only.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'Virtualize Financial Chat timeline rendering'
+            git push origin user-source
+          fi
