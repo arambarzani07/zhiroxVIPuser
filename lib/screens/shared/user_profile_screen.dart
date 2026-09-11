@@ -1628,7 +1628,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final allTimelineItems = _buildTimelineItems();
     final timelineItems = _filterFinancialTimeline(allTimelineItems);
-    final runningBalances = _financialRunningBalances(allTimelineItems);
+    // A partial newest-page window has no trustworthy opening ledger balance.
+    // Hide per-row running balances until the complete history is hydrated.
+    final runningBalances = _financialTimelineHasMore
+        ? const <String, double?>{}
+        : _financialRunningBalances(allTimelineItems);
     final hasFilters = _hasFinancialFilters;
     final waitingForFullFilterHistory = hasFilters &&
         (_financialTimelineHasMore || _financialFilterHydrating);

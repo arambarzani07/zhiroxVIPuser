@@ -153,6 +153,7 @@ for marker in (
     '_ensureAllFinancialHistoryLoaded',
     '_hydrateFinancialHistoryForFilters',
     'مامەڵە کۆنەکان باربکە',
+    '_financialTimelineHasMore\n        ? const <String, double?>{}',
 ):
     if marker not in profile:
         fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat pagination marker missing: {marker}')
