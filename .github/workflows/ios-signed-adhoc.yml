@@ -1,0 +1,399 @@
+name: iOS Signed Ad Hoc
+
+on:
+  workflow_dispatch:
+    inputs:
+      edition:
+        description: App edition to sign
+        required: true
+        type: choice
+        options:
+          - owner
+          - user
+
+permissions:
+  contents: read
+
+jobs:
+  sign-ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_P12_BASE64: ${{ secrets.APPLE_P12_BASE64 }}
+      APPLE_P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+      OWNER_MOBILEPROVISION_BASE64: ${{ secrets.OWNER_MOBILEPROVISION_BASE64 }}
+      USER_MOBILEPROVISION_BASE64: ${{ secrets.USER_MOBILEPROVISION_BASE64 }}
+
+    steps:
+      - name: Checkout selected source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.edition == 'owner' && 'owner-source' || 'user-source' }}
+
+      - name: Resolve app edition
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.edition }}" == "owner" ]]; then
+            echo "EDITION=owner" >> "$GITHUB_ENV"
+            echo "SOURCE_BRANCH=owner-source" >> "$GITHUB_ENV"
+            echo "BUNDLE_ID=com.karoxghafoor.zhirox.owner" >> "$GITHUB_ENV"
+            echo "DISPLAY_NAME=ZHIROX Owner" >> "$GITHUB_ENV"
+            echo "BUNDLE_NAME=zhirox_owner" >> "$GITHUB_ENV"
+            echo "IPA_NAME=ZHIROX-Owner-Signed.ipa" >> "$GITHUB_ENV"
+            echo "ARTIFACT_NAME=zhirox-owner-signed-adhoc" >> "$GITHUB_ENV"
+          else
+            echo "EDITION=user" >> "$GITHUB_ENV"
+            echo "SOURCE_BRANCH=user-source" >> "$GITHUB_ENV"
+            echo "BUNDLE_ID=com.karoxghafoor.zhirox.user" >> "$GITHUB_ENV"
+            echo "DISPLAY_NAME=ZHIROX User" >> "$GITHUB_ENV"
+            echo "BUNDLE_NAME=zhirox_user" >> "$GITHUB_ENV"
+            echo "IPA_NAME=ZHIROX-User-Signed.ipa" >> "$GITHUB_ENV"
+            echo "ARTIFACT_NAME=zhirox-user-signed-adhoc" >> "$GITHUB_ENV"
+          fi
+
+      - name: Validate signing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$APPLE_TEAM_ID" ]] || { echo "::error::Missing APPLE_TEAM_ID secret"; exit 1; }
+          [[ -n "$APPLE_P12_BASE64" ]] || { echo "::error::Missing APPLE_P12_BASE64 secret"; exit 1; }
+          [[ -n "$APPLE_P12_PASSWORD" ]] || { echo "::error::Missing APPLE_P12_PASSWORD secret"; exit 1; }
+          if [[ "$EDITION" == "owner" ]]; then
+            [[ -n "$OWNER_MOBILEPROVISION_BASE64" ]] || { echo "::error::Missing OWNER_MOBILEPROVISION_BASE64 secret"; exit 1; }
+          else
+            [[ -n "$USER_MOBILEPROVISION_BASE64" ]] || { echo "::error::Missing USER_MOBILEPROVISION_BASE64 secret"; exit 1; }
+          fi
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Verify online-only policy
+        run: python3 scripts/verify_online_only.py
+
+      - name: Prepare app identity and iOS 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $DISPLAY_NAME" ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName $BUNDLE_NAME" ios/Runner/Info.plist
+          sed -i '' "s/platform :ios, '13.0'/platform :ios, '15.0'/" ios/Podfile
+          sed -i '' "s/IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'/IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'/" ios/Podfile
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' ios/Runner.xcodeproj/project.pbxproj
+
+      - name: Install CocoaPods
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ios
+          pod install
+
+      - name: Wire CocoaPods xcconfig
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Debug.xcconfig
+          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Release.xcconfig
+
+      - name: Analyze strictly
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Decode and validate signing assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CERT_PATH="$RUNNER_TEMP/zhirox-distribution.p12"
+          export PROFILE_PATH="$RUNNER_TEMP/zhirox.mobileprovision"
+          export PROFILE_PLIST="$RUNNER_TEMP/zhirox-profile.plist"
+
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          Path(os.environ['CERT_PATH']).write_bytes(
+              base64.b64decode(os.environ['APPLE_P12_BASE64'], validate=True)
+          )
+          profile_secret = (
+              os.environ['OWNER_MOBILEPROVISION_BASE64']
+              if os.environ['EDITION'] == 'owner'
+              else os.environ['USER_MOBILEPROVISION_BASE64']
+          )
+          Path(os.environ['PROFILE_PATH']).write_bytes(
+              base64.b64decode(profile_secret, validate=True)
+          )
+          PY
+
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+
+          python3 - <<'PY'
+          import os
+          import plistlib
+          import time
+
+          with open(os.environ['PROFILE_PLIST'], 'rb') as fh:
+              profile = plistlib.load(fh)
+
+          team_ids = profile.get('TeamIdentifier') or []
+          if not team_ids:
+              raise SystemExit('Provisioning profile has no TeamIdentifier')
+          profile_team = str(team_ids[0])
+          expected_team = os.environ['APPLE_TEAM_ID']
+          if profile_team != expected_team:
+              raise SystemExit(
+                  f'Provisioning profile team mismatch: expected {expected_team}, got {profile_team}'
+              )
+
+          entitlements = profile.get('Entitlements') or {}
+          actual_app_id = str(entitlements.get('application-identifier') or '')
+          expected_app_id = f"{profile_team}.{os.environ['BUNDLE_ID']}"
+          if actual_app_id != expected_app_id:
+              raise SystemExit(
+                  f'Provisioning profile bundle mismatch: expected {expected_app_id}, got {actual_app_id}'
+              )
+
+          devices = profile.get('ProvisionedDevices') or []
+          if not devices:
+              raise SystemExit('This is not an Ad Hoc profile: ProvisionedDevices is empty')
+
+          expiration = profile.get('ExpirationDate')
+          if expiration is None or expiration.timestamp() <= time.time():
+              raise SystemExit('Provisioning profile is expired')
+
+          if entitlements.get('get-task-allow') is True:
+              raise SystemExit('Expected an Ad Hoc distribution profile, but get-task-allow is true')
+
+          profile_uuid = str(profile.get('UUID') or '')
+          profile_name = str(profile.get('Name') or '')
+          if not profile_uuid or not profile_name:
+              raise SystemExit('Provisioning profile is missing UUID or Name')
+
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write(f'PROFILE_UUID={profile_uuid}\n')
+              env.write(f'PROFILE_NAME={profile_name}\n')
+              env.write(f'PROFILE_DEVICE_COUNT={len(devices)}\n')
+
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write(f'### Ad Hoc profile validated\n')
+              summary.write(f'- Edition: {os.environ["EDITION"]}\n')
+              summary.write(f'- Bundle ID: {os.environ["BUNDLE_ID"]}\n')
+              summary.write(f'- Registered devices: {len(devices)}\n')
+              summary.write(f'- Profile expiry: {expiration.isoformat()}\n')
+          PY
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+
+      - name: Import Apple Distribution certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/zhirox-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)$(uuidgen)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/zhirox-distribution.p12" \
+            -P "$APPLE_P12_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          VALID_IDENTITIES="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -c 'Apple Distribution' || true)"
+          [[ "$VALID_IDENTITIES" -ge 1 ]] || {
+            echo "::error::No valid Apple Distribution signing identity found in the P12"
+            exit 1
+          }
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Archive signed app
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE_PATH="$RUNNER_TEMP/ZHIROX.xcarchive"
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY='Apple Distribution' \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            archive
+          echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
+
+      - name: Export signed Ad Hoc IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPORT_OPTIONS="$RUNNER_TEMP/ExportOptions.plist"
+          EXPORT_DIR="$RUNNER_TEMP/export"
+          mkdir -p "$EXPORT_DIR"
+
+          cat > "$EXPORT_OPTIONS" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>ad-hoc</string>
+            <key>teamID</key>
+            <string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$BUNDLE_ID</key>
+              <string>$PROFILE_NAME</string>
+            </dict>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_DIR" \
+            -exportOptionsPlist "$EXPORT_OPTIONS"
+
+          SIGNED_IPA="$(find "$EXPORT_DIR" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
+          [[ -n "$SIGNED_IPA" ]] || { echo "::error::Signed IPA was not exported"; exit 1; }
+          cp "$SIGNED_IPA" "$IPA_NAME"
+
+      - name: Verify signed IPA and embedded profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERIFY_DIR="$RUNNER_TEMP/verify-signed-ipa"
+          rm -rf "$VERIFY_DIR"
+          mkdir -p "$VERIFY_DIR"
+          unzip -q "$IPA_NAME" -d "$VERIFY_DIR"
+          APP_PATH="$(find "$VERIFY_DIR/Payload" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          [[ -n "$APP_PATH" ]] || { echo "::error::IPA Payload does not contain an app"; exit 1; }
+
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          ACTUAL_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          ACTUAL_DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
+          [[ "$ACTUAL_BUNDLE_ID" == "$BUNDLE_ID" ]] || {
+            echo "::error::Signed app bundle mismatch: $ACTUAL_BUNDLE_ID"
+            exit 1
+          }
+          [[ "$ACTUAL_DISPLAY_NAME" == "$DISPLAY_NAME" ]] || {
+            echo "::error::Signed app display name mismatch: $ACTUAL_DISPLAY_NAME"
+            exit 1
+          }
+
+          security cms -D -i "$APP_PATH/embedded.mobileprovision" > "$RUNNER_TEMP/embedded-profile.plist"
+          python3 - <<'PY'
+          import os
+          import plistlib
+
+          with open(os.path.join(os.environ['RUNNER_TEMP'], 'embedded-profile.plist'), 'rb') as fh:
+              profile = plistlib.load(fh)
+          entitlements = profile.get('Entitlements') or {}
+          actual = str(entitlements.get('application-identifier') or '')
+          expected = f"{os.environ['APPLE_TEAM_ID']}.{os.environ['BUNDLE_ID']}"
+          if actual != expected:
+              raise SystemExit(f'Embedded profile mismatch: expected {expected}, got {actual}')
+          if not (profile.get('ProvisionedDevices') or []):
+              raise SystemExit('Embedded profile is not Ad Hoc')
+          PY
+
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
+          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
+          {
+            echo "### Signed IPA verified"
+            echo "- App: $DISPLAY_NAME"
+            echo "- Bundle ID: $BUNDLE_ID"
+            echo "- Version: $VERSION ($BUILD)"
+            echo "- Distribution: Ad Hoc"
+            echo "- Registered devices in profile: $PROFILE_DEVICE_COUNT"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create OTA manifest template
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > ota-manifest-template.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>items</key>
+            <array>
+              <dict>
+                <key>assets</key>
+                <array>
+                  <dict>
+                    <key>kind</key>
+                    <string>software-package</string>
+                    <key>url</key>
+                    <string>https://YOUR-SECURE-HTTPS-HOST/$IPA_NAME</string>
+                  </dict>
+                </array>
+                <key>metadata</key>
+                <dict>
+                  <key>bundle-identifier</key>
+                  <string>$BUNDLE_ID</string>
+                  <key>bundle-version</key>
+                  <string>1.0.0</string>
+                  <key>kind</key>
+                  <string>software</string>
+                  <key>title</key>
+                  <string>$DISPLAY_NAME</string>
+                </dict>
+              </dict>
+            </array>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Upload private signed package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: |
+            ${{ env.IPA_NAME }}
+            ota-manifest-template.plist
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Signing readiness summary
+        shell: bash
+        run: |
+          {
+            echo
+            echo "Signed package is intentionally kept as a private Actions artifact."
+            echo "For Safari OTA installation, host the IPA and manifest on a secure HTTPS origin,"
+            echo "then open: itms-services://?action=download-manifest&url=https://YOUR-HOST/manifest.plist"
+            echo "Only devices present in the Ad Hoc provisioning profile can install it."
+          } >> "$GITHUB_STEP_SUMMARY"
