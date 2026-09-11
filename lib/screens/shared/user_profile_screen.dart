@@ -8,6 +8,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen.dart';
 import 'package:zhirox/screens/shared/financial_payment_flow.dart';
+import 'package:zhirox/screens/shared/financial_document_actions.dart';
 
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/pdf_service.dart';
@@ -2480,7 +2481,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Color accent,
     bool isDark,
   ) {
-    final imageUrl = PBService.pb.getFileUrl(debt, receiptPath).toString();
+    final imageUrl = FinancialDocumentActions.receiptUrl(
+        debt,
+        receiptPath: receiptPath,
+      );
     return ClipRRect(
       borderRadius: BorderRadius.circular(11),
       child: Container(
@@ -2693,177 +2697,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         break;
       case 'receipt':
         if (debt != null && receiptPath.isNotEmpty) {
-          await _openFinancialReceiptViewer(debt, receiptPath);
+          await FinancialDocumentActions.openReceiptViewer(
+            context,
+            debt,
+            receiptPath: receiptPath,
+          );
         }
         break;
       case 'invoice':
-        if (debt != null) await _generateFinancialInvoice(debt);
+        if (debt != null) {
+          await FinancialDocumentActions.generateDebtInvoice(context, debt);
+        }
         break;
       case 'statement':
         await _generateCurrentFinancialStatement();
         break;
-    }
-  }
-
-  Future<void> _openFinancialReceiptViewer(
-    RecordModel debt,
-    String receiptPath,
-  ) async {
-    if (!mounted || receiptPath.isEmpty) return;
-    final imageUrl = PBService.pb.getFileUrl(debt, receiptPath).toString();
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (viewerContext) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            title: const Text('وەصڵ'),
-          ),
-          body: SafeArea(
-            child: Center(
-              child: InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 5,
-                boundaryMargin: const EdgeInsets.all(48),
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.contain,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return const SizedBox(
-                      width: 42,
-                      height: 42,
-                      child: CircularProgressIndicator(color: Colors.white),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) => const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text(
-                      'وێنەی وەصڵ بار نەبوو. پەیوەندی ئینتەرنێت بپشکنە.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _generateFinancialInvoice(RecordModel debt) async {
-    final auth = context.read<AuthProvider>();
-    try {
-      await PdfService.generateInvoice(
-        debt: debt,
-        marketName: auth.marketName,
-        adminName: auth.userName,
-        adminPhone: auth.user?.getStringValue('phone') ?? '',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      AppHelpers.showSnackBar(
-        context,
-        AppHelpers.backendErrorMessage(
-          e,
-          fallback: 'وەصڵ دروست نەکرا. دووبارە هەوڵ بدە.',
-        ),
-        isError: true,
-      );
-    }
-  }
-
-  Future<void> _generateFilteredFinancialChatStatement() async {
-    final allItems = _buildTimelineItems();
-    final visibleItems = _filterFinancialTimeline(allItems);
-    if (visibleItems.isEmpty) {
-      AppHelpers.showSnackBar(
-        context,
-        'هیچ مامەڵەیەک نییە بۆ کەشف/هاوبەشکردن',
-        isError: true,
-      );
-      return;
-    }
-
-    final balances = _financialRunningBalances(allItems);
-    String systemDescription(RecordModel record) {
-      final type = record.getStringValue('event_type');
-      final actor = record.getStringValue('actor_name').trim();
-      final base = switch (type) {
-        'debt_deleted' => 'قەرز سڕایەوە',
-        'payment_updated' => 'پارەدانەوە دەستکاری کرا',
-        'payment_deleted' => 'پارەدانەوە سڕایەوە',
-        _ => 'قەرز دەستکاری کرا',
-      };
-      return actor.isEmpty ? base : '$base • $actor';
-    }
-
-    final entries = <Map<String, dynamic>>[];
-    for (final item in visibleItems) {
-      final record = item.record;
-      final debt = item.isPayment ? item.relatedDebt : record;
-      final currency = debt?.getStringValue('currency').isNotEmpty == true
-          ? debt!.getStringValue('currency')
-          : 'IQD';
-      final description = item.isSystem
-          ? systemDescription(record)
-          : item.isPayment
-              ? record.getStringValue('note').trim()
-              : record.getStringValue('description').trim();
-      entries.add({
-        'type': item.kind,
-        'date': item.date.toIso8601String(),
-        'description': description,
-        'amount': record.getDoubleValue('amount'),
-        'currency': currency,
-        'dollar_rate': debt?.getDoubleValue('dollar_rate') ?? 0,
-        'balance_after_iqd': balances[_timelineLedgerKey(item)],
-      });
-    }
-
-    final filterParts = <String>[];
-    final query = _financialSearchController.text.trim();
-    if (query.isNotEmpty) filterParts.add('گەڕان: $query');
-    if (_financialDateRange != null) {
-      filterParts.add(
-        '${DateFormat('yyyy/MM/dd').format(_financialDateRange!.start)} — '
-        '${DateFormat('yyyy/MM/dd').format(_financialDateRange!.end)}',
-      );
-    }
-    final typeLabel = switch (_financialTypeFilter) {
-      'debt' => 'قەرز',
-      'payment' => 'پارەدانەوە',
-      'system' => 'مێژووی گۆڕانکاری',
-      _ => '',
-    };
-    if (typeLabel.isNotEmpty) filterParts.add(typeLabel);
-
-    try {
-      await PdfService.generateFinancialChatStatement(
-        entries: entries,
-        customerName: _user?.getStringValue('name') ?? '',
-        marketName: context.read<AuthProvider>().marketName,
-        adminName: context.read<AuthProvider>().userName,
-        adminPhone:
-            context.read<AuthProvider>().user?.getStringValue('phone') ?? '',
-        filterSummary:
-            filterParts.isEmpty ? 'هەموو مامەڵەکان' : filterParts.join(' • '),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      AppHelpers.showSnackBar(
-        context,
-        AppHelpers.backendErrorMessage(
-          e,
-          fallback: 'کەشفی چاتی دارایی دروست نەکرا. دووبارە هەوڵ بدە.',
-        ),
-        isError: true,
-      );
     }
   }
 

@@ -102,6 +102,7 @@ for marker in ('String? _loadError', 'AppHelpers.backendErrorMessage', 'دووب
 # and new activity must arrive through Supabase realtime, never a local cache.
 profile = (LIB / 'screens/shared/user_profile_screen.dart').read_text(encoding='utf-8')
 payment_flow = (LIB / 'screens/shared/financial_payment_flow.dart').read_text(encoding='utf-8')
+document_actions = (LIB / 'screens/shared/financial_document_actions.dart').read_text(encoding='utf-8')
 debt_detail_source = (LIB / 'screens/shared/debt_detail_screen.dart').read_text(encoding='utf-8')
 for marker in (
     'PBService.getFinancialEvents',
@@ -146,13 +147,32 @@ if 'DebtProvider' in customer_list_source:
 
 for marker in (
     '_showFinancialTransactionActions',
-    '_openFinancialReceiptViewer',
-    'InteractiveViewer(',
-    'PdfService.generateInvoice(',
+    'FinancialDocumentActions.openReceiptViewer(',
+    'FinancialDocumentActions.generateDebtInvoice(',
     'onTap: () => _showFinancialTransactionActions(item)',
 ):
     if marker not in profile:
         fail(f'Financial Chat Phase 6 marker missing: {marker}')
+for marker in (
+    'generateDebtInvoice(',
+    'receiptUrl(',
+    'openReceiptViewer(',
+    'PdfService.generateInvoice(',
+    'InteractiveViewer(',
+    'PBService.pb.getFileUrl(',
+):
+    if marker not in document_actions:
+        fail(f'lib/screens/shared/financial_document_actions.dart: shared document marker missing: {marker}')
+for source_name, source in (
+    ('lib/screens/shared/user_profile_screen.dart', profile),
+    ('lib/screens/shared/debt_detail_screen.dart', debt_detail_source),
+):
+    if 'PdfService.generateInvoice(' in source:
+        fail(f'{source_name}: direct invoice generation duplicates shared document actions')
+    if 'InteractiveViewer(' in source:
+        fail(f'{source_name}: duplicate receipt viewer must not return')
+    if 'PBService.pb.getFileUrl(' in source:
+        fail(f'{source_name}: receipt URL resolution must stay centralized')
 
 
 # Financial Chat ledger intelligence, overdue visibility, targeted payment
