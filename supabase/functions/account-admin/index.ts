@@ -268,6 +268,90 @@ Deno.serve(async (req) => {
       return json({ error: "forbidden" }, 403);
     }
 
+    if (action === "list_admins") {
+      if (requesterProfile.is_system_owner !== true) {
+        return json({ error: "system_owner_required" }, 403);
+      }
+      const page = Math.max(1, Math.round(Number(body.page ?? 1)) || 1);
+      const perPage = Math.min(100, Math.max(1, Math.round(Number(body.per_page ?? 15)) || 15));
+      const from = (page - 1) * perPage;
+      const { data: admins, count, error } = await admin
+        .from("profiles")
+        .select(
+          "id,name,phone,role,market_name,subscription_end,approved,active,is_system_owner,created_at,updated_at",
+          { count: "exact" },
+        )
+        .eq("role", "admin")
+        .eq("is_system_owner", false)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, from + perPage - 1);
+      if (error) return json({ error: error.message }, 400);
+
+      const adminIds = (admins ?? []).map((row: any) => row.id);
+      const counts = new Map<string, { employee: number; customer: number }>();
+      if (adminIds.length > 0) {
+        const { data: members, error: membersError } = await admin
+          .from("profiles")
+          .select("admin_id,role")
+          .in("admin_id", adminIds)
+          .in("role", ["employee", "customer"]);
+        if (membersError) return json({ error: membersError.message }, 400);
+        for (const member of members ?? []) {
+          const current = counts.get(member.admin_id) ?? { employee: 0, customer: 0 };
+          if (member.role === "employee") current.employee += 1;
+          if (member.role === "customer") current.customer += 1;
+          counts.set(member.admin_id, current);
+        }
+      }
+
+      const totalItems = count ?? 0;
+      return json({
+        admins: (admins ?? []).map((row: any) => ({
+          admin: row,
+          employee_count: counts.get(row.id)?.employee ?? 0,
+          customer_count: counts.get(row.id)?.customer ?? 0,
+        })),
+        total_items: totalItems,
+        total_pages: Math.max(1, Math.ceil(totalItems / perPage)),
+        page,
+      });
+    }
+
+    if (action === "renew_subscription") {
+      if (requesterProfile.is_system_owner !== true) {
+        return json({ error: "system_owner_required" }, 403);
+      }
+      const adminId = String(body.admin_id ?? "").trim();
+      const days = Math.round(Number(body.days));
+      if (!adminId || !Number.isFinite(days) || days < 1 || days > 3650) {
+        return json({ error: "invalid_input" }, 400);
+      }
+      const { data: target, error: targetError } = await admin
+        .from("profiles")
+        .select("id,subscription_end")
+        .eq("id", adminId)
+        .eq("role", "admin")
+        .eq("is_system_owner", false)
+        .maybeSingle();
+      if (targetError) return json({ error: targetError.message }, 400);
+      if (!target) return json({ error: "admin_not_found" }, 404);
+
+      const parsedEnd = target.subscription_end
+        ? Date.parse(String(target.subscription_end))
+        : Number.NaN;
+      const base = Number.isFinite(parsedEnd) && parsedEnd > Date.now()
+        ? parsedEnd
+        : Date.now();
+      const subscriptionEnd = new Date(base + days * 86400000).toISOString();
+      const { error: updateError } = await admin
+        .from("profiles")
+        .update({ subscription_end: subscriptionEnd })
+        .eq("id", adminId);
+      if (updateError) return json({ error: updateError.message }, 400);
+      return json({ subscription_end: subscriptionEnd });
+    }
+
     if (action === "reset_password") {
       const targetId = String(body.user_id ?? "").trim();
       const newPassword = String(body.new_password ?? "");

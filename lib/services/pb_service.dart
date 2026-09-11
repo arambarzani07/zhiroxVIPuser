@@ -239,13 +239,18 @@ class PBService {
     await ensureInitialized();
     final safePage = page < 1 ? 1 : page;
     final safePerPage = perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage);
-    final raw = await client.rpc(
-      'get_system_owner_admins_page',
-      params: {
-        'p_page': safePage,
-        'p_per_page': safePerPage,
+    final response = await client.functions.invoke(
+      'account-admin',
+      body: {
+        'action': 'list_admins',
+        'page': safePage,
+        'per_page': safePerPage,
       },
     );
+    if (response.data is Map && response.data['error'] != null) {
+      throw _functionError(response.data);
+    }
+    final raw = response.data;
     if (raw is! Map) throw Exception('invalid admin management page');
 
     final data = Map<String, dynamic>.from(raw);
@@ -280,13 +285,17 @@ class PBService {
   static Future<void> renewAdminSubscription(String adminId, int days) async {
     if (days < 1 || days > 3650) throw Exception('invalid_input');
     await ensureInitialized();
-    await client.rpc(
-      'renew_system_owner_admin_subscription',
-      params: {
-        'p_admin_id': adminId,
-        'p_days': days,
+    final response = await client.functions.invoke(
+      'account-admin',
+      body: {
+        'action': 'renew_subscription',
+        'admin_id': adminId,
+        'days': days,
       },
     );
+    if (response.data is Map && response.data['error'] != null) {
+      throw _functionError(response.data);
+    }
   }
 
   static Future<void> deleteAdminWithData(String adminId) async {
@@ -750,16 +759,20 @@ class PBService {
     String? referenceId,
   }) async {
     await ensureInitialized();
-  final rpcResult = await client.rpc(
-    'record_payment',
-    params: {
-      'p_debt_id': debtId,
-      'p_amount': amount,
-      'p_note': note ?? '',
-      'p_reference_kind': referenceKind,
-      'p_reference_id': referenceId,
+  final response = await client.functions.invoke(
+    'record-payment',
+    body: {
+      'debt_id': debtId,
+      'amount': amount,
+      'note': note ?? '',
+      'reference_kind': referenceKind,
+      'reference_id': referenceId,
     },
   );
+  if (response.data is Map && response.data['error'] != null) {
+    throw _functionError(response.data);
+  }
+  final rpcResult = response.data;
 
   Map<String, dynamic>? paymentRow;
   if (rpcResult is Map) {
