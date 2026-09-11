@@ -28,6 +28,47 @@ class AppHelpers {
     return '${formatter.format(amount)} د.ع';
   }
 
+  /// Normalize one debt field to IQD using the rate stored on that debt.
+  /// A USD debt without a valid historical rate is unknown, never silently mixed.
+  static double? debtValueInIqd(RecordModel debt, String field) {
+    final value = debt.getDoubleValue(field);
+    final rawCurrency = debt.getStringValue('currency').trim();
+    final currency = rawCurrency.isEmpty ? 'IQD' : rawCurrency.toUpperCase();
+    if (currency != 'USD') return value;
+    final rate = debt.getDoubleValue('dollar_rate');
+    if (rate <= 0) return null;
+    return value * rate;
+  }
+
+  static ({
+    double totalDebt,
+    double totalRemaining,
+    double totalPaid,
+    bool complete,
+  }) debtSummaryInIqd(Iterable<RecordModel> debts) {
+    var totalDebt = 0.0;
+    var totalRemaining = 0.0;
+    var complete = true;
+    for (final debt in debts) {
+      final amount = debtValueInIqd(debt, 'amount');
+      final remaining = debtValueInIqd(debt, 'remaining');
+      if (amount == null || remaining == null) {
+        complete = false;
+        continue;
+      }
+      totalDebt += amount;
+      totalRemaining += remaining;
+    }
+    var totalPaid = totalDebt - totalRemaining;
+    if (totalPaid.abs() < 0.000001) totalPaid = 0;
+    return (
+      totalDebt: totalDebt,
+      totalRemaining: totalRemaining,
+      totalPaid: totalPaid,
+      complete: complete,
+    );
+  }
+
   // فۆرماتی بەروار
   static String formatDate(String date) {
     try {

@@ -45,6 +45,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   // Stats (calculated from ALL debts, not just loaded ones)
   double _totalDebtAmount = 0;
   double _totalRemainingAmount = 0;
+  bool _totalsComplete = true;
   String _marketName = '';
 
   List<RecordModel> get _filteredDebts {
@@ -165,12 +166,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       }
 
       final allDebts = await PBService.getDebts(customerId: auth.userId);
-      double totalDebt = 0;
-      double totalRemaining = 0;
-      for (final debt in allDebts) {
-        totalDebt += debt.getDoubleValue('amount');
-        totalRemaining += debt.getDoubleValue('remaining');
-      }
+      final summary = AppHelpers.debtSummaryInIqd(allDebts);
+      final totalDebt = summary.totalDebt;
+      final totalRemaining = summary.totalRemaining;
 
       final activeDebts = allDebts
           .where((debt) => debt.getStringValue('status') != 'paid')
@@ -186,6 +184,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       setState(() {
         _totalDebtAmount = totalDebt;
         _totalRemainingAmount = totalRemaining;
+        _totalsComplete = summary.complete;
         _activeDebts = activeDebts;
         _historyDebts = historyResult['items'] as List<RecordModel>;
         _historyTotalItems = historyResult['totalItems'] as int;
@@ -241,6 +240,14 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Future<void> _printStatement() async {
+    if (!_totalsComplete) {
+      AppHelpers.showSnackBar(
+        context,
+        'کەشف دروست ناکرێت تا نرخی گۆڕینەوەی هەموو قەرزە USD ـەکان دیاری بکرێت.',
+        isError: true,
+      );
+      return;
+    }
     if (_activeDebts.isEmpty) {
       AppHelpers.showSnackBar(
         context,
@@ -451,7 +458,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      AppHelpers.formatCurrency(_totalRemaining),
+                      _totalsComplete
+                          ? AppHelpers.formatCurrency(_totalRemaining)
+                          : '—',
                       textDirection: TextDirection.ltr,
                       style: TextStyle(
                         fontSize: 28,
@@ -460,13 +469,35 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                         color: textPrimary,
                       ),
                     ),
+                    if (!_totalsComplete) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'هەندێک قەرزی USD نرخی گۆڕینەوەی نییە؛ کۆی گشتی بۆ پاراستنی دروستی نیشان نادرێت.',
+                          style: TextStyle(
+                            color: Colors.orange,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     Row(
                       children: [
                         Expanded(
                           child: _buildSummaryMetric(
                             label: 'دراوە',
-                            value: AppHelpers.formatCurrency(totalPaid),
+                            value: _totalsComplete
+                                ? AppHelpers.formatCurrency(totalPaid)
+                                : '—',
                             icon: Icons.check_circle_outline_rounded,
                             accent: Colors.green,
                           ),

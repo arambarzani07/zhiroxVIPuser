@@ -764,15 +764,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   // ═══════════════════════════════════════════
 
   List<Widget> _buildCustomerBody() {
-    final totalDebt = _debts.fold(
-      0.0,
-      (sum, d) => sum + d.getDoubleValue('amount'),
-    );
-    final totalRemaining = _debts.fold(
-      0.0,
-      (sum, d) => sum + d.getDoubleValue('remaining'),
-    );
-    final totalPaid = totalDebt - totalRemaining;
+    final summary = AppHelpers.debtSummaryInIqd(_debts);
+    final totalDebt = summary.totalDebt;
+    final totalRemaining = summary.totalRemaining;
+    final totalPaid = summary.totalPaid;
+    final totalsComplete = summary.complete;
     final auth = context.read<AuthProvider>();
 
     final overview = <Widget>[
@@ -784,14 +780,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               _buildStatChip(
                 Icons.monetization_on_outlined,
                 'کۆی قەرز',
-                AppHelpers.formatCurrency(totalDebt),
+                totalsComplete ? AppHelpers.formatCurrency(totalDebt) : '—',
                 Colors.orange,
               ),
               const SizedBox(width: 10),
               _buildStatChip(
                 Icons.pending_outlined,
                 'ماوە',
-                AppHelpers.formatCurrency(totalRemaining),
+                totalsComplete ? AppHelpers.formatCurrency(totalRemaining) : '—',
                 Colors.red,
               ),
             ],
@@ -803,11 +799,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
             child: OutlinedButton.icon(
-              onPressed: () => _generateAccountStatement(
-                totalDebt: totalDebt,
-                totalRemaining: totalRemaining,
-                totalPaid: totalPaid,
-              ),
+              onPressed: totalsComplete
+                  ? () => _generateAccountStatement(
+                        totalDebt: totalDebt,
+                        totalRemaining: totalRemaining,
+                        totalPaid: totalPaid,
+                      )
+                  : _showIncompleteCurrencySummaryMessage,
               icon: const Icon(Icons.receipt_long_rounded, size: 19),
               label: const Text('کەشف حیساب'),
               style: OutlinedButton.styleFrom(
@@ -821,6 +819,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ),
         ),
+      if (!totalsComplete) _buildCurrencySummaryWarning(),
       _buildDebtLimitCard(),
     ];
 
@@ -1090,6 +1089,55 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return '$days ڕۆژ دواکەوتوو';
   }
 
+  void _showIncompleteCurrencySummaryMessage() {
+    AppHelpers.showSnackBar(
+      context,
+      'هەندێک قەرزی USD نرخی گۆڕینەوەی دروستی نییە؛ بۆ پاراستنی دروستی ژمارەکان کۆی گشتی پیشان نادرێت.',
+      isError: true,
+    );
+  }
+
+  Widget _buildCurrencySummaryWarning({bool compact = false}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final warning = Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 11 : 13,
+        vertical: compact ? 8 : 10,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: isDark ? 0.12 : 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.20)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.currency_exchange_rounded, size: 17, color: Colors.orange),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'کۆی دارایی نیشان نادرێت چونکە هەندێک USD نرخی گۆڕینەوەی نییە.',
+              style: TextStyle(
+                fontSize: compact ? 9.5 : 10.5,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+                color: isDark
+                    ? AppDarkColors.textSecondary
+                    : const Color(0xFF7A5B00),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (compact) return warning;
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+        child: warning,
+      ),
+    );
+  }
+
   Future<void> _pickFinancialDateRange() async {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
@@ -1325,6 +1373,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final allTimelineItems = _buildTimelineItems();
     final timelineItems = _filterFinancialTimeline(allTimelineItems);
     final runningBalances = _financialRunningBalances(allTimelineItems);
+    final totalsComplete = AppHelpers.debtSummaryInIqd(_debts).complete;
     final health = _debtHealth(totalRemaining, totalDebt);
 
     return SliverToBoxAdapter(
@@ -1406,22 +1455,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     children: [
                       _buildChatSummaryValue(
                         label: 'قەرز',
-                        value: totalDebt,
+                        value: totalsComplete ? totalDebt : double.nan,
                         color: Colors.orange,
                         isDark: isDark,
                       ),
                       const SizedBox(width: 7),
                       _buildChatSummaryValue(
                         label: 'دراوە',
-                        value: totalPaid,
+                        value: totalsComplete ? totalPaid : double.nan,
                         color: Colors.green,
                         isDark: isDark,
                       ),
                       const SizedBox(width: 7),
                       _buildChatSummaryValue(
                         label: 'ماوە',
-                        value: totalRemaining,
-                        color: totalRemaining > 0 ? Colors.red : Colors.green,
+                        value: totalsComplete ? totalRemaining : double.nan,
+                        color: totalsComplete && totalRemaining > 0
+                            ? Colors.red
+                            : Colors.green,
                         isDark: isDark,
                       ),
                     ],
@@ -1436,12 +1487,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ),
             const SizedBox(height: 9),
-            _buildDebtHealthStrip(
-              label: health.$1,
-              color: health.$2,
-              totalRemaining: totalRemaining,
-              totalPaid: totalPaid,
-            ),
+            if (totalsComplete)
+              _buildDebtHealthStrip(
+                label: health.$1,
+                color: health.$2,
+                totalRemaining: totalRemaining,
+                totalPaid: totalPaid,
+              )
+            else
+              _buildCurrencySummaryWarning(compact: true),
             const SizedBox(height: 12),
             if (timelineItems.isEmpty)
               allTimelineItems.isEmpty
@@ -1483,7 +1537,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
             const SizedBox(height: 3),
             Text(
-              AppHelpers.formatCurrency(value),
+              value.isNaN ? '—' : AppHelpers.formatCurrency(value),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textDirection: TextDirection.ltr,
@@ -1648,10 +1702,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Widget _buildFinancialChatComposer(AuthProvider auth, bool isDark) {
-    final totalRemaining = _debts.fold<double>(
-      0,
-      (sum, debt) => sum + debt.getDoubleValue('remaining'),
-    );
+    final hasOutstandingDebt =
+        _debts.any((debt) => debt.getDoubleValue('remaining') > 0);
     final replyTarget = _financialReplyTarget;
 
     return SafeArea(
@@ -1753,7 +1805,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 const SizedBox(width: 9),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: totalRemaining > 0
+                    onPressed: hasOutstandingDebt
                         ? () => _showFinancialPaymentSheet(auth)
                         : null,
                     icon: const Icon(Icons.payments_outlined, size: 18),
@@ -1762,7 +1814,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       minimumSize: const Size.fromHeight(46),
                       foregroundColor: Colors.green.shade700,
                       side: BorderSide(
-                        color: totalRemaining > 0
+                        color: hasOutstandingDebt
                             ? Colors.green.withValues(alpha: 0.32)
                             : const Color(0xFFD0D5DD),
                       ),
@@ -3016,18 +3068,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _generateCurrentFinancialStatement() async {
-    final totalDebt = _debts.fold<double>(
-      0,
-      (sum, debt) => sum + debt.getDoubleValue('amount'),
-    );
-    final totalRemaining = _debts.fold<double>(
-      0,
-      (sum, debt) => sum + debt.getDoubleValue('remaining'),
-    );
+    final summary = AppHelpers.debtSummaryInIqd(_debts);
+    if (!summary.complete) {
+      _showIncompleteCurrencySummaryMessage();
+      return;
+    }
     await _generateAccountStatement(
-      totalDebt: totalDebt,
-      totalRemaining: totalRemaining,
-      totalPaid: totalDebt - totalRemaining,
+      totalDebt: summary.totalDebt,
+      totalRemaining: summary.totalRemaining,
+      totalPaid: summary.totalPaid,
     );
   }
 
@@ -3826,13 +3875,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final limit = _user!.getDoubleValue('debt_limit');
     final hasLimit = limit > 0;
     final canEdit = auth.canSetDebtLimit;
-    final totalRemaining = _debts.fold(
-      0.0,
-      (sum, d) => sum + d.getDoubleValue('remaining'),
-    );
-    final remainingLimit = hasLimit ? limit - totalRemaining : 0.0;
-    final isOverLimit = hasLimit && remainingLimit < 0;
-    final usagePercent = hasLimit
+    final debtSummary = AppHelpers.debtSummaryInIqd(_debts);
+    final totalRemaining = debtSummary.totalRemaining;
+    final totalsComplete = debtSummary.complete;
+    final remainingLimit =
+        hasLimit && totalsComplete ? limit - totalRemaining : 0.0;
+    final isOverLimit = hasLimit && totalsComplete && remainingLimit < 0;
+    final usagePercent = hasLimit && totalsComplete
         ? (totalRemaining / limit).clamp(0.0, 1.0)
         : 0.0;
 
@@ -4010,7 +4059,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                             ),
                             Text(
-                              AppHelpers.formatCurrency(remainingLimit.abs()),
+                              totalsComplete ? AppHelpers.formatCurrency(remainingLimit.abs()) : '—',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,

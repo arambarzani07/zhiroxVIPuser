@@ -192,6 +192,20 @@ for marker in ('referenceKind', 'referenceId'):
         fail(f'lib/screens/shared/add_debt_screen.dart: debt reference pass-through missing: {marker}')
 
 
+# Currency-safe financial totals: never add raw USD values into IQD summaries.
+helpers_source = (LIB / 'utils/helpers.dart').read_text(encoding='utf-8')
+dashboard_source = (LIB / 'screens/customer/customer_dashboard.dart').read_text(encoding='utf-8')
+for marker in ('debtValueInIqd', 'debtSummaryInIqd'):
+    if marker not in helpers_source:
+        fail(f'lib/utils/helpers.dart: currency-safe finance marker missing: {marker}')
+for marker in ('AppHelpers.debtSummaryInIqd(_debts)', '_buildCurrencySummaryWarning', '_showIncompleteCurrencySummaryMessage'):
+    if marker not in profile:
+        fail(f'lib/screens/shared/user_profile_screen.dart: currency-safe summary marker missing: {marker}')
+for marker in ('AppHelpers.debtSummaryInIqd(allDebts)', '_totalsComplete'):
+    if marker not in dashboard_source:
+        fail(f'lib/screens/customer/customer_dashboard.dart: currency-safe dashboard marker missing: {marker}')
+
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
