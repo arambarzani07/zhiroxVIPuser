@@ -2,44 +2,42 @@ name: Official Receipt UI Once
 
 on:
   push:
-    branches: [owner-source, user-source]
+    branches:
+      - owner-source
+      - user-source
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
-      - name: Wire receipt settings and verifier
+      - name: Apply patch
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
           dashboard = Path('lib/screens/admin/admin_dashboard.dart')
           text = dashboard.read_text()
-
-          import_anchor = "import 'package:zhirox/screens/admin/subscription_payment_screen.dart';\n"
-          receipt_import = "import 'package:zhirox/screens/admin/receipt_settings_screen.dart';\n"
-          if receipt_import not in text:
-              if import_anchor not in text:
-                  raise SystemExit('admin dashboard import anchor missing')
-              text = text.replace(import_anchor, import_anchor + receipt_import, 1)
-
-          report_anchor = """                _settingsTile(
+          anchor = "import 'package:zhirox/screens/admin/subscription_payment_screen.dart';\n"
+          imp = "import 'package:zhirox/screens/admin/receipt_settings_screen.dart';\n"
+          if imp not in text:
+              if anchor not in text:
+                  raise SystemExit('import anchor missing')
+              text = text.replace(anchor, anchor + imp, 1)
+          report = """                _settingsTile(
                   isDark: isDark,
                   icon: Icons.summarize_outlined,
                   iconColor: AppColors.primary,
                   title: 'کەشفی حیساب و ڕاپۆرت',"""
-          receipt_tile = """                _settingsTile(
+          tile = """                _settingsTile(
                   isDark: isDark,
                   icon: Icons.receipt_long_outlined,
                   iconColor: Colors.teal,
@@ -57,11 +55,10 @@ jobs:
                 ),
 """
           if "title: 'ڕێکخستنی پسوولەی فەرمی'" not in text:
-              if report_anchor not in text:
-                  raise SystemExit('admin dashboard report tile anchor missing')
-              text = text.replace(report_anchor, receipt_tile + report_anchor, 1)
+              if report not in text:
+                  raise SystemExit('menu anchor missing')
+              text = text.replace(report, tile + report, 1)
           dashboard.write_text(text)
-
           verifier = Path('scripts/verify_online_only.py')
           v = verifier.read_text()
           old = "        'PdfService.generateInvoice(',"
@@ -69,25 +66,17 @@ jobs:
           if old in v:
               v = v.replace(old, new, 1)
           elif new not in v:
-              raise SystemExit('financial document verifier marker missing')
+              raise SystemExit('verifier anchor missing')
           verifier.write_text(v)
-
-          if receipt_import not in dashboard.read_text():
-              raise SystemExit('receipt settings import not applied')
-          if "title: 'ڕێکخستنی پسوولەی فەرمی'" not in dashboard.read_text():
-              raise SystemExit('receipt settings tile not applied')
-          if new not in verifier.read_text():
-              raise SystemExit('official receipt verifier marker not applied')
-          print('Official receipt UI wiring complete.')
           PY
 
-      - name: Commit patch and remove one-time workflow
+      - name: Commit
         shell: bash
         run: |
           set -euo pipefail
           git rm .github/workflows/official-receipt-ui-once.yml
           git add lib/screens/admin/admin_dashboard.dart scripts/verify_online_only.py
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name github-actions
+          git config user.email github-actions@github.com
           git commit -m 'Wire official receipt settings UI'
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push
