@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import re
 
 root = Path(os.environ.get('REPO_ROOT', Path.cwd())).resolve()
 account = root / 'supabase/functions/account-admin/index.ts'
@@ -7,43 +8,33 @@ verify = root / 'scripts/verify_online_only.py'
 
 source = account.read_text(encoding='utf-8')
 
-admin_guard = '''    if (target.role === "admin") {
-      return json({ error: "admin_delete_requires_dedicated_endpoint" }, 409);
-    }
-'''
-anchor = '''    if (!target) return json({ error: "not_found" }, 404);
-    if (target.is_system_owner) return json({ error: "cannot_delete_system_owner" }, 403);
-
-'''
-if 'admin_delete_requires_dedicated_endpoint' not in source:
-    if source.count(anchor) != 1:
-        raise SystemExit('account-admin delete target anchor mismatch')
-    source = source.replace(anchor, anchor + admin_guard + '\n', 1)
-
-legacy = '''      } else if (target.role === "admin") {
-        const { data: tenantUsers } = await admin
-          .from("profiles")
-          .select("id")
-          .eq("admin_id", targetId);
-        const ids = [targetId, ...(tenantUsers ?? []).map((u: any) => u.id)];
-        const { data: tenantDebts } = await admin
-          .from("debts")
-          .select("id")
-          .in("customer_id", ids);
-        const debtIds = (tenantDebts ?? []).map((d: any) => d.id);
-        if (debtIds.length) await admin.from("payments").delete().in("debt_id", debtIds);
-        await admin
-          .from("notifications")
-          .delete()
-          .or(ids.map((id: string) => `customer_id.eq.${id}`).join(","));
-        await admin.from("debts").delete().in("customer_id", ids);
-        for (const id of (tenantUsers ?? []).map((u: any) => u.id)) {
-          await admin.auth.admin.deleteUser(id);
-        }
+admin_guard = '''      if (target.role === "admin") {
+        return json({ error: "admin_delete_requires_dedicated_endpoint" }, 409);
       }
 '''
-if legacy in source:
-    source = source.replace(legacy, '      }\n', 1)
+owner_guard_line = '      if (target.is_system_owner) return json({ error: "cannot_delete_system_owner" }, 403);\n'
+if 'admin_delete_requires_dedicated_endpoint' not in source:
+    delete_start = source.find('    if (action === "delete_user") {')
+    if delete_start < 0:
+        raise SystemExit('account-admin delete_user block missing')
+    guard_at = source.find(owner_guard_line, delete_start)
+    if guard_at < 0:
+        raise SystemExit('account-admin delete target guard missing')
+    insert_at = guard_at + len(owner_guard_line)
+    source = source[:insert_at] + admin_guard + source[insert_at:]
+
+legacy_pattern = re.compile(
+    r'      \} else if \(target\.role === "admin"\) \{.*?\n      \}\n\n'
+    r'      const \{ error \} = await admin\.auth\.admin\.deleteUser\(targetId\);',
+    re.S,
+)
+source, count = legacy_pattern.subn(
+    '      }\n\n      const { error } = await admin.auth.admin.deleteUser(targetId);',
+    source,
+    count=1,
+)
+if count == 0 and 'const { data: tenantUsers }' in source:
+    raise SystemExit('legacy admin delete block did not match')
 if 'const { data: tenantUsers }' in source:
     raise SystemExit('legacy admin delete block still present')
 account.write_text(source, encoding='utf-8')
@@ -70,10 +61,8 @@ else:
     ):
         if required not in update_account_source:
             fail(f'supabase/functions/update-account/index.ts: account hardening marker missing: {required}')
+    allowlist_area = update_account_source.split('const selfFields', 1)[-1].split('const allowed', 1)[0]
     for forbidden in ('"role",', '"is_system_owner",', '"admin_id",'):
-        # These privileged fields may appear in auth metadata, but must never be
-        # present in either profile-update allowlist.
-        allowlist_area = update_account_source.split('const selfFields', 1)[-1].split('const allowed', 1)[0]
         if forbidden in allowlist_area:
             fail(f'supabase/functions/update-account/index.ts: privileged profile field entered update allowlist: {forbidden}')
 
