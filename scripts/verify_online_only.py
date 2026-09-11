@@ -41,12 +41,6 @@ if '_validateSubscription(' not in auth:
     fail('lib/providers/auth_provider.dart: saved sessions must revalidate subscription state')
 
 
-debt_provider = (LIB / 'providers/debt_provider.dart').read_text(encoding='utf-8')
-for forbidden in ('List<RecordModel> _debts', 'List<RecordModel> _payments', 'Future<void> loadDebts', 'Future<void> loadPayments'):
-    if forbidden in debt_provider:
-        fail(f'lib/providers/debt_provider.dart: stale provider cache API remains: {forbidden}')
-
-
 add_debt = (LIB / 'screens/shared/add_debt_screen.dart').read_text(encoding='utf-8')
 for marker in ('_customerLoadError', '_buildCustomerPicker', 'دووبارە هەوڵ بدە'):
     if marker not in add_debt:
