@@ -4,7 +4,7 @@ on:
   push:
     branches: [owner-source]
     paths:
-      - 'scripts/apply_customer_inbox_performance.py'
+      - 'scripts/apply_customer_inbox_performance_v2.py'
       - '.github/workflows/apply-customer-inbox-performance.yml'
 
 permissions:
@@ -21,10 +21,10 @@ jobs:
           fetch-depth: 0
 
       - name: Preserve patch helper
-        run: cp scripts/apply_customer_inbox_performance.py /tmp/apply_customer_inbox_performance.py
+        run: cp scripts/apply_customer_inbox_performance_v2.py /tmp/apply_customer_inbox_performance_v2.py
 
       - name: Patch Owner
-        run: python scripts/apply_customer_inbox_performance.py
+        run: python scripts/apply_customer_inbox_performance_v2.py
 
       - name: Commit Owner
         run: |
@@ -42,7 +42,7 @@ jobs:
           git checkout -B user-source origin/user-source
 
       - name: Patch User
-        run: python /tmp/apply_customer_inbox_performance.py
+        run: python /tmp/apply_customer_inbox_performance_v2.py
 
       - name: Commit User
         run: |
