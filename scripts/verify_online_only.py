@@ -312,7 +312,7 @@ for marker in (
     '_timelineAmountInIqd',
     '_overdueDebtLabel',
     'ماوەی هەژمار',
-    'پارەدانەوەی تەواو',
+    'پارە وەرگرتنەوەی تەواو',
     'initialDebtId',
     'initialAmount',
     "case 'pay_full':",
