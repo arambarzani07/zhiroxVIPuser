@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
+import 'package:zhirox/screens/admin/subscription_payment_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/pdf_service.dart';
@@ -755,6 +756,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                _settingsTile(
+                  isDark: isDark,
+                  icon: Icons.account_balance_wallet_outlined,
+                  iconColor: Colors.green,
+                  title: 'بەشداری و پارەدان بە FIB',
+                  subtitle: 'پلان هەڵبژێرە و بە FIB پارە بدە',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SubscriptionPaymentScreen(),
+                      ),
+                    );
+                  },
+                ),
                 _settingsTile(
                   isDark: isDark,
                   icon: Icons.summarize_outlined,

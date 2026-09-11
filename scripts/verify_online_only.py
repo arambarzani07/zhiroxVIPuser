@@ -646,6 +646,18 @@ if account_admin_edge.exists():
     if 'const { data: tenantUsers }' in account_admin_source:
         fail('supabase/functions/account-admin/index.ts: duplicate admin cascade deletion must stay removed')
 
+payment_screen = LIB / 'screens/admin/subscription_payment_screen.dart'
+fib_edge = ROOT / 'supabase/functions/fib-subscription-payment/index.ts'
+fib_migration = ROOT / 'supabase/migrations/20260911170000_add_fib_subscription_payments.sql'
+for path in (payment_screen, fib_edge, fib_migration):
+    if not path.exists():
+        fail(f'{path.relative_to(ROOT)}: FIB subscription payment component missing')
+if payment_screen.exists():
+    source = payment_screen.read_text(encoding='utf-8')
+    for marker in ('پارەدان بە FIB', 'PBService.createFibSubscriptionPayment', 'PBService.checkFibSubscriptionPayment'):
+        if marker not in source:
+            fail(f'lib/screens/admin/subscription_payment_screen.dart: FIB marker missing: {marker}')
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:

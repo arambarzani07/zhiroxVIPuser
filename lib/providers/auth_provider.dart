@@ -126,11 +126,8 @@ class AuthProvider extends ChangeNotifier {
     }
 
     if (userRole == 'admin') {
-      final subEnd = current.getStringValue('subscription_end');
-      final date = DateTime.tryParse(subEnd);
-      if (date != null && !date.isAfter(DateTime.now())) {
-        throw 'ماوەی ڕێکەوتنی بەشداریت تەواو بووە. تکایە پەیوەندی بکە بۆ نوێکردنەوە.';
-      }
+      // Expired admins remain authenticated only so the app can present the
+      // restricted subscription-payment screen. Main blocks dashboard access.
       return;
     }
 
@@ -144,6 +141,13 @@ class AuthProvider extends ChangeNotifier {
         throw 'ماوەی ڕێکەوتنی بەڕێوەبەرەکەت تەواو بووە. تکایە پەیوەندی بکە بە بەڕێوەبەرەکەت.';
       }
     }
+  }
+
+  Future<void> refreshCurrentProfile() async {
+    final current = _user;
+    if (current == null) return;
+    _user = await PBService.getUser(current.id);
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> _loadSavedUser() async {
