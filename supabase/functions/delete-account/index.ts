@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
 
     const childIds = (tenantUsers ?? []).map((row: { id: string }) => row.id);
 
+    // Capture receipt object paths before customer profiles/debts cascade away.
     const receiptPaths: string[] = [];
     if (childIds.length > 0) {
       const { data: receiptRows, error: receiptError } = await admin
@@ -96,6 +97,9 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Delete tenant auth accounts first in bounded batches. Every auth deletion
+    // cascades its profile and related public rows transactionally via Postgres
+    // FKs. If one batch fails, the admin remains so the operation is retryable.
     for (const batch of chunks(childIds, 8)) {
       const results = await Promise.all(
         batch.map(async (userId) => {
@@ -120,6 +124,8 @@ Deno.serve(async (req) => {
       return json({ error: "admin_delete_failed", detail: deleteAdminError.message }, 409);
     }
 
+    // Storage is outside the relational FK transaction. Cleanup is best-effort
+    // after the authoritative account/data deletion has succeeded.
     let receiptCleanupFailed = false;
     for (const batch of chunks(receiptPaths, 100)) {
       if (batch.length === 0) continue;
