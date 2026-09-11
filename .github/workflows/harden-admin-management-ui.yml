@@ -1,0 +1,29 @@
+name: Harden Owner Admin Management UI
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/harden-admin-management-ui.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Patch owner-source
+        run: |
+          set -euo pipefail
+          python3 scripts/harden_admin_management_ui.py
+          git add lib/screens/auth/admin_management_screen.dart scripts/verify_online_only.py
+          git commit -m 'Serialize Owner admin paging and validate subscriptions'
+          git push origin owner-source
