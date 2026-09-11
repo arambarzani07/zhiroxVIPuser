@@ -178,6 +178,20 @@ if 'generateFinancialChatStatement({' not in pdf_source:
     fail('lib/services/pdf_service.dart: filter-aware Financial Chat PDF export missing')
 
 
+# Financial Chat reply/reference must be persisted server-side, not kept as
+# ephemeral UI-only state.
+profile_source = (LIB / 'screens/shared/user_profile_screen.dart').read_text(encoding='utf-8')
+for marker in ('_financialReplyTarget', 'referenceKind:', 'referenceId:', 'reference_snapshot', 'وەک وەڵام / پەیوەستکردن'):
+    if marker not in profile_source:
+        fail(f'lib/screens/shared/user_profile_screen.dart: persistent Financial Chat reference marker missing: {marker}')
+for marker in ('referenceKind', 'referenceId', "'p_reference_kind'", "'p_reference_id'"):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: persistent financial reference marker missing: {marker}')
+for marker in ('referenceKind', 'referenceId'):
+    if marker not in add_debt:
+        fail(f'lib/screens/shared/add_debt_screen.dart: debt reference pass-through missing: {marker}')
+
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:

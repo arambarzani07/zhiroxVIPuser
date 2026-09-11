@@ -545,6 +545,8 @@ class PBService {
     String? marketName,
     String? customCreatedDate,
     String? receiptImagePath,
+    String? referenceKind,
+    String? referenceId,
   }) async {
     String receiptPath = '';
     if (receiptImagePath != null && receiptImagePath.isNotEmpty) {
@@ -566,6 +568,16 @@ class PBService {
       if (customCreatedDate != null && customCreatedDate.isNotEmpty)
         'custom_date': customCreatedDate,
       if (receiptPath.isNotEmpty) 'receipt_image': receiptPath,
+      if (referenceKind != null &&
+          referenceKind.isNotEmpty &&
+          referenceId != null &&
+          referenceId.isNotEmpty)
+        'reference_kind': referenceKind,
+      if (referenceKind != null &&
+          referenceKind.isNotEmpty &&
+          referenceId != null &&
+          referenceId.isNotEmpty)
+        'reference_id': referenceId,
     };
 
     RecordModel created;
@@ -711,6 +723,8 @@ class PBService {
     String? note,
     required String createdBy,
     String? createdByName,
+    String? referenceKind,
+    String? referenceId,
   }) async {
     await ensureInitialized();
   final rpcResult = await client.rpc(
@@ -719,6 +733,8 @@ class PBService {
       'p_debt_id': debtId,
       'p_amount': amount,
       'p_note': note ?? '',
+      'p_reference_kind': referenceKind,
+      'p_reference_id': referenceId,
     },
   );
 
