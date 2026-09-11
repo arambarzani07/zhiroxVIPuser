@@ -1,0 +1,53 @@
+name: Add Owner User Separation Guards
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - 'scripts/add_owner_user_separation_guards.py'
+      - '.github/workflows/add-owner-user-separation-guards.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout owner-source
+        uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+
+      - name: Preserve helper
+        run: cp scripts/add_owner_user_separation_guards.py /tmp/add_owner_user_separation_guards.py
+
+      - name: Patch Owner verifier
+        run: python scripts/add_owner_user_separation_guards.py
+
+      - name: Commit Owner verifier
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/verify_online_only.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'Guard Owner and User source separation'
+            git push origin HEAD:owner-source
+          fi
+
+      - name: Checkout user-source
+        run: |
+          git fetch origin user-source
+          git checkout -B user-source origin/user-source
+
+      - name: Patch User verifier
+        run: python /tmp/add_owner_user_separation_guards.py
+
+      - name: Commit User verifier
+        run: |
+          git add scripts/verify_online_only.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'Guard Owner and User source separation'
+            git push origin HEAD:user-source
+          fi
