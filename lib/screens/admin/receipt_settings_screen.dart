@@ -262,7 +262,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: _paperSize,
+                        initialValue: _paperSize,
                         decoration: _decoration('قەبارەی کاغەز', Icons.print_outlined),
                         items: const [
                           DropdownMenuItem(value: 'a4', child: Text('A4 ـ پسوولەی فەرمی تەواو')),
