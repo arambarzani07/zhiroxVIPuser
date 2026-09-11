@@ -66,6 +66,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   final _financialSearchController = TextEditingController();
   DateTimeRange? _financialDateRange;
   String _financialTypeFilter = 'all';
+  _ProfileTimelineItem? _financialReplyTarget;
 
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -1651,6 +1652,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       0,
       (sum, debt) => sum + debt.getDoubleValue('remaining'),
     );
+    final replyTarget = _financialReplyTarget;
+
     return SafeArea(
       top: false,
       child: Container(
@@ -1672,43 +1675,104 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: () => _openAddDebtFromChat(),
-                icon: const Icon(Icons.add_rounded, size: 19),
-                label: const Text('قەرز زیاد بکە'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(46),
-                  backgroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
+            if (replyTarget != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: isDark ? 0.12 : 0.07),
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border(
+                    right: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.65),
+                      width: 3,
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: totalRemaining > 0
-                    ? () => _showFinancialPaymentSheet(auth)
-                    : null,
-                icon: const Icon(Icons.payments_outlined, size: 18),
-                label: const Text('پارەدانەوە'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(46),
-                  foregroundColor: Colors.green.shade700,
-                  side: BorderSide(
-                    color: totalRemaining > 0
-                        ? Colors.green.withValues(alpha: 0.32)
-                        : const Color(0xFFD0D5DD),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
-                  ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.reply_rounded, size: 17, color: AppColors.primary),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'پەیوەست بە مامەڵەی پێشوو',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          Text(
+                            _financialReplyLabel(replyTarget),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? AppDarkColors.textSecondary
+                                  : const Color(0xFF475467),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'لابردنی پەیوەندی',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => setState(() => _financialReplyTarget = null),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(height: 8),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _openAddDebtFromChat,
+                    icon: const Icon(Icons.add_rounded, size: 19),
+                    label: const Text('قەرز زیاد بکە'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(46),
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: totalRemaining > 0
+                        ? () => _showFinancialPaymentSheet(auth)
+                        : null,
+                    icon: const Icon(Icons.payments_outlined, size: 18),
+                    label: const Text('پارەدانەوە'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(46),
+                      foregroundColor: Colors.green.shade700,
+                      side: BorderSide(
+                        color: totalRemaining > 0
+                            ? Colors.green.withValues(alpha: 0.32)
+                            : const Color(0xFFD0D5DD),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1720,10 +1784,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AddDebtScreen(customerId: widget.userId),
+        builder: (_) => AddDebtScreen(
+          customerId: widget.userId,
+          referenceKind: _financialReplyTarget == null
+              ? null
+              : (_financialReplyTarget!.isPayment ? 'payment' : 'debt'),
+          referenceId: _financialReplyTarget?.record.id,
+        ),
       ),
     );
     if (result == true && mounted) {
+      if (mounted && _financialReplyTarget != null) {
+        setState(() => _financialReplyTarget = null);
+      }
       await _refreshFinancialData(autoJump: true);
     }
   }
@@ -1931,6 +2004,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     note: noteController.text.trim(),
                                     createdBy: auth.userId,
                                     createdByName: auth.userName,
+                                    referenceKind: _financialReplyTarget == null
+                                        ? null
+                                        : (_financialReplyTarget!.isPayment
+                                            ? 'payment'
+                                            : 'debt'),
+                                    referenceId: _financialReplyTarget?.record.id,
                                   );
                                   if (!sheetContext.mounted) return;
                                   Navigator.pop(sheetContext);
@@ -1939,7 +2018,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     context,
                                     'پارەدانەوە بە سەرکەوتوویی تۆمارکرا',
                                   );
-                                  await _refreshFinancialData(autoJump: true);
+                                  if (mounted && _financialReplyTarget != null) {
+        setState(() => _financialReplyTarget = null);
+      }
+      await _refreshFinancialData(autoJump: true);
                                 } catch (e) {
                                   if (!sheetContext.mounted) return;
                                   setSheetState(() {
@@ -2242,6 +2324,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ),
                       ),
                     ],
+                    if (_financialReferenceSnapshot(record) != null) ...[
+                      const SizedBox(height: 7),
+                      _buildPersistentFinancialReference(record, color, isDark),
+                    ],
                     if (isPayment && relatedDebt != null) ...[
                       const SizedBox(height: 7),
                       _buildPaymentDebtReference(relatedDebt, color, isDark),
@@ -2471,6 +2557,98 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  Map<String, dynamic>? _financialReferenceSnapshot(RecordModel record) {
+    final raw = record.toJson()['reference_snapshot'];
+    if (raw is Map && raw.isNotEmpty) {
+      return Map<String, dynamic>.from(raw);
+    }
+    return null;
+  }
+
+  String _financialReplyLabel(_ProfileTimelineItem item) {
+    final isPayment = item.isPayment;
+    final record = item.record;
+    final amount = record.getDoubleValue('amount');
+    final relatedCurrency = item.relatedDebt?.getStringValue('currency') ?? '';
+    final ownCurrency = record.getStringValue('currency');
+    final currency = (isPayment ? relatedCurrency : ownCurrency).trim().isEmpty
+        ? 'IQD'
+        : (isPayment ? relatedCurrency : ownCurrency);
+    final text = (isPayment
+            ? record.getStringValue('note')
+            : record.getStringValue('description'))
+        .trim();
+    final amountText = AppHelpers.formatCurrencyWithType(amount, currency);
+    final prefix = isPayment ? 'پارەدانەوە' : 'قەرز';
+    return text.isEmpty ? '$prefix • $amountText' : '$prefix • $amountText • $text';
+  }
+
+  Widget _buildPersistentFinancialReference(
+    RecordModel record,
+    Color accent,
+    bool isDark,
+  ) {
+    final snapshot = _financialReferenceSnapshot(record);
+    if (snapshot == null) return const SizedBox.shrink();
+
+    final kind = snapshot['kind']?.toString() ?? '';
+    final amount = double.tryParse('${snapshot['amount'] ?? 0}') ?? 0;
+    final currency = (snapshot['currency']?.toString() ?? '').trim().isEmpty
+        ? 'IQD'
+        : snapshot['currency'].toString();
+    final text = snapshot['text']?.toString().trim() ?? '';
+    final label = kind == 'payment' ? 'وەڵام بۆ پارەدانەوە' : 'وەڵام بۆ قەرز';
+    final amountText = AppHelpers.formatCurrencyWithType(amount, currency);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.055)
+            : Colors.white.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(10),
+        border: Border(
+          right: BorderSide(color: accent.withValues(alpha: 0.72), width: 3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.reply_rounded, size: 14, color: accent),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                    color: accent,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  text.isEmpty ? amountText : '$amountText • $text',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? AppDarkColors.textSecondary
+                        : const Color(0xFF475467),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildReceiptPreview(
     RecordModel debt,
     String receiptPath,
@@ -2561,6 +2739,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     final debt = item.isPayment ? item.relatedDebt : item.record;
     final receiptPath = debt?.getStringValue('receipt_image').trim() ?? '';
+    final auth = context.read<AuthProvider>();
     final action = await showModalBottomSheet<String>(
       context: context,
       useSafeArea: true,
@@ -2618,6 +2797,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 title: const Text('وردەکاری مامەڵە'),
                 onTap: () => Navigator.pop(sheetContext, 'details'),
               ),
+              if (auth.userRole != 'customer')
+                ListTile(
+                  leading: const Icon(Icons.reply_rounded),
+                  title: const Text('وەک وەڵام / پەیوەستکردن'),
+                  subtitle: const Text('مامەڵەی نوێ بە ئەم مامەڵەیەوە ببەستە'),
+                  onTap: () => Navigator.pop(sheetContext, 'reference'),
+                ),
               if (receiptPath.isNotEmpty)
                 ListTile(
                   leading: const Icon(Icons.image_outlined),
@@ -2644,6 +2830,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     if (!mounted || action == null) return;
     switch (action) {
+      case 'reference':
+        if (mounted) {
+          setState(() => _financialReplyTarget = item);
+          _jumpToLatest();
+        }
+        break;
       case 'details':
         await _openTimelineItem(item);
         break;

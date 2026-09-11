@@ -17,8 +17,16 @@ import 'package:image_picker/image_picker.dart';
 class AddDebtScreen extends StatefulWidget {
   final String? customerId;
   final RecordModel? debt;
+  final String? referenceKind;
+  final String? referenceId;
 
-  const AddDebtScreen({super.key, this.customerId, this.debt});
+  const AddDebtScreen({
+    super.key,
+    this.customerId,
+    this.debt,
+    this.referenceKind,
+    this.referenceId,
+  });
 
   @override
   State<AddDebtScreen> createState() => _AddDebtScreenState();
@@ -841,6 +849,8 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               ? _customDebtDate!.toUtc().toIso8601String()
               : null,
           receiptImagePath: _receiptImage?.path,
+          referenceKind: widget.referenceKind,
+          referenceId: widget.referenceId,
         );
 
         // Local push notification for new debt
