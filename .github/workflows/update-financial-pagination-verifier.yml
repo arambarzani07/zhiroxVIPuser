@@ -1,0 +1,43 @@
+name: Update Financial Pagination Verifier
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/update-financial-pagination-verifier.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Patch owner-source
+        run: |
+          set -euo pipefail
+          cp scripts/update_financial_pagination_verifier.py /tmp/update_financial_pagination_verifier.py
+          python3 scripts/update_financial_pagination_verifier.py
+          git add scripts/verify_online_only.py
+          git commit -m 'Update verifier for paginated Financial Chat'
+          git push origin owner-source
+      - name: Patch user-source
+        run: |
+          set -euo pipefail
+          git reset --hard
+          git clean -fd
+          git fetch origin user-source
+          git checkout -B user-source origin/user-source
+          cp /tmp/update_financial_pagination_verifier.py scripts/.update_financial_pagination_verifier.tmp.py
+          REPO_ROOT="$PWD" python3 scripts/.update_financial_pagination_verifier.tmp.py
+          rm -f scripts/.update_financial_pagination_verifier.tmp.py
+          git add scripts/verify_online_only.py
+          git commit -m 'Update verifier for paginated Financial Chat'
+          git push origin user-source
