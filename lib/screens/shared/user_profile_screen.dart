@@ -1657,9 +1657,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final type = record.getStringValue('event_type');
     final actor = record.getStringValue('actor_name').trim();
     final amount = record.getDoubleValue('amount');
-    final currency = record.getStringValue('currency').isEmpty
-        ? 'IQD'
-        : record.getStringValue('currency');
     // Audit events store the canonical amount but do not snapshot dollar_rate.
     // Never relabel that known IQD value as USD without a safe conversion rate.
     final amountText = amount > 0 ? AppHelpers.formatCurrency(amount) : '';
