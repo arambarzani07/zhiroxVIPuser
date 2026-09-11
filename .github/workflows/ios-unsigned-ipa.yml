@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ios-unsigned-${{ github.ref }}
@@ -115,3 +115,29 @@ jobs:
           path: ${{ env.IPA_FILE }}
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish permanent IPA download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF_NAME}" in
+            owner-source)
+              TAG="owner-latest"
+              TITLE="ZHIROX Owner - Latest"
+              ;;
+            user-source)
+              TAG="user-latest"
+              TITLE="ZHIROX User - Latest"
+              ;;
+          esac
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$IPA_FILE" --clobber
+          else
+            gh release create "$TAG" "$IPA_FILE" \
+              --title "$TITLE" \
+              --notes "Latest unsigned IPA. Updated automatically by GitHub Actions." \
+              --target "$GITHUB_SHA"
+          fi
