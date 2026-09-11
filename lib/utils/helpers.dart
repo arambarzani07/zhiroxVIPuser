@@ -28,16 +28,49 @@ class AppHelpers {
     return '${formatter.format(amount)} د.ع';
   }
 
-  /// Normalize one debt field to IQD using the rate stored on that debt.
-  /// A USD debt without a valid historical rate is unknown, never silently mixed.
-  static double? debtValueInIqd(RecordModel debt, String field) {
-    final value = debt.getDoubleValue(field);
-    final rawCurrency = debt.getStringValue('currency').trim();
-    final currency = rawCurrency.isEmpty ? 'IQD' : rawCurrency.toUpperCase();
-    if (currency != 'USD') return value;
-    final rate = debt.getDoubleValue('dollar_rate');
-    if (rate <= 0) return null;
-    return value * rate;
+  /// Canonical finance storage is IQD. `currency` and `dollar_rate` are display
+  /// metadata for legacy USD-tagged debts; amount/remaining/payment.amount stay
+  /// in the same base IQD unit used by record_payment.
+  static double debtValueInIqd(RecordModel debt, String field) {
+    return debt.getDoubleValue(field);
+  }
+
+  /// Convert a canonical IQD storage amount into the debt's display currency.
+  /// A USD label without a valid historical rate cannot be converted safely.
+  static double? storageAmountToDisplay(
+    double storageAmount,
+    String currency, {
+    double dollarRate = 0,
+  }) {
+    final normalized = currency.trim().toUpperCase();
+    if (normalized != 'USD') return storageAmount;
+    if (dollarRate <= 0) return null;
+    return storageAmount / dollarRate;
+  }
+
+  /// Format a canonical IQD storage amount without ever presenting IQD as USD.
+  /// If USD conversion metadata is incomplete, fail safe to the known IQD value.
+  static String formatStoredFinancialAmount(
+    double storageAmount,
+    String currency, {
+    double dollarRate = 0,
+    bool showConversion = true,
+  }) {
+    final normalized = currency.trim().toUpperCase();
+    final display = storageAmountToDisplay(
+      storageAmount,
+      normalized,
+      dollarRate: dollarRate,
+    );
+    if (normalized == 'USD' && display != null) {
+      return formatCurrencyWithType(
+        display,
+        'USD',
+        dollarRate: dollarRate,
+        showConversion: showConversion,
+      );
+    }
+    return formatCurrency(storageAmount);
   }
 
   static ({
@@ -52,7 +85,7 @@ class AppHelpers {
     for (final debt in debts) {
       final amount = debtValueInIqd(debt, 'amount');
       final remaining = debtValueInIqd(debt, 'remaining');
-      if (amount == null || remaining == null) {
+      if (!amount.isFinite || !remaining.isFinite) {
         complete = false;
         continue;
       }

@@ -72,10 +72,16 @@ void main() {
       });
     }
 
-    test('normalizes mixed IQD and USD using the historical debt rate', () {
+    test('sums canonical IQD storage even for a legacy USD display tag', () {
       final summary = AppHelpers.debtSummaryInIqd([
         debt(id: 'iqd', amount: 100000, remaining: 60000, currency: 'IQD'),
-        debt(id: 'usd', amount: 50, remaining: 20, currency: 'USD', rate: 1500),
+        debt(
+          id: 'legacy-usd',
+          amount: 75000,
+          remaining: 30000,
+          currency: 'USD',
+          rate: 1500,
+        ),
       ]);
       expect(summary.complete, isTrue);
       expect(summary.totalDebt, 175000);
@@ -83,11 +89,36 @@ void main() {
       expect(summary.totalPaid, 85000);
     });
 
-    test('fails closed when a USD debt has no valid historical rate', () {
+    test('converts storage IQD to USD only for display', () {
+      expect(
+        AppHelpers.storageAmountToDisplay(75000, 'USD', dollarRate: 1500),
+        50,
+      );
+      expect(
+        AppHelpers.formatStoredFinancialAmount(
+          75000,
+          'USD',
+          dollarRate: 1500,
+        ),
+        r'$50.00 (75,000 د.ع)',
+      );
+    });
+
+    test('falls back to known IQD when USD display rate is missing', () {
       final summary = AppHelpers.debtSummaryInIqd([
-        debt(id: 'usd-no-rate', amount: 50, remaining: 20, currency: 'USD'),
+        debt(
+          id: 'legacy-usd-no-rate',
+          amount: 75000,
+          remaining: 30000,
+          currency: 'USD',
+        ),
       ]);
-      expect(summary.complete, isFalse);
+      expect(summary.complete, isTrue);
+      expect(summary.totalDebt, 75000);
+      expect(
+        AppHelpers.formatStoredFinancialAmount(75000, 'USD'),
+        '75,000 د.ع',
+      );
     });
   });
 
