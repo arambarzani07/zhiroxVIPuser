@@ -1,0 +1,44 @@
+name: Cleanup Legacy IPA Assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cleanup-legacy-ipa-assets.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove legacy release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for pair in \
+            'owner-safari-download|zhirox-owner-unsigned.ipa' \
+            'safari-download|zhiroxVIPuser-unsigned.ipa'
+          do
+            TAG="${pair%%|*}"
+            ASSET="${pair#*|}"
+            if gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | grep -Fxq "$ASSET"; then
+              gh release delete-asset "$TAG" "$ASSET" --repo "${{ github.repository }}" --yes
+            fi
+          done
+
+      - name: Normalize release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release edit owner-safari-download \
+            --repo "${{ github.repository }}" \
+            --title 'ZHIROX Owner — Safari Download' \
+            --notes 'Independent public Owner app. Bundle ID: com.karoxghafoor.zhirox.owner. Admin creation remains protected by System Owner authentication. Unsigned IPA; sign before installation.'
+          gh release edit safari-download \
+            --repo "${{ github.repository }}" \
+            --title 'ZHIROX User — Safari Download' \
+            --notes 'Independent public User app. Bundle ID: com.karoxghafoor.zhirox.user. Admin account creation is controlled by the system owner. Unsigned IPA; sign before installation.'
