@@ -239,6 +239,9 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!target) return json({ error: "not_found" }, 404);
       if (target.is_system_owner) return json({ error: "cannot_delete_system_owner" }, 403);
+      if (target.role === "admin") {
+        return json({ error: "admin_delete_requires_dedicated_endpoint" }, 409);
+      }
 
       const requesterTenant = requesterProfile.role === "admin"
         ? requesterProfile.id
@@ -272,26 +275,6 @@ Deno.serve(async (req) => {
         await admin.from("debts").update({ created_by: null }).eq("created_by", targetId);
         await admin.from("payments").update({ created_by: null }).eq("created_by", targetId);
         await admin.from("notifications").update({ sender_id: null }).eq("sender_id", targetId);
-      } else if (target.role === "admin") {
-        const { data: tenantUsers } = await admin
-          .from("profiles")
-          .select("id")
-          .eq("admin_id", targetId);
-        const ids = [targetId, ...(tenantUsers ?? []).map((u: any) => u.id)];
-        const { data: tenantDebts } = await admin
-          .from("debts")
-          .select("id")
-          .in("customer_id", ids);
-        const debtIds = (tenantDebts ?? []).map((d: any) => d.id);
-        if (debtIds.length) await admin.from("payments").delete().in("debt_id", debtIds);
-        await admin
-          .from("notifications")
-          .delete()
-          .or(ids.map((id: string) => `customer_id.eq.${id}`).join(","));
-        await admin.from("debts").delete().in("customer_id", ids);
-        for (const id of (tenantUsers ?? []).map((u: any) => u.id)) {
-          await admin.auth.admin.deleteUser(id);
-        }
       }
 
       const { error } = await admin.auth.admin.deleteUser(targetId);
