@@ -915,6 +915,34 @@ class PBService {
     return RecordModel.fromJson(json);
   }
 
+  static Future<Map<String, Map<String, dynamic>>> getCustomerInboxRows(
+    List<String> customerIds,
+  ) async {
+    if (customerIds.isEmpty) return const {};
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_customer_inbox_rows',
+      params: {'p_customer_ids': customerIds},
+    );
+    if (raw is! List) throw Exception('invalid customer inbox rows');
+    final result = <String, Map<String, dynamic>>{};
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final row = Map<String, dynamic>.from(item);
+      final customerId = row['customer_id']?.toString() ?? '';
+      if (customerId.isNotEmpty) result[customerId] = row;
+    }
+    return result;
+  }
+
+  static Future<void> markFinancialChatRead(String customerId) async {
+    await ensureInitialized();
+    await client.rpc(
+      'mark_financial_chat_read',
+      params: {'p_customer_id': customerId},
+    );
+  }
+
   static Future<Map<String, dynamic>> getCustomerFinanceSnapshot(
     String customerId,
   ) async {
