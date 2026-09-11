@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/screens/admin/intelligence_center_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/services/app_update_service.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -122,8 +125,6 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
       if (!mounted) return;
       setState(() {
         _lastCheck = DateTime.now();
-        // Update checks must never block the application when GitHub or the
-        // network is temporarily unavailable.
         _error = null;
       });
     } finally {
@@ -163,6 +164,12 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
     await _checkForUpdate();
   }
 
+  Future<void> _openIntelligenceCenter() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const IntelligenceCenterScreen()),
+    );
+  }
+
   void _dismiss() {
     final info = _update;
     if (info == null || info.mandatory) return;
@@ -188,14 +195,38 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
     );
   }
 
+  Widget _intelligenceButton() {
+    return SafeArea(
+      minimum: const EdgeInsets.fromLTRB(12, 12, 12, 82),
+      child: Align(
+        alignment: Alignment.bottomRight,
+        child: FloatingActionButton.small(
+          heroTag: 'zhirox-intelligence-center',
+          tooltip: 'ZHIROX Intelligence Center',
+          onPressed: _openIntelligenceCenter,
+          child: const Icon(Icons.auto_awesome_rounded),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final canOpenIntelligence = auth.isLoggedIn &&
+        auth.userRole == 'admin' &&
+        !(auth.user?.getBoolValue('is_system_owner') ?? false);
     final info = _update;
+
     if (info == null) {
-      if (!_isSystemOwner) return widget.child;
+      if (!_isSystemOwner && !canOpenIntelligence) return widget.child;
       return Stack(
         fit: StackFit.expand,
-        children: [widget.child, _ownerControlButton()],
+        children: [
+          widget.child,
+          if (canOpenIntelligence) _intelligenceButton(),
+          if (_isSystemOwner) _ownerControlButton(),
+        ],
       );
     }
 
@@ -388,6 +419,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
             child: card,
           ),
         ),
+        if (canOpenIntelligence && !info.mandatory) _intelligenceButton(),
         if (_isSystemOwner) _ownerControlButton(),
       ],
     );
