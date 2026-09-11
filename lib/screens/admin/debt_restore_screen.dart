@@ -78,16 +78,6 @@ class _DebtRestoreScreenState extends State<DebtRestoreScreen> {
     final id = item['id']?.toString() ?? '';
     if (id.isEmpty || _busyId != null) return;
 
-    final customerName = item['customer_name']?.toString().trim() ?? '';
-    final confirm = await AppHelpers.showConfirmDialog(
-      context,
-      title: 'گەڕاندنەوەی قەرز',
-      message: customerName.isEmpty
-          ? 'دڵنیایت دەتەوێت ئەم قەرزە بگەڕێنیتەوە؟'
-          : 'دڵنیایت دەتەوێت قەرزی $customerName بگەڕێنیتەوە؟',
-    );
-    if (!mounted || !confirm) return;
-
     setState(() => _busyId = id);
     try {
       final response = await PBService.client.functions.invoke(
