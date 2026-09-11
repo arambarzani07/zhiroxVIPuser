@@ -46,6 +46,7 @@ jobs:
             owner)
               echo "ARTIFACT_NAME=zhirox-owner-unsigned-ipa" >> "$GITHUB_ENV"
               echo "IPA_FILE=ZHIROX-Owner.ipa" >> "$GITHUB_ENV"
+              echo "LEGACY_IPA_FILE=zhirox-owner-unsigned.ipa" >> "$GITHUB_ENV"
               echo "TARGET_BRANCH=owner-source" >> "$GITHUB_ENV"
               echo "RELEASE_TAG=owner-safari-download" >> "$GITHUB_ENV"
               echo "RELEASE_TITLE=ZHIROX Owner — Safari Download" >> "$GITHUB_ENV"
@@ -54,6 +55,7 @@ jobs:
             user)
               echo "ARTIFACT_NAME=zhiroxVIPuser-unsigned-ipa" >> "$GITHUB_ENV"
               echo "IPA_FILE=ZHIROX-User.ipa" >> "$GITHUB_ENV"
+              echo "LEGACY_IPA_FILE=zhiroxVIPuser-unsigned.ipa" >> "$GITHUB_ENV"
               echo "TARGET_BRANCH=user-source" >> "$GITHUB_ENV"
               echo "RELEASE_TAG=safari-download" >> "$GITHUB_ENV"
               echo "RELEASE_TITLE=ZHIROX User — Safari Download" >> "$GITHUB_ENV"
@@ -107,6 +109,24 @@ jobs:
               --target "$TARGET_BRANCH" \
               --title "$RELEASE_TITLE" \
               --notes "$RELEASE_NOTES"
+          fi
+
+          gh release edit "$RELEASE_TAG" \
+            --repo "${{ github.repository }}" \
+            --title "$RELEASE_TITLE" \
+            --notes "$RELEASE_NOTES"
+
+      - name: Remove legacy IPA alias
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" \
+              --repo "${{ github.repository }}" \
+              --json assets \
+              --jq '.assets[].name' | grep -Fxq "$LEGACY_IPA_FILE"; then
+            gh release delete-asset "$RELEASE_TAG" "$LEGACY_IPA_FILE" \
+              --repo "${{ github.repository }}" --yes
           fi
 
       - name: Print direct Safari URL
