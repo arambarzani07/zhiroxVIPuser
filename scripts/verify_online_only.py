@@ -590,6 +590,23 @@ elif edition == 'user-source':
         if required not in login_source:
             fail(f'lib/screens/auth/login_screen.dart: User owner-contact marker missing: {required}')
 
+# User-edition Owner isolation must remain enforced.
+for forbidden_path in (
+    ROOT / 'lib/screens/auth/admin_management_screen.dart',
+    ROOT / 'lib/screens/auth/register_admin_screen.dart',
+):
+    if forbidden_path.exists():
+        fail(f'{forbidden_path.relative_to(ROOT)}: owner-only screen must not ship in User source')
+if 'AdminManagementScreen' in main:
+    fail('lib/main.dart: User source must not reference AdminManagementScreen')
+for marker in (
+    "auth.user?.getBoolValue('is_system_owner') ?? false",
+    'ئەم هەژمارە بۆ ZHIROX Owner ـە',
+    'ئەپی User دەسەڵاتی خاوەن سیستەم نادات.',
+):
+    if marker not in main:
+        fail(f'lib/main.dart: User owner-isolation marker missing: {marker}')
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:

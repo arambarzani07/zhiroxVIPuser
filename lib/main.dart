@@ -393,6 +393,58 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         if (!auth.isLoggedIn) return const LoginScreen();
 
+        // User edition must never expose System Owner capabilities. Even if
+        // valid owner credentials are entered here, keep the account isolated
+        // to the dedicated ZHIROX Owner application.
+        if (auth.user?.getBoolValue('is_system_owner') ?? false) {
+          return Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.admin_panel_settings_outlined,
+                          size: 56,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(height: 18),
+                        const Text(
+                          'ئەم هەژمارە بۆ ZHIROX Owner ـە',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'بۆ بەڕێوەبردنی هەژمارەکانی بەڕێوەبەر، ئەپی ZHIROX Owner بەکاربهێنە. ئەپی User دەسەڵاتی خاوەن سیستەم نادات.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(height: 1.7),
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: auth.isLoading ? null : () => auth.logout(),
+                            icon: const Icon(Icons.logout_rounded),
+                            label: const Text('چوونەدەرەوە'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
         switch (auth.userRole) {
           case 'admin':
             return const AdminDashboard();
