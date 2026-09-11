@@ -1,0 +1,40 @@
+name: Apply Payment Confirmation
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-payment-confirmation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp scripts/apply_payment_confirmation.py /tmp/apply_payment_confirmation.py
+          cp scripts/update_payment_confirmation_verifier.py /tmp/update_payment_confirmation_verifier.py
+      - name: Patch Owner
+        run: |
+          python /tmp/apply_payment_confirmation.py
+          python /tmp/update_payment_confirmation_verifier.py
+          git add lib/screens/shared/user_profile_screen.dart scripts/verify_online_only.py
+          git commit -m "Confirm Financial Chat payments before submit"
+          git push origin HEAD:owner-source
+      - name: Patch User
+        run: |
+          git fetch origin user-source
+          git checkout -B user-source origin/user-source
+          python /tmp/apply_payment_confirmation.py
+          python /tmp/update_payment_confirmation_verifier.py
+          git add lib/screens/shared/user_profile_screen.dart scripts/verify_online_only.py
+          git commit -m "Confirm Financial Chat payments before submit"
+          git push origin HEAD:user-source
