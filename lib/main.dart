@@ -17,6 +17,7 @@ import 'package:zhirox/services/notification_service.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
+import 'package:zhirox/widgets/auto_update_gate.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -267,7 +268,9 @@ class ZhiroxApp extends StatelessWidget {
           builder: (context, child) {
             return Directionality(
               textDirection: TextDirection.rtl,
-              child: _OnlineOnlyGate(child: child!),
+              child: _OnlineOnlyGate(
+                child: AutoUpdateGate(child: child!),
+              ),
             );
           },
           home: const AuthWrapper(),
