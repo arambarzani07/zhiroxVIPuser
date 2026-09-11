@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/services/official_receipt_service.dart';
 import 'package:zhirox/services/pb_service.dart';
-import 'package:zhirox/services/pdf_service.dart';
+import 'package:zhirox/services/receipt_settings_service.dart';
 import 'package:zhirox/utils/helpers.dart';
 
 /// Single source of truth for debt invoices and receipt viewing.
@@ -44,18 +45,25 @@ class FinancialDocumentActions {
             adminName = admin.getStringValue('name').trim();
           }
         } catch (_) {
-          // Invoice can still be generated with the authenticated display data.
+          // The receipt still uses the authenticated display data if available.
         }
       }
 
       if (marketName.isEmpty) marketName = 'Zhirox System';
       if (adminName.isEmpty) adminName = 'ZHIROX';
 
-      await PdfService.generateInvoice(
+      final settings = await ReceiptSettingsService.load(
+        adminId: adminId,
+        fallbackMarketName: marketName,
+        fallbackPhone: adminPhone,
+      );
+
+      await OfficialReceiptService.generateDebtReceipt(
         debt: debt,
         marketName: marketName,
         adminName: adminName,
-        adminPhone: adminPhone,
+        fallbackPhone: adminPhone,
+        settings: settings,
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -63,7 +71,7 @@ class FinancialDocumentActions {
         context,
         AppHelpers.backendErrorMessage(
           e,
-          fallback: 'نەتوانرا وەصڵ دروست بکرێت. دووبارە هەوڵ بدە.',
+          fallback: 'نەتوانرا پسوولەی فەرمی دروست بکرێت. دووبارە هەوڵ بدە.',
         ),
         isError: true,
       );
