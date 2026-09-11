@@ -105,7 +105,7 @@ payment_flow = (LIB / 'screens/shared/financial_payment_flow.dart').read_text(en
 document_actions = (LIB / 'screens/shared/financial_document_actions.dart').read_text(encoding='utf-8')
 debt_detail_source = (LIB / 'screens/shared/debt_detail_screen.dart').read_text(encoding='utf-8')
 for marker in (
-    'PBService.getFinancialEvents',
+    'PBService.getCustomerFinancialTimelinePage',
     "table: 'financial_events'",
     '_hasNewFinancialActivity',
     '_jumpToLatest',
@@ -290,7 +290,10 @@ for marker in (
     if marker not in helpers_source:
         fail(f'lib/utils/helpers.dart: currency-safe finance marker missing: {marker}')
 for marker in (
-    'AppHelpers.debtSummaryInIqd(_debts)',
+    '_financeTotalDebtIqd',
+    '_financeTotalRemainingIqd',
+    '_financeTotalPaidIqd',
+    '_financeSummaryComplete',
     'AppHelpers.formatStoredFinancialAmount',
     '_buildCurrencySummaryWarning',
     '_showIncompleteCurrencySummaryMessage',
