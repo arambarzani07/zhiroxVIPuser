@@ -1,0 +1,42 @@
+name: Apply Analyzer Cleanup
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/apply-analyzer-cleanup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Patch owner-source
+        run: |
+          set -euo pipefail
+          git checkout owner-source
+          REPO_ROOT="$PWD" python3 scripts/remove_unused_financial_event_currency.py
+          git add lib/screens/shared/user_profile_screen.dart
+          if ! git diff --cached --quiet; then
+            git commit -m 'Remove unused Financial Chat currency variable'
+            git push origin owner-source
+          fi
+      - name: Patch user-source
+        run: |
+          set -euo pipefail
+          git show owner-source:scripts/remove_unused_financial_event_currency.py > /tmp/remove_unused_financial_event_currency.py
+          git checkout user-source
+          REPO_ROOT="$PWD" python3 /tmp/remove_unused_financial_event_currency.py
+          git add lib/screens/shared/user_profile_screen.dart
+          if ! git diff --cached --quiet; then
+            git commit -m 'Remove unused Financial Chat currency variable'
+            git push origin user-source
+          fi
