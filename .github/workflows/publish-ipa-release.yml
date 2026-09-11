@@ -5,17 +5,67 @@ on:
     workflows: ["iOS Unsigned IPA"]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      edition:
+        description: App edition to publish
+        required: true
+        type: choice
+        options:
+          - user
+          - owner
 
 permissions:
   contents: write
   actions: read
 
 jobs:
-  publish-user:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'user-source' && github.event.workflow_run.conclusion == 'success')
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       (github.event.workflow_run.head_branch == 'user-source' ||
+        github.event.workflow_run.head_branch == 'owner-source'))
     runs-on: ubuntu-latest
     steps:
-      - name: Download user-source IPA artifact
+      - name: Resolve release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            EDITION="${{ inputs.edition }}"
+          else
+            case "${{ github.event.workflow_run.head_branch }}" in
+              owner-source) EDITION="owner" ;;
+              user-source) EDITION="user" ;;
+              *) echo "Unsupported source branch" >&2; exit 1 ;;
+            esac
+          fi
+
+          case "$EDITION" in
+            owner)
+              echo "ARTIFACT_NAME=zhirox-owner-unsigned-ipa" >> "$GITHUB_ENV"
+              echo "IPA_FILE=ZHIROX-Owner.ipa" >> "$GITHUB_ENV"
+              echo "TARGET_BRANCH=owner-source" >> "$GITHUB_ENV"
+              echo "RELEASE_TAG=owner-safari-download" >> "$GITHUB_ENV"
+              echo "RELEASE_TITLE=ZHIROX Owner — Safari Download" >> "$GITHUB_ENV"
+              echo "RELEASE_NOTES=Independent public Owner app. Bundle ID: com.karoxghafoor.zhirox.owner. Admin creation remains protected by System Owner authentication. Unsigned IPA; sign before installation." >> "$GITHUB_ENV"
+              ;;
+            user)
+              echo "ARTIFACT_NAME=zhiroxVIPuser-unsigned-ipa" >> "$GITHUB_ENV"
+              echo "IPA_FILE=ZHIROX-User.ipa" >> "$GITHUB_ENV"
+              echo "TARGET_BRANCH=user-source" >> "$GITHUB_ENV"
+              echo "RELEASE_TAG=safari-download" >> "$GITHUB_ENV"
+              echo "RELEASE_TITLE=ZHIROX User — Safari Download" >> "$GITHUB_ENV"
+              echo "RELEASE_NOTES=Independent public User app. Bundle ID: com.karoxghafoor.zhirox.user. Admin account creation is controlled by the system owner. Unsigned IPA; sign before installation." >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unsupported edition: $EDITION" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Download matching IPA artifact
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -26,13 +76,13 @@ jobs:
             RUN_ID="${{ github.event.workflow_run.id }}"
             gh run download "$RUN_ID" \
               --repo "${{ github.repository }}" \
-              --name zhiroxVIPuser-unsigned-ipa \
+              --name "$ARTIFACT_NAME" \
               --dir out
           else
             ARTIFACT_ID="$(gh api \
               -H 'Accept: application/vnd.github+json' \
-              "/repos/${{ github.repository }}/actions/artifacts?name=zhiroxVIPuser-unsigned-ipa&per_page=50" \
-              --jq 'first(.artifacts[] | select(.expired == false and .workflow_run.head_branch == "user-source") | .id)')"
+              "/repos/${{ github.repository }}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=50" \
+              --jq "first(.artifacts[] | select(.expired == false and .workflow_run.head_branch == \"${TARGET_BRANCH}\") | .id)")"
             test -n "$ARTIFACT_ID"
             gh api \
               -H 'Accept: application/vnd.github+json' \
@@ -41,74 +91,24 @@ jobs:
             unzip -o out/artifact.zip -d out
           fi
 
-          test -f out/ZHIROX-User.ipa
+          test -f "out/${IPA_FILE}"
 
-      - name: Create or update public User release
+      - name: Create or update public release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view safari-download --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release upload safari-download out/ZHIROX-User.ipa \
+          if gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "out/${IPA_FILE}" \
               --repo "${{ github.repository }}" --clobber
           else
-            gh release create safari-download out/ZHIROX-User.ipa \
+            gh release create "$RELEASE_TAG" "out/${IPA_FILE}" \
               --repo "${{ github.repository }}" \
-              --target user-source \
-              --title "ZHIROX User — Safari Download" \
-              --notes "Independent public User app. Bundle ID: com.karoxghafoor.zhirox.user. Admin account creation is controlled by the system owner. Unsigned IPA; sign before installation."
+              --target "$TARGET_BRANCH" \
+              --title "$RELEASE_TITLE" \
+              --notes "$RELEASE_NOTES"
           fi
 
-      - name: Print User Safari URL
-        run: echo "https://github.com/${{ github.repository }}/releases/download/safari-download/ZHIROX-User.ipa"
-
-  publish-owner:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'owner-source' && github.event.workflow_run.conclusion == 'success')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download owner-source IPA artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Print direct Safari URL
         run: |
-          set -euo pipefail
-          mkdir -p out
-
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            RUN_ID="${{ github.event.workflow_run.id }}"
-            gh run download "$RUN_ID" \
-              --repo "${{ github.repository }}" \
-              --name zhirox-owner-unsigned-ipa \
-              --dir out
-          else
-            ARTIFACT_ID="$(gh api \
-              -H 'Accept: application/vnd.github+json' \
-              "/repos/${{ github.repository }}/actions/artifacts?name=zhirox-owner-unsigned-ipa&per_page=50" \
-              --jq 'first(.artifacts[] | select(.expired == false and .workflow_run.head_branch == "owner-source") | .id)')"
-            test -n "$ARTIFACT_ID"
-            gh api \
-              -H 'Accept: application/vnd.github+json' \
-              "/repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip" \
-              > out/artifact.zip
-            unzip -o out/artifact.zip -d out
-          fi
-
-          test -f out/ZHIROX-Owner.ipa
-
-      - name: Create or update public Owner release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if gh release view owner-safari-download --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release upload owner-safari-download out/ZHIROX-Owner.ipa \
-              --repo "${{ github.repository }}" --clobber
-          else
-            gh release create owner-safari-download out/ZHIROX-Owner.ipa \
-              --repo "${{ github.repository }}" \
-              --target owner-source \
-              --title "ZHIROX Owner — Safari Download" \
-              --notes "Independent public Owner app. Bundle ID: com.karoxghafoor.zhirox.owner. Admin creation remains protected by System Owner authentication. Unsigned IPA; sign before installation."
-          fi
-
-      - name: Print Owner Safari URL
-        run: echo "https://github.com/${{ github.repository }}/releases/download/owner-safari-download/ZHIROX-Owner.ipa"
+          echo "https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/${IPA_FILE}"
