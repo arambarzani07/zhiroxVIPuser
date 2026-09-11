@@ -211,6 +211,19 @@ for marker in ('AppHelpers.debtSummaryInIqd(allDebts)', '_totalsComplete'):
         fail(f'lib/screens/customer/customer_dashboard.dart: currency-safe dashboard marker missing: {marker}')
 
 
+# Financial Chat payment confirmation: destructive/full-balance payment actions
+# must show a confirmation summary before the live transaction is submitted.
+for marker_name in (
+    '_confirmFinancialPayment',
+    '_buildPaymentConfirmationRow',
+    'ماوەی پێش پارەدان',
+    'ماوەی دوای پارەدان',
+    'پشتڕاستە — تۆمار بکە',
+):
+    if marker_name not in profile:
+        fail(f'Financial Chat payment confirmation marker missing: {marker_name}')
+
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
