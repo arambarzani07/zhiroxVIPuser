@@ -7,6 +7,7 @@ import 'package:workmanager/workmanager.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/admin_dashboard.dart';
+import 'package:zhirox/screens/auth/admin_management_screen.dart';
 import 'package:zhirox/screens/auth/login_screen.dart';
 import 'package:zhirox/screens/customer/customer_dashboard.dart';
 import 'package:zhirox/screens/employee/employee_dashboard.dart';
@@ -396,6 +397,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
         }
 
         if (!auth.isLoggedIn) return const LoginScreen();
+
+        if (auth.user?.getBoolValue('is_system_owner') ?? false) {
+          return const AdminManagementScreen();
+        }
 
         switch (auth.userRole) {
           case 'admin':

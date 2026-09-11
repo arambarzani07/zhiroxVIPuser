@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:zhirox/providers/auth_provider.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -194,6 +196,13 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
             tooltip: 'بەڕێوەبەری نوێ',
             onPressed: _showCreateAdminDialog,
             icon: const Icon(Icons.person_add_alt_1_rounded, size: 21),
+          ),
+          IconButton(
+            tooltip: 'چوونەدەرەوە',
+            onPressed: () async {
+              await context.read<AuthProvider>().logout();
+            },
+            icon: const Icon(Icons.logout_rounded, size: 21),
           ),
           const SizedBox(width: 4),
         ],

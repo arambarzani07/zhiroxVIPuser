@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
-import 'package:zhirox/screens/auth/register_admin_screen.dart';
 import 'package:zhirox/screens/auth/register_customer_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -72,9 +71,21 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _openAdminRegistration() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const RegisterAdminScreen()),
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('هەژماری بەڕێوەبەر'),
+        content: const Text(
+          'بۆ دروستکردنی هەژماری بەڕێوەبەر، سەرەتا بە هەژماری خاوەن سیستەم بچۆ ژوورەوە. دوای چوونەژوورەوە، لە پەڕەی بەڕێوەبردنی بەڕێوەبەران هەژماری نوێ دروست بکە.',
+          style: TextStyle(height: 1.6),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('باشە'),
+          ),
+        ],
+      ),
     );
   }
 
