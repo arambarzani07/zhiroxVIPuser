@@ -1868,6 +1868,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> _showFinancialPaymentSheet(
     AuthProvider auth, {
     String? initialDebtId,
+    double? initialAmount,
   }) async {
     final openDebts = _debts
         .where((debt) => debt.getDoubleValue('remaining') > 0)
@@ -1878,12 +1879,26 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       return;
     }
 
+    String inputAmountText(double value) {
+      if (value == value.roundToDouble()) return value.toInt().toString();
+      return value.toStringAsFixed(2);
+    }
+
     final amountController = TextEditingController();
     final noteController = TextEditingController();
     String selectedDebtId = openDebts.first.id;
     if (initialDebtId != null &&
         openDebts.any((debt) => debt.id == initialDebtId)) {
       selectedDebtId = initialDebtId;
+    }
+    if (initialAmount != null && initialAmount > 0) {
+      final selectedDebt = openDebts.firstWhere(
+        (debt) => debt.id == selectedDebtId,
+        orElse: () => openDebts.first,
+      );
+      final remaining = selectedDebt.getDoubleValue('remaining');
+      final safeAmount = initialAmount.clamp(0.0, remaining).toDouble();
+      if (safeAmount > 0) amountController.text = inputAmountText(safeAmount);
     }
     var saving = false;
     String? localError;
@@ -1904,6 +1919,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 orElse: () => openDebts.first,
               );
               final remaining = selectedDebt.getDoubleValue('remaining');
+
+              void applyQuickAmount(double value) {
+                final safeValue = value.clamp(0.0, remaining).toDouble();
+                amountController.text = inputAmountText(safeValue);
+                amountController.selection = TextSelection.collapsed(
+                  offset: amountController.text.length,
+                );
+                setSheetState(() => localError = null);
+              }
+
               return Container(
                 padding: EdgeInsets.fromLTRB(
                   16,
@@ -1977,6 +2002,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             ? null
                             : (value) {
                                 if (value == null) return;
+                                amountController.clear();
                                 setSheetState(() {
                                   selectedDebtId = value;
                                   localError = null;
@@ -2002,6 +2028,49 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           prefixIcon: const Icon(Icons.payments_outlined),
                           border: const OutlineInputBorder(),
                         ),
+                      ),
+                      const SizedBox(height: 9),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: saving
+                                  ? null
+                                  : () => applyQuickAmount(remaining * 0.25),
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                              ),
+                              child: const Text('25%'),
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: saving
+                                  ? null
+                                  : () => applyQuickAmount(remaining * 0.50),
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                              ),
+                              child: const Text('50%'),
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: FilledButton.tonal(
+                              onPressed: saving
+                                  ? null
+                                  : () => applyQuickAmount(remaining),
+                              style: FilledButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                              ),
+                              child: const Text('تەواو'),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       TextField(
@@ -2473,10 +2542,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             _showFinancialPaymentSheet(
                               auth,
                               initialDebtId: record.id,
+                              initialAmount: record.getDoubleValue('remaining'),
                             ),
                           ),
                           icon: const Icon(Icons.payments_outlined, size: 14),
-                          label: const Text('پارەدانەوەی خێرا'),
+                          label: const Text('پارەدانەوەی تەواو'),
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.green.shade700,
                             visualDensity: VisualDensity.compact,
@@ -2856,6 +2926,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   subtitle: const Text('مامەڵەی نوێ بە ئەم مامەڵەیەوە ببەستە'),
                   onTap: () => Navigator.pop(sheetContext, 'reference'),
                 ),
+              if (auth.userRole != 'customer' &&
+                  debt != null &&
+                  debt.getDoubleValue('remaining') > 0)
+                ListTile(
+                  leading: Icon(
+                    Icons.done_all_rounded,
+                    color: Colors.green.shade700,
+                  ),
+                  title: const Text('پارەدانەوەی تەواوی ماوە'),
+                  subtitle: Text(
+                    AppHelpers.formatCurrencyWithType(
+                      debt.getDoubleValue('remaining'),
+                      currency,
+                    ),
+                    textDirection: TextDirection.ltr,
+                  ),
+                  onTap: () => Navigator.pop(sheetContext, 'pay_full'),
+                ),
               if (receiptPath.isNotEmpty)
                 ListTile(
                   leading: const Icon(Icons.image_outlined),
@@ -2890,6 +2978,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         break;
       case 'details':
         await _openTimelineItem(item);
+        break;
+      case 'pay_full':
+        if (debt != null && debt.getDoubleValue('remaining') > 0) {
+          await _showFinancialPaymentSheet(
+            auth,
+            initialDebtId: debt.id,
+            initialAmount: debt.getDoubleValue('remaining'),
+          );
+        }
         break;
       case 'receipt':
         if (debt != null && receiptPath.isNotEmpty) {
