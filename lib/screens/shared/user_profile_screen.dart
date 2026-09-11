@@ -1865,6 +1865,145 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (mounted) await _refreshFinancialData();
   }
 
+  Future<bool> _confirmFinancialPayment({
+    required BuildContext parentContext,
+    required RecordModel debt,
+    required double amount,
+  }) async {
+    final isDark = Theme.of(parentContext).brightness == Brightness.dark;
+    final remaining = debt.getDoubleValue('remaining');
+    final after = (remaining - amount).clamp(0.0, remaining).toDouble();
+    final currency = debt.getStringValue('currency').trim().isEmpty
+        ? 'IQD'
+        : debt.getStringValue('currency');
+    final description = debt.getStringValue('description').trim();
+
+    final result = await showDialog<bool>(
+      context: parentContext,
+      builder: (dialogContext) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.verified_outlined, color: Colors.green),
+            SizedBox(width: 8),
+            Text('پشتڕاستکردنەوەی پارەدان'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (description.isNotEmpty) ...[
+              Text(
+                description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+            ],
+            _buildPaymentConfirmationRow(
+              'ماوەی پێش پارەدان',
+              AppHelpers.formatCurrencyWithType(remaining, currency),
+              isDark,
+            ),
+            const SizedBox(height: 8),
+            _buildPaymentConfirmationRow(
+              'بڕی پارەدان',
+              AppHelpers.formatCurrencyWithType(amount, currency),
+              isDark,
+              valueColor: Colors.green.shade700,
+            ),
+            const Divider(height: 20),
+            _buildPaymentConfirmationRow(
+              'ماوەی دوای پارەدان',
+              AppHelpers.formatCurrencyWithType(after, currency),
+              isDark,
+              valueColor: after > 0 ? Colors.orange.shade800 : Colors.green.shade700,
+              emphasized: true,
+            ),
+            if (after <= 0) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.done_all_rounded, color: Colors.green, size: 18),
+                    SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        'ئەم پارەدانە قەرزەکە بە تەواوی دادەخات.',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('پاشگەزبوونەوە'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.check_rounded, size: 18),
+            label: const Text('پشتڕاستە — تۆمار بکە'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.green.shade700,
+            ),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
+  Widget _buildPaymentConfirmationRow(
+    String label,
+    String value,
+    bool isDark, {
+    Color? valueColor,
+    bool emphasized = false,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: emphasized ? 12.5 : 11.5,
+              fontWeight: emphasized ? FontWeight.w800 : FontWeight.w600,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF667085),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          value,
+          textDirection: TextDirection.ltr,
+          style: TextStyle(
+            fontSize: emphasized ? 14 : 12.5,
+            fontWeight: FontWeight.w900,
+            color: valueColor ??
+                (isDark ? AppDarkColors.textPrimary : const Color(0xFF1D2939)),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _showFinancialPaymentSheet(
     AuthProvider auth, {
     String? initialDebtId,
@@ -2113,6 +2252,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       'بڕی پارەدانەوە نابێت لە ماوەی قەرز زیاتر بێت.');
                                   return;
                                 }
+
+                                final confirmed = await _confirmFinancialPayment(
+                                  parentContext: sheetContext,
+                                  debt: selectedDebt,
+                                  amount: amount,
+                                );
+                                if (!confirmed || !sheetContext.mounted) return;
 
                                 setSheetState(() {
                                   saving = true;
