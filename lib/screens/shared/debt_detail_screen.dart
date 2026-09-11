@@ -1054,11 +1054,19 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     final confirm = await AppHelpers.showConfirmDialog(
       context,
       title: 'سڕینەوەی قەرز',
-      message: 'دڵنیایت لە سڕینەوەی ئەم قەرزە؟',
+      message: 'قەرزەکە دەخرێتە سەبەتە و دەتوانیت دواتر بیگەڕێنیتەوە. دڵنیایت؟',
     );
     if (!mounted || !confirm) return;
     try {
-      await PBService.deleteDebt(widget.debtId);
+      final response = await PBService.client.functions.invoke(
+      'debt-restore-admin',
+      body: {'action': 'delete', 'debt_id': widget.debtId},
+    );
+    final data = response.data;
+    if (data is! Map || data['deleted'] != true) {
+      final code = data is Map ? data['error']?.toString() : null;
+      throw Exception(code ?? 'delete_failed');
+    }
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
