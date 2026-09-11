@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:zhirox/services/pb_service.dart';
 
 class AppUpdateInfo {
   const AppUpdateInfo({
@@ -37,6 +38,20 @@ class AppUpdateInfo {
       sha256: json['sha256']?.toString().trim().toLowerCase() ?? '',
       publishedAt: DateTime.tryParse(json['published_at']?.toString() ?? ''),
       commit: json['commit']?.toString().trim(),
+    );
+  }
+
+  AppUpdateInfo copyWith({String? notes, bool? mandatory}) {
+    return AppUpdateInfo(
+      edition: edition,
+      version: version,
+      latestBuild: latestBuild,
+      downloadUrl: downloadUrl,
+      notes: notes ?? this.notes,
+      mandatory: mandatory ?? this.mandatory,
+      sha256: sha256,
+      publishedAt: publishedAt,
+      commit: commit,
     );
   }
 }
@@ -100,7 +115,7 @@ class AppUpdateService {
       throw const FormatException('invalid_update_manifest');
     }
 
-    final info = AppUpdateInfo.fromJson(Map<String, dynamic>.from(decoded));
+    var info = AppUpdateInfo.fromJson(Map<String, dynamic>.from(decoded));
     if (info.edition != edition || info.latestBuild <= 0) {
       throw const FormatException('invalid_update_manifest_identity');
     }
@@ -110,6 +125,28 @@ class AppUpdateService {
         downloadUri.scheme != 'https' ||
         downloadUri.host != 'github.com') {
       throw const FormatException('invalid_update_download_url');
+    }
+
+    // The release manifest is immutable build metadata. A tiny public Supabase
+    // row lets the System Owner change only the rollout policy (mandatory and
+    // release note override) without rebuilding or republishing the IPA.
+    try {
+      await PBService.ensureInitialized();
+      final row = await PBService.client
+          .from('app_update_settings')
+          .select('mandatory, notes')
+          .eq('edition', edition)
+          .maybeSingle();
+      if (row != null) {
+        final overrideNotes = row['notes']?.toString().trim() ?? '';
+        info = info.copyWith(
+          mandatory: row['mandatory'] == true,
+          notes: overrideNotes.isEmpty ? info.notes : overrideNotes,
+        );
+      }
+    } catch (_) {
+      // Update discovery must keep working from GitHub even if Supabase policy
+      // metadata is temporarily unavailable.
     }
 
     if (info.latestBuild <= currentBuild) return null;
