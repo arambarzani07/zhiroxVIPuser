@@ -621,6 +621,17 @@ if account_admin_edge.exists():
     if 'const { data: tenantUsers }' in account_admin_source:
         fail('supabase/functions/account-admin/index.ts: duplicate admin cascade deletion must stay removed')
 
+
+# Owner admin-management paging must serialize refresh and pagination.
+if edition == 'owner-source':
+    owner_management = (LIB / 'screens/auth/admin_management_screen.dart').read_text(encoding='utf-8')
+    if owner_management.count('_loadInFlight = true;') < 2:
+        fail('lib/screens/auth/admin_management_screen.dart: refresh/load-more requests must share one in-flight lock')
+    if '_loadInFlight = false;\n      if (mounted) setState(() => _isLoadingMore = false);' not in owner_management:
+        fail('lib/screens/auth/admin_management_screen.dart: load-more lock must always release in finally')
+    if owner_management.count("return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';") < 2:
+        fail('lib/screens/auth/admin_management_screen.dart: subscription day validation must match backend bounds')
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:

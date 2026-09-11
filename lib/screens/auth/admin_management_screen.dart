@@ -75,7 +75,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
   }
 
   Future<void> _loadAdmins() async {
-    if (!mounted || _loadInFlight) return;
+    if (!mounted || _loadInFlight || _isLoadingMore) return;
     _loadInFlight = true;
 
     if (_admins.isEmpty) {
@@ -123,6 +123,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
       return;
     }
 
+    _loadInFlight = true;
     setState(() => _isLoadingMore = true);
     try {
       final data = await PBService.getAdminsPage(
@@ -141,6 +142,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
         AppHelpers.showSnackBar(context, _friendlyError(e), isError: true);
       }
     } finally {
+      _loadInFlight = false;
       if (mounted) setState(() => _isLoadingMore = false);
     }
   }
@@ -482,8 +484,8 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                           isLtr: true,
                           validator: (value) {
                             final days = int.tryParse(value?.trim() ?? '');
-                            if (days == null || days <= 0) {
-                              return 'ژمارەی ڕۆژێکی دروست بنووسە';
+                            if (days == null || days < 1 || days > 3650) {
+                              return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';
                             }
                             return null;
                           },
@@ -593,8 +595,8 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                   isLtr: true,
                   validator: (value) {
                     final days = int.tryParse(value?.trim() ?? '');
-                    if (days == null || days <= 0) {
-                      return 'ژمارەی ڕۆژێکی دروست بنووسە';
+                    if (days == null || days < 1 || days > 3650) {
+                      return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';
                     }
                     return null;
                   },
