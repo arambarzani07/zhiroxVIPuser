@@ -664,9 +664,27 @@ if edition == 'owner-source':
         "labelText: 'پلانی بەشداری'",
         'subscriptionPlan: selectedPlan',
         '_subscriptionPlanLabel(subscriptionPlan)',
+        '١٠,٠٠٠ د.ع',
+        '٢٥,٠٠٠ د.ع',
+        '٤٥,٠٠٠ د.ع',
+        '٨٠,٠٠٠ د.ع',
+        'کڕیار بەخۆڕاییە',
+        'هەر کارمەندی زیادە ٢,٠٠٠ د.ع مانگانە',
     ):
         if marker not in owner_management:
             fail(f'lib/screens/auth/admin_management_screen.dart: subscription-plan marker missing: {marker}')
+
+payment_screen = LIB / 'screens/admin/subscription_payment_screen.dart'
+fib_edge = ROOT / 'supabase/functions/fib-subscription-payment/index.ts'
+fib_migration = ROOT / 'supabase/migrations/20260911170000_add_fib_subscription_payments.sql'
+for path in (payment_screen, fib_edge, fib_migration):
+    if not path.exists():
+        fail(f'{path.relative_to(ROOT)}: FIB subscription payment component missing')
+if payment_screen.exists():
+    source = payment_screen.read_text(encoding='utf-8')
+    for marker in ('پارەدان بە FIB', 'PBService.createFibSubscriptionPayment', 'PBService.checkFibSubscriptionPayment'):
+        if marker not in source:
+            fail(f'lib/screens/admin/subscription_payment_screen.dart: FIB marker missing: {marker}')
 
 if violations:
     print('ONLINE-ONLY POLICY FAILED')

@@ -8,26 +8,38 @@ import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 
 class _SubscriptionPlan {
-  const _SubscriptionPlan(this.code, this.label, this.days);
+  const _SubscriptionPlan(this.code, this.label, this.days, this.priceLabel);
 
   final String code;
   final String label;
   final int? days;
+  final String priceLabel;
 }
 
 const _subscriptionPlans = <_SubscriptionPlan>[
-  _SubscriptionPlan('monthly', 'مانگانە — ٣٠ ڕۆژ', 30),
-  _SubscriptionPlan('quarterly', '٣ مانگ — ٩٠ ڕۆژ', 90),
-  _SubscriptionPlan('semiannual', '٦ مانگ — ١٨٠ ڕۆژ', 180),
-  _SubscriptionPlan('annual', 'ساڵانە — ٣٦٥ ڕۆژ', 365),
-  _SubscriptionPlan('custom', 'ماوەی تایبەت', null),
+  _SubscriptionPlan('monthly', 'مانگانە — ٣٠ ڕۆژ', 30, '١٠,٠٠٠ د.ع'),
+  _SubscriptionPlan('quarterly', '٣ مانگ — ٩٠ ڕۆژ', 90, '٢٥,٠٠٠ د.ع'),
+  _SubscriptionPlan('semiannual', '٦ مانگ — ١٨٠ ڕۆژ', 180, '٤٥,٠٠٠ د.ع'),
+  _SubscriptionPlan('annual', 'ساڵانە — ٣٦٥ ڕۆژ', 365, '٨٠,٠٠٠ د.ع'),
+  _SubscriptionPlan('custom', 'ماوەی تایبەت', null, 'بە ڕێککەوتن'),
 ];
+
+const _subscriptionAudienceNote =
+    'کڕیار بەخۆڕاییە • تا ٣ کارمەند لە نرخەکەدایە • '
+    'هەر کارمەندی زیادە ٢,٠٠٠ د.ع مانگانە';
 
 String _subscriptionPlanLabel(String code) {
   for (final plan in _subscriptionPlans) {
     if (plan.code == code) return plan.label;
   }
   return 'ماوەی تایبەت';
+}
+
+String _subscriptionPlanPrice(String code) {
+  for (final plan in _subscriptionPlans) {
+    if (plan.code == code) return plan.priceLabel;
+  }
+  return 'بە ڕێککەوتن';
 }
 
 class AdminManagementScreen extends StatefulWidget {
@@ -509,7 +521,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                               .map(
                                 (plan) => DropdownMenuItem(
                                   value: plan.code,
-                                  child: Text(plan.label),
+                                  child: Text('${plan.label} • ${plan.priceLabel}'),
                                 ),
                               )
                               .toList(),
@@ -525,6 +537,15 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                                     daysCtrl.text = plan.days.toString();
                                   }
                                 },
+                        ),
+                        const SizedBox(height: 9),
+                        Text(
+                          _subscriptionAudienceNote,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            height: 1.45,
+                            color: textSecondary,
+                          ),
                         ),
                         if (selectedPlan == 'custom') ...[
                           const SizedBox(height: 12),
@@ -664,7 +685,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                           .map(
                             (plan) => DropdownMenuItem(
                               value: plan.code,
-                              child: Text(plan.label),
+                              child: Text('${plan.label} • ${plan.priceLabel}'),
                             ),
                           )
                           .toList(),
@@ -680,6 +701,17 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                                 daysCtrl.text = plan.days.toString();
                               }
                             },
+                    ),
+                    const SizedBox(height: 9),
+                    Text(
+                      _subscriptionAudienceNote,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        height: 1.45,
+                        color: isDark
+                            ? AppDarkColors.textSecondary
+                            : const Color(0xFF667085),
+                      ),
                     ),
                     if (selectedPlan == 'custom') ...[
                       const SizedBox(height: 12),
@@ -1115,6 +1147,11 @@ class _AdminCard extends StatelessWidget {
                 _meta(
                   Icons.workspace_premium_outlined,
                   _subscriptionPlanLabel(subscriptionPlan),
+                  textSecondary,
+                ),
+                _meta(
+                  Icons.payments_outlined,
+                  'نرخ: ${_subscriptionPlanPrice(subscriptionPlan)}',
                   textSecondary,
                 ),
                 _meta(

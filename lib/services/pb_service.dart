@@ -111,6 +111,14 @@ class PBService {
         return 'سڕینەوەی هەژماری بەڕێوەبەر سەرکەوتوو نەبوو';
       case 'invalid_input':
         return 'زانیارییەکان تەواو یان دروست نین';
+      case 'fib_not_configured':
+        return 'پارەدانی FIB هێشتا لەلایەن خاوەنی سیستەمەوە چالاک نەکراوە';
+      case 'fib_auth_failed':
+      case 'payment_create_failed':
+      case 'payment_failed':
+        return 'دروستکردنی پارەدانی FIB سەرکەوتوو نەبوو';
+      case 'payment_not_found':
+        return 'پارەدانەکە نەدۆزرایەوە';
       default:
         return code.isEmpty ? 'هەڵەیەک لە سێرڤەر ڕوویدا' : code;
     }
@@ -325,6 +333,32 @@ class PBService {
     final subEnd = admin.getStringValue('subscription_end');
     if (subEnd.isEmpty) return 9999;
     return DateTime.parse(subEnd).difference(DateTime.now()).inDays;
+  }
+
+  static Future<Map<String, dynamic>> createFibSubscriptionPayment(
+    String plan,
+  ) async {
+    await ensureInitialized();
+    final response = await client.functions.invoke(
+      'fib-subscription-payment',
+      body: {'action': 'create', 'plan': plan},
+    );
+    if (response.data is Map && response.data['error'] != null) {
+      throw _functionError(response.data);
+    }
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  static Future<String> checkFibSubscriptionPayment(String localPaymentId) async {
+    await ensureInitialized();
+    final response = await client.functions.invoke(
+      'fib-subscription-payment',
+      body: {'action': 'status', 'local_payment_id': localPaymentId},
+    );
+    if (response.data is Map && response.data['error'] != null) {
+      throw _functionError(response.data);
+    }
+    return (response.data as Map)['status']?.toString() ?? 'pending';
   }
 
   // ==================== Admin Approval ====================

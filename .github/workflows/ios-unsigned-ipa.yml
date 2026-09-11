@@ -65,6 +65,9 @@ jobs:
       - name: Verify account-admin boundaries
         run: python3 scripts/verify_account_admin_security.py
 
+      - name: Verify FIB payment security
+        run: python3 scripts/verify_fib_payment_security.py
+
       - name: Prepare independent iOS identity
         run: |
           sed -i '' "s/com.karoxghafoor.zhirox/${BUNDLE_ID}/g" ios/Runner.xcodeproj/project.pbxproj

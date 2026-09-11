@@ -7,6 +7,7 @@ import 'package:workmanager/workmanager.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/admin_dashboard.dart';
+import 'package:zhirox/screens/admin/subscription_payment_screen.dart';
 import 'package:zhirox/screens/auth/admin_management_screen.dart';
 import 'package:zhirox/screens/auth/login_screen.dart';
 import 'package:zhirox/screens/customer/customer_dashboard.dart';
@@ -383,7 +384,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
         }
         _wasLoggedIn = auth.isLoggedIn;
 
-        if (auth.isLoggedIn && auth.subscriptionDaysLeft <= 0) {
+        if (auth.isLoggedIn &&
+            auth.subscriptionDaysLeft <= 0 &&
+            auth.userRole != 'admin') {
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             if (!mounted) return;
             await auth.logout();
@@ -400,6 +403,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         if (auth.user?.getBoolValue('is_system_owner') ?? false) {
           return const AdminManagementScreen();
+        }
+
+        if (auth.userRole == 'admin' && auth.subscriptionDaysLeft <= 0) {
+          return const SubscriptionPaymentScreen(restricted: true);
         }
 
         switch (auth.userRole) {
