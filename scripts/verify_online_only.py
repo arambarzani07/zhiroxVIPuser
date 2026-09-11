@@ -116,6 +116,19 @@ for marker in (
 if 'getFinancialEvents(String customerId)' not in pb:
     fail('lib/services/pb_service.dart: Financial Chat audit reader missing')
 
+# Long Financial Chat histories must stay virtualized. Building every message
+# bubble eagerly inside a Column causes large customer ledgers to jank/freeze.
+for marker in (
+    '_FinancialChatRenderEntry',
+    '_buildFinancialChatRenderEntries',
+    'SliverChildBuilderDelegate',
+    'addAutomaticKeepAlives: false',
+):
+    if marker not in profile:
+        fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat virtualization marker missing: {marker}')
+if '_buildFinancialChatMessages(' in profile:
+    fail('lib/screens/shared/user_profile_screen.dart: eager Financial Chat message widget list must not return')
+
 
 # Financial Chat Phase 4 must remain live-only and keep its integrated search,
 # date/type filters, debt references, receipt preview and statement/share action.

@@ -49,6 +49,23 @@ class _ProfileTimelineItem {
   bool get isSystem => kind == 'system';
 }
 
+class _FinancialChatRenderEntry {
+  final _ProfileTimelineItem? item;
+  final DateTime? separatorDate;
+  final int timelineIndex;
+
+  const _FinancialChatRenderEntry.item(
+    _ProfileTimelineItem this.item,
+    this.timelineIndex,
+  ) : separatorDate = null;
+
+  const _FinancialChatRenderEntry.separator(
+    DateTime this.separatorDate,
+    this.timelineIndex,
+  ) : item = null;
+
+  bool get isSeparator => separatorDate != null;
+}
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
   RecordModel? _user;
@@ -1375,12 +1392,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final allTimelineItems = _buildTimelineItems();
     final timelineItems = _filterFinancialTimeline(allTimelineItems);
     final runningBalances = _financialRunningBalances(allTimelineItems);
+    final renderEntries = _buildFinancialChatRenderEntries(timelineItems);
     final totalsComplete = AppHelpers.debtSummaryInIqd(_debts).complete;
     final health = _debtHealth(totalRemaining, totalDebt);
 
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+    Widget buildHeader() {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1502,12 +1520,42 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             if (timelineItems.isEmpty)
               allTimelineItems.isEmpty
                   ? _buildEmptyTimelineState(isDark)
-                  : _buildFilteredTimelineEmptyState(isDark)
-            else
-              ..._buildFinancialChatMessages(timelineItems, runningBalances),
-            const SizedBox(height: 8),
+                  : _buildFilteredTimelineEmptyState(isDark),
           ],
         ),
+      );
+    }
+
+    // One virtualized sliver owns both the Financial Chat header and the
+    // timeline rows. Unlike spreading a List<Widget> into a Column, this only
+    // builds message bubbles close to the viewport and keeps long histories
+    // responsive without changing search/filter/realtime semantics.
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          if (index == 0) return buildHeader();
+          if (index == renderEntries.length + 1) {
+            return const SizedBox(height: 8);
+          }
+
+          final entry = renderEntries[index - 1];
+          final child = entry.isSeparator
+              ? _buildChatDaySeparator(entry.separatorDate!)
+              : entry.item!.isSystem
+                  ? _buildFinancialSystemMessage(entry.item!)
+                  : _buildTimelineBubble(
+                      entry.item!,
+                      entry.timelineIndex,
+                      balanceAfter:
+                          runningBalances[_timelineLedgerKey(entry.item!)],
+                    );
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: child,
+          );
+        },
+        childCount: renderEntries.length + 2,
+        addAutomaticKeepAlives: false,
       ),
     );
   }
@@ -1555,31 +1603,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  List<Widget> _buildFinancialChatMessages(
+  List<_FinancialChatRenderEntry> _buildFinancialChatRenderEntries(
     List<_ProfileTimelineItem> timelineItems,
-    Map<String, double?> runningBalances,
   ) {
-    final widgets = <Widget>[];
+    final entries = <_FinancialChatRenderEntry>[];
     DateTime? previousDay;
 
     for (var index = 0; index < timelineItems.length; index++) {
       final item = timelineItems[index];
       final day = DateTime(item.date.year, item.date.month, item.date.day);
       if (previousDay == null || day != previousDay) {
-        widgets.add(_buildChatDaySeparator(item.date));
+        entries.add(_FinancialChatRenderEntry.separator(item.date, index));
         previousDay = day;
       }
-      widgets.add(
-        item.isSystem
-            ? _buildFinancialSystemMessage(item)
-            : _buildTimelineBubble(
-                item,
-                index,
-                balanceAfter: runningBalances[_timelineLedgerKey(item)],
-              ),
-      );
+      entries.add(_FinancialChatRenderEntry.item(item, index));
     }
-    return widgets;
+    return entries;
   }
 
   Widget _buildChatDaySeparator(DateTime date) {
