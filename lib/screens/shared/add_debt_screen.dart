@@ -730,9 +730,9 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
             final confirm = await showDialog<bool>(
               context: context,
               builder: (dialogContext) => AlertDialog(
-                title: const Text('سنوری قەرز تێپەڕیوە'),
+                title: const Text('سنووری قەرز تێپەڕیوە'),
                 content: Text(
-                  'بەکارهێنەر سنوری قەرزی تێپەڕاندووە.\n'
+                  'بەکارهێنەر سنووری قەرزی تێپەڕاندووە.\n'
                   'سنور: ${AppHelpers.formatCurrency(debtLimit)}\n'
                   'کۆی گشتی: ${AppHelpers.formatCurrency(currentBalance + totalNewDebt)}\n\n'
                   'ئایا دەتەوێت بەردەوام بیت؟',
@@ -758,7 +758,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
           } else {
             AppHelpers.showSnackBar(
               context,
-              'ناتوانیت ئەم قەرزە زیاد بکەیت! بەکارهێنەر سنوری قەرزی تێپەڕاندووە.\n'
+              'ناتوانیت ئەم قەرزە زیاد بکەیت! بەکارهێنەر سنووری قەرزی تێپەڕاندووە.\n'
               'سنور: ${AppHelpers.formatCurrency(debtLimit)}\n'
               'کۆی گشتی دوای زیادکردن: ${AppHelpers.formatCurrency(currentBalance + totalNewDebt)}',
               isError: true,
@@ -872,7 +872,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         } catch (_) {}
 
         if (mounted) {
-          AppHelpers.showSnackBar(context, 'قەرز بە سەرکەوتوویی زیادکرا');
+          AppHelpers.showSnackBar(context, 'قەرز پێدان تۆمار کرا ✅');
           Navigator.pop(context, true); // Return true to indicate success
         }
       }
@@ -1291,7 +1291,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'سنوری قەرز: ${AppHelpers.formatCurrency(limit)}',
+                          'سنووری قەرز: ${AppHelpers.formatCurrency(limit)}',
                           style: TextStyle(
                             fontSize: 12,
                             color: isDark
