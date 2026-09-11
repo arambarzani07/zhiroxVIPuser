@@ -23,8 +23,8 @@ profile = replace_once(
 
 profile = replace_once(
     profile,
-    '    _financialRealtimeDebounce?.cancel();\n',
-    '    _financialRealtimeDebounce?.cancel();\n    _financialSearchDebounce?.cancel();\n',
+    '''  @override\n  void dispose() {\n    _financialRealtimeDebounce?.cancel();\n''',
+    '''  @override\n  void dispose() {\n    _financialRealtimeDebounce?.cancel();\n    _financialSearchDebounce?.cancel();\n''',
     'search debounce dispose',
 )
 
@@ -60,7 +60,7 @@ profile = replace_once(
 )
 
 anchor = '''if '_buildFinancialChatMessages(' in profile:\n    fail('lib/screens/shared/user_profile_screen.dart: eager Financial Chat message widget list must not return')\n\n\n'''
-guard = '''# Text search must debounce full-history hydration so typing does not start\n# an expensive page walk on the first keypress. Existing filter hydration is\n# single-flight; this guard keeps the text entry path debounced as well.\nfor marker in (\n    'Timer? _financialSearchDebounce;',\n    '_scheduleFinancialSearchHydration',\n    'Duration(milliseconds: 350)',\n    '_financialSearchDebounce?.cancel();',\n):\n    if marker not in profile:\n        fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat search debounce marker missing: {marker}')\nif ''' + '"""' + '''onChanged: (_) {\n            setState(() {});\n            unawaited(_hydrateFinancialHistoryForFilters());\n          },''' + '"""' + ''' in profile:\n    fail('lib/screens/shared/user_profile_screen.dart: text search must not hydrate full history on every keypress')\n\n\n'''
+guard = '''# Text search must debounce full-history hydration so typing does not start\n# an expensive page walk on the first keypress. Existing filter hydration is\n# single-flight; this guard keeps the text entry path debounced as well.\nfor marker in (\n    'Timer? _financialSearchDebounce;',\n    '_scheduleFinancialSearchHydration',\n    'Duration(milliseconds: 350)',\n    '_financialSearchDebounce?.cancel();',\n):\n    if marker not in profile:\n        fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat search debounce marker missing: {marker}')\nif \"\"\"onChanged: (_) {\n            setState(() {});\n            unawaited(_hydrateFinancialHistoryForFilters());\n          },\"\"\" in profile:\n    fail('lib/screens/shared/user_profile_screen.dart: text search must not hydrate full history on every keypress')\n\n\n'''
 if guard not in verifier:
     verifier = replace_once(
         verifier,
