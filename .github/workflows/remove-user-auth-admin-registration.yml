@@ -1,0 +1,34 @@
+name: Remove User Auth Admin Registration
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - 'scripts/remove_user_auth_admin_registration.py'
+      - '.github/workflows/remove-user-auth-admin-registration.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout user-source
+        uses: actions/checkout@v4
+        with:
+          ref: user-source
+          fetch-depth: 0
+
+      - name: Remove User Auth admin registration
+        run: python scripts/remove_user_auth_admin_registration.py
+
+      - name: Commit User Auth cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/providers/auth_provider.dart scripts/verify_online_only.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'Remove admin registration from User AuthProvider'
+            git push origin HEAD:user-source
+          fi
