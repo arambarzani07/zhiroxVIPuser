@@ -74,11 +74,12 @@ class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen> {
   Future<void> _checkPayment() async {
     final paymentId = _localPaymentId;
     if (paymentId == null) return;
+    final auth = context.read<AuthProvider>();
     setState(() => _loading = true);
     try {
       final status = await PBService.checkFibSubscriptionPayment(paymentId);
       if (status == 'paid') {
-        await context.read<AuthProvider>().refreshCurrentProfile();
+        await auth.refreshCurrentProfile();
         if (!mounted) return;
         AppHelpers.showSnackBar(
           context,
@@ -140,30 +141,41 @@ class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen> {
               style: TextStyle(fontSize: 12, height: 1.5),
             ),
             const SizedBox(height: 16),
-            ..._plans.map((plan) {
-              final selected = _selectedPlan == plan.code;
-              return Card(
-                color: selected
-                    ? AppColors.primary.withValues(alpha: isDark ? 0.22 : 0.08)
-                    : null,
-                child: RadioListTile<String>(
-                  value: plan.code,
-                  groupValue: _selectedPlan,
-                  onChanged: _loading
-                      ? null
-                      : (value) => setState(() => _selectedPlan = value!),
-                  title: Text(
-                    plan.title,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  subtitle: Text(plan.period),
-                  secondary: Text(
-                    plan.price,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-              );
-            }),
+            RadioGroup<String>(
+              groupValue: _selectedPlan,
+              onChanged: _loading
+                  ? (_) {}
+                  : (value) {
+                      if (value != null) {
+                        setState(() => _selectedPlan = value);
+                      }
+                    },
+              child: Column(
+                children: _plans.map((plan) {
+                  final selected = _selectedPlan == plan.code;
+                  return Card(
+                    color: selected
+                        ? AppColors.primary.withValues(
+                            alpha: isDark ? 0.22 : 0.08,
+                          )
+                        : null,
+                    child: RadioListTile<String>(
+                      value: plan.code,
+                      enabled: !_loading,
+                      title: Text(
+                        plan.title,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: Text(plan.period),
+                      secondary: Text(
+                        plan.price,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
             const SizedBox(height: 14),
             ElevatedButton.icon(
               onPressed: _loading ? null : _startPayment,
