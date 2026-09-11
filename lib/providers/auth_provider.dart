@@ -98,7 +98,7 @@ class AuthProvider extends ChangeNotifier {
         final active = updated.getBoolValue('active');
         final approved = updated.getBoolValue('approved');
 
-        if (role == 'employee' && (!active || !approved)) {
+        if (!active || (role == 'customer' && !approved)) {
           wasDeactivated = true;
           await logout();
           return;
@@ -117,6 +117,13 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _validateSubscription() async {
     final current = _user;
     if (current == null) return;
+
+    if (!current.getBoolValue('active')) {
+      throw 'ئەم هەژمارە ناچالاک کراوە';
+    }
+    if (userRole == 'customer' && !current.getBoolValue('approved')) {
+      throw 'ئەم هەژمارە هێشتا پەسەند نەکراوە';
+    }
 
     if (userRole == 'admin') {
       final subEnd = current.getStringValue('subscription_end');
@@ -159,7 +166,7 @@ class AuthProvider extends ChangeNotifier {
         return;
       }
 
-      if (userRole == 'employee') _subscribeToUserChanges();
+      _subscribeToUserChanges();
     } finally {
       _isInitializing = false;
       if (!_disposed) notifyListeners();
@@ -239,7 +246,7 @@ class AuthProvider extends ChangeNotifier {
         throw 'وشەی نهێنی یان ژمارە مۆبایل هەڵەیە';
       }
 
-      if (userRole == 'employee') _subscribeToUserChanges();
+      _subscribeToUserChanges();
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(kLockoutTimeKey);

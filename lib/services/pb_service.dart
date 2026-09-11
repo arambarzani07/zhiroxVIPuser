@@ -153,13 +153,13 @@ class PBService {
       final user = await getUser(authUser.id);
       final role = user.getStringValue('role');
 
+      if (!user.getBoolValue('active')) {
+        await client.auth.signOut();
+        throw 'ئەم هەژمارە ناچالاک کراوە';
+      }
       if (role == 'customer' && !user.getBoolValue('approved')) {
         await client.auth.signOut();
         throw AppStrings.notApproved;
-      }
-      if (role == 'employee' && !user.getBoolValue('active')) {
-        await client.auth.signOut();
-        throw 'ئەم ئەکاونتە لەلایەن ئەدمینەوە ناچالاک کراوە';
       }
 
       if (role == 'employee' || role == 'customer') {
