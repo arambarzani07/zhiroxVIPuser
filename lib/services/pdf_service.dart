@@ -934,6 +934,147 @@ class PdfService {
     );
   }
 
+  // ==================== Financial Chat Statement ====================
+
+  static Future<void> generateFinancialChatStatement({
+    required List<Map<String, dynamic>> entries,
+    required String customerName,
+    required String marketName,
+    required String adminName,
+    String adminPhone = '',
+    String filterSummary = '',
+  }) async {
+    final fontData = await rootBundle.load("assets/fonts/NotoKufiArabic.ttf");
+    final boldData = await rootBundle.load(
+      "assets/fonts/NotoKufiArabic-Bold.ttf",
+    );
+    final font = pw.Font.ttf(fontData);
+    final bold = pw.Font.ttf(boldData);
+    final formatter = NumberFormat('#,##0.##', 'en');
+    final pdf = pw.Document();
+
+    String money(double value, String currency, double rate) {
+      if (currency == 'USD') {
+        final usd = NumberFormat('#,##0.00', 'en').format(value);
+        if (rate > 0) {
+          return '\$$usd (${formatter.format(value * rate)} د.ع)';
+        }
+        return '\$$usd';
+      }
+      return '${formatter.format(value)} د.ع';
+    }
+
+    final rows = entries.map((entry) {
+      final type = entry['type']?.toString() ?? '';
+      final amount = (entry['amount'] as num?)?.toDouble() ?? 0;
+      final currency = entry['currency']?.toString() ?? 'IQD';
+      final rate = (entry['dollar_rate'] as num?)?.toDouble() ?? 0;
+      final balance = (entry['balance_after_iqd'] as num?)?.toDouble();
+      final typeText = switch (type) {
+        'debt' => 'قەرز',
+        'payment' => 'پارەدانەوە',
+        _ => 'گۆڕانکاری',
+      };
+      final signedAmount = type == 'system'
+          ? '-'
+          : '${type == 'payment' ? '−' : '+'} ${money(amount, currency, rate)}';
+      return [
+        _reshape(typeText),
+        _reshape(AppHelpers.formatDateTime(entry['date']?.toString() ?? '')),
+        _reshape(entry['description']?.toString().isNotEmpty == true
+            ? entry['description'].toString()
+            : '-'),
+        _reshape(signedAmount),
+        balance == null ? '-' : _reshape('${formatter.format(balance)} د.ع'),
+      ];
+    }).toList(growable: false);
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        theme: pw.ThemeData.withFont(base: font, bold: bold),
+        textDirection: pw.TextDirection.rtl,
+        margin: const pw.EdgeInsets.all(28),
+        build: (context) => [
+          pw.Container(
+            padding: const pw.EdgeInsets.all(14),
+            decoration: pw.BoxDecoration(
+              color: PdfColor.fromHex('#F4F7FB'),
+              borderRadius: pw.BorderRadius.circular(8),
+              border: pw.Border.all(color: PdfColors.grey300),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                pw.Text(
+                  _reshape('کەشفی چاتی دارایی'),
+                  style: pw.TextStyle(
+                    font: bold,
+                    fontSize: 20,
+                    color: PdfColor.fromHex('#1D4ED8'),
+                  ),
+                ),
+                pw.SizedBox(height: 5),
+                pw.Text(
+                  _reshape('$marketName • $customerName'),
+                  style: pw.TextStyle(font: bold, fontSize: 12),
+                ),
+                pw.SizedBox(height: 3),
+                pw.Text(
+                  _reshape('بەڕێوەبەر: $adminName${adminPhone.isEmpty ? '' : ' • $adminPhone'}'),
+                  style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                ),
+                if (filterSummary.isNotEmpty) ...[
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    _reshape('فلتەر: $filterSummary'),
+                    style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 14),
+          pw.TableHelper.fromTextArray(
+            headers: [
+              _reshape('جۆر'),
+              _reshape('بەروار'),
+              _reshape('وردەکاری'),
+              _reshape('بڕ'),
+              _reshape('ماوەی هەژمار'),
+            ],
+            data: rows,
+            headerStyle: pw.TextStyle(
+              font: bold,
+              fontSize: 9,
+              color: PdfColors.white,
+            ),
+            headerDecoration: const pw.BoxDecoration(
+              color: PdfColor.fromInt(0xFF2563EB),
+            ),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            cellAlignment: pw.Alignment.center,
+            headerAlignment: pw.Alignment.center,
+            oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+          ),
+          pw.SizedBox(height: 14),
+          pw.Align(
+            alignment: pw.Alignment.centerLeft,
+            child: pw.Text(
+              _reshape('ژمارەی مامەڵەکان: ${entries.length}'),
+              style: pw.TextStyle(font: bold, fontSize: 9),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+      name: 'FinancialChat_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}',
+    );
+  }
+
   // ==================== Admin Report (Professional, per-customer summary) ====================
 
   static Future<void> generateAdminReport({
