@@ -598,6 +598,15 @@ for marker in (
     if marker not in main:
         fail(f'lib/main.dart: User owner-isolation marker missing: {marker}')
 
+# User AuthProvider must not expose admin registration.
+auth_provider_source = (LIB / 'providers/auth_provider.dart').read_text(encoding='utf-8')
+for forbidden in (
+    'Future<void> registerAdmin(',
+    'PBService.registerAdmin(',
+):
+    if forbidden in auth_provider_source:
+        fail(f'lib/providers/auth_provider.dart: User source must not expose admin registration: {forbidden}')
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:

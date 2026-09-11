@@ -259,29 +259,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> registerAdmin({
-    required String marketName,
-    required String adminName,
-    required String phone,
-    required String password,
-    required int subscriptionDays,
-  }) async {
-    _isLoading = true;
-    if (!_disposed) notifyListeners();
-    try {
-      await PBService.registerAdmin(
-        marketName: marketName,
-        adminName: adminName,
-        phone: phone,
-        password: password,
-        subscriptionDays: subscriptionDays,
-      );
-    } finally {
-      _isLoading = false;
-      if (!_disposed) notifyListeners();
-    }
-  }
-
   Future<void> registerCustomer({
     required String name,
     required String phone,
