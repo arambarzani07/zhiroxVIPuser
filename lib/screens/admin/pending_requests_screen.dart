@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
+import 'package:zhirox/screens/admin/debt_restore_screen.dart';
 import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -45,7 +47,6 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         _loadFailed = false;
       });
     }
-
     try {
       final users = await PBService.getUsers(
         role: 'customer',
@@ -114,12 +115,18 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     }
   }
 
+  void _openRestore() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const DebtRestoreScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final background = isDark
-        ? AppDarkColors.background
-        : const Color(0xFFF7F8FA);
+    final background =
+        isDark ? AppDarkColors.background : const Color(0xFFF7F8FA);
 
     return ColoredBox(
       color: background,
@@ -160,7 +167,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
         child: Row(
           children: [
             Container(
@@ -205,6 +212,12 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              tooltip: 'گەڕاندنەوەی کردار',
+              onPressed: _openRestore,
+              icon: const Icon(Icons.restore_from_trash_rounded, size: 22),
+              color: Colors.orange,
             ),
             IconButton(
               tooltip: 'نوێکردنەوە',
@@ -276,19 +289,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.cloud_off_outlined,
-                size: 29,
-                color: Colors.orange,
-              ),
-            ),
+            const Icon(Icons.cloud_off_outlined, size: 42, color: Colors.orange),
             const SizedBox(height: 14),
             Text(
               'داواکارییەکان بار نەبوون',
@@ -300,16 +301,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                     : const Color(0xFF344054),
               ),
             ),
-            const SizedBox(height: 5),
-            Text(
+            const SizedBox(height: 6),
+            const Text(
               'پەیوەندی ئینتەرنێت بپشکنە و دووبارە هەوڵ بدەرەوە',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark
-                    ? AppDarkColors.textSecondary
-                    : const Color(0xFF98A2B3),
-              ),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -384,36 +379,21 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.phone_outlined,
-                          size: 13,
-                          color: isDark
-                              ? AppDarkColors.textSecondary
-                              : const Color(0xFF98A2B3),
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            phone.isEmpty ? 'ژمارە نەدراوە' : phone,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textDirection: TextDirection.ltr,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: isDark
-                                  ? AppDarkColors.textSecondary
-                                  : const Color(0xFF667085),
-                            ),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      phone.isEmpty ? 'ژمارە نەدراوە' : phone,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textDirection: TextDirection.ltr,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isDark
+                            ? AppDarkColors.textSecondary
+                            : const Color(0xFF667085),
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
               Text(
                 AppHelpers.formatDate(date),
                 style: TextStyle(
