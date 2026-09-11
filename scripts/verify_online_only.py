@@ -432,6 +432,27 @@ if 'PBService.markFinancialChatRead(user.id)' in customer_list_source:
     fail('lib/screens/shared/user_list_screen.dart: unbounded read receipt must not return')
 
 
+# A read receipt must never advance without a concrete activity timestamp that
+# the viewer actually observed. Null timestamps are fail-closed in both app and DB.
+seen_read_migration = ROOT / 'supabase/migrations/20260911095127_require_seen_timestamp_for_financial_chat_read.sql'
+if not seen_read_migration.exists():
+    fail(f'{seen_read_migration.relative_to(ROOT)}: seen-timestamp read migration must be tracked')
+else:
+    seen_read_source = seen_read_migration.read_text(encoding='utf-8')
+    for marker in (
+        'where p_read_through is not null',
+        'least(p_read_through, now())',
+        'greatest(',
+    ):
+        if marker not in seen_read_source:
+            fail(f'{seen_read_migration.relative_to(ROOT)}: fail-closed read marker missing: {marker}')
+for marker in ('required DateTime readThrough', 'readThrough.toUtc().toIso8601String()'):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: required read-through marker missing: {marker}')
+if 'if (readThrough == null) return;' not in customer_list_source:
+    fail('lib/screens/shared/user_list_screen.dart: missing null read-through fail-closed guard')
+
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:

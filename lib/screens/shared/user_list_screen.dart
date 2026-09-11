@@ -302,6 +302,7 @@ class _UserListScreenState extends State<UserListScreen> {
     String customerId,
     DateTime? readThrough,
   ) async {
+    if (readThrough == null) return;
     try {
       await PBService.markFinancialChatRead(
         customerId,
