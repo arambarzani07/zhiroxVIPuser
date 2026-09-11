@@ -2,11 +2,15 @@ name: iOS Unsigned IPA
 
 on:
   push:
-    branches: [owner-source]
+    branches: [owner-source, user-source]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ios-unsigned-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-ios:
@@ -15,6 +19,33 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve app edition
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF_NAME}" in
+            owner-source)
+              echo "APP_EDITION=Owner" >> "$GITHUB_ENV"
+              echo "BUNDLE_ID=com.karoxghafoor.zhirox.owner" >> "$GITHUB_ENV"
+              echo "DISPLAY_NAME=ZHIROX Owner" >> "$GITHUB_ENV"
+              echo "BUNDLE_NAME=zhirox_owner" >> "$GITHUB_ENV"
+              echo "IPA_FILE=ZHIROX-Owner.ipa" >> "$GITHUB_ENV"
+              echo "ARTIFACT_NAME=zhirox-owner-unsigned-ipa" >> "$GITHUB_ENV"
+              ;;
+            user-source)
+              echo "APP_EDITION=User" >> "$GITHUB_ENV"
+              echo "BUNDLE_ID=com.karoxghafoor.zhirox.user" >> "$GITHUB_ENV"
+              echo "DISPLAY_NAME=ZHIROX User" >> "$GITHUB_ENV"
+              echo "BUNDLE_NAME=zhirox_user" >> "$GITHUB_ENV"
+              echo "IPA_FILE=ZHIROX-User.ipa" >> "$GITHUB_ENV"
+              echo "ARTIFACT_NAME=zhiroxVIPuser-unsigned-ipa" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unsupported source branch: ${GITHUB_REF_NAME}" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -31,11 +62,11 @@ jobs:
       - name: Verify online-only policy
         run: python3 scripts/verify_online_only.py
 
-      - name: Prepare independent Owner iOS identity
+      - name: Prepare independent iOS identity
         run: |
-          sed -i '' 's/com.karoxghafoor.zhirox/com.karoxghafoor.zhirox.owner/g' ios/Runner.xcodeproj/project.pbxproj
-          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ZHIROX Owner" ios/Runner/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleName zhirox_owner" ios/Runner/Info.plist
+          sed -i '' "s/com.karoxghafoor.zhirox/${BUNDLE_ID}/g" ios/Runner.xcodeproj/project.pbxproj
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${DISPLAY_NAME}" ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName ${BUNDLE_NAME}" ios/Runner/Info.plist
 
       - name: Prepare iOS 15 deployment target
         run: |
@@ -62,22 +93,22 @@ jobs:
       - name: Build iOS without signing
         run: flutter build ios --release --no-codesign
 
-      - name: Verify Owner app identity
+      - name: Verify app identity
         run: |
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx 'com.karoxghafoor.zhirox.owner'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx 'ZHIROX Owner'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "$BUNDLE_ID"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "$DISPLAY_NAME"
 
-      - name: Package owner unsigned IPA
+      - name: Package unsigned IPA
         run: |
           rm -rf Payload
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
-          ditto -c -k --sequesterRsrc --keepParent Payload ZHIROX-Owner.ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload "$IPA_FILE"
 
-      - name: Upload owner IPA artifact
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zhirox-owner-unsigned-ipa
-          path: ZHIROX-Owner.ipa
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.IPA_FILE }}
           if-no-files-found: error
           retention-days: 7
