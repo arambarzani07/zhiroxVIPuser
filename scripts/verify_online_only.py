@@ -130,6 +130,48 @@ if '_buildFinancialChatMessages(' in profile:
     fail('lib/screens/shared/user_profile_screen.dart: eager Financial Chat message widget list must not return')
 
 
+# Financial Chat long-history performance must stay server-paginated. Initial
+# customer load uses one aggregate/open-debt snapshot plus a deterministic
+# 50-item composite-cursor timeline page; filters hydrate all pages explicitly.
+for marker in (
+    'getCustomerFinanceSnapshot',
+    'getCustomerFinancialTimelinePage',
+    "'get_customer_finance_snapshot'",
+    "'get_customer_financial_timeline_page'",
+    "'p_cursor_at'",
+    "'p_cursor_kind'",
+    "'p_cursor_id'",
+    'getAllCustomerDebtsLive',
+):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: Financial Chat pagination marker missing: {marker}')
+for marker in (
+    '_openDebts',
+    '_financialTimelineHasMore',
+    '_financialTimelineCursor',
+    '_loadOlderFinancialHistory',
+    '_ensureAllFinancialHistoryLoaded',
+    '_hydrateFinancialHistoryForFilters',
+    'مامەڵە کۆنەکان باربکە',
+):
+    if marker not in profile:
+        fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat pagination marker missing: {marker}')
+load_data_match = re.search(
+    r'Future<void>\s+_loadData\(\)\s+async\s*\{(.*?)(?=\s*Future<void>\s+_subscribeFinancialRealtime)',
+    profile,
+    re.S,
+)
+if not load_data_match:
+    fail('lib/screens/shared/user_profile_screen.dart: _loadData pagination implementation not found')
+else:
+    load_body = load_data_match.group(1)
+    for forbidden in ('PBService.getDebts(', 'PBService.getPayments(', 'PBService.getFinancialEvents('):
+        if forbidden in load_body:
+            fail(f'lib/screens/shared/user_profile_screen.dart: initial customer load must not bulk-load history: {forbidden}')
+    for required in ('PBService.getCustomerFinanceSnapshot', 'PBService.getCustomerFinancialTimelinePage', 'limit: 50'):
+        if required not in load_body:
+            fail(f'lib/screens/shared/user_profile_screen.dart: initial paginated load marker missing: {required}')
+
 # Financial Chat Phase 4 must remain live-only and keep its integrated search,
 # date/type filters, debt references, receipt preview and statement/share action.
 for marker_name in (
