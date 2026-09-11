@@ -298,9 +298,15 @@ class _UserListScreenState extends State<UserListScreen> {
     return '$title • $detail';
   }
 
-  Future<void> _markFinancialChatReadBestEffort(String customerId) async {
+  Future<void> _markFinancialChatReadBestEffort(
+    String customerId,
+    DateTime? readThrough,
+  ) async {
     try {
-      await PBService.markFinancialChatRead(customerId);
+      await PBService.markFinancialChatRead(
+        customerId,
+        readThrough: readThrough,
+      );
     } catch (_) {
       if (mounted) _scheduleCustomerInboxRefresh();
     }
@@ -309,10 +315,13 @@ class _UserListScreenState extends State<UserListScreen> {
   Future<void> _openUserProfile(RecordModel user) async {
     if (widget.role == 'customer') {
       final row = _customerInbox[user.id];
+      final readThrough = DateTime.tryParse(
+        row?['last_activity_at']?.toString() ?? '',
+      );
       if (row != null && row['unread'] == true) {
         setState(() => row['unread'] = false);
       }
-      unawaited(_markFinancialChatReadBestEffort(user.id));
+      unawaited(_markFinancialChatReadBestEffort(user.id, readThrough));
     }
     await Navigator.push(
       context,
@@ -800,7 +809,14 @@ class _UserListScreenState extends State<UserListScreen> {
                           ),
                         ).then((_) => _loadUsers());
                       } else if (value == 'payment') {
-                        unawaited(PBService.markFinancialChatRead(user.id));
+                        unawaited(
+                          _markFinancialChatReadBestEffort(
+                            user.id,
+                            DateTime.tryParse(
+                              inbox?['last_activity_at']?.toString() ?? '',
+                            ),
+                          ),
+                        );
                         Navigator.push(
                           context,
                           MaterialPageRoute(

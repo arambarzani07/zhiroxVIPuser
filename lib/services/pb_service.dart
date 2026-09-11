@@ -935,11 +935,17 @@ class PBService {
     return result;
   }
 
-  static Future<void> markFinancialChatRead(String customerId) async {
+  static Future<void> markFinancialChatRead(
+    String customerId, {
+    DateTime? readThrough,
+  }) async {
     await ensureInitialized();
     await client.rpc(
-      'mark_financial_chat_read',
-      params: {'p_customer_id': customerId},
+      'mark_financial_chat_read_through',
+      params: {
+        'p_customer_id': customerId,
+        'p_read_through': readThrough?.toUtc().toIso8601String(),
+      },
     );
   }
 
