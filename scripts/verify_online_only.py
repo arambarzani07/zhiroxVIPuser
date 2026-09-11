@@ -130,6 +130,24 @@ if '_buildFinancialChatMessages(' in profile:
     fail('lib/screens/shared/user_profile_screen.dart: eager Financial Chat message widget list must not return')
 
 
+# Text search must debounce full-history hydration so typing does not start
+# an expensive page walk on the first keypress. Existing filter hydration is
+# single-flight; this guard keeps the text entry path debounced as well.
+for marker in (
+    'Timer? _financialSearchDebounce;',
+    '_scheduleFinancialSearchHydration',
+    'Duration(milliseconds: 350)',
+    '_financialSearchDebounce?.cancel();',
+):
+    if marker not in profile:
+        fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat search debounce marker missing: {marker}')
+if """onChanged: (_) {
+            setState(() {});
+            unawaited(_hydrateFinancialHistoryForFilters());
+          },""" in profile:
+    fail('lib/screens/shared/user_profile_screen.dart: text search must not hydrate full history on every keypress')
+
+
 # Financial Chat long-history performance must stay server-paginated. Initial
 # customer load uses one aggregate/open-debt snapshot plus a deterministic
 # 50-item composite-cursor timeline page; filters hydrate all pages explicitly.
