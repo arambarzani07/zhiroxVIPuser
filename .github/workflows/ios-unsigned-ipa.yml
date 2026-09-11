@@ -2,28 +2,50 @@ name: iOS Unsigned IPA
 
 on:
   push:
-    branches: [main]
+    branches: [owner-source, user-source]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: ios-unsigned-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build-ios:
     runs-on: macos-latest
     timeout-minutes: 60
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve app edition
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF_NAME}" in
+            owner-source)
+              echo "APP_EDITION=Owner" >> "$GITHUB_ENV"
+              echo "BUNDLE_ID=com.karoxghafoor.zhirox.owner" >> "$GITHUB_ENV"
+              echo "DISPLAY_NAME=ZHIROX Owner" >> "$GITHUB_ENV"
+              echo "BUNDLE_NAME=zhirox_owner" >> "$GITHUB_ENV"
+              echo "IPA_FILE=ZHIROX-Owner.ipa" >> "$GITHUB_ENV"
+              echo "ARTIFACT_NAME=zhirox-owner-unsigned-ipa" >> "$GITHUB_ENV"
+              ;;
+            user-source)
+              echo "APP_EDITION=User" >> "$GITHUB_ENV"
+              echo "BUNDLE_ID=com.karoxghafoor.zhirox.user" >> "$GITHUB_ENV"
+              echo "DISPLAY_NAME=ZHIROX User" >> "$GITHUB_ENV"
+              echo "BUNDLE_NAME=zhirox_user" >> "$GITHUB_ENV"
+              echo "IPA_FILE=ZHIROX-User.ipa" >> "$GITHUB_ENV"
+              echo "ARTIFACT_NAME=zhiroxVIPuser-unsigned-ipa" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unsupported source branch: ${GITHUB_REF_NAME}" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -36,6 +58,15 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
+
+      - name: Verify online-only policy
+        run: python3 scripts/verify_online_only.py
+
+      - name: Prepare independent iOS identity
+        run: |
+          sed -i '' "s/com.karoxghafoor.zhirox/${BUNDLE_ID}/g" ios/Runner.xcodeproj/project.pbxproj
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${DISPLAY_NAME}" ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName ${BUNDLE_NAME}" ios/Runner/Info.plist
 
       - name: Prepare iOS 15 deployment target
         run: |
@@ -53,57 +84,31 @@ jobs:
           printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Debug.xcconfig
           printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Release.xcconfig
 
-      - name: Analyze for compile errors
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Analyze strictly
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
 
       - name: Build iOS without signing
         run: flutter build ios --release --no-codesign
+
+      - name: Verify app identity
+        run: |
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "$BUNDLE_ID"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "$DISPLAY_NAME"
 
       - name: Package unsigned IPA
         run: |
           rm -rf Payload
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
-          ditto -c -k --sequesterRsrc --keepParent Payload zhiroxVIPuser-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload "$IPA_FILE"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zhiroxVIPuser-unsigned-ipa
-          path: zhiroxVIPuser-unsigned.ipa
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.IPA_FILE }}
           if-no-files-found: error
           retention-days: 7
-
-      - name: Prepare Safari download site
-        run: |
-          rm -rf _site
-          mkdir -p _site
-          cp zhiroxVIPuser-unsigned.ipa _site/zhiroxVIPuser-unsigned.ipa
-          cat > _site/index.html <<'HTML'
-          <!doctype html>
-          <html lang="ku" dir="rtl">
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>ZHIROX VIP User IPA</title>
-          <body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:680px;margin:60px auto;padding:24px;text-align:center">
-            <h1>ZHIROX VIP User</h1>
-            <p>فایلی IPA بۆ iOS</p>
-            <p><a href="zhiroxVIPuser-unsigned.ipa" download style="font-size:20px">داونلۆدی ڕاستەوخۆی IPA</a></p>
-            <p>Unsigned IPA — پێش دامەزراندن پێویستی بە واژۆکردن هەیە.</p>
-          </body>
-          </html>
-          HTML
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
