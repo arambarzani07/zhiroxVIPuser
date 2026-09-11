@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/official_receipt_service.dart';
 import 'package:zhirox/services/pb_service.dart';
+import 'package:zhirox/services/pdf_service.dart';
 import 'package:zhirox/services/receipt_settings_service.dart';
 import 'package:zhirox/utils/helpers.dart';
 
@@ -45,26 +46,36 @@ class FinancialDocumentActions {
             adminName = admin.getStringValue('name').trim();
           }
         } catch (_) {
-          // The receipt still uses the authenticated display data if available.
+          // The receipt still uses authenticated display data if available.
         }
       }
 
       if (marketName.isEmpty) marketName = 'Zhirox System';
       if (adminName.isEmpty) adminName = 'ZHIROX';
 
-      final settings = await ReceiptSettingsService.load(
-        adminId: adminId,
-        fallbackMarketName: marketName,
-        fallbackPhone: adminPhone,
-      );
-
-      await OfficialReceiptService.generateDebtReceipt(
-        debt: debt,
-        marketName: marketName,
-        adminName: adminName,
-        fallbackPhone: adminPhone,
-        settings: settings,
-      );
+      try {
+        final settings = await ReceiptSettingsService.load(
+          adminId: adminId,
+          fallbackMarketName: marketName,
+          fallbackPhone: adminPhone,
+        );
+        await OfficialReceiptService.generateDebtReceipt(
+          debt: debt,
+          marketName: marketName,
+          adminName: adminName,
+          fallbackPhone: adminPhone,
+          settings: settings,
+        );
+      } catch (_) {
+        // Fail safely to the established invoice path if custom receipt
+        // configuration or rendering is temporarily unavailable.
+        await PdfService.generateInvoice(
+          debt: debt,
+          marketName: marketName,
+          adminName: adminName,
+          adminPhone: adminPhone,
+        );
+      }
     } catch (e) {
       if (!context.mounted) return;
       AppHelpers.showSnackBar(
