@@ -661,16 +661,20 @@ class PBService {
     String? referenceId,
   }) async {
     await ensureInitialized();
-  final rpcResult = await client.rpc(
-    'record_payment',
-    params: {
-      'p_debt_id': debtId,
-      'p_amount': amount,
-      'p_note': note ?? '',
-      'p_reference_kind': referenceKind,
-      'p_reference_id': referenceId,
+  final response = await client.functions.invoke(
+    'record-payment',
+    body: {
+      'debt_id': debtId,
+      'amount': amount,
+      'note': note ?? '',
+      'reference_kind': referenceKind,
+      'reference_id': referenceId,
     },
   );
+  if (response.data is Map && response.data['error'] != null) {
+    throw _functionError(response.data);
+  }
+  final rpcResult = response.data;
 
   Map<String, dynamic>? paymentRow;
   if (rpcResult is Map) {
