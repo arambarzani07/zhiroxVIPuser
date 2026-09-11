@@ -1,0 +1,37 @@
+name: Fix Verifier After Debt Cleanup
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-verifier-after-debt-cleanup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp scripts/fix_verifier_after_debt_cleanup.py /tmp/fix_verifier_after_debt_cleanup.py
+      - name: Patch Owner
+        run: |
+          python /tmp/fix_verifier_after_debt_cleanup.py
+          git add scripts/verify_online_only.py
+          git commit -m "Fix verifier after debt provider removal"
+          git push origin HEAD:owner-source
+      - name: Patch User
+        run: |
+          git fetch origin user-source
+          git checkout -B user-source origin/user-source
+          python /tmp/fix_verifier_after_debt_cleanup.py
+          git add scripts/verify_online_only.py
+          git commit -m "Fix verifier after debt provider removal"
+          git push origin HEAD:user-source
