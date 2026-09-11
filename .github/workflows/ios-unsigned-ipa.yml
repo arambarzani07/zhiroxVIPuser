@@ -62,6 +62,9 @@ jobs:
       - name: Verify online-only policy
         run: python3 scripts/verify_online_only.py
 
+      - name: Verify account-admin boundaries
+        run: python3 scripts/verify_account_admin_security.py
+
       - name: Prepare independent iOS identity
         run: |
           sed -i '' "s/com.karoxghafoor.zhirox/${BUNDLE_ID}/g" ios/Runner.xcodeproj/project.pbxproj
