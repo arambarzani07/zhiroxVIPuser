@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import re
 import sys
 
@@ -543,6 +544,51 @@ else:
     ):
         if forbidden in secure_delete_source:
             fail(f'supabase/functions/delete-account/index.ts: relational cleanup must stay FK-cascade driven, found {forbidden}')
+
+# Owner/User edition separation and privileged account-admin guards.
+edition = os.environ.get('GITHUB_REF_NAME', '')
+login_source = (LIB / 'screens/auth/login_screen.dart').read_text(encoding='utf-8')
+account_admin_edge = ROOT / 'supabase/functions/account-admin/index.ts'
+if not account_admin_edge.exists():
+    fail('supabase/functions/account-admin/index.ts: account-admin production source must be tracked')
+else:
+    account_admin_source = account_admin_edge.read_text(encoding='utf-8')
+    for required in (
+        'requesterProfile?.is_system_owner',
+        'requesterProfile.active !== true',
+        'system_owner_required',
+        'admin.auth.getUser(token)',
+    ):
+        if required not in account_admin_source:
+            fail(f'supabase/functions/account-admin/index.ts: privileged account guard missing: {required}')
+
+if edition == 'owner-source':
+    for required in (
+        "package:zhirox/screens/auth/admin_management_screen.dart",
+        "getBoolValue('is_system_owner')",
+        'return const AdminManagementScreen()',
+    ):
+        if required not in main:
+            fail(f'lib/main.dart: Owner System Owner routing marker missing: {required}')
+    if 'RegisterAdminScreen' in login_source or 'register_admin_screen.dart' in login_source:
+        fail('lib/screens/auth/login_screen.dart: Owner logged-out login must not open RegisterAdminScreen directly')
+    owner_management = (LIB / 'screens/auth/admin_management_screen.dart').read_text(encoding='utf-8')
+    for required in (
+        '_showCreateAdminDialog',
+        "context.read<AuthProvider>().logout()",
+        'PBService.registerAdmin(',
+    ):
+        if required not in owner_management:
+            fail(f'lib/screens/auth/admin_management_screen.dart: Owner management marker missing: {required}')
+elif edition == 'user-source':
+    if 'RegisterAdminScreen' in login_source or 'register_admin_screen.dart' in login_source:
+        fail('lib/screens/auth/login_screen.dart: User edition must never route to RegisterAdminScreen')
+    for required in (
+        '_showOwnerContactDialog',
+        'تەنها لەلایەن خاوەن سیستەمەوە درووست دەکرێت.',
+    ):
+        if required not in login_source:
+            fail(f'lib/screens/auth/login_screen.dart: User owner-contact marker missing: {required}')
 
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
