@@ -1,0 +1,43 @@
+name: Fix Partial Financial Running Balance
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/fix-partial-running-balance.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Patch owner-source
+        run: |
+          set -euo pipefail
+          cp scripts/fix_partial_timeline_running_balance.py /tmp/fix_partial_timeline_running_balance.py
+          python3 scripts/fix_partial_timeline_running_balance.py
+          git add lib/screens/shared/user_profile_screen.dart scripts/verify_online_only.py
+          git commit -m 'Hide running balance until full history is loaded'
+          git push origin owner-source
+      - name: Patch user-source
+        run: |
+          set -euo pipefail
+          git reset --hard
+          git clean -fd
+          git fetch origin user-source
+          git checkout -B user-source origin/user-source
+          cp /tmp/fix_partial_timeline_running_balance.py scripts/.fix_partial_timeline_running_balance.tmp.py
+          REPO_ROOT="$PWD" python3 scripts/.fix_partial_timeline_running_balance.tmp.py
+          rm -f scripts/.fix_partial_timeline_running_balance.tmp.py
+          git add lib/screens/shared/user_profile_screen.dart scripts/verify_online_only.py
+          git commit -m 'Hide running balance until full history is loaded'
+          git push origin user-source
