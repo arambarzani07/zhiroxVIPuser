@@ -88,11 +88,11 @@ Deno.serve(async (req) => {
     if (childIds.length > 0) {
       const { data: receiptRows, error: receiptError } = await admin
         .from("debts")
-        .select("receipt_image")
+        .select("receipt_image_path")
         .in("customer_id", childIds);
       if (receiptError) return json({ error: receiptError.message }, 400);
       for (const row of receiptRows ?? []) {
-        const path = String(row.receipt_image ?? "").trim();
+        const path = String(row.receipt_image_path ?? "").trim();
         if (path && !receiptPaths.includes(path)) receiptPaths.push(path);
       }
     }
