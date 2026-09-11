@@ -159,6 +159,25 @@ for marker in (
         fail(f'Financial Chat Phase 6 marker missing: {marker}')
 
 
+# Financial Chat Phase 7: ledger intelligence, overdue visibility, targeted
+# quick-pay and filter-aware PDF export must stay integrated in the customer chat.
+for marker in (
+    '_financialRunningBalances',
+    '_timelineAmountInIqd',
+    '_overdueDebtLabel',
+    'ماوەی هەژمار',
+    'پارەدانەوەی خێرا',
+    'initialDebtId',
+    '_generateFilteredFinancialChatStatement',
+    'PdfService.generateFinancialChatStatement',
+):
+    if marker not in profile:
+        fail(f'Financial Chat Phase 7 marker missing: {marker}')
+pdf_source = (LIB / 'services/pdf_service.dart').read_text(encoding='utf-8')
+if 'generateFinancialChatStatement({' not in pdf_source:
+    fail('lib/services/pdf_service.dart: filter-aware Financial Chat PDF export missing')
+
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:

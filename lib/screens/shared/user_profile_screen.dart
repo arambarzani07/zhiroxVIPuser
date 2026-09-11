@@ -1036,6 +1036,59 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }).toList(growable: false);
   }
 
+  String _timelineLedgerKey(_ProfileTimelineItem item) =>
+      '${item.kind}:${item.record.id}';
+
+  double? _timelineAmountInIqd(_ProfileTimelineItem item) {
+    if (item.isSystem) return 0;
+    final amount = item.record.getDoubleValue('amount');
+    final debt = item.isPayment ? item.relatedDebt : item.record;
+    if (debt == null) return null;
+    final currency = debt.getStringValue('currency').isEmpty
+        ? 'IQD'
+        : debt.getStringValue('currency');
+    if (currency != 'USD') return amount;
+    final rate = debt.getDoubleValue('dollar_rate');
+    if (rate <= 0) return null;
+    return amount * rate;
+  }
+
+  Map<String, double?> _financialRunningBalances(
+    List<_ProfileTimelineItem> items,
+  ) {
+    var running = 0.0;
+    var complete = true;
+    final balances = <String, double?>{};
+    for (final item in items) {
+      if (item.isSystem) continue;
+      final normalized = _timelineAmountInIqd(item);
+      if (normalized == null) {
+        complete = false;
+      } else if (item.isPayment) {
+        running -= normalized;
+      } else {
+        running += normalized;
+      }
+      if (running.abs() < 0.000001) running = 0;
+      balances[_timelineLedgerKey(item)] = complete ? running : null;
+    }
+    return balances;
+  }
+
+  String? _overdueDebtLabel(RecordModel debt) {
+    if (debt.getStringValue('status') == 'paid') return null;
+    final raw = debt.getStringValue('due_date').trim();
+    if (raw.isEmpty) return null;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return null;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(parsed.year, parsed.month, parsed.day);
+    if (!due.isBefore(today)) return null;
+    final days = today.difference(due).inDays;
+    return '$days ڕۆژ دواکەوتوو';
+  }
+
   Future<void> _pickFinancialDateRange() async {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
@@ -1192,11 +1245,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             const SizedBox(width: 7),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => _generateAccountStatement(
-                  totalDebt: totalDebt,
-                  totalRemaining: totalRemaining,
-                  totalPaid: totalPaid,
-                ),
+                onPressed: _generateFilteredFinancialChatStatement,
                 icon: const Icon(Icons.ios_share_rounded, size: 17),
                 label: const Text('کەشف / هاوبەشکردن'),
                 style: OutlinedButton.styleFrom(
@@ -1274,6 +1323,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final allTimelineItems = _buildTimelineItems();
     final timelineItems = _filterFinancialTimeline(allTimelineItems);
+    final runningBalances = _financialRunningBalances(allTimelineItems);
     final health = _debtHealth(totalRemaining, totalDebt);
 
     return SliverToBoxAdapter(
@@ -1397,7 +1447,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ? _buildEmptyTimelineState(isDark)
                   : _buildFilteredTimelineEmptyState(isDark)
             else
-              ..._buildFinancialChatMessages(timelineItems),
+              ..._buildFinancialChatMessages(timelineItems, runningBalances),
             const SizedBox(height: 8),
           ],
         ),
@@ -1450,6 +1500,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   List<Widget> _buildFinancialChatMessages(
     List<_ProfileTimelineItem> timelineItems,
+    Map<String, double?> runningBalances,
   ) {
     final widgets = <Widget>[];
     DateTime? previousDay;
@@ -1464,7 +1515,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       widgets.add(
         item.isSystem
             ? _buildFinancialSystemMessage(item)
-            : _buildTimelineBubble(item, index),
+            : _buildTimelineBubble(
+                item,
+                index,
+                balanceAfter: runningBalances[_timelineLedgerKey(item)],
+              ),
       );
     }
     return widgets;
@@ -1685,7 +1740,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (mounted) await _refreshFinancialData();
   }
 
-  Future<void> _showFinancialPaymentSheet(AuthProvider auth) async {
+  Future<void> _showFinancialPaymentSheet(
+    AuthProvider auth, {
+    String? initialDebtId,
+  }) async {
     final openDebts = _debts
         .where((debt) => debt.getDoubleValue('remaining') > 0)
         .toList()
@@ -1697,7 +1755,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     final amountController = TextEditingController();
     final noteController = TextEditingController();
-    var selectedDebtId = openDebts.first.id;
+    String selectedDebtId = openDebts.first.id;
+    if (initialDebtId != null &&
+        openDebts.any((debt) => debt.id == initialDebtId)) {
+      selectedDebtId = initialDebtId;
+    }
     var saving = false;
     String? localError;
 
@@ -2013,7 +2075,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildTimelineBubble(_ProfileTimelineItem item, int index) {
+  Widget _buildTimelineBubble(
+    _ProfileTimelineItem item,
+    int index, {
+    double? balanceAfter,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isPayment = item.isPayment;
     final record = item.record;
@@ -2042,6 +2108,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       showConversion: currency == 'USD',
     );
     final receiptPath = isPayment ? '' : record.getStringValue('receipt_image');
+    final overdueLabel = isPayment ? null : _overdueDebtLabel(record);
+    final auth = context.read<AuthProvider>();
+    final canQuickPay = !isPayment &&
+        auth.userRole != 'customer' &&
+        record.getDoubleValue('remaining') > 0;
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -2178,6 +2249,110 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     if (!isPayment && receiptPath.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       _buildReceiptPreview(record, receiptPath, color, isDark),
+                    ],
+                    if (overdueLabel != null) ...[
+                      const SizedBox(height: 7),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: isDark ? 0.14 : 0.08),
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(
+                            color: Colors.red.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.schedule_rounded,
+                              size: 13,
+                              color: Colors.red,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              overdueLabel,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (balanceAfter != null) ...[
+                      const SizedBox(height: 7),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.10)
+                              : Colors.white.withValues(alpha: 0.62),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              'ماوەی هەژمار',
+                              style: TextStyle(
+                                color: isDark
+                                    ? AppDarkColors.textSecondary
+                                    : const Color(0xFF667085),
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              AppHelpers.formatCurrency(balanceAfter),
+                              textDirection: TextDirection.ltr,
+                              style: TextStyle(
+                                color: balanceAfter > 0
+                                    ? Colors.red.shade700
+                                    : Colors.green.shade700,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (canQuickPay) ...[
+                      const SizedBox(height: 5),
+                      Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: TextButton.icon(
+                          onPressed: () => unawaited(
+                            _showFinancialPaymentSheet(
+                              auth,
+                              initialDebtId: record.id,
+                            ),
+                          ),
+                          icon: const Icon(Icons.payments_outlined, size: 14),
+                          label: const Text('پارەدانەوەی خێرا'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.green.shade700,
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                     const SizedBox(height: 7),
                     Row(
@@ -2553,6 +2728,95 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         AppHelpers.backendErrorMessage(
           e,
           fallback: 'وەصڵ دروست نەکرا. دووبارە هەوڵ بدە.',
+        ),
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _generateFilteredFinancialChatStatement() async {
+    final allItems = _buildTimelineItems();
+    final visibleItems = _filterFinancialTimeline(allItems);
+    if (visibleItems.isEmpty) {
+      AppHelpers.showSnackBar(
+        context,
+        'هیچ مامەڵەیەک نییە بۆ کەشف/هاوبەشکردن',
+        isError: true,
+      );
+      return;
+    }
+
+    final balances = _financialRunningBalances(allItems);
+    String systemDescription(RecordModel record) {
+      final type = record.getStringValue('event_type');
+      final actor = record.getStringValue('actor_name').trim();
+      final base = switch (type) {
+        'debt_deleted' => 'قەرز سڕایەوە',
+        'payment_updated' => 'پارەدانەوە دەستکاری کرا',
+        'payment_deleted' => 'پارەدانەوە سڕایەوە',
+        _ => 'قەرز دەستکاری کرا',
+      };
+      return actor.isEmpty ? base : '$base • $actor';
+    }
+
+    final entries = <Map<String, dynamic>>[];
+    for (final item in visibleItems) {
+      final record = item.record;
+      final debt = item.isPayment ? item.relatedDebt : record;
+      final currency = debt?.getStringValue('currency').isNotEmpty == true
+          ? debt!.getStringValue('currency')
+          : 'IQD';
+      final description = item.isSystem
+          ? systemDescription(record)
+          : item.isPayment
+              ? record.getStringValue('note').trim()
+              : record.getStringValue('description').trim();
+      entries.add({
+        'type': item.kind,
+        'date': item.date.toIso8601String(),
+        'description': description,
+        'amount': record.getDoubleValue('amount'),
+        'currency': currency,
+        'dollar_rate': debt?.getDoubleValue('dollar_rate') ?? 0,
+        'balance_after_iqd': balances[_timelineLedgerKey(item)],
+      });
+    }
+
+    final filterParts = <String>[];
+    final query = _financialSearchController.text.trim();
+    if (query.isNotEmpty) filterParts.add('گەڕان: $query');
+    if (_financialDateRange != null) {
+      filterParts.add(
+        '${DateFormat('yyyy/MM/dd').format(_financialDateRange!.start)} — '
+        '${DateFormat('yyyy/MM/dd').format(_financialDateRange!.end)}',
+      );
+    }
+    final typeLabel = switch (_financialTypeFilter) {
+      'debt' => 'قەرز',
+      'payment' => 'پارەدانەوە',
+      'system' => 'مێژووی گۆڕانکاری',
+      _ => '',
+    };
+    if (typeLabel.isNotEmpty) filterParts.add(typeLabel);
+
+    try {
+      await PdfService.generateFinancialChatStatement(
+        entries: entries,
+        customerName: _user?.getStringValue('name') ?? '',
+        marketName: context.read<AuthProvider>().marketName,
+        adminName: context.read<AuthProvider>().userName,
+        adminPhone:
+            context.read<AuthProvider>().user?.getStringValue('phone') ?? '',
+        filterSummary:
+            filterParts.isEmpty ? 'هەموو مامەڵەکان' : filterParts.join(' • '),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'کەشفی چاتی دارایی دروست نەکرا. دووبارە هەوڵ بدە.',
         ),
         isError: true,
       );
