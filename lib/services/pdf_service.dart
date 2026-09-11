@@ -953,15 +953,15 @@ class PdfService {
     final formatter = NumberFormat('#,##0.##', 'en');
     final pdf = pw.Document();
 
-    String money(double value, String currency, double rate) {
-      if (currency == 'USD') {
-        final usd = NumberFormat('#,##0.00', 'en').format(value);
-        if (rate > 0) {
-          return '\$$usd (${formatter.format(value * rate)} د.ع)';
-        }
-        return '\$$usd';
+    String money(double storageValue, String currency, double rate) {
+      final normalized = currency.trim().toUpperCase();
+      if (normalized == 'USD' && rate > 0) {
+        final displayUsd = storageValue / rate;
+        final usd = NumberFormat('#,##0.00', 'en').format(displayUsd);
+        return '\$$usd (${formatter.format(storageValue)} د.ع)';
       }
-      return '${formatter.format(value)} د.ع';
+      // Without a historical rate the only trustworthy value is storage IQD.
+      return '${formatter.format(storageValue)} د.ع';
     }
 
     final rows = entries.map((entry) {

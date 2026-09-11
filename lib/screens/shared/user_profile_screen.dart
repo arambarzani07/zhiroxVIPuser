@@ -1060,16 +1060,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   double? _timelineAmountInIqd(_ProfileTimelineItem item) {
     if (item.isSystem) return 0;
-    final amount = item.record.getDoubleValue('amount');
-    final debt = item.isPayment ? item.relatedDebt : item.record;
-    if (debt == null) return null;
-    final currency = debt.getStringValue('currency').isEmpty
-        ? 'IQD'
-        : debt.getStringValue('currency');
-    if (currency != 'USD') return amount;
-    final rate = debt.getDoubleValue('dollar_rate');
-    if (rate <= 0) return null;
-    return amount * rate;
+    // Debt and payment amounts share one canonical base IQD storage unit.
+    return item.record.getDoubleValue('amount');
   }
 
   Map<String, double?> _financialRunningBalances(
@@ -1668,9 +1660,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final currency = record.getStringValue('currency').isEmpty
         ? 'IQD'
         : record.getStringValue('currency');
-    final amountText = amount > 0
-        ? AppHelpers.formatCurrencyWithType(amount, currency)
-        : '';
+    // Audit events store the canonical amount but do not snapshot dollar_rate.
+    // Never relabel that known IQD value as USD without a safe conversion rate.
+    final amountText = amount > 0 ? AppHelpers.formatCurrency(amount) : '';
 
     final (icon, message) = switch (type) {
       'debt_deleted' => (
@@ -2047,7 +2039,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final status = isPayment ? '' : record.getStringValue('status');
     final color = isPayment ? Colors.green.shade700 : Colors.orange.shade800;
     final background = color.withValues(alpha: isDark ? 0.16 : 0.09);
-    final formattedAmount = AppHelpers.formatCurrencyWithType(
+    final formattedAmount = AppHelpers.formatStoredFinancialAmount(
       amount,
       currency,
       dollarRate: dollarRate,
@@ -2366,7 +2358,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ? 'IQD'
         : debt.getStringValue('currency');
     final amount = debt.getDoubleValue('amount');
-    final amountText = AppHelpers.formatCurrencyWithType(
+    final amountText = AppHelpers.formatStoredFinancialAmount(
       amount,
       currency,
       dollarRate: debt.getDoubleValue('dollar_rate'),
@@ -2443,7 +2435,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ? record.getStringValue('note')
             : record.getStringValue('description'))
         .trim();
-    final amountText = AppHelpers.formatCurrencyWithType(amount, currency);
+    final dollarRate = isPayment
+        ? (item.relatedDebt?.getDoubleValue('dollar_rate') ?? 0)
+        : record.getDoubleValue('dollar_rate');
+    final amountText = AppHelpers.formatStoredFinancialAmount(
+      amount,
+      currency,
+      dollarRate: dollarRate,
+      showConversion: currency == 'USD',
+    );
     final prefix = isPayment ? 'پارەدانەوە' : 'قەرز';
     return text.isEmpty ? '$prefix • $amountText' : '$prefix • $amountText • $text';
   }
@@ -2462,8 +2462,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ? 'IQD'
         : snapshot['currency'].toString();
     final text = snapshot['text']?.toString().trim() ?? '';
+    final dollarRate =
+        double.tryParse('${snapshot['dollar_rate'] ?? 0}') ?? 0;
     final label = kind == 'payment' ? 'وەڵام بۆ پارەدانەوە' : 'وەڵام بۆ قەرز';
-    final amountText = AppHelpers.formatCurrencyWithType(amount, currency);
+    final amountText = AppHelpers.formatStoredFinancialAmount(
+      amount,
+      currency,
+      dollarRate: dollarRate,
+      showConversion: currency == 'USD',
+    );
 
     return Container(
       width: double.infinity,
@@ -2618,6 +2625,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         final currency = debt?.getStringValue('currency').isNotEmpty == true
             ? debt!.getStringValue('currency')
             : 'IQD';
+        final dollarRate = debt?.getDoubleValue('dollar_rate') ?? 0;
         return Container(
           decoration: BoxDecoration(
             color: isDark ? AppDarkColors.card : Colors.white,
@@ -2655,7 +2663,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 subtitle: Text(
-                  AppHelpers.formatCurrencyWithType(amount, currency),
+                  AppHelpers.formatStoredFinancialAmount(
+                    amount,
+                    currency,
+                    dollarRate: dollarRate,
+                    showConversion: currency == 'USD',
+                  ),
                   textDirection: TextDirection.ltr,
                 ),
               ),
@@ -2682,9 +2695,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                   title: const Text('پارەدانەوەی تەواوی ماوە'),
                   subtitle: Text(
-                    AppHelpers.formatCurrencyWithType(
+                    AppHelpers.formatStoredFinancialAmount(
                       debt.getDoubleValue('remaining'),
                       currency,
+                      dollarRate: dollarRate,
+                      showConversion: currency == 'USD',
                     ),
                     textDirection: TextDirection.ltr,
                   ),
