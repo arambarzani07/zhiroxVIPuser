@@ -27,11 +27,15 @@ jobs:
         run: |
           set -euo pipefail
           git checkout owner-source
-          python3 scripts/apply_financial_chat_virtualization.py
-          git add lib/screens/shared/user_profile_screen.dart scripts/verify_online_only.py
-          if ! git diff --cached --quiet; then
-            git commit -m 'Virtualize Financial Chat timeline rendering'
-            git push origin owner-source
+          if grep -q '_FinancialChatRenderEntry' lib/screens/shared/user_profile_screen.dart; then
+            echo 'owner-source already patched'
+          else
+            python3 scripts/apply_financial_chat_virtualization.py
+            git add lib/screens/shared/user_profile_screen.dart scripts/verify_online_only.py
+            if ! git diff --cached --quiet; then
+              git commit -m 'Virtualize Financial Chat timeline rendering'
+              git push origin owner-source
+            fi
           fi
 
       - name: Patch user-source
@@ -39,7 +43,9 @@ jobs:
           set -euo pipefail
           git show owner-source:scripts/apply_financial_chat_virtualization.py > /tmp/apply_financial_chat_virtualization.py
           git checkout user-source
-          python3 /tmp/apply_financial_chat_virtualization.py
+          cp /tmp/apply_financial_chat_virtualization.py scripts/apply_financial_chat_virtualization.py
+          python3 scripts/apply_financial_chat_virtualization.py
+          rm -f scripts/apply_financial_chat_virtualization.py
           git add lib/screens/shared/user_profile_screen.dart scripts/verify_online_only.py
           if ! git diff --cached --quiet; then
             git commit -m 'Virtualize Financial Chat timeline rendering'
