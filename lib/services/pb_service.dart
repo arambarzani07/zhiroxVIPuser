@@ -194,23 +194,6 @@ class PBService {
 
   // ==================== Registration ====================
 
-  static Future<RecordModel> registerAdmin({
-    required String marketName,
-    required String adminName,
-    required String phone,
-    required String password,
-    required int subscriptionDays,
-  }) {
-    return _invokeCreateAccount({
-      'role': 'admin',
-      'market_name': marketName,
-      'name': adminName,
-      'phone': phone.trim(),
-      'password': password,
-      'subscription_days': subscriptionDays,
-    });
-  }
-
   static Future<RecordModel> registerCustomer({
     required String name,
     String fatherName = '',
@@ -231,78 +214,6 @@ class PBService {
   }
 
   // ==================== Admin Subscription Management ====================
-
-  static Future<Map<String, dynamic>> getAdminsPage({
-    int page = 1,
-    int perPage = 15,
-  }) async {
-    await ensureInitialized();
-    final safePage = page < 1 ? 1 : page;
-    final safePerPage = perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage);
-    final raw = await client.rpc(
-      'get_system_owner_admins_page',
-      params: {
-        'p_page': safePage,
-        'p_per_page': safePerPage,
-      },
-    );
-    if (raw is! Map) throw Exception('invalid admin management page');
-
-    final data = Map<String, dynamic>.from(raw);
-    final admins = <Map<String, dynamic>>[];
-    final rawAdmins = data['admins'];
-    if (rawAdmins is List) {
-      for (final item in rawAdmins) {
-        if (item is! Map) continue;
-        final row = Map<String, dynamic>.from(item);
-        final rawAdmin = row['admin'];
-        if (rawAdmin is! Map) continue;
-        int asInt(dynamic value) =>
-            value is int ? value : int.tryParse('${value ?? 0}') ?? 0;
-        admins.add({
-          'admin': _profileRecord(Map<String, dynamic>.from(rawAdmin)),
-          'employeeCount': asInt(row['employee_count']),
-          'customerCount': asInt(row['customer_count']),
-        });
-      }
-    }
-
-    int asInt(dynamic value, int fallback) =>
-        value is int ? value : int.tryParse('${value ?? ''}') ?? fallback;
-    return {
-      'admins': admins,
-      'totalItems': asInt(data['total_items'], admins.length),
-      'totalPages': asInt(data['total_pages'], 1),
-      'page': asInt(data['page'], safePage),
-    };
-  }
-
-  static Future<void> renewAdminSubscription(String adminId, int days) async {
-    if (days < 1 || days > 3650) throw Exception('invalid_input');
-    await ensureInitialized();
-    await client.rpc(
-      'renew_system_owner_admin_subscription',
-      params: {
-        'p_admin_id': adminId,
-        'p_days': days,
-      },
-    );
-  }
-
-  static Future<void> deleteAdminWithData(String adminId) async {
-    await ensureInitialized();
-    try {
-      final response = await client.functions.invoke(
-        'delete-account',
-        body: {'user_id': adminId},
-      );
-      if (response.data is Map && response.data['error'] != null) {
-        throw _functionError(response.data);
-      }
-    } on FunctionsException catch (e) {
-      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
-    }
-  }
 
   static Future<int> checkSubscriptionDaysLeft(String adminId) async {
     final admin = await pb.collection('users').getOne(adminId);

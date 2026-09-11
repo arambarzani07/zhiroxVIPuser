@@ -483,26 +483,23 @@ if 'if (online && mounted) _loadUsers();' in customer_list_source:
 if "_loadUsers(search: _searchController.text.trim());" not in customer_list_source:
     fail('lib/screens/shared/user_list_screen.dart: reconnect/search-preserving reload marker missing')
 
-# System Owner admin management must use the set-based, owner-checked RPCs.
-for marker in (
-    "'get_system_owner_admins_page'",
-    "'renew_system_owner_admin_subscription'",
-    "'employeeCount': asInt(row['employee_count'])",
-    "'customerCount': asInt(row['customer_count'])",
+# User mobile client must not expose System Owner admin-management APIs.
+for forbidden in (
+    'static Future<RecordModel> registerAdmin(',
+    'static Future<Map<String, dynamic>> getAdminsPage(',
+    'static Future<void> renewAdminSubscription(',
+    'static Future<void> deleteAdminWithData(',
 ):
-    if marker not in pb:
-        fail(f'lib/services/pb_service.dart: System Owner admin-management marker missing: {marker}')
-admin_section = pb.split('// ==================== Admin Subscription Management ====================', 1)[-1]
-admin_section = admin_section.split('// ==================== Admin Approval ====================', 1)[0]
-if 'for (final admin in result.items)' in admin_section:
-    fail('lib/services/pb_service.dart: Admin management must not restore per-admin N+1 queries')
-if 'admin_id = "$adminId" && role = "employee"' in admin_section or 'admin_id = "$adminId" && role = "customer"' in admin_section:
-    fail('lib/services/pb_service.dart: Admin management counts must stay set-based')
+    if forbidden in pb:
+        fail(f'lib/services/pb_service.dart: User source must not expose owner API: {forbidden}')
+
+# Shared backend migrations remain tracked and security-hardened even though
+# the User mobile client does not call these owner-only RPCs.
 admin_rpc_migration = ROOT / 'supabase/migrations/20260911102326_system_owner_admin_management_rpcs.sql'
 if not admin_rpc_migration.exists():
     fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner admin-management migration must be tracked')
 else:
-    admin_rpc_source = admin_rpc_migration.read_text(encoding='utf-8')
+    admin_rpc_source = admin_rpc_migration.read_text(encoding='utf-8').lower()
     for marker in (
         'security definer',
         'p.is_system_owner = true',
@@ -512,16 +509,10 @@ else:
         'revoke all on function public.get_system_owner_admins_page(integer, integer) from public, anon;',
         'revoke all on function public.renew_system_owner_admin_subscription(uuid, integer) from public, anon;',
     ):
-        if marker not in admin_rpc_source.lower():
+        if marker not in admin_rpc_source:
             fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner RPC security marker missing: {marker}')
 
-# System Owner admin deletion must use its JWT-verified dedicated Edge Function.
-admin_section = pb.split('// ==================== Admin Subscription Management ====================', 1)[-1]
-admin_section = admin_section.split('// ==================== Admin Approval ====================', 1)[0]
-if "'delete-account'" not in admin_section:
-    fail('lib/services/pb_service.dart: System Owner admin deletion must use delete-account')
-if "'account-admin'" in admin_section and "'action': 'delete_user'" in admin_section:
-    fail('lib/services/pb_service.dart: System Owner admin deletion must not use the legacy account-admin delete path')
+# Shared backend secure admin deletion must remain JWT-verified and Owner-scoped.
 secure_delete_edge = ROOT / 'supabase/functions/delete-account/index.ts'
 if not secure_delete_edge.exists():
     fail('supabase/functions/delete-account/index.ts: secure admin deletion Edge Function must be tracked')
