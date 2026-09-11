@@ -46,7 +46,9 @@ class _UserListScreenState extends State<UserListScreen> {
       _loadUsers();
     });
     _connectivitySub = ConnectivityService.instance.statusStream.listen((online) {
-      if (online && mounted) _loadUsers();
+      if (online && mounted) {
+        _loadUsers(search: _searchController.text.trim());
+      }
     });
     if (widget.role == 'customer') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -103,7 +105,7 @@ class _UserListScreenState extends State<UserListScreen> {
         unawaited(_loadCustomerInboxInBackground(users, generation: generation));
       }
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _users = [];
         _isLoading = false;
