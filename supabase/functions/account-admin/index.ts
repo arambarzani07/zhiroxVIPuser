@@ -94,6 +94,13 @@ Deno.serve(async (req) => {
       let approved = true;
       const active = true;
       let marketName = "";
+      let debtLimit = 0;
+      const debtDuration = 30;
+      let canAddCustomers = false;
+      let canSetDebtLimit = false;
+      let canSetDueDate = false;
+      let canEditDebts = false;
+      let canSendNotifications = false;
 
       if (role === "admin") {
         if (!requester || !requesterProfile?.is_system_owner || requesterProfile.active !== true) {
@@ -119,6 +126,11 @@ Deno.serve(async (req) => {
           return json({ error: "employee_creation_requires_admin" }, 403);
         }
         adminId = requester.id;
+        canAddCustomers = Boolean(body.can_add_customers ?? false);
+        canSetDebtLimit = Boolean(body.can_set_debt_limit ?? false);
+        canSetDueDate = Boolean(body.can_set_due_date ?? false);
+        canEditDebts = Boolean(body.can_edit_debts ?? false);
+        canSendNotifications = Boolean(body.can_send_notifications ?? false);
       } else {
         if (!adminId) return json({ error: "admin_id_required" }, 400);
         const { data: targetAdmin, error: targetAdminError } = await admin
@@ -146,6 +158,19 @@ Deno.serve(async (req) => {
           approved = true;
         } else {
           approved = false;
+        }
+
+        const requestedDebtLimit = Number(body.debt_limit ?? 0);
+        const safeDebtLimit =
+          Number.isFinite(requestedDebtLimit) && requestedDebtLimit >= 0
+            ? requestedDebtLimit
+            : 0;
+        if (
+          requesterProfile?.role === "admin" ||
+          (requesterProfile?.role === "employee" &&
+            requesterProfile.can_set_debt_limit === true)
+        ) {
+          debtLimit = safeDebtLimit;
         }
       }
 
@@ -180,13 +205,13 @@ Deno.serve(async (req) => {
         created_by: createdBy,
         approved,
         active,
-        debt_limit: Number(body.debt_limit ?? 0),
-        debt_duration: Number(body.debt_duration ?? 30),
-        can_add_customers: Boolean(body.can_add_customers ?? false),
-        can_set_debt_limit: Boolean(body.can_set_debt_limit ?? false),
-        can_set_due_date: Boolean(body.can_set_due_date ?? false),
-        can_edit_debts: Boolean(body.can_edit_debts ?? false),
-        can_send_notifications: Boolean(body.can_send_notifications ?? false),
+        debt_limit: debtLimit,
+        debt_duration: debtDuration,
+        can_add_customers: canAddCustomers,
+        can_set_debt_limit: canSetDebtLimit,
+        can_set_due_date: canSetDueDate,
+        can_edit_debts: canEditDebts,
+        can_send_notifications: canSendNotifications,
         subscription_end: subscriptionEnd,
         is_system_owner: false,
       };
