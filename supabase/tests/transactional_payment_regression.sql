@@ -33,11 +33,10 @@ begin
     raise exception 'employee and open debt fixture required';
   end if;
 
-  perform set_config('request.jwt.claim.sub', v_employee::text, true);
-
   select *
     into v_payment
-  from public.record_payment(
+  from public.record_payment_service(
+    v_employee,
     v_debt,
     least(1, v_before),
     'regression',
@@ -62,4 +61,3 @@ $test$;
 rollback;
 
 select 'transactional payment regression passed' as result;
-
