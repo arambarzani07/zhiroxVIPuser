@@ -1,0 +1,41 @@
+name: Apply Financial Chat Phase 5
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-financial-chat-phase5.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout owner source
+        uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp scripts/apply_financial_chat_phase5.py /tmp/apply_financial_chat_phase5.py
+
+      - name: Patch Owner
+        run: |
+          python /tmp/apply_financial_chat_phase5.py
+          git add lib/screens/shared/user_profile_screen.dart
+          git commit -m "Add quick payment presets to Financial Chat"
+          git push origin HEAD:owner-source
+
+      - name: Patch User
+        run: |
+          git fetch origin user-source
+          git checkout -B user-source origin/user-source
+          python /tmp/apply_financial_chat_phase5.py
+          git add lib/screens/shared/user_profile_screen.dart
+          git commit -m "Add quick payment presets to Financial Chat"
+          git push origin HEAD:user-source
