@@ -1,0 +1,163 @@
+name: Harden Auto Update once
+
+on:
+  push:
+    paths:
+      - .github/workflows/harden-auto-update-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'Start Auto Update hardening'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Harden automatic update flow
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {count}')
+              return text.replace(old, new, 1)
+
+          gate_path = Path('lib/widgets/auto_update_gate.dart')
+          gate = gate_path.read_text()
+
+          gate = replace_once(
+              gate,
+              "  String? _error;\n",
+              "  String? _error;\n  Timer? _periodicUpdateTimer;\n",
+              'timer field',
+          )
+
+          if "      unawaited(_startOwnerWatch());\n    });\n" in gate:
+              gate = replace_once(
+                  gate,
+                  "      unawaited(_startOwnerWatch());\n    });\n",
+                  "      unawaited(_startOwnerWatch());\n    });\n    _periodicUpdateTimer = Timer.periodic(const Duration(minutes: 5), (_) {\n      if (mounted && _supportedPlatform) unawaited(_checkForUpdate());\n    });\n",
+                  'owner periodic timer',
+              )
+          else:
+              gate = replace_once(
+                  gate,
+                  "      unawaited(_checkForUpdate());\n    });\n",
+                  "      unawaited(_checkForUpdate());\n    });\n    _periodicUpdateTimer = Timer.periodic(const Duration(minutes: 5), (_) {\n      if (mounted && _supportedPlatform) unawaited(_checkForUpdate());\n    });\n",
+                  'user periodic timer',
+              )
+
+          gate = replace_once(
+              gate,
+              "  void dispose() {\n    WidgetsBinding.instance.removeObserver(this);\n",
+              "  void dispose() {\n    _periodicUpdateTimer?.cancel();\n    WidgetsBinding.instance.removeObserver(this);\n",
+              'timer dispose',
+          )
+
+          owner_resume = """    if (state != AppLifecycleState.resumed) return;
+    unawaited(_refreshOwnerAccess());
+    if (!_supportedPlatform) return;
+    final last = _lastCheck;
+    if (last == null ||
+        DateTime.now().difference(last) >= const Duration(minutes: 10)) {
+      unawaited(_checkForUpdate());
+    }
+"""
+          owner_resume_new = """    if (state != AppLifecycleState.resumed) return;
+    unawaited(_refreshOwnerAccess());
+    if (!_supportedPlatform) return;
+    final last = _lastCheck;
+    final mustRecheck = _update?.mandatory == true;
+    if (mustRecheck ||
+        last == null ||
+        DateTime.now().difference(last) >= const Duration(minutes: 5)) {
+      unawaited(_checkForUpdate());
+    }
+"""
+          user_resume = """    if (state != AppLifecycleState.resumed || !_supportedPlatform) return;
+    final last = _lastCheck;
+    if (last == null || DateTime.now().difference(last) >= const Duration(minutes: 10)) {
+      unawaited(_checkForUpdate());
+    }
+"""
+          user_resume_new = """    if (state != AppLifecycleState.resumed || !_supportedPlatform) return;
+    final last = _lastCheck;
+    final mustRecheck = _update?.mandatory == true;
+    if (mustRecheck ||
+        last == null ||
+        DateTime.now().difference(last) >= const Duration(minutes: 5)) {
+      unawaited(_checkForUpdate());
+    }
+"""
+          if owner_resume in gate:
+              gate = replace_once(gate, owner_resume, owner_resume_new, 'owner resume recheck')
+          elif user_resume in gate:
+              gate = replace_once(gate, user_resume, user_resume_new, 'user resume recheck')
+          else:
+              raise SystemExit('resume recheck block not found')
+
+          gate = replace_once(
+              gate,
+              "        if (info == null || info.latestBuild == _dismissedBuild) {\n",
+              "        if (info == null ||\n            (info.latestBuild == _dismissedBuild && !info.mandatory)) {\n",
+              'mandatory overrides dismissal',
+          )
+
+          gate = replace_once(
+              gate,
+              "      if (!opened) {\n        setState(() => _error = 'نەتوانرا لینکی IPA لە Safari بکرێتەوە.');\n      }\n",
+              "      if (!opened) {\n        setState(() => _error = 'نەتوانرا لینکی IPA لە Safari بکرێتەوە.');\n      } else {\n        // Force an immediate re-check when the user comes back from Safari.\n        // This keeps mandatory/optional rollout changes responsive.\n        _lastCheck = null;\n      }\n",
+              'recheck after safari',
+          )
+
+          gate = replace_once(
+              gate,
+              "              'لینکەکە ڕاستەوخۆ لە Safari دەکرێتەوە.',\n",
+              "              'Safari دەکرێتەوە • پشکنینی خۆکار هەر ٥ خولەک.',\n",
+              'auto check footer',
+          )
+          gate_path.write_text(gate)
+
+          service_path = Path('lib/services/app_update_service.dart')
+          service = service_path.read_text()
+          validation = """    if (downloadUri == null ||
+        downloadUri.scheme != 'https' ||
+        downloadUri.host != 'github.com') {
+      throw const FormatException('invalid_update_download_url');
+    }
+
+"""
+          validation_new = """    if (downloadUri == null ||
+        downloadUri.scheme != 'https' ||
+        downloadUri.host != 'github.com') {
+      throw const FormatException('invalid_update_download_url');
+    }
+    final expectedIpa = edition == 'owner' ? 'ZHIROX-Owner.ipa' : 'ZHIROX-User.ipa';
+    final expectedPath = '/$_repository/releases/download/$releaseTag/$expectedIpa';
+    if (downloadUri.path != expectedPath) {
+      throw const FormatException('invalid_update_download_identity');
+    }
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(info.sha256)) {
+      throw const FormatException('invalid_update_sha256');
+    }
+
+"""
+          service = replace_once(service, validation, validation_new, 'manifest validation')
+          service_path.write_text(service)
+
+          Path('.github/workflows/harden-auto-update-once.yml').unlink()
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Harden automatic app updates"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
