@@ -104,12 +104,15 @@ class _UserListScreenState extends State<UserListScreen> {
       if (widget.role == 'customer' && users.isNotEmpty) {
         unawaited(_loadCustomerInboxInBackground(users, generation: generation));
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _users = [];
         _isLoading = false;
-        _loadError = 'نەتوانرا لیستەکە باربکرێت. پەیوەندی ئینتەرنێت بپشکنە.';
+        _loadError = AppHelpers.backendErrorMessage(
+          error,
+          fallback: 'نەتوانرا لیستەکە باربکرێت. دووبارە هەوڵ بدە.',
+        );
       });
     }
   }
@@ -161,7 +164,7 @@ class _UserListScreenState extends State<UserListScreen> {
         _users = sorted;
         _inboxError = null;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || (generation != null && generation != _loadGeneration)) return;
       setState(() {
         _customerInbox.clear();
@@ -169,7 +172,10 @@ class _UserListScreenState extends State<UserListScreen> {
         _balanceErrors
           ..clear()
           ..addAll(ids);
-        _inboxError = 'نەتوانرا پوختەی چاتی کڕیاران باربکرێت';
+        _inboxError = AppHelpers.backendErrorMessage(
+          error,
+          fallback: 'نەتوانرا پوختە و باڵانسی کڕیاران باربکرێت. دووبارە هەوڵ بدە.',
+        );
         debugPrint(_inboxError);
       });
     } finally {
