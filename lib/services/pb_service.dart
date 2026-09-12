@@ -1153,57 +1153,46 @@ class PBService {
 
   // ==================== Stats ====================
 
+  static RecordModel _dashboardDebtRecord(Map<String, dynamic> row) {
+    final customer = row.remove('customer');
+    final createdBy = row.remove('created_by');
+    final json = _debtRecordFromRaw(row).toJson();
+    json['expand'] = <String, dynamic>{
+      if (customer is Map)
+        'customer': _profileRecord(Map<String, dynamic>.from(customer)).toJson(),
+      if (createdBy is Map)
+        'created_by': _profileRecord(Map<String, dynamic>.from(createdBy)).toJson(),
+    };
+    return RecordModel.fromJson(json);
+  }
+
   static Future<Map<String, dynamic>> getDashboardStats({String? adminId}) async {
-    final safeAdminId = adminId != null ? _sanitize(adminId) : null;
-    var customerFilter = 'role = "customer"';
-    if (safeAdminId != null) customerFilter += ' && admin_id = "$safeAdminId"';
-    var debtFilter = '';
-    if (safeAdminId != null) debtFilter = 'customer.admin_id = "$safeAdminId"';
-    var paymentFilter = '';
-    if (safeAdminId != null) paymentFilter = 'debt.customer.admin_id = "$safeAdminId"';
-    var pendingFilter = 'role = "customer" && approved = false';
-    if (safeAdminId != null) pendingFilter += ' && admin_id = "$safeAdminId"';
-
-    final results = await Future.wait([
-      pb.collection('users').getList(filter: '$customerFilter && approved = true', perPage: 1),
-      pb.collection('debts').getList(filter: debtFilter, perPage: 500),
-      pb.collection('payments').getList(filter: paymentFilter, perPage: 500),
-      pb.collection('users').getList(filter: pendingFilter, perPage: 1),
-      pb.collection('debts').getList(
-        filter: debtFilter,
-        sort: '-created',
-        perPage: 5,
-        expand: 'customer,created_by',
-      ),
-    ]);
-
-    final customers = results[0];
-    final debts = results[1];
-    final payments = results[2];
-    final pending = results[3];
-    final recent = results[4];
-
-    double totalDebt = 0;
-    double totalRemaining = 0;
-    int pendingCount = 0;
-    for (final debt in debts.items) {
-      totalDebt += debt.getDoubleValue('amount');
-      totalRemaining += debt.getDoubleValue('remaining');
-      if (debt.getStringValue('status') != 'paid') pendingCount++;
+    await ensureInitialized();
+    final raw = await client.rpc('get_admin_dashboard_snapshot');
+    if (raw is! Map) throw const FormatException('invalid dashboard snapshot');
+    final data = Map<String, dynamic>.from(raw);
+    final recent = <RecordModel>[];
+    if (data['recent_activity'] is List) {
+      for (final item in data['recent_activity'] as List) {
+        if (item is Map) {
+          recent.add(_dashboardDebtRecord(Map<String, dynamic>.from(item)));
+        }
+      }
     }
-    double totalPayments = 0;
-    for (final payment in payments.items) {
-      totalPayments += payment.getDoubleValue('amount');
-    }
+
+    double number(dynamic value) =>
+        value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+    int integer(dynamic value) =>
+        value is num ? value.toInt() : int.tryParse('$value') ?? 0;
 
     return {
-      'totalCustomers': customers.totalItems,
-      'totalDebt': totalDebt,
-      'totalRemaining': totalRemaining,
-      'totalPayments': totalPayments,
-      'pendingDebts': pendingCount,
-      'pendingRequests': pending.totalItems,
-      'recentActivity': recent.items,
+      'totalCustomers': integer(data['total_customers']),
+      'totalDebt': number(data['total_debt']),
+      'totalRemaining': number(data['total_remaining']),
+      'totalPayments': number(data['total_payments']),
+      'pendingDebts': integer(data['pending_debts']),
+      'pendingRequests': integer(data['pending_requests']),
+      'recentActivity': recent,
     };
   }
 
