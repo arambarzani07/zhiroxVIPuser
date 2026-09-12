@@ -64,6 +64,228 @@ begin
 end;
 $$;
 
+-- Remove remaining advisor findings without broadening any tenant boundary.
+create index if not exists app_update_settings_updated_by_idx
+  on public.app_update_settings(updated_by);
+create index if not exists employee_permissions_updated_by_idx
+  on public.employee_permissions(updated_by);
+create index if not exists receipt_documents_created_by_idx
+  on public.receipt_documents(created_by);
+create index if not exists tenant_backups_created_by_idx
+  on public.tenant_backups(created_by);
+
+-- One SELECT policy avoids evaluating two permissive policies for each row;
+-- write policies remain admin-only and keep USING/WITH CHECK separate.
+drop policy if exists employee_permissions_admin_manage on public.employee_permissions;
+drop policy if exists employee_permissions_employee_read on public.employee_permissions;
+drop policy if exists employee_permissions_select_authorized on public.employee_permissions;
+create policy employee_permissions_select_authorized
+  on public.employee_permissions for select to authenticated
+  using (
+    (
+      (select private."current_role"()) = 'admin'
+      and admin_id = (select private.current_admin_id())
+    )
+    or (
+      employee_id = (select auth.uid())
+      and admin_id = (select private.current_admin_id())
+    )
+  );
+
+drop policy if exists employee_permissions_insert_admin on public.employee_permissions;
+create policy employee_permissions_insert_admin
+  on public.employee_permissions for insert to authenticated
+  with check (
+    (select private."current_role"()) = 'admin'
+    and admin_id = (select private.current_admin_id())
+    and updated_by = (select auth.uid())
+    and exists (
+      select 1 from public.profiles p
+      where p.id = employee_id
+        and p.role = 'employee'
+        and p.admin_id = (select private.current_admin_id())
+    )
+  );
+
+drop policy if exists employee_permissions_update_admin on public.employee_permissions;
+create policy employee_permissions_update_admin
+  on public.employee_permissions for update to authenticated
+  using (
+    (select private."current_role"()) = 'admin'
+    and admin_id = (select private.current_admin_id())
+  )
+  with check (
+    (select private."current_role"()) = 'admin'
+    and admin_id = (select private.current_admin_id())
+    and updated_by = (select auth.uid())
+    and exists (
+      select 1 from public.profiles p
+      where p.id = employee_id
+        and p.role = 'employee'
+        and p.admin_id = (select private.current_admin_id())
+    )
+  );
+
+drop policy if exists employee_permissions_delete_admin on public.employee_permissions;
+create policy employee_permissions_delete_admin
+  on public.employee_permissions for delete to authenticated
+  using (
+    (select private."current_role"()) = 'admin'
+    and admin_id = (select private.current_admin_id())
+  );
+
+drop policy if exists market_receipt_settings_insert_admin on public.market_receipt_settings;
+create policy market_receipt_settings_insert_admin
+  on public.market_receipt_settings for insert to authenticated
+  with check (
+    (select private."current_role"()) = 'admin'
+    and admin_id = (select auth.uid())
+    and admin_id = (select private.current_admin_id())
+  );
+drop policy if exists market_receipt_settings_update_admin on public.market_receipt_settings;
+create policy market_receipt_settings_update_admin
+  on public.market_receipt_settings for update to authenticated
+  using (
+    (select private."current_role"()) = 'admin'
+    and admin_id = (select auth.uid())
+    and admin_id = (select private.current_admin_id())
+  )
+  with check (
+    (select private."current_role"()) = 'admin'
+    and admin_id = (select auth.uid())
+    and admin_id = (select private.current_admin_id())
+  );
+drop policy if exists market_receipt_settings_delete_admin on public.market_receipt_settings;
+create policy market_receipt_settings_delete_admin
+  on public.market_receipt_settings for delete to authenticated
+  using (
+    (select private."current_role"()) = 'admin'
+    and admin_id = (select auth.uid())
+    and admin_id = (select private.current_admin_id())
+  );
+
+drop policy if exists receipt_documents_insert_staff on public.receipt_documents;
+create policy receipt_documents_insert_staff
+  on public.receipt_documents for insert to authenticated
+  with check (
+    admin_id = (select private.current_admin_id())
+    and (select private."current_role"()) in ('admin', 'employee')
+    and created_by = (select auth.uid())
+  );
+
+-- Privileged implementations live outside the Data API. Public entrypoints are
+-- SECURITY INVOKER wrappers, while the private implementations re-check role
+-- and derive tenant/actor exclusively from the authenticated session.
+create or replace function private.create_tenant_backup_impl(
+  p_label text,
+  p_type text
+)
+returns uuid
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  tenant_id uuid;
+  backup_id uuid;
+  snapshot jsonb;
+  counts jsonb;
+begin
+  if private."current_role"() <> 'admin' then
+    raise exception 'admin_required' using errcode = '42501';
+  end if;
+  if p_type not in ('manual','automatic','before_restore') then
+    raise exception 'invalid_backup_type' using errcode = '22023';
+  end if;
+  tenant_id := private.current_admin_id();
+  snapshot := jsonb_build_object(
+    'version', 1,
+    'created_at', now(),
+    'profiles', coalesce((select jsonb_agg(to_jsonb(p) - 'password_hash')
+      from public.profiles p where p.id = tenant_id or p.admin_id = tenant_id), '[]'::jsonb),
+    'debts', coalesce((select jsonb_agg(to_jsonb(d)) from public.debts d
+      where private.profile_tenant_id(d.customer_id) = tenant_id), '[]'::jsonb),
+    'payments', coalesce((select jsonb_agg(to_jsonb(pay)) from public.payments pay
+      where private.debt_tenant_id(pay.debt_id) = tenant_id), '[]'::jsonb),
+    'employee_permissions', coalesce((select jsonb_agg(to_jsonb(ep))
+      from public.employee_permissions ep where ep.admin_id = tenant_id), '[]'::jsonb)
+  );
+  counts := jsonb_build_object(
+    'profiles', jsonb_array_length(snapshot->'profiles'),
+    'debts', jsonb_array_length(snapshot->'debts'),
+    'payments', jsonb_array_length(snapshot->'payments'),
+    'employee_permissions', jsonb_array_length(snapshot->'employee_permissions')
+  );
+  insert into public.tenant_backups(
+    admin_id, created_by, label, backup_type, payload, record_counts, expires_at
+  ) values (
+    tenant_id, auth.uid(), left(coalesce(nullif(trim(p_label),''),'Backup'),120),
+    p_type, snapshot, counts,
+    case when p_type = 'automatic' then now() + interval '90 days' else null end
+  ) returning id into backup_id;
+  insert into public.audit_logs(
+    admin_id, actor_id, action, entity_type, entity_id, after_data
+  ) values (tenant_id, auth.uid(), 'backup', 'tenant_backups', backup_id::text, counts);
+  return backup_id;
+end;
+$$;
+revoke all on function private.create_tenant_backup_impl(text,text)
+  from public, anon;
+grant execute on function private.create_tenant_backup_impl(text,text)
+  to authenticated;
+
+create or replace function public.create_tenant_backup(
+  p_label text default 'Manual backup',
+  p_type text default 'manual'
+)
+returns uuid
+language sql
+volatile
+security invoker
+set search_path = ''
+as $$
+  select private.create_tenant_backup_impl(p_label, p_type)
+$$;
+revoke all on function public.create_tenant_backup(text,text) from public, anon;
+grant execute on function public.create_tenant_backup(text,text) to authenticated;
+
+create or replace function private.get_tenant_export_impl()
+returns jsonb
+language plpgsql stable security definer
+set search_path = ''
+as $$
+declare tenant_id uuid;
+begin
+  if private."current_role"() <> 'admin'
+     and not private.employee_has_permission('export_data') then
+    raise exception 'export_permission_required' using errcode = '42501';
+  end if;
+  tenant_id := private.current_admin_id();
+  return jsonb_build_object(
+    'exported_at', now(),
+    'profiles', coalesce((select jsonb_agg(to_jsonb(p) - 'password_hash')
+      from public.profiles p where p.id = tenant_id or p.admin_id = tenant_id), '[]'::jsonb),
+    'debts', coalesce((select jsonb_agg(to_jsonb(d)) from public.debts d
+      where private.profile_tenant_id(d.customer_id) = tenant_id), '[]'::jsonb),
+    'payments', coalesce((select jsonb_agg(to_jsonb(pay)) from public.payments pay
+      where private.debt_tenant_id(pay.debt_id) = tenant_id), '[]'::jsonb)
+  );
+end;
+$$;
+revoke all on function private.get_tenant_export_impl() from public, anon;
+grant execute on function private.get_tenant_export_impl() to authenticated;
+
+create or replace function public.get_tenant_export()
+returns jsonb
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select private.get_tenant_export_impl()
+$$;
+revoke all on function public.get_tenant_export() from public, anon;
+grant execute on function public.get_tenant_export() to authenticated;
+
 drop trigger if exists employee_permissions_sync_profile
   on public.employee_permissions;
 create trigger employee_permissions_sync_profile
@@ -79,15 +301,15 @@ create policy debts_select_authorized
   using (
     is_deleted = false
     and (
-      (customer_id = auth.uid() and private."current_role"() = 'customer')
+      (customer_id = (select auth.uid()) and (select private."current_role"()) = 'customer')
       or (
-        private."current_role"() = 'admin'
-        and private.profile_tenant_id(customer_id) = private.current_admin_id()
+        (select private."current_role"()) = 'admin'
+        and private.profile_tenant_id(customer_id) = (select private.current_admin_id())
       )
       or (
-        private."current_role"() = 'employee'
-        and private.employee_has_permission('view_debts')
-        and private.profile_tenant_id(customer_id) = private.current_admin_id()
+        (select private."current_role"()) = 'employee'
+        and (select private.employee_has_permission('view_debts'))
+        and private.profile_tenant_id(customer_id) = (select private.current_admin_id())
       )
     )
   );
@@ -97,14 +319,14 @@ create policy debts_insert_staff
   on public.debts for insert to authenticated
   with check (
     (
-      private."current_role"() = 'admin'
+      (select private."current_role"()) = 'admin'
       or (
-        private."current_role"() = 'employee'
-        and private.employee_has_permission('add_debts')
+        (select private."current_role"()) = 'employee'
+        and (select private.employee_has_permission('add_debts'))
       )
     )
-    and private.profile_tenant_id(customer_id) = private.current_admin_id()
-    and created_by = auth.uid()
+    and private.profile_tenant_id(customer_id) = (select private.current_admin_id())
+    and created_by = (select auth.uid())
     and is_deleted = false
     and deleted_at is null
     and deleted_by is null
@@ -115,24 +337,24 @@ create policy debts_update_staff
   on public.debts for update to authenticated
   using (
     (
-      private."current_role"() = 'admin'
+      (select private."current_role"()) = 'admin'
       or (
-        private."current_role"() = 'employee'
-        and private.employee_has_permission('edit_debts')
+        (select private."current_role"()) = 'employee'
+        and (select private.employee_has_permission('edit_debts'))
       )
     )
-    and private.profile_tenant_id(customer_id) = private.current_admin_id()
+    and private.profile_tenant_id(customer_id) = (select private.current_admin_id())
     and is_deleted = false
   )
   with check (
     (
-      private."current_role"() = 'admin'
+      (select private."current_role"()) = 'admin'
       or (
-        private."current_role"() = 'employee'
-        and private.employee_has_permission('edit_debts')
+        (select private."current_role"()) = 'employee'
+        and (select private.employee_has_permission('edit_debts'))
       )
     )
-    and private.profile_tenant_id(customer_id) = private.current_admin_id()
+    and private.profile_tenant_id(customer_id) = (select private.current_admin_id())
     and is_deleted = false
     and deleted_at is null
     and deleted_by is null
@@ -148,20 +370,20 @@ create policy payments_select_authorized
     )
     and (
       (
-        private.debt_customer_id(debt_id) = auth.uid()
-        and private."current_role"() = 'customer'
+        private.debt_customer_id(debt_id) = (select auth.uid())
+        and (select private."current_role"()) = 'customer'
       )
       or (
-        private."current_role"() = 'admin'
-        and private.debt_tenant_id(debt_id) = private.current_admin_id()
+        (select private."current_role"()) = 'admin'
+        and private.debt_tenant_id(debt_id) = (select private.current_admin_id())
       )
       or (
-        private."current_role"() = 'employee'
+        (select private."current_role"()) = 'employee'
         and (
-          private.employee_has_permission('view_debts')
-          or private.employee_has_permission('view_financial_reports')
+          (select private.employee_has_permission('view_debts'))
+          or (select private.employee_has_permission('view_financial_reports'))
         )
-        and private.debt_tenant_id(debt_id) = private.current_admin_id()
+        and private.debt_tenant_id(debt_id) = (select private.current_admin_id())
       )
     )
   );
@@ -171,14 +393,14 @@ create policy payments_insert_staff
   on public.payments for insert to authenticated
   with check (
     (
-      private."current_role"() = 'admin'
+      (select private."current_role"()) = 'admin'
       or (
-        private."current_role"() = 'employee'
-        and private.employee_has_permission('record_payments')
+        (select private."current_role"()) = 'employee'
+        and (select private.employee_has_permission('record_payments'))
       )
     )
-    and private.debt_tenant_id(debt_id) = private.current_admin_id()
-    and created_by = auth.uid()
+    and private.debt_tenant_id(debt_id) = (select private.current_admin_id())
+    and created_by = (select auth.uid())
     and exists (
       select 1 from public.debts d
       where d.id = debt_id and d.is_deleted = false
@@ -288,14 +510,14 @@ begin
       create policy financial_events_permission_read
       on public.financial_events for select to authenticated
       using (
-        private."current_role"() = 'admin'
+        (select private."current_role"()) = 'admin'
         or (
-          private."current_role"() = 'employee'
-          and private.employee_has_permission('view_financial_reports')
+          (select private."current_role"()) = 'employee'
+          and (select private.employee_has_permission('view_financial_reports'))
         )
         or (
-          private."current_role"() = 'customer'
-          and customer_id = auth.uid()
+          (select private."current_role"()) = 'customer'
+          and customer_id = (select auth.uid())
         )
       )
     $policy$;
