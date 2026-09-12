@@ -588,14 +588,18 @@ else:
 
 if edition == 'owner-source':
     for required in (
-        "package:zhirox/screens/auth/admin_management_screen.dart",
+        "package:zhirox/screens/auth/owner_dashboard.dart",
         "getBoolValue('is_system_owner')",
-        'return const AdminManagementScreen()',
+        'return const OwnerDashboard()',
     ):
         if required not in main:
             fail(f'lib/main.dart: Owner System Owner routing marker missing: {required}')
     if 'RegisterAdminScreen' in login_source or 'register_admin_screen.dart' in login_source:
         fail('lib/screens/auth/login_screen.dart: Owner logged-out login must not open RegisterAdminScreen directly')
+    owner_dashboard = (LIB / 'screens/auth/owner_dashboard.dart').read_text(encoding='utf-8')
+    for required in ("package:zhirox/screens/auth/admin_management_screen.dart", 'const AdminManagementScreen()'):
+        if required not in owner_dashboard:
+            fail(f'lib/screens/auth/owner_dashboard.dart: protected management marker missing: {required}')
     owner_management = (LIB / 'screens/auth/admin_management_screen.dart').read_text(encoding='utf-8')
     for required in (
         '_showCreateAdminDialog',
