@@ -5,7 +5,6 @@ import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
-import 'package:zhirox/screens/admin/pending_requests_screen.dart';
 import 'package:zhirox/screens/admin/admin_settings_screen.dart';
 import 'package:zhirox/screens/admin/subscription_payment_screen.dart';
 import 'package:zhirox/screens/admin/governance_center_screen.dart';
@@ -115,7 +114,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         adminId: auth.userId,
       ),
       AdminSettingsScreen(
-        key: ValueKey('settings_' + auth.userId),
+        key: ValueKey('settings_${auth.userId}'),
         pendingCount: pendingNavCount,
       ),
     ];
