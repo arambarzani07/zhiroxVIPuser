@@ -25,7 +25,6 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
   final _footerController = TextEditingController();
   final _colorController = TextEditingController();
   final _prefixController = TextEditingController();
-  final _vatController = TextEditingController();
   final _discountController = TextEditingController();
   final _customFieldsController = TextEditingController();
 
@@ -68,7 +67,6 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
     _footerController.dispose();
     _colorController.dispose();
     _prefixController.dispose();
-    _vatController.dispose();
     _discountController.dispose();
     _customFieldsController.dispose();
     super.dispose();
@@ -105,7 +103,6 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
         _footerController.text = settings.footerNote;
         _colorController.text = settings.primaryColor;
         _prefixController.text = settings.receiptPrefix;
-        _vatController.text = settings.vatPercent.toStringAsFixed(2);
         _discountController.text = settings.discountPercent.toStringAsFixed(2);
         _customFieldsController.text = settings.customFields
             .map((field) => '${field['label'] ?? ''}=${field['value'] ?? ''}')
@@ -184,7 +181,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       showQr: _showQr,
       showBarcode: _showBarcode,
       receiptPrefix: _prefixController.text.trim().toUpperCase(),
-      vatPercent: double.tryParse(_vatController.text.trim()) ?? 0,
+      vatPercent: 0,
       discountPercent: double.tryParse(_discountController.text.trim()) ?? 0,
       defaultPaymentMethod: _defaultPaymentMethod,
       customFields: _parseCustomFields(),
@@ -511,7 +508,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           controller: _registrationController,
                           textDirection: TextDirection.ltr,
                           decoration: _decoration(
-                            'ژمارەی تۆمار / باج',
+                            'ژمارەی تۆمار',
                             Icons.badge_outlined,
                           ),
                         ),
@@ -694,21 +691,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           contentPadding: EdgeInsets.zero,
                         ),
                       ]),
-                      _section('باج، داشکاندن و پارەدان', Icons.calculate_outlined, [
-                        TextFormField(
-                          controller: _vatController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          textDirection: TextDirection.ltr,
-                          decoration: _decoration('VAT %', Icons.percent),
-                          validator: (value) {
-                            final number = double.tryParse(value?.trim() ?? '');
-                            if (number == null || number < 0 || number > 100) {
-                              return 'لە 0 تا 100';
-                            }
-                            return null;
-                          },
-                        ),
-                        _gap(),
+                      _section('داشکاندن و پارەدان', Icons.calculate_outlined, [
                         TextFormField(
                           controller: _discountController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -760,7 +743,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           decoration: _decoration(
                             'Custom Fields',
                             Icons.dynamic_form_outlined,
-                            hint: 'لق=دۆرێ\nژمارەی باج=12345',
+                            hint: 'لق=دۆرێ\nکۆدی فرۆشگا=12345',
                           ).copyWith(
                             helperText: 'هەر دێڕێک: ناوی خانە=بەها  •  تا ١٢ خانە',
                           ),
