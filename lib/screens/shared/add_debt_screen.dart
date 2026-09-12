@@ -8,6 +8,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/notification_service.dart';
+import 'package:zhirox/services/receipt_settings_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/utils/image_utils.dart';
@@ -36,6 +37,9 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   final _formKey = GlobalKey<FormState>();
   final _descriptionController = TextEditingController();
   final _dollarRateController = TextEditingController();
+  double _discountPercent = 0;
+  bool _loadingPricingPolicy = true;
+  String? _pricingPolicyError;
   DateTime? _dueDate;
   bool _hasDueDate = false;
   bool _hasCustomDebtDate = false;
@@ -63,6 +67,11 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       _dollarRateController.text = widget.debt!
           .getDoubleValue('dollar_rate')
           .toString();
+      _discountPercent = widget.debt!
+          .getDoubleValue('discount_percent')
+          .clamp(0.0, 100.0)
+          .toDouble();
+      _loadingPricingPolicy = false;
       final dueDateStr = widget.debt!.getStringValue('due_date');
       if (dueDateStr.isNotEmpty) {
         _dueDate = DateTime.tryParse(dueDateStr);
@@ -78,6 +87,9 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       }
     } else {
       _selectedCustomerId = widget.customerId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadPricingPolicy();
+      });
     }
     _loadCustomers();
   }
@@ -117,6 +129,37 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         _loadingCustomers = false;
         _customerLoadError =
             'نەتوانرا لیستی کڕیاران لە سێرڤەر وەربگیرێت. ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.';
+      });
+    }
+  }
+
+  Future<void> _loadPricingPolicy() async {
+    if (widget.debt != null) return;
+    final auth = context.read<AuthProvider>();
+    if (mounted) {
+      setState(() {
+        _loadingPricingPolicy = true;
+        _pricingPolicyError = null;
+      });
+    }
+    try {
+      final settings = await ReceiptSettingsService.load(
+        adminId: auth.adminId,
+        fallbackMarketName: auth.marketName,
+        fallbackPhone: auth.user?.getStringValue('phone') ?? '',
+      );
+      if (!mounted) return;
+      setState(() {
+        _discountPercent = settings.discountPercent.clamp(0.0, 100.0).toDouble();
+        _loadingPricingPolicy = false;
+        _pricingPolicyError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingPricingPolicy = false;
+        _pricingPolicyError =
+            'نەتوانرا ڕێکخستنی داشکاندنی مارکێت پشتڕاست بکرێتەوە.';
       });
     }
   }
@@ -644,6 +687,18 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   }
 
   Future<void> _save() async {
+    if (widget.debt == null && _loadingPricingPolicy) {
+      AppHelpers.showSnackBar(
+        context,
+        'چاوەڕێ بکە تا ڕێکخستنی داشکاندن پشتڕاست دەکرێتەوە.',
+        isError: true,
+      );
+      return;
+    }
+    if (widget.debt == null && _pricingPolicyError != null) {
+      AppHelpers.showSnackBar(context, _pricingPolicyError!, isError: true);
+      return;
+    }
     if (_loadingCustomers || _customerLoadError != null) {
       AppHelpers.showSnackBar(
         context,
@@ -669,18 +724,35 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       final dollarRate =
           double.tryParse(_dollarRateController.text.trim()) ?? 0;
 
-      // Calculate total in IQD by converting each item individually
-      double totalNewDebt = 0;
-      double totalUsdAmount = 0;
+      // Calculate the undiscounted subtotal in IQD, then apply the
+      // market receipt discount once. The discounted result is the financial
+      // debt amount used by limits, payments, reports, and receipts.
+      double subtotalNewDebt = 0;
+      double subtotalUsdAmount = 0;
       for (var item in _items) {
         final itemCurrency = item['currency'] as String? ?? _currency;
         final itemTotal = (item['price'] as double) * (item['qty'] as int);
         if (itemCurrency == 'USD') {
-          totalUsdAmount += itemTotal;
-          totalNewDebt += dollarRate > 0 ? itemTotal * dollarRate : itemTotal;
+          subtotalUsdAmount += itemTotal;
+          subtotalNewDebt += dollarRate > 0 ? itemTotal * dollarRate : itemTotal;
         } else {
-          totalNewDebt += itemTotal;
+          subtotalNewDebt += itemTotal;
         }
+      }
+      final discountPercent = _discountPercent.clamp(0.0, 100.0).toDouble();
+      final discountAmount =
+          ((subtotalNewDebt * discountPercent / 100) * 100).roundToDouble() / 100;
+      final totalNewDebt = subtotalNewDebt - discountAmount;
+      final totalUsdAmount = subtotalUsdAmount * (1 - discountPercent / 100);
+      if (totalNewDebt <= 0) {
+        if (!mounted) return;
+        AppHelpers.showSnackBar(
+          context,
+          'داشکاندن ناتوانێت کۆی کۆتایی قەرز بکاتە سفر.',
+          isError: true,
+        );
+        setState(() => _isLoading = false);
+        return;
       }
 
       // Check Debt Limit. This is fail-closed: if the selected customer or
@@ -723,7 +795,27 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         }
         if (!mounted) return;
 
-        if (currentBalance + totalNewDebt > debtLimit) {
+        final oldRemainingForProjection =
+            widget.debt?.getDoubleValue('remaining') ?? 0;
+        final oldAmountForProjection =
+            widget.debt?.getDoubleValue('amount') ?? 0;
+        final alreadyPaidForProjection = widget.debt == null
+            ? 0.0
+            : (oldAmountForProjection - oldRemainingForProjection)
+                .clamp(0.0, double.infinity)
+                .toDouble();
+        final newRemainingForProjection = widget.debt == null
+            ? totalNewDebt
+            : (totalNewDebt - alreadyPaidForProjection)
+                .clamp(0.0, double.infinity)
+                .toDouble();
+        final sameCustomer = widget.debt != null &&
+            widget.debt!.getStringValue('customer') == _selectedCustomerId;
+        final projectedBalance = currentBalance +
+            newRemainingForProjection -
+            (sameCustomer ? oldRemainingForProjection : 0);
+
+        if (projectedBalance > debtLimit) {
           final canOverride = auth.canSetDebtLimit;
 
           if (canOverride) {
@@ -734,7 +826,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                 content: Text(
                   'بەکارهێنەر سنووری قەرزی تێپەڕاندووە.\n'
                   'سنور: ${AppHelpers.formatCurrency(debtLimit)}\n'
-                  'کۆی گشتی: ${AppHelpers.formatCurrency(currentBalance + totalNewDebt)}\n\n'
+                  'کۆی گشتی: ${AppHelpers.formatCurrency(projectedBalance)}\n\n'
                   'ئایا دەتەوێت بەردەوام بیت؟',
                 ),
                 actions: [
@@ -760,7 +852,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               context,
               'ناتوانیت ئەم قەرزە زیاد بکەیت! بەکارهێنەر سنووری قەرزی تێپەڕاندووە.\n'
               'سنور: ${AppHelpers.formatCurrency(debtLimit)}\n'
-              'کۆی گشتی دوای زیادکردن: ${AppHelpers.formatCurrency(currentBalance + totalNewDebt)}',
+              'کۆی گشتی دوای زیادکردن: ${AppHelpers.formatCurrency(projectedBalance)}',
               isError: true,
             );
             setState(() => _isLoading = false);
@@ -773,14 +865,27 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         // Update Logic
         final oldAmount = widget.debt!.getDoubleValue('amount');
         final oldRemaining = widget.debt!.getDoubleValue('remaining');
-        final paid = oldAmount - oldRemaining;
-        final newRemaining = totalNewDebt - paid;
-
-        // Validation: New debt cannot be less than what is already paid?
-        // Actually it can be, leading to negative remaining (credit).
-        // But for safety, let's warn or ensure logic handles it.
-        // PocketBase doesn't prevent negative values unless constrained.
-        // We'll proceed.
+        final paid = (oldAmount - oldRemaining)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+        if (totalNewDebt + 0.009 < paid) {
+          if (!mounted) return;
+          AppHelpers.showSnackBar(
+            context,
+            'کۆی کۆتایی دوای داشکاندن نابێت کەمتر بێت لە پارەی پێشتر وەرگیراو.',
+            isError: true,
+          );
+          setState(() => _isLoading = false);
+          return;
+        }
+        final newRemaining = (totalNewDebt - paid)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+        final newStatus = newRemaining <= 0
+            ? 'paid'
+            : paid > 0
+                ? 'partial'
+                : 'pending';
 
         // Check if due_date changed → notify customer
         final oldDueDate = widget.debt!.getStringValue('due_date');
@@ -791,8 +896,12 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         await PBService.updateDebt(widget.debt!.id, {
           'customer': _selectedCustomerId,
           'description': _descriptionController.text.trim(),
+          'subtotal': subtotalNewDebt,
+          'discount_percent': discountPercent,
+          'discount_amount': discountAmount,
           'amount': totalNewDebt,
           'remaining': newRemaining,
+          'status': newStatus,
           'due_date': newDueDate,
           'currency': 'IQD',
           'dollar_rate': dollarRate,
@@ -835,6 +944,8 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
           customerId: _selectedCustomerId!,
           description: _descriptionController.text.trim(),
           amount: totalNewDebt,
+          subtotal: subtotalNewDebt,
+          discountPercent: discountPercent,
           dueDate: _dueDate != null
               ? DateFormat('yyyy-MM-dd').format(_dueDate!)
               : '',
@@ -1621,6 +1732,60 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
           ),
           const SizedBox(height: 16),
 
+          if (widget.debt == null && _loadingPricingPolicy)
+            const LinearProgressIndicator(minHeight: 2),
+          if (widget.debt == null && _pricingPolicyError != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.22)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.sync_problem_rounded, color: Colors.orange, size: 19),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _pricingPolicyError!,
+                      style: const TextStyle(fontSize: 11.5),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'دووبارە هەوڵ بدە',
+                    onPressed: _loadPricingPolicy,
+                    icon: const Icon(Icons.refresh_rounded, size: 19),
+                  ),
+                ],
+              ),
+            ),
+          if (!_loadingPricingPolicy &&
+              _pricingPolicyError == null &&
+              _discountPercent > 0)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.18)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.discount_outlined, color: Colors.green, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'داشکاندنی مارکێت: ${_discountPercent.toStringAsFixed(2)}% • خۆکارانە لە کۆی کۆتایی کەم دەکرێتەوە',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           if (_items.isEmpty)
             Container(
               padding: const EdgeInsets.symmetric(vertical: 18),
@@ -2390,6 +2555,13 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         if (dollarRate > 0) totalUSD += itemTotal / dollarRate;
       }
     }
+    final discountIQD =
+        ((totalIQD * _discountPercent / 100) * 100).roundToDouble() / 100;
+    final grandTotalIQD =
+        (totalIQD - discountIQD).clamp(0.0, double.infinity).toDouble();
+    final discountUSD = totalUSD * _discountPercent / 100;
+    final grandTotalUSD =
+        (totalUSD - discountUSD).clamp(0.0, double.infinity).toDouble();
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
@@ -2411,7 +2583,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'کۆی گشتی',
+                  'کۆی کۆتایی',
                   style: TextStyle(
                     fontSize: 10.5,
                     color: isDark
@@ -2421,7 +2593,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  AppHelpers.formatCurrencyWithType(totalIQD, 'IQD'),
+                  AppHelpers.formatCurrencyWithType(grandTotalIQD, 'IQD'),
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
@@ -2431,9 +2603,19 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                   ),
                   textDirection: TextDirection.ltr,
                 ),
-                if (totalUSD > 0)
+                if (_discountPercent > 0 && totalIQD > 0)
                   Text(
-                    AppHelpers.formatCurrencyWithType(totalUSD, 'USD'),
+                    'پێش داشکاندن: ${AppHelpers.formatCurrencyWithType(totalIQD, 'IQD')} • -${AppHelpers.formatCurrencyWithType(discountIQD, 'IQD')}',
+                    style: const TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange,
+                    ),
+                    textDirection: TextDirection.ltr,
+                  ),
+                if (grandTotalUSD > 0)
+                  Text(
+                    AppHelpers.formatCurrencyWithType(grandTotalUSD, 'USD'),
                     style: const TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w600,
