@@ -1,6 +1,7 @@
+// ignore_for_file: prefer_interpolation_to_compose_strings, unnecessary_underscores
+
 import 'dart:convert';
 import 'dart:io';
-import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
