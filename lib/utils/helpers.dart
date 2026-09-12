@@ -199,6 +199,12 @@ class AppHelpers {
       return 'دانیشتنەکەت بەسەرچووە. تکایە دووبارە بچۆ ژوورەوە.';
     }
 
+    if (text.contains('42501') ||
+        text.contains('database error') ||
+        text.contains('postgres')) {
+      return 'کێشەیەک لە سێرڤەر ڕوویدا. دووبارە هەوڵ بدە.';
+    }
+
     if (text.contains('403') ||
         text.contains('permission') ||
         text.contains('row-level security') ||
