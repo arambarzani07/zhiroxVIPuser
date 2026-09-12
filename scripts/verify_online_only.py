@@ -491,23 +491,42 @@ if 'if (online && mounted) _loadUsers();' in customer_list_source:
 if "_loadUsers(search: _searchController.text.trim());" not in customer_list_source:
     fail('lib/screens/shared/user_list_screen.dart: reconnect/search-preserving reload marker missing')
 
-# User mobile client must not expose System Owner admin-management APIs.
-for forbidden in (
-    'static Future<RecordModel> registerAdmin(',
-    'static Future<Map<String, dynamic>> getAdminsPage(',
-    'static Future<void> renewAdminSubscription(',
-    'static Future<void> deleteAdminWithData(',
+# System Owner admin management must use the set-based, owner-checked Edge gateway.
+for marker in (
+    "'account-admin'",
+    "'action': 'list_admins'",
+    "'action': 'renew_subscription'",
+    "'employeeCount': asInt(row['employee_count'])",
+    "'customerCount': asInt(row['customer_count'])",
 ):
-    if forbidden in pb:
-        fail(f'lib/services/pb_service.dart: User source must not expose owner API: {forbidden}')
-
-# Shared backend migrations remain tracked and security-hardened even though
-# the User mobile client does not call these owner-only RPCs.
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: System Owner admin-management marker missing: {marker}')
+admin_section = pb.split('// ==================== Admin Subscription Management ====================', 1)[-1]
+admin_section = admin_section.split('// ==================== Admin Approval ====================', 1)[0]
+if 'for (final admin in result.items)' in admin_section:
+    fail('lib/services/pb_service.dart: Admin management must not restore per-admin N+1 queries')
+if 'admin_id = "$adminId" && role = "employee"' in admin_section or 'admin_id = "$adminId" && role = "customer"' in admin_section:
+    fail('lib/services/pb_service.dart: Admin management counts must stay set-based')
+account_admin_edge = ROOT / 'supabase/functions/account-admin/index.ts'
+if not account_admin_edge.exists():
+    fail('supabase/functions/account-admin/index.ts: System Owner admin-management gateway must be tracked')
+else:
+    account_admin_management_source = account_admin_edge.read_text(encoding='utf-8')
+    for marker in (
+        'action === "list_admins"',
+        'action === "renew_subscription"',
+        'requesterProfile.is_system_owner !== true',
+        '.eq("is_system_owner", false)',
+        'employee_count',
+        'customer_count',
+    ):
+        if marker not in account_admin_management_source:
+            fail(f'supabase/functions/account-admin/index.ts: System Owner admin-management marker missing: {marker}')
 admin_rpc_migration = ROOT / 'supabase/migrations/20260911102326_system_owner_admin_management_rpcs.sql'
 if not admin_rpc_migration.exists():
     fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner admin-management migration must be tracked')
 else:
-    admin_rpc_source = admin_rpc_migration.read_text(encoding='utf-8').lower()
+    admin_rpc_source = admin_rpc_migration.read_text(encoding='utf-8')
     for marker in (
         'security definer',
         'p.is_system_owner = true',
@@ -517,10 +536,16 @@ else:
         'revoke all on function public.get_system_owner_admins_page(integer, integer) from public, anon;',
         'revoke all on function public.renew_system_owner_admin_subscription(uuid, integer) from public, anon;',
     ):
-        if marker not in admin_rpc_source:
+        if marker not in admin_rpc_source.lower():
             fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner RPC security marker missing: {marker}')
 
-# Shared backend secure admin deletion must remain JWT-verified and Owner-scoped.
+# System Owner admin deletion must use its JWT-verified dedicated Edge Function.
+admin_section = pb.split('// ==================== Admin Subscription Management ====================', 1)[-1]
+admin_section = admin_section.split('// ==================== Admin Approval ====================', 1)[0]
+if "'delete-account'" not in admin_section:
+    fail('lib/services/pb_service.dart: System Owner admin deletion must use delete-account')
+if "'account-admin'" in admin_section and "'action': 'delete_user'" in admin_section:
+    fail('lib/services/pb_service.dart: System Owner admin deletion must not use the legacy account-admin delete path')
 secure_delete_edge = ROOT / 'supabase/functions/delete-account/index.ts'
 if not secure_delete_edge.exists():
     fail('supabase/functions/delete-account/index.ts: secure admin deletion Edge Function must be tracked')
@@ -563,14 +588,18 @@ else:
 
 if edition == 'owner-source':
     for required in (
-        "package:zhirox/screens/auth/admin_management_screen.dart",
+        "package:zhirox/screens/auth/owner_dashboard.dart",
         "getBoolValue('is_system_owner')",
-        'return const AdminManagementScreen()',
+        'return const OwnerDashboard()',
     ):
         if required not in main:
             fail(f'lib/main.dart: Owner System Owner routing marker missing: {required}')
     if 'RegisterAdminScreen' in login_source or 'register_admin_screen.dart' in login_source:
         fail('lib/screens/auth/login_screen.dart: Owner logged-out login must not open RegisterAdminScreen directly')
+    owner_dashboard = (LIB / 'screens/auth/owner_dashboard.dart').read_text(encoding='utf-8')
+    for required in ("package:zhirox/screens/auth/admin_management_screen.dart", 'const AdminManagementScreen()'):
+        if required not in owner_dashboard:
+            fail(f'lib/screens/auth/owner_dashboard.dart: protected management marker missing: {required}')
     owner_management = (LIB / 'screens/auth/admin_management_screen.dart').read_text(encoding='utf-8')
     for required in (
         '_showCreateAdminDialog',
@@ -588,32 +617,6 @@ elif edition == 'user-source':
     ):
         if required not in login_source:
             fail(f'lib/screens/auth/login_screen.dart: User owner-contact marker missing: {required}')
-
-# User-edition Owner isolation must remain enforced.
-for forbidden_path in (
-    ROOT / 'lib/screens/auth/admin_management_screen.dart',
-    ROOT / 'lib/screens/auth/register_admin_screen.dart',
-):
-    if forbidden_path.exists():
-        fail(f'{forbidden_path.relative_to(ROOT)}: owner-only screen must not ship in User source')
-if 'AdminManagementScreen' in main:
-    fail('lib/main.dart: User source must not reference AdminManagementScreen')
-for marker in (
-    "auth.user?.getBoolValue('is_system_owner') ?? false",
-    'ئەم هەژمارە بۆ ZHIROX Owner ـە',
-    'ئەپی User دەسەڵاتی خاوەن سیستەم نادات.',
-):
-    if marker not in main:
-        fail(f'lib/main.dart: User owner-isolation marker missing: {marker}')
-
-# User AuthProvider must not expose admin registration.
-auth_provider_source = (LIB / 'providers/auth_provider.dart').read_text(encoding='utf-8')
-for forbidden in (
-    'Future<void> registerAdmin(',
-    'PBService.registerAdmin(',
-):
-    if forbidden in auth_provider_source:
-        fail(f'lib/providers/auth_provider.dart: User source must not expose admin registration: {forbidden}')
 
 
 # Account Edge Function privilege boundaries.
@@ -646,6 +649,35 @@ if account_admin_edge.exists():
     if 'const { data: tenantUsers }' in account_admin_source:
         fail('supabase/functions/account-admin/index.ts: duplicate admin cascade deletion must stay removed')
 
+
+# Owner admin-management paging must serialize refresh and pagination.
+if edition == 'owner-source':
+    owner_management = (LIB / 'screens/auth/admin_management_screen.dart').read_text(encoding='utf-8')
+    if owner_management.count('_loadInFlight = true;') < 2:
+        fail('lib/screens/auth/admin_management_screen.dart: refresh/load-more requests must share one in-flight lock')
+    if '_loadInFlight = false;\n      if (mounted) setState(() => _isLoadingMore = false);' not in owner_management:
+        fail('lib/screens/auth/admin_management_screen.dart: load-more lock must always release in finally')
+    if owner_management.count("return 'ماوە دەبێت لە ١ تا ٣٦٥٠ ڕۆژ بێت';") < 2:
+        fail('lib/screens/auth/admin_management_screen.dart: subscription day validation must match backend bounds')
+    for marker in (
+        "_SubscriptionPlan('monthly',",
+        "_SubscriptionPlan('quarterly',",
+        "_SubscriptionPlan('semiannual',",
+        "_SubscriptionPlan('annual',",
+        "_SubscriptionPlan('custom',",
+        "labelText: 'پلانی بەشداری'",
+        'subscriptionPlan: selectedPlan',
+        '_subscriptionPlanLabel(subscriptionPlan)',
+        '١٠,٠٠٠ د.ع',
+        '٢٥,٠٠٠ د.ع',
+        '٤٥,٠٠٠ د.ع',
+        '٨٠,٠٠٠ د.ع',
+        'کڕیار بەخۆڕاییە',
+        'هەر کارمەندی زیادە ٢,٠٠٠ د.ع مانگانە',
+    ):
+        if marker not in owner_management:
+            fail(f'lib/screens/auth/admin_management_screen.dart: subscription-plan marker missing: {marker}')
+
 payment_screen = LIB / 'screens/admin/subscription_payment_screen.dart'
 fib_edge = ROOT / 'supabase/functions/fib-subscription-payment/index.ts'
 fib_migration = ROOT / 'supabase/migrations/20260911170000_add_fib_subscription_payments.sql'
@@ -657,6 +689,25 @@ if payment_screen.exists():
     for marker in ('پارەدان بە FIB', 'PBService.createFibSubscriptionPayment', 'PBService.checkFibSubscriptionPayment'):
         if marker not in source:
             fail(f'lib/screens/admin/subscription_payment_screen.dart: FIB marker missing: {marker}')
+
+# Employee-aware debts/payments RLS calls this private helper while the query
+# runs as `authenticated`. Revoking EXECUTE makes normal dashboard and customer
+# balance reads fail with SQLSTATE 42501.
+employee_rls_migration = (
+    ROOT / 'supabase/migrations/20260912130000_enforce_employee_permissions.sql'
+)
+if not employee_rls_migration.exists():
+    fail('employee permission RLS migration must be tracked')
+else:
+    employee_rls_source = employee_rls_migration.read_text(encoding='utf-8')
+    if not re.search(
+        r'grant\s+execute\s+on\s+function\s+'
+        r'private\.employee_has_permission\s*\(\s*text\s*\)\s+'
+        r'to\s+authenticated\s*;',
+        employee_rls_source,
+        re.I,
+    ):
+        fail('authenticated must be able to evaluate employee-aware RLS policies')
 
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
