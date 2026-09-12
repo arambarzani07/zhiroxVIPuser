@@ -167,7 +167,9 @@ class FinancialDocumentActions {
         await _runOfficialAction(context, debt, action);
       } catch (_) {
         if (action == 'print') {
+          if (!context.mounted) return;
           final identity = await _identity(context);
+          if (!context.mounted) return;
           await PdfService.generateInvoice(
             debt: debt,
             marketName: identity.marketName,

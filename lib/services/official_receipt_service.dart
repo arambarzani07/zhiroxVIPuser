@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:cross_file/cross_file.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -423,7 +421,8 @@ class OfficialReceiptService {
             marginAll: settings.marginMm * PdfPageFormat.mm,
           )
         : PdfPageFormat.a4;
-    final baseFontSize = (is58 ? 6.8 : is80 ? 8.2 : 10.0) * settings.fontScale;
+    final baseFontSize =
+        (is58 ? 6.8 : is80 ? 8.2 : 10.0) * settings.fontScale;
     final brand = _brandColor(settings.primaryColor);
     final template = settings.templateFor(documentType);
     final modern = template == 'modern';
@@ -601,7 +600,11 @@ class OfficialReceiptService {
           brandingHeader(),
           pw.SizedBox(height: isThermal ? 7 : 13),
           pw.Divider(color: modern ? brand : PdfColors.grey500),
-          infoLine(_label('receipt_no', language), data.receiptNumber, ltr: true),
+          infoLine(
+            _label('receipt_no', language),
+            data.receiptNumber,
+            ltr: true,
+          ),
           infoLine(_label('date', language), data.created),
           infoLine(
             _label('customer', language),
@@ -634,28 +637,35 @@ class OfficialReceiptService {
               data: itemRows,
               headerStyle: pw.TextStyle(
                 font: bold,
-                fontSize: isThermal ? baseFontSize * 0.82 : baseFontSize * 0.9,
+                fontSize:
+                    isThermal ? baseFontSize * 0.82 : baseFontSize * 0.9,
                 color: PdfColors.white,
               ),
-              headerDecoration: pw.BoxDecoration(color: modern ? brand : PdfColors.grey800),
+              headerDecoration:
+                  pw.BoxDecoration(color: modern ? brand : PdfColors.grey800),
               cellStyle: pw.TextStyle(
                 font: font,
-                fontSize: isThermal ? baseFontSize * 0.76 : baseFontSize * 0.86,
+                fontSize:
+                    isThermal ? baseFontSize * 0.76 : baseFontSize * 0.86,
               ),
               cellAlignment: pw.Alignment.center,
               headerAlignment: pw.Alignment.center,
-              border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+              border:
+                  pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
             )
           else
             pw.Container(
               width: double.infinity,
               padding: const pw.EdgeInsets.all(8),
               decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: modern ? brand : PdfColors.grey400),
+                border:
+                    pw.Border.all(color: modern ? brand : PdfColors.grey400),
                 borderRadius: pw.BorderRadius.circular(4),
               ),
               child: pw.Text(
-                _r(data.description.isEmpty ? 'قەرزی ڕاستەوخۆ' : data.description),
+                _r(data.description.isEmpty
+                    ? 'قەرزی ڕاستەوخۆ'
+                    : data.description),
                 textAlign: pw.TextAlign.center,
                 style: pw.TextStyle(font: font, fontSize: baseFontSize),
               ),
@@ -686,7 +696,10 @@ class OfficialReceiptService {
                   ),
                 infoLine(_label('paid', language), paidText),
                 infoLine(_label('remaining', language), remainingText),
-                infoLine(_label('status', language), AppHelpers.statusName(data.status)),
+                infoLine(
+                  _label('status', language),
+                  AppHelpers.statusName(data.status),
+                ),
               ],
             ),
           ),
@@ -705,7 +718,10 @@ class OfficialReceiptService {
                     children: [
                       pw.Text(
                         _r(_label('customer_signature', language)),
-                        style: pw.TextStyle(font: bold, fontSize: baseFontSize * 0.85),
+                        style: pw.TextStyle(
+                          font: bold,
+                          fontSize: baseFontSize * 0.85,
+                        ),
                       ),
                       pw.SizedBox(height: isThermal ? 12 : 22),
                       pw.Container(height: 1, color: PdfColors.grey600),
@@ -741,7 +757,10 @@ class OfficialReceiptService {
                     else ...[
                       pw.Text(
                         _r(_label('market_stamp', language)),
-                        style: pw.TextStyle(font: bold, fontSize: baseFontSize * 0.85),
+                        style: pw.TextStyle(
+                          font: bold,
+                          fontSize: baseFontSize * 0.85,
+                        ),
                       ),
                       pw.SizedBox(height: isThermal ? 12 : 22),
                       pw.Container(height: 1, color: PdfColors.grey600),
@@ -774,7 +793,10 @@ class OfficialReceiptService {
                     width: isThermal ? 92 : 150,
                     height: isThermal ? 34 : 45,
                     drawText: true,
-                    textStyle: pw.TextStyle(font: font, fontSize: baseFontSize * 0.7),
+                    textStyle: pw.TextStyle(
+                      font: font,
+                      fontSize: baseFontSize * 0.7,
+                    ),
                   ),
               ],
             ),
