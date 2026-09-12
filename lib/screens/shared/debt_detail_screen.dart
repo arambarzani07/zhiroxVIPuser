@@ -571,7 +571,9 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                       ],
                     ),
                   ),
-                  if (!isCustomer &&\n                            (auth.userRole == 'admin' || auth.canRecordPayments) &&\n                            status != 'paid')
+                  if (!isCustomer &&
+                      (auth.userRole == 'admin' || auth.canRecordPayments) &&
+                      status != 'paid')
                     TextButton.icon(
                       onPressed: _showAddPaymentDialog,
                       icon: const Icon(Icons.add_rounded, size: 17),
