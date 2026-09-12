@@ -14,8 +14,18 @@ import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
 
 class AdminSettingsScreen extends StatelessWidget {
-  const AdminSettingsScreen({super.key, required this.pendingCount});
+  const AdminSettingsScreen({
+    super.key,
+    required this.pendingCount,
+    required this.onOpenReports,
+    required this.onChangePhone,
+    required this.onChangePassword,
+  });
+
   final int pendingCount;
+  final VoidCallback onOpenReports;
+  final VoidCallback onChangePhone;
+  final VoidCallback onChangePassword;
 
   void _open(BuildContext context, Widget screen) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
@@ -97,6 +107,13 @@ class AdminSettingsScreen extends StatelessWidget {
                         const Scaffold(body: SafeArea(child: IntelligenceCenterScreen())),
                       ),
                     ),
+                    const Divider(height: 1),
+                    _SettingsRow(
+                      icon: Icons.summarize_outlined,
+                      title: 'کەشفی حیساب و ڕاپۆرت',
+                      subtitle: 'ڕاپۆرتی قەرز و پارەدانەوە چاپ بکە',
+                      onTap: onOpenReports,
+                    ),
                   ]),
                 ),
                 const SizedBox(height: 22),
@@ -170,6 +187,22 @@ class AdminSettingsScreen extends StatelessWidget {
                       title: isDark ? 'دۆخی ڕووناک' : 'دۆخی تاریک',
                       subtitle: 'گۆڕینی ڕەنگی ڕووکار',
                       onTap: () => context.read<ThemeProvider>().toggleTheme(),
+                    ),
+                    const Divider(height: 1),
+                    _SettingsRow(
+                      icon: Icons.phone_android_rounded,
+                      title: 'گۆڕینی ژمارە مۆبایل',
+                      subtitle: auth.userPhone.isEmpty
+                          ? 'ژمارە مۆبایلێکی نوێ دابنێ'
+                          : auth.userPhone,
+                      onTap: onChangePhone,
+                    ),
+                    const Divider(height: 1),
+                    _SettingsRow(
+                      icon: Icons.lock_outline_rounded,
+                      title: 'گۆڕینی وشەی نهێنی',
+                      subtitle: 'وشەی نهێنیی نوێ دابنێ',
+                      onTap: onChangePassword,
                     ),
                     const Divider(height: 1),
                     _SettingsRow(
