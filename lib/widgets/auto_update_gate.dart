@@ -25,6 +25,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
   bool _opening = false;
   int? _dismissedBuild;
   String? _error;
+  Timer? _periodicUpdateTimer;
 
   bool get _supportedPlatform =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -36,10 +37,14 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_checkForUpdate());
     });
+    _periodicUpdateTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      if (mounted && _supportedPlatform) unawaited(_checkForUpdate());
+    });
   }
 
   @override
   void dispose() {
+    _periodicUpdateTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -48,7 +53,10 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed || !_supportedPlatform) return;
     final last = _lastCheck;
-    if (last == null || DateTime.now().difference(last) >= const Duration(minutes: 10)) {
+    final mustRecheck = _update?.mandatory == true;
+    if (mustRecheck ||
+        last == null ||
+        DateTime.now().difference(last) >= const Duration(minutes: 5)) {
       unawaited(_checkForUpdate());
     }
   }
@@ -67,7 +75,8 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
       setState(() {
         _lastCheck = DateTime.now();
         _error = null;
-        if (info == null || info.latestBuild == _dismissedBuild) {
+        if (info == null ||
+            (info.latestBuild == _dismissedBuild && !info.mandatory)) {
           _update = null;
         } else {
           _update = info;
@@ -75,10 +84,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _lastCheck = DateTime.now();
-        _error = null;
-      });
+      setState(() => _lastCheck = DateTime.now());
     } finally {
       _checking = false;
     }
@@ -97,6 +103,9 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
       if (!mounted) return;
       if (!opened) {
         setState(() => _error = 'نەتوانرا لینکی IPA لە Safari بکرێتەوە.');
+      } else {
+        // Re-check immediately when the user returns from Safari.
+        _lastCheck = null;
       }
     } catch (_) {
       if (!mounted) return;
@@ -155,7 +164,8 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? AppDarkColors.card : Colors.white;
-    final border = isDark ? AppDarkColors.cardBorder : const Color(0xFFE4E7EC);
+    final border =
+        isDark ? AppDarkColors.cardBorder : const Color(0xFFE4E7EC);
     final primaryText =
         isDark ? AppDarkColors.textPrimary : const Color(0xFF101828);
     final secondaryText =
@@ -218,6 +228,17 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                     ],
                   ),
                 ),
+                IconButton(
+                  tooltip: 'پشکنینەوە',
+                  onPressed: _checking ? null : _checkForUpdate,
+                  icon: _checking
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded, size: 20),
+                ),
                 if (!info.mandatory)
                   IconButton(
                     tooltip: 'دواتر',
@@ -245,7 +266,8 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                       'Build ${AppUpdateService.currentBuild}',
                     ),
                   ),
-                  Icon(Icons.arrow_back_rounded, size: 18, color: secondaryText),
+                  Icon(Icons.arrow_back_rounded,
+                      size: 18, color: secondaryText),
                   Expanded(
                     child: _buildVersionCell(
                       context,
@@ -310,14 +332,16 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                             ),
                           )
                         : const Icon(Icons.open_in_browser_rounded, size: 18),
-                    label: Text(_opening ? 'دەکرێتەوە...' : 'دابەزاندنی IPA'),
+                    label: Text(
+                      _opening ? 'دەکرێتەوە...' : 'دابەزاندنی IPA',
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
             Text(
-              'لینکەکە ڕاستەوخۆ لە Safari دەکرێتەوە.',
+              'پشکنینی خۆکار هەر ٥ خولەک • دوای گەڕانەوە لە Safari دووبارە پشکنین دەکرێت.',
               textAlign: TextAlign.center,
               style: TextStyle(color: secondaryText, fontSize: 9.5),
             ),
