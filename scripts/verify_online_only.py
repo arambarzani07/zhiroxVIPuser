@@ -690,6 +690,25 @@ if payment_screen.exists():
         if marker not in source:
             fail(f'lib/screens/admin/subscription_payment_screen.dart: FIB marker missing: {marker}')
 
+# Employee-aware debts/payments RLS calls this private helper while the query
+# runs as `authenticated`. Revoking EXECUTE makes normal dashboard and customer
+# balance reads fail with SQLSTATE 42501.
+employee_rls_migration = (
+    ROOT / 'supabase/migrations/20260912130000_enforce_employee_permissions.sql'
+)
+if not employee_rls_migration.exists():
+    fail('employee permission RLS migration must be tracked')
+else:
+    employee_rls_source = employee_rls_migration.read_text(encoding='utf-8')
+    if not re.search(
+        r'grant\s+execute\s+on\s+function\s+'
+        r'private\.employee_has_permission\s*\(\s*text\s*\)\s+'
+        r'to\s+authenticated\s*;',
+        employee_rls_source,
+        re.I,
+    ):
+        fail('authenticated must be able to evaluate employee-aware RLS policies')
+
 if violations:
     print('ONLINE-ONLY POLICY FAILED')
     for item in violations:
