@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
+import 'package:zhirox/screens/admin/admin_settings_screen.dart';
 import 'package:zhirox/screens/admin/subscription_payment_screen.dart';
 import 'package:zhirox/screens/admin/governance_center_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
@@ -113,14 +114,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
         role: 'customer',
         adminId: auth.userId,
       ),
-      UserListScreen(
-        key: const ValueKey('employees'),
-        role: 'employee',
-        adminId: auth.userId,
-      ),
-      PendingRequestsScreen(
-        key: ValueKey('pending_${auth.userId}'),
-        adminId: auth.userId,
+      AdminSettingsScreen(
+        key: ValueKey('settings_' + auth.userId),
+        pendingCount: pendingNavCount,
       ),
     ];
 
@@ -160,17 +156,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
               children: [
                 _buildNavItem(
                   0,
-                  Icons.dashboard_outlined,
-                  Icons.dashboard,
+                  Icons.space_dashboard_outlined,
+                  Icons.space_dashboard_rounded,
                   'داشبۆرد',
                 ),
-                _buildNavItem(1, Icons.people_outline, Icons.people, 'کڕیار'),
-                _buildNavItem(2, Icons.badge_outlined, Icons.badge, 'کارمەند'),
                 _buildNavItem(
-                  3,
-                  Icons.pending_actions_outlined,
-                  Icons.pending_actions,
-                  'داواکان',
+                  1,
+                  Icons.people_outline_rounded,
+                  Icons.people_rounded,
+                  'کڕیار',
+                ),
+                _buildNavItem(
+                  2,
+                  Icons.settings_outlined,
+                  Icons.settings_rounded,
+                  'ڕێکخستن',
                   badgeCount: pendingNavCount,
                 ),
               ],
