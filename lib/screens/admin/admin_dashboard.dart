@@ -370,7 +370,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
                     // Welcome - Tappable for profile menu
                     GestureDetector(
-                      onTap: () => _selectTab(2),
+                      onTap: () {
+                        setState(() {
+                          _currentIndex = 2;
+                          _visitedTabs.add(2);
+                        });
+                      },
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                         child: Row(
