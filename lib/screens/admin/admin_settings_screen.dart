@@ -192,9 +192,9 @@ class AdminSettingsScreen extends StatelessWidget {
                     _SettingsRow(
                       icon: Icons.phone_android_rounded,
                       title: 'گۆڕینی ژمارە مۆبایل',
-                      subtitle: auth.userPhone.isEmpty
+                      subtitle: (auth.user?.getStringValue('phone') ?? '').isEmpty
                           ? 'ژمارە مۆبایلێکی نوێ دابنێ'
-                          : auth.userPhone,
+                          : auth.user!.getStringValue('phone'),
                       onTap: onChangePhone,
                     ),
                     const Divider(height: 1),
