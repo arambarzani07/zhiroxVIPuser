@@ -608,6 +608,8 @@ class PBService {
     required String customerId,
     required String description,
     required double amount,
+    double? subtotal,
+    double discountPercent = 0,
     required String dueDate,
     required String createdBy,
     String currency = 'IQD',
@@ -629,6 +631,8 @@ class PBService {
     final body = <String, dynamic>{
       'customer': customerId,
       'description': description,
+      'subtotal': subtotal ?? amount,
+      'discount_percent': discountPercent,
       'amount': amount,
       'remaining': amount,
       'due_date': dueDate.trim().isEmpty ? null : dueDate,

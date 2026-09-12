@@ -696,7 +696,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           controller: _discountController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           textDirection: TextDirection.ltr,
-                          decoration: _decoration('داشکاندن %', Icons.discount_outlined),
+                          decoration: _decoration('داشکاندنی بنەڕەت %', Icons.discount_outlined),
                           validator: (value) {
                             final number = double.tryParse(value?.trim() ?? '');
                             if (number == null || number < 0 || number > 100) {

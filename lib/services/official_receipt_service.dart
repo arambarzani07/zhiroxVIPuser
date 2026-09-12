@@ -39,6 +39,9 @@ class _ReceiptData {
   final String status;
   final String currency;
   final double dollarRate;
+  final double subtotal;
+  final double discountPercent;
+  final double discountAmount;
   final double amount;
   final double paid;
   final double remaining;
@@ -55,6 +58,9 @@ class _ReceiptData {
     required this.status,
     required this.currency,
     required this.dollarRate,
+    required this.subtotal,
+    required this.discountPercent,
+    required this.discountAmount,
     required this.amount,
     required this.paid,
     required this.remaining,
@@ -72,6 +78,9 @@ class _ReceiptData {
         status: status,
         currency: currency,
         dollarRate: dollarRate,
+        subtotal: subtotal,
+        discountPercent: discountPercent,
+        discountAmount: discountAmount,
         amount: amount,
         paid: paid,
         remaining: remaining,
@@ -113,7 +122,8 @@ class OfficialReceiptService {
       'qty': ['دانە', 'العدد', 'Qty'],
       'price': ['نرخ', 'السعر', 'Price'],
       'line_total': ['کۆ', 'المجموع', 'Total'],
-      'total': ['کۆی گشتی', 'المجموع الكلي', 'Grand total'],
+      'subtotal': ['کۆی پێش داشکاندن', 'المجموع قبل الخصم', 'Subtotal'],
+      'total': ['کۆی کۆتایی', 'المجموع النهائي', 'Grand total'],
       'paid': ['پارەی وەرگیراو', 'المبلغ المستلم', 'Paid'],
       'remaining': ['ماوەی قەرز', 'المتبقي', 'Remaining'],
       'status': ['دۆخ', 'الحالة', 'Status'],
@@ -166,6 +176,16 @@ class OfficialReceiptService {
     final currency = debt.getStringValue('currency').trim().toUpperCase();
     final dollarRate = debt.getDoubleValue('dollar_rate');
     final amount = debt.getDoubleValue('amount');
+    final storedSubtotal = debt.getDoubleValue('subtotal');
+    final subtotal = storedSubtotal > 0 ? storedSubtotal : amount;
+    final discountPercent = debt
+        .getDoubleValue('discount_percent')
+        .clamp(0.0, 100.0)
+        .toDouble();
+    final storedDiscountAmount = debt.getDoubleValue('discount_amount');
+    final discountAmount = storedDiscountAmount > 0
+        ? storedDiscountAmount
+        : ((subtotal * discountPercent / 100) * 100).roundToDouble() / 100;
     final remaining = debt.getDoubleValue('remaining');
     final paid = amount - remaining;
     final description = debt.getStringValue('description').trim();
@@ -224,6 +244,9 @@ class OfficialReceiptService {
       status: status,
       currency: currency,
       dollarRate: dollarRate,
+      subtotal: subtotal,
+      discountPercent: discountPercent,
+      discountAmount: discountAmount,
       amount: amount,
       paid: paid,
       remaining: remaining,
@@ -279,6 +302,14 @@ class OfficialReceiptService {
     required MarketReceiptSettings settings,
   }) {
     final year = DateTime.now().year;
+    const previewSubtotal = 125000.0;
+    final previewDiscountPercent =
+        settings.discountPercent.clamp(0.0, 100.0).toDouble();
+    final previewDiscountAmount =
+        ((previewSubtotal * previewDiscountPercent / 100) * 100).roundToDouble() /
+            100;
+    final previewAmount = previewSubtotal - previewDiscountAmount;
+    final previewPaid = previewAmount > 50000 ? 50000.0 : previewAmount;
     final data = _ReceiptData(
       sourceId: 'preview',
       receiptNumber: '${settings.receiptPrefix}-$year-000123',
@@ -292,9 +323,12 @@ class OfficialReceiptService {
       status: 'partial',
       currency: 'IQD',
       dollarRate: 0,
-      amount: 125000,
-      paid: 50000,
-      remaining: 75000,
+      subtotal: previewSubtotal,
+      discountPercent: previewDiscountPercent,
+      discountAmount: previewDiscountAmount,
+      amount: previewAmount,
+      paid: previewPaid,
+      remaining: previewAmount - previewPaid,
       items: const [
         _ReceiptItem(name: 'کاڵای یەکەم', qty: 2, price: 25000, currency: 'IQD'),
         _ReceiptItem(name: 'کاڵای دووەم', qty: 1, price: 75000, currency: 'IQD'),
@@ -468,6 +502,18 @@ class OfficialReceiptService {
             ])
         .toList(growable: false);
 
+    final subtotalText = AppHelpers.formatStoredFinancialAmount(
+      data.subtotal,
+      data.currency,
+      dollarRate: data.dollarRate,
+      showConversion: true,
+    );
+    final discountAmountText = AppHelpers.formatStoredFinancialAmount(
+      data.discountAmount,
+      data.currency,
+      dollarRate: data.dollarRate,
+      showConversion: true,
+    );
     final totalText = AppHelpers.formatStoredFinancialAmount(
       data.amount,
       data.currency,
@@ -680,13 +726,14 @@ class OfficialReceiptService {
             ),
             child: pw.Column(
               children: [
-                infoLine(_label('total', language), totalText),
-                if (settings.discountPercent > 0)
+                infoLine(_label('subtotal', language), subtotalText),
+                if (data.discountPercent > 0)
                   infoLine(
                     _label('discount', language),
-                    '${settings.discountPercent.toStringAsFixed(2)}%',
+                    '${data.discountPercent.toStringAsFixed(2)}% • -$discountAmountText',
                     ltr: true,
                   ),
+                infoLine(_label('total', language), totalText),
                 infoLine(_label('paid', language), paidText),
                 infoLine(_label('remaining', language), remainingText),
                 infoLine(
