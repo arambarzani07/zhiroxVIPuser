@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:zhirox/services/pb_service.dart';
+import 'package:zhirox/utils/helpers.dart';
 
 class GovernanceCenterScreen extends StatefulWidget {
   const GovernanceCenterScreen({super.key});
@@ -48,7 +49,7 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       final uid = client.auth.currentUser!.id;
       final result = await Future.wait([
         client.from('profiles').select(
-          'id,name,phone,active,employee_permissions(*)',
+          'id,name,phone,active,employee_permissions!employee_permissions_employee_id_fkey(*)',
         ).eq('role', 'employee').eq('admin_id', uid).order('name'),
         client.from('audit_logs').select(
           'id,actor_id,action,entity_type,entity_id,changed_fields,occurred_at',
@@ -64,7 +65,12 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
         backups = rows(result[2]);
       });
     } catch (e) {
-      if (mounted) setState(() => error = 'نەتوانرا زانیارییەکان بهێنرێن: ' + e.toString());
+      if (mounted) {
+        setState(() => error = AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا زانیارییەکان بهێنرێن. دووبارە هەوڵ بدە.',
+        ));
+      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -99,7 +105,10 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       toast('دەسەڵاتەکان پاشەکەوت کران');
       await load();
     } catch (e) {
-      toast('پاشەکەوت نەکرا: ' + e.toString(), bad: true);
+      toast(AppHelpers.backendErrorMessage(
+        e,
+        fallback: 'دەسەڵاتەکان پاشەکەوت نەکران. دووبارە هەوڵ بدە.',
+      ), bad: true);
     }
   }
 
@@ -112,7 +121,10 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       toast('Backup درووست کرا');
       await load();
     } catch (e) {
-      toast('Backup درووست نەکرا: ' + e.toString(), bad: true);
+      toast(AppHelpers.backendErrorMessage(
+        e,
+        fallback: 'Backup درووست نەکرا. دووبارە هەوڵ بدە.',
+      ), bad: true);
     }
   }
 
@@ -145,7 +157,10 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       toast('داتا بە سەرکەوتوویی گەڕێندرایەوە');
       await load();
     } catch (e) {
-      toast('Restore سەرکەوتوو نەبوو: ' + e.toString(), bad: true);
+      toast(AppHelpers.backendErrorMessage(
+        e,
+        fallback: 'Restore سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+      ), bad: true);
     }
   }
 
@@ -174,7 +189,10 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       await file.writeAsString('\uFEFF' + output.toString(), flush: true);
       await Share.shareXFiles([XFile(file.path, mimeType: 'text/csv')]);
     } catch (e) {
-      toast('Export سەرکەوتوو نەبوو: ' + e.toString(), bad: true);
+      toast(AppHelpers.backendErrorMessage(
+        e,
+        fallback: 'Export سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+      ), bad: true);
     }
   }
 
