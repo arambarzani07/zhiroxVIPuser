@@ -119,7 +119,6 @@ class OfficialReceiptService {
       'status': ['دۆخ', 'الحالة', 'Status'],
       'note': ['تێبینی', 'ملاحظة', 'Note'],
       'payment_method': ['جۆری پارەدان', 'طريقة الدفع', 'Payment method'],
-      'vat': ['باج / VAT', 'الضريبة / VAT', 'VAT'],
       'discount': ['داشکاندن', 'الخصم', 'Discount'],
       'customer_signature': ['واژۆی کڕیار', 'توقيع الزبون', 'Customer signature'],
       'market_stamp': ['مۆر / واژۆی مارکێت', 'ختم / توقيع السوق', 'Market stamp / signature'],
@@ -686,12 +685,6 @@ class OfficialReceiptService {
                   infoLine(
                     _label('discount', language),
                     '${settings.discountPercent.toStringAsFixed(2)}%',
-                    ltr: true,
-                  ),
-                if (settings.vatPercent > 0)
-                  infoLine(
-                    _label('vat', language),
-                    '${settings.vatPercent.toStringAsFixed(2)}%',
                     ltr: true,
                   ),
                 infoLine(_label('paid', language), paidText),
