@@ -115,6 +115,39 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
     }
   }
 
+  Future<void> restoreBackup(Map<String, dynamic> backup) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('گەڕاندنەوەی Backup'),
+        content: const Text(
+          'پێش Restoreکردن Backupێکی پاراستن بە خۆکاری درووست دەکرێت. دڵنیایت؟',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('نەخێر'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await PBService.client.rpc(
+        'restore_tenant_backup',
+        params: {'p_backup_id': backup['id']},
+      );
+      toast('داتا بە سەرکەوتوویی گەڕێندرایەوە');
+      await load();
+    } catch (e) {
+      toast('Restore سەرکەوتوو نەبوو: ' + e.toString(), bad: true);
+    }
+  }
+
   Future<void> exportCsv() async {
     try {
       final raw = await PBService.client.rpc('get_tenant_export');
@@ -256,6 +289,11 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
           title: Text((backup['label'] ?? 'Backup').toString()),
           subtitle: Text((backup['created_at'] ?? '').toString() + '\n' + (backup['record_counts'] ?? {}).toString()),
           isThreeLine: true,
+          trailing: IconButton(
+            tooltip: 'Restore',
+            icon: const Icon(Icons.restore_rounded),
+            onPressed: () => restoreBackup(backup),
+          ),
         ))),
       ],
     ),
