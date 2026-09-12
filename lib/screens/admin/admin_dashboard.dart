@@ -4,10 +4,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
-import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/admin_settings_screen.dart';
-import 'package:zhirox/screens/admin/subscription_payment_screen.dart';
-import 'package:zhirox/screens/admin/governance_center_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/pdf_service.dart';
@@ -116,6 +113,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
       AdminSettingsScreen(
         key: ValueKey('settings_${auth.userId}'),
         pendingCount: pendingNavCount,
+        onOpenReports: () => unawaited(_showReportMenu(auth)),
+        onChangePhone: () => _showChangePhoneDialog(auth),
+        onChangePassword: () => _showChangePasswordDialog(auth),
       ),
     ];
 
@@ -364,38 +364,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             ),
                           ),
                           const Spacer(),
-                          Material(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () => _showAdminProfileMenu(auth),
-                              child: Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.16),
-                                  ),
-                                ),
-                                alignment: Alignment.center,
-                                child: const Icon(
-                                  Icons.tune_rounded,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),
 
                     // Welcome - Tappable for profile menu
                     GestureDetector(
-                      onTap: () => _showAdminProfileMenu(auth),
+                      onTap: () => _selectTab(2),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                         child: Row(
@@ -655,287 +630,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
           const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
         ],
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════
-  // ── Admin Profile Menu ──
-  // ═══════════════════════════════════════════
-
-  void _showAdminProfileMenu(AuthProvider auth) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final marketName = auth.user?.getStringValue('market_name') ?? AppStrings.appName;
-    final phone = auth.user?.getStringValue('phone') ?? 'نەدراوە';
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(ctx).size.height * 0.74,
-          ),
-          decoration: BoxDecoration(
-            color: isDark ? AppDarkColors.card : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 18),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppDarkColors.cardBorder : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.storefront_rounded,
-                        color: AppColors.primary,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            marketName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: isDark
-                                  ? AppDarkColors.textPrimary
-                                  : const Color(0xFF1F2937),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            phone,
-                            textDirection: TextDirection.ltr,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark
-                                  ? AppDarkColors.textSecondary
-                                  : Colors.grey[500],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      'ڕێکخستنەکان',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: isDark
-                            ? AppDarkColors.textSecondary
-                            : Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _settingsTile(
-                  isDark: isDark,
-                  icon: Icons.account_balance_wallet_outlined,
-                  iconColor: Colors.green,
-                  title: 'بەشداری و پارەدان بە FIB',
-                  subtitle: 'پلان هەڵبژێرە و بە FIB پارە بدە',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SubscriptionPaymentScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _settingsTile(
-                  isDark: isDark,
-                  icon: Icons.admin_panel_settings_outlined,
-                  iconColor: Colors.deepPurple,
-                  title: 'دەسەڵات، Audit و Backup',
-                  subtitle: 'بەڕێوەبردنی دەسەڵات و Backupی داتا',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const GovernanceCenterScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _settingsTile(
-                  isDark: isDark,
-                  icon: Icons.summarize_outlined,
-                  iconColor: AppColors.primary,
-                  title: 'کەشفی حیساب و ڕاپۆرت',
-                  subtitle: 'ڕاپۆرتی قەرز و پارەدانەوە چاپ بکە',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    unawaited(_showReportMenu(auth));
-                  },
-                ),
-                _settingsTile(
-                  isDark: isDark,
-                  icon: isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                  iconColor: Colors.indigo,
-                  title: isDark ? 'ڕووناکی' : 'دۆخی تاریک',
-                  subtitle: 'ڕووکار و ڕەنگی ئەپ بگۆڕە',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    context.read<ThemeProvider>().toggleTheme();
-                  },
-                ),
-                const Divider(height: 24),
-                _settingsTile(
-                  isDark: isDark,
-                  icon: Icons.phone_android_rounded,
-                  iconColor: Colors.blue,
-                  title: 'گۆڕینی ژمارە مۆبایل',
-                  subtitle: phone,
-                  ltrSubtitle: true,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showChangePhoneDialog(auth);
-                  },
-                ),
-                _settingsTile(
-                  isDark: isDark,
-                  icon: Icons.lock_outline_rounded,
-                  iconColor: Colors.orange,
-                  title: 'گۆڕینی وشەی نهێنی',
-                  subtitle: 'وشەی نهێنیی نوێ دابنێ',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showChangePasswordDialog(auth);
-                  },
-                ),
-                const Divider(height: 24),
-                _settingsTile(
-                  isDark: isDark,
-                  icon: Icons.logout_rounded,
-                  iconColor: Colors.red,
-                  title: AppStrings.logout,
-                  subtitle: 'لە هەژمارەکەت بچۆ دەرەوە',
-                  destructive: true,
-                  showChevron: false,
-                  onTap: () async {
-                    Navigator.pop(ctx);
-                    final confirm = await AppHelpers.showConfirmDialog(
-                      context,
-                      title: AppStrings.logout,
-                      message: 'دڵنیایت لە چوونەدەرەوە؟',
-                    );
-                    if (confirm && mounted) auth.logout();
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _settingsTile({
-    required bool isDark,
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    bool destructive = false,
-    bool showChevron = true,
-    bool ltrSubtitle = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(icon, color: iconColor, size: 19),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: destructive
-                              ? Colors.red
-                              : isDark
-                                  ? AppDarkColors.textPrimary
-                                  : const Color(0xFF1F2937),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        textDirection:
-                            ltrSubtitle ? TextDirection.ltr : TextDirection.rtl,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: isDark
-                              ? AppDarkColors.textSecondary
-                              : Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (showChevron)
-                  Icon(
-                    Icons.chevron_left_rounded,
-                    size: 20,
-                    color: isDark ? Colors.grey[600] : Colors.grey[350],
-                  ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
