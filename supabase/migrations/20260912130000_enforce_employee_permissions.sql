@@ -185,6 +185,13 @@ create policy payments_insert_staff
     )
   );
 
+-- These helpers are referenced while PostgreSQL evaluates RLS policies.
+-- Without EXECUTE, every debts/payments read fails with SQLSTATE 42501 even
+-- for admins. The helper is kept in the non-exposed private schema and scopes
+-- its result to auth.uid() and the caller's tenant.
+grant execute on function private.employee_has_permission(text)
+  to authenticated;
+
 -- Financial audit data is owner/admin-only unless explicitly granted.
 do $$
 declare policy_name text;
