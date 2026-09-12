@@ -93,23 +93,22 @@ class _OwnerHome extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             AppSurface(
-              color: AppColors.primary,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.shield_rounded, color: Colors.white, size: 32),
+                  const Icon(Icons.shield_rounded, color: AppColors.primary, size: 32),
                   const SizedBox(height: 18),
                   Text(
                     'System Owner',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.w800,
                         ),
                   ),
                   const SizedBox(height: 6),
                   const Text(
                     'دەسەڵاتی سەرەکی بۆ بەشداریکردن، مارکێت و بڵاوکردنەوەی وەشان.',
-                    style: TextStyle(color: Colors.white70, height: 1.6),
+                    style: TextStyle(color: AppColors.textSecondary, height: 1.6),
                   ),
                 ],
               ),
