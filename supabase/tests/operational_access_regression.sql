@@ -19,6 +19,18 @@ begin
     raise exception 'authenticated cannot evaluate employee-aware RLS policies';
   end if;
 
+  if has_function_privilege(
+    'anon',
+    'public.get_admin_dashboard_snapshot()',
+    'EXECUTE'
+  ) or not has_function_privilege(
+    'authenticated',
+    'public.get_admin_dashboard_snapshot()',
+    'EXECUTE'
+  ) then
+    raise exception 'dashboard snapshot grants are unsafe';
+  end if;
+
   if not has_table_privilege('authenticated', 'public.financial_events', 'SELECT') then
     raise exception 'authenticated must retain select access to financial_events';
   end if;
