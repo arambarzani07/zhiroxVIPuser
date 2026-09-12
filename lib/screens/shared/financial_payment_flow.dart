@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pocketbase/pocketbase.dart';
+import 'package:zhirox/screens/shared/payment_receipt_actions.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -223,6 +224,8 @@ class FinancialPaymentFlow {
     var saving = false;
     String? localError;
     var saved = false;
+    RecordModel? savedPayment;
+    RecordModel? savedDebt;
 
     try {
       await showModalBottomSheet<void>(
@@ -472,7 +475,7 @@ class FinancialPaymentFlow {
                                 localError = null;
                               });
                               try {
-                                await PBService.createPayment(
+                                final payment = await PBService.createPayment(
                                   debtId: debt.id,
                                   amount: storageAmount,
                                   note: noteController.text.trim(),
@@ -481,6 +484,12 @@ class FinancialPaymentFlow {
                                   referenceKind: referenceKind,
                                   referenceId: referenceId,
                                 );
+                                savedPayment = payment;
+                                try {
+                                  savedDebt = await PBService.getDebt(debt.id);
+                                } catch (_) {
+                                  savedDebt = debt;
+                                }
                                 saved = true;
                                 if (sheetContext.mounted) {
                                   Navigator.pop(sheetContext);
@@ -533,6 +542,15 @@ class FinancialPaymentFlow {
         context,
         'پارەدانەوە بە سەرکەوتوویی تۆمارکرا',
       );
+      final payment = savedPayment;
+      final debt = savedDebt;
+      if (payment != null && debt != null && context.mounted) {
+        await PaymentReceiptActions.show(
+          context,
+          payment: payment,
+          debt: debt,
+        );
+      }
     }
     return saved;
   }
