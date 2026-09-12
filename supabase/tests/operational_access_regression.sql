@@ -31,6 +31,28 @@ begin
     raise exception 'dashboard snapshot grants are unsafe';
   end if;
 
+  if (select prosecdef from pg_proc
+      where oid = 'public.create_tenant_backup(text,text)'::regprocedure)
+     or (select prosecdef from pg_proc
+         where oid = 'public.get_tenant_export()'::regprocedure) then
+    raise exception 'exposed governance RPC must remain security invoker';
+  end if;
+
+  if has_function_privilege(
+    'anon', 'private.create_tenant_backup_impl(text,text)', 'EXECUTE'
+  ) or has_function_privilege(
+    'anon', 'private.get_tenant_export_impl()', 'EXECUTE'
+  ) then
+    raise exception 'anonymous role can execute private governance implementation';
+  end if;
+
+  if (select count(*) from pg_policies
+      where schemaname = 'public'
+        and tablename = 'employee_permissions'
+        and cmd = 'SELECT') <> 1 then
+    raise exception 'employee permissions must have exactly one select policy';
+  end if;
+
   if not has_table_privilege('authenticated', 'public.financial_events', 'SELECT') then
     raise exception 'authenticated must retain select access to financial_events';
   end if;
