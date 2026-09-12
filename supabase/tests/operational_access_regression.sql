@@ -11,6 +11,14 @@ begin
     raise exception 'authenticated must not be able to truncate financial_events';
   end if;
 
+  if not has_function_privilege(
+    'authenticated',
+    'private.employee_has_permission(text)',
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated cannot evaluate employee-aware RLS policies';
+  end if;
+
   if not has_table_privilege('authenticated', 'public.financial_events', 'SELECT') then
     raise exception 'authenticated must retain select access to financial_events';
   end if;
