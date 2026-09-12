@@ -15,6 +15,7 @@ import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/services/notification_service.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
+import 'package:zhirox/widgets/app_design.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/auto_update_gate.dart';
 
@@ -133,132 +134,8 @@ class ZhiroxApp extends StatelessWidget {
           title: 'ژیرۆکس',
           debugShowCheckedModeBanner: false,
           themeMode: themeProvider.themeMode,
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: AppColors.primary,
-              brightness: Brightness.light,
-            ),
-            fontFamily: 'NotoKufiArabic',
-            useMaterial3: true,
-            appBarTheme: const AppBarTheme(
-              centerTitle: true,
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
-            elevatedButtonTheme: ElevatedButtonThemeData(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-              fillColor: Colors.grey.shade50,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              labelStyle: const TextStyle(fontFamily: 'NotoKufiArabic'),
-              hintStyle: const TextStyle(fontFamily: 'NotoKufiArabic'),
-            ),
-            textTheme: Typography.material2021().black.apply(
-              fontFamily: 'NotoKufiArabic',
-            ),
-            cardTheme: CardThemeData(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-          darkTheme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: AppColors.primary,
-              brightness: Brightness.dark,
-              surface: AppDarkColors.surface,
-            ),
-            scaffoldBackgroundColor: AppDarkColors.background,
-            fontFamily: 'NotoKufiArabic',
-            useMaterial3: true,
-            appBarTheme: AppBarTheme(
-              centerTitle: true,
-              backgroundColor: AppDarkColors.surface,
-              foregroundColor: AppDarkColors.textPrimary,
-              elevation: 0,
-            ),
-            elevatedButtonTheme: ElevatedButtonThemeData(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppDarkColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-              fillColor: AppDarkColors.inputFill,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              labelStyle: TextStyle(
-                fontFamily: 'NotoKufiArabic',
-                color: AppDarkColors.textSecondary,
-              ),
-              hintStyle: TextStyle(
-                fontFamily: 'NotoKufiArabic',
-                color: AppDarkColors.textSecondary,
-              ),
-            ),
-            textTheme: Typography.material2021().white.apply(
-              fontFamily: 'NotoKufiArabic',
-            ),
-            cardTheme: CardThemeData(
-              elevation: 0,
-              color: AppDarkColors.card,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: AppDarkColors.cardBorder),
-              ),
-            ),
-            dialogTheme: DialogThemeData(
-              backgroundColor: AppDarkColors.surface,
-              titleTextStyle: TextStyle(
-                color: AppDarkColors.textPrimary,
-                fontFamily: 'NotoKufiArabic',
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-              contentTextStyle: TextStyle(
-                color: AppDarkColors.textSecondary,
-                fontFamily: 'NotoKufiArabic',
-              ),
-            ),
-            bottomSheetTheme: BottomSheetThemeData(
-              backgroundColor: AppDarkColors.surface,
-            ),
-            dividerColor: AppDarkColors.divider,
-            iconTheme: IconThemeData(color: AppDarkColors.textSecondary),
-          ),
+          theme: AppDesign.lightTheme,
+          darkTheme: AppDesign.darkTheme,
           locale: const Locale('ckb'),
           builder: (context, child) {
             return Directionality(
