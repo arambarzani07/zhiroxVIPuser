@@ -204,7 +204,10 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       await file.writeAsString(const JsonEncoder.withIndent('  ').convert(raw), flush: true);
       await Share.shareXFiles([XFile(file.path, mimeType: 'application/json')]);
     } catch (e) {
-      toast('Export سەرکەوتوو نەبوو: ' + e.toString(), bad: true);
+      toast(AppHelpers.backendErrorMessage(
+        e,
+        fallback: 'Export سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+      ), bad: true);
     }
   }
 
