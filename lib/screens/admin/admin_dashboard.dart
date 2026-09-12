@@ -7,6 +7,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
 import 'package:zhirox/screens/admin/subscription_payment_screen.dart';
+import 'package:zhirox/screens/admin/governance_center_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/pdf_service.dart';
@@ -768,6 +769,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const SubscriptionPaymentScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _settingsTile(
+                  isDark: isDark,
+                  icon: Icons.admin_panel_settings_outlined,
+                  iconColor: Colors.deepPurple,
+                  title: 'دەسەڵات، Audit و Backup',
+                  subtitle: 'بەڕێوەبردنی دەسەڵات و Backupی داتا',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const GovernanceCenterScreen(),
                       ),
                     );
                   },
