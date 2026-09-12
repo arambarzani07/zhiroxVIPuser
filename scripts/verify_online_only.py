@@ -98,6 +98,23 @@ for marker in ('String? _loadError', 'AppHelpers.backendErrorMessage', 'دووب
     if marker not in detail:
         fail(f'lib/screens/shared/debt_detail_screen.dart: lifecycle/error marker missing: {marker}')
 
+dashboard_service = (LIB / 'services/pb_service.dart').read_text(encoding='utf-8')
+if "client.rpc('get_admin_dashboard_snapshot')" not in dashboard_service:
+    fail('lib/services/pb_service.dart: dashboard must use the bounded snapshot RPC')
+if "pb.collection('payments').getList(filter: paymentFilter" in dashboard_service:
+    fail('lib/services/pb_service.dart: dashboard still downloads payment rows for totals')
+
+employee_permissions_sql = (
+    ROOT / 'supabase/migrations/20260912130000_enforce_employee_permissions.sql'
+).read_text(encoding='utf-8').lower()
+for marker in (
+    'security invoker',
+    'get_admin_dashboard_snapshot()',
+    'grant execute on function public.get_admin_dashboard_snapshot() to authenticated;',
+):
+    if marker not in employee_permissions_sql:
+        fail(f'dashboard snapshot migration missing marker: {marker}')
+
 
 # Financial Chat realtime/audit markers: business history remains server-backed
 # and new activity must arrive through Supabase realtime, never a local cache.
