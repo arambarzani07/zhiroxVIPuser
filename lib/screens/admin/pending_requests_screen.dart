@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:zhirox/screens/admin/debt_restore_screen.dart';
-import 'package:zhirox/screens/admin/receipt_settings_screen.dart';
 import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -123,13 +122,6 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     );
   }
 
-  void _openReceiptSettings() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ReceiptSettingsScreen()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -220,12 +212,6 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                   ),
                 ],
               ),
-            ),
-            IconButton(
-              tooltip: 'ڕێکخستنی پسوولەی فەرمی',
-              onPressed: _openReceiptSettings,
-              icon: const Icon(Icons.receipt_long_outlined, size: 22),
-              color: Colors.teal,
             ),
             IconButton(
               tooltip: 'گەڕاندنەوەی کردار',
