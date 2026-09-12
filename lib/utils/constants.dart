@@ -1,30 +1,35 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const Color primary = Color(0xFF1A73E8);
-  static const Color secondary = Color(0xFF4CAF50);
-  static const Color danger = Color(0xFFE53935);
-  static const Color warning = Color(0xFFFFA726);
-  static const Color background = Color(0xFFF5F7FA);
-  static const Color cardBg = Colors.white;
-  static const Color textPrimary = Color(0xFF1A1A2E);
-  static const Color textSecondary = Color(0xFF6B7280);
-  static const Color success = Color(0xFF2E7D32);
-  static const Color scaffoldBackground = Color(0xFFF5F7FA);
+  static const Color primary = Color(0xFF3157E0);
+  static const Color primarySoft = Color(0xFFE9EDFF);
+  static const Color secondary = Color(0xFF12A594);
+  static const Color accent = Color(0xFFFFB547);
+  static const Color danger = Color(0xFFE5484D);
+  static const Color warning = Color(0xFFF59E0B);
+  static const Color success = Color(0xFF0E9F6E);
+  static const Color background = Color(0xFFF6F7FB);
+  static const Color scaffoldBackground = background;
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color surfaceMuted = Color(0xFFF0F2F8);
+  static const Color cardBg = surface;
+  static const Color border = Color(0xFFE2E5EF);
+  static const Color textPrimary = Color(0xFF171B2E);
+  static const Color textSecondary = Color(0xFF687086);
 }
 
 class AppDarkColors {
-  static const Color background = Color(0xFF0F1523);
-  static const Color surface = Color(0xFF1A2137);
-  static const Color card = Color(0xFF1E2742);
-  static const Color cardBorder = Color(0xFF2A3555);
-  static const Color textPrimary = Color(0xFFE8ECF4);
-  static const Color textSecondary = Color(0xFF8B95B0);
-  static const Color divider = Color(0xFF2A3555);
-  static const Color primary = Color(0xFF5B9CF6);
-  static const Color primaryMuted = Color(0xFF2D4A7A);
-  static const Color inputFill = Color(0xFF16203A);
-  static const Color shimmer = Color(0xFF243052);
+  static const Color background = Color(0xFF0B1020);
+  static const Color surface = Color(0xFF11182B);
+  static const Color card = Color(0xFF151E34);
+  static const Color cardBorder = Color(0xFF27324A);
+  static const Color textPrimary = Color(0xFFF4F6FB);
+  static const Color textSecondary = Color(0xFFA6AFC3);
+  static const Color divider = cardBorder;
+  static const Color primary = Color(0xFF8CA4FF);
+  static const Color primaryMuted = Color(0xFF263B78);
+  static const Color inputFill = Color(0xFF10182C);
+  static const Color shimmer = Color(0xFF202C47);
 }
 
 class AppStrings {
