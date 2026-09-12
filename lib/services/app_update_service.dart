@@ -79,6 +79,8 @@ class AppUpdateService {
 
   static String get releaseTag => '$edition-latest';
   static String get manifestFileName => '$edition-update.json';
+  static String get ipaFileName =>
+      edition == 'owner' ? 'ZHIROX-Owner.ipa' : 'ZHIROX-User.ipa';
 
   static Uri get manifestUri {
     final base = Uri.parse(
@@ -91,21 +93,44 @@ class AppUpdateService {
     );
   }
 
+  static Future<http.Response> _fetchManifest() async {
+    Object? lastError;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final response = await http
+            .get(
+              manifestUri,
+              headers: const {
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache',
+              },
+            )
+            .timeout(const Duration(seconds: 10));
+
+        if (response.statusCode == 200) return response;
+        if (response.statusCode >= 400 &&
+            response.statusCode < 500 &&
+            response.statusCode != 429) {
+          return response;
+        }
+        lastError = StateError('update_manifest_http_${response.statusCode}');
+      } catch (error) {
+        lastError = error;
+      }
+
+      if (attempt < 2) {
+        await Future<void>.delayed(Duration(seconds: attempt + 1));
+      }
+    }
+    throw lastError ?? StateError('update_manifest_unavailable');
+  }
+
   static Future<AppUpdateInfo?> checkForUpdate() async {
     // Only CI-built applications have a trusted monotonically increasing build
     // number. Local/debug builds intentionally do not show update prompts.
     if (currentBuild <= 0) return null;
 
-    final response = await http
-        .get(
-          manifestUri,
-          headers: const {
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache',
-          },
-        )
-        .timeout(const Duration(seconds: 12));
-
+    final response = await _fetchManifest();
     if (response.statusCode != 200) {
       throw StateError('update_manifest_http_${response.statusCode}');
     }
@@ -127,9 +152,18 @@ class AppUpdateService {
       throw const FormatException('invalid_update_download_url');
     }
 
-    // The release manifest is immutable build metadata. A tiny public Supabase
-    // row lets the System Owner change only the rollout policy (mandatory and
-    // release note override) without rebuilding or republishing the IPA.
+    final expectedPath =
+        '/$_repository/releases/download/$releaseTag/$ipaFileName';
+    if (downloadUri.path != expectedPath) {
+      throw const FormatException('invalid_update_download_identity');
+    }
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(info.sha256)) {
+      throw const FormatException('invalid_update_sha256');
+    }
+
+    // The release manifest is immutable build metadata. Supabase contains only
+    // rollout policy, so System Owner can switch mandatory/optional and notes
+    // without rebuilding the IPA.
     try {
       await PBService.ensureInitialized();
       final row = await PBService.client
@@ -145,8 +179,7 @@ class AppUpdateService {
         );
       }
     } catch (_) {
-      // Update discovery must keep working from GitHub even if Supabase policy
-      // metadata is temporarily unavailable.
+      // GitHub update discovery remains available if rollout policy is offline.
     }
 
     if (info.latestBuild <= currentBuild) return null;
