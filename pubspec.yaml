@@ -31,6 +31,8 @@ dependencies:
   flutter_image_compress: ^2.3.0
   path_provider: ^2.1.5
   connectivity_plus: ^6.1.0
+  share_plus: ^10.1.4
+  cross_file: ^0.3.4+2
 
 dev_dependencies:
   flutter_test:
