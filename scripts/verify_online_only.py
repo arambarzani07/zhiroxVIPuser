@@ -115,6 +115,22 @@ for marker in (
     if marker not in employee_permissions_sql:
         fail(f'dashboard snapshot migration missing marker: {marker}')
 
+for marker in (
+    'private.create_tenant_backup_impl',
+    'private.get_tenant_export_impl',
+    'employee_permissions_select_authorized',
+    'app_update_settings_updated_by_idx',
+):
+    if marker not in employee_permissions_sql:
+        fail(f'governance/RLS hardening migration missing marker: {marker}')
+
+user_list_source = (LIB / 'screens/shared/user_list_screen.dart').read_text(
+    encoding='utf-8'
+)
+for marker in ('_inboxError!', 'warning_amber_rounded', 'هەوڵدانەوە'):
+    if marker not in user_list_source:
+        fail(f'customer balance retry UI missing marker: {marker}')
+
 
 # Financial Chat realtime/audit markers: business history remains server-backed
 # and new activity must arrive through Supabase realtime, never a local cache.
