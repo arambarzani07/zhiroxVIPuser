@@ -1,3 +1,4 @@
+-- Keeps debt accounting and official receipts on the same discount calculation.
 alter table public.debts
   add column if not exists subtotal numeric not null default 0,
   add column if not exists discount_percent numeric not null default 0,
