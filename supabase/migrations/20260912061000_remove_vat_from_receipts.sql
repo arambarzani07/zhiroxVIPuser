@@ -1,3 +1,4 @@
+-- VAT is intentionally disabled system-wide; legacy clients are normalized to zero.
 update public.market_receipt_settings
 set vat_percent = 0
 where vat_percent <> 0;
