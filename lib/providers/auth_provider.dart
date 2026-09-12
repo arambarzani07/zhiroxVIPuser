@@ -66,6 +66,21 @@ class AuthProvider extends ChangeNotifier {
       (userRole == 'employee' &&
           (_user?.getBoolValue('can_send_notifications') ?? false));
 
+  bool _employeePermission(String field) =>
+      userRole == 'admin' ||
+      (userRole == 'employee' && (_user?.getBoolValue(field) ?? false));
+
+  bool get canViewCustomers => _employeePermission('can_view_customers');
+  bool get canEditCustomers => _employeePermission('can_edit_customers');
+  bool get canDeleteCustomers => _employeePermission('can_delete_customers');
+  bool get canViewDebts => _employeePermission('can_view_debts');
+  bool get canAddDebts => _employeePermission('can_add_debts');
+  bool get canDeleteDebts => _employeePermission('can_delete_debts');
+  bool get canRecordPayments => _employeePermission('can_record_payments');
+  bool get canViewFinancialReports =>
+      _employeePermission('can_view_financial_reports');
+  bool get canExportData => _employeePermission('can_export_data');
+
   double get debtLimit => _user?.getDoubleValue('debt_limit') ?? 0;
 
   bool wasDeactivated = false;
