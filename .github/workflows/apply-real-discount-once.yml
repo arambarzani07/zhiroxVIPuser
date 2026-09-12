@@ -1,0 +1,483 @@
+name: Apply real discount once
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-real-discount-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'Start real discount rollout'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Apply discount accounting
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {count}')
+              return text.replace(old, new, 1)
+
+          def sub_once(text, pattern, repl, label):
+              text, count = re.subn(pattern, repl, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {count}')
+              return text
+
+          # ---------- AddDebtScreen: market default discount becomes real transaction math ----------
+          path = Path('lib/screens/shared/add_debt_screen.dart')
+          text = path.read_text()
+          text = replace_once(
+              text,
+              "import 'package:zhirox/services/notification_service.dart';\n",
+              "import 'package:zhirox/services/notification_service.dart';\nimport 'package:zhirox/services/receipt_settings_service.dart';\n",
+              'receipt settings import',
+          )
+          text = replace_once(
+              text,
+              "  final _dollarRateController = TextEditingController();\n",
+              "  final _dollarRateController = TextEditingController();\n  double _discountPercent = 0;\n  bool _loadingPricingPolicy = true;\n  String? _pricingPolicyError;\n",
+              'discount state',
+          )
+          text = replace_once(
+              text,
+              "      _dollarRateController.text = widget.debt!\n          .getDoubleValue('dollar_rate')\n          .toString();\n",
+              "      _dollarRateController.text = widget.debt!\n          .getDoubleValue('dollar_rate')\n          .toString();\n      _discountPercent = widget.debt!\n          .getDoubleValue('discount_percent')\n          .clamp(0.0, 100.0)\n          .toDouble();\n      _loadingPricingPolicy = false;\n",
+              'edit discount restore',
+          )
+          text = replace_once(
+              text,
+              "    } else {\n      _selectedCustomerId = widget.customerId;\n    }\n    _loadCustomers();\n",
+              "    } else {\n      _selectedCustomerId = widget.customerId;\n      WidgetsBinding.instance.addPostFrameCallback((_) {\n        if (mounted) _loadPricingPolicy();\n      });\n    }\n    _loadCustomers();\n",
+              'pricing policy bootstrap',
+          )
+          pricing_method = r'''  Future<void> _loadPricingPolicy() async {
+    if (widget.debt != null) return;
+    final auth = context.read<AuthProvider>();
+    if (mounted) {
+      setState(() {
+        _loadingPricingPolicy = true;
+        _pricingPolicyError = null;
+      });
+    }
+    try {
+      final settings = await ReceiptSettingsService.load(
+        adminId: auth.adminId,
+        fallbackMarketName: auth.marketName,
+        fallbackPhone: auth.user?.getStringValue('phone') ?? '',
+      );
+      if (!mounted) return;
+      setState(() {
+        _discountPercent = settings.discountPercent.clamp(0.0, 100.0).toDouble();
+        _loadingPricingPolicy = false;
+        _pricingPolicyError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingPricingPolicy = false;
+        _pricingPolicyError =
+            'نەتوانرا ڕێکخستنی داشکاندنی مارکێت پشتڕاست بکرێتەوە.';
+      });
+    }
+  }
+
+'''
+          text = replace_once(
+              text,
+              "  @override\n  void dispose() {\n",
+              pricing_method + "  @override\n  void dispose() {\n",
+              'pricing policy method',
+          )
+          text = replace_once(
+              text,
+              "  Future<void> _save() async {\n",
+              "  Future<void> _save() async {\n    if (widget.debt == null && _loadingPricingPolicy) {\n      AppHelpers.showSnackBar(\n        context,\n        'چاوەڕێ بکە تا ڕێکخستنی داشکاندن پشتڕاست دەکرێتەوە.',\n        isError: true,\n      );\n      return;\n    }\n    if (widget.debt == null && _pricingPolicyError != null) {\n      AppHelpers.showSnackBar(context, _pricingPolicyError!, isError: true);\n      return;\n    }\n",
+              'pricing save guard',
+          )
+          calculation = r'''      // Calculate the undiscounted subtotal in IQD, then apply the
+      // market receipt discount once. The discounted result is the financial
+      // debt amount used by limits, payments, reports, and receipts.
+      double subtotalNewDebt = 0;
+      double subtotalUsdAmount = 0;
+      for (var item in _items) {
+        final itemCurrency = item['currency'] as String? ?? _currency;
+        final itemTotal = (item['price'] as double) * (item['qty'] as int);
+        if (itemCurrency == 'USD') {
+          subtotalUsdAmount += itemTotal;
+          subtotalNewDebt += dollarRate > 0 ? itemTotal * dollarRate : itemTotal;
+        } else {
+          subtotalNewDebt += itemTotal;
+        }
+      }
+      final discountPercent = _discountPercent.clamp(0.0, 100.0).toDouble();
+      final discountAmount =
+          ((subtotalNewDebt * discountPercent / 100) * 100).roundToDouble() / 100;
+      final totalNewDebt = subtotalNewDebt - discountAmount;
+      final totalUsdAmount = subtotalUsdAmount * (1 - discountPercent / 100);
+      if (totalNewDebt <= 0) {
+        if (!mounted) return;
+        AppHelpers.showSnackBar(
+          context,
+          'داشکاندن ناتوانێت کۆی کۆتایی قەرز بکاتە سفر.',
+          isError: true,
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Check Debt Limit.'''
+          text = sub_once(
+              text,
+              r"      // Calculate total in IQD by converting each item individually\n.*?      // Check Debt Limit\.",
+              calculation,
+              'discount calculation',
+          )
+          text = replace_once(
+              text,
+              "        if (currentBalance + totalNewDebt > debtLimit) {\n",
+              "        final oldRemainingForProjection =\n            widget.debt?.getDoubleValue('remaining') ?? 0;\n        final oldAmountForProjection =\n            widget.debt?.getDoubleValue('amount') ?? 0;\n        final alreadyPaidForProjection = widget.debt == null\n            ? 0.0\n            : (oldAmountForProjection - oldRemainingForProjection)\n                .clamp(0.0, double.infinity)\n                .toDouble();\n        final newRemainingForProjection = widget.debt == null\n            ? totalNewDebt\n            : (totalNewDebt - alreadyPaidForProjection)\n                .clamp(0.0, double.infinity)\n                .toDouble();\n        final sameCustomer = widget.debt != null &&\n            widget.debt!.getStringValue('customer') == _selectedCustomerId;\n        final projectedBalance = currentBalance +\n            newRemainingForProjection -\n            (sameCustomer ? oldRemainingForProjection : 0);\n\n        if (projectedBalance > debtLimit) {\n",
+              'projected debt limit',
+          )
+          text = text.replace('currentBalance + totalNewDebt', 'projectedBalance')
+          update_logic = r'''        final oldAmount = widget.debt!.getDoubleValue('amount');
+        final oldRemaining = widget.debt!.getDoubleValue('remaining');
+        final paid = (oldAmount - oldRemaining)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+        if (totalNewDebt + 0.009 < paid) {
+          if (!mounted) return;
+          AppHelpers.showSnackBar(
+            context,
+            'کۆی کۆتایی دوای داشکاندن نابێت کەمتر بێت لە پارەی پێشتر وەرگیراو.',
+            isError: true,
+          );
+          setState(() => _isLoading = false);
+          return;
+        }
+        final newRemaining = (totalNewDebt - paid)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+        final newStatus = newRemaining <= 0
+            ? 'paid'
+            : paid > 0
+                ? 'partial'
+                : 'pending';
+
+        // Check if due_date changed'''
+          text = sub_once(
+              text,
+              r"        final oldAmount = widget\.debt!\.getDoubleValue\('amount'\);\n.*?        // Check if due_date changed",
+              update_logic,
+              'edit discount accounting',
+          )
+          text = replace_once(
+              text,
+              "          'amount': totalNewDebt,\n          'remaining': newRemaining,\n",
+              "          'subtotal': subtotalNewDebt,\n          'discount_percent': discountPercent,\n          'discount_amount': discountAmount,\n          'amount': totalNewDebt,\n          'remaining': newRemaining,\n          'status': newStatus,\n",
+              'update pricing fields',
+          )
+          text = replace_once(
+              text,
+              "          amount: totalNewDebt,\n          dueDate:",
+              "          amount: totalNewDebt,\n          subtotal: subtotalNewDebt,\n          discountPercent: discountPercent,\n          dueDate:",
+              'create pricing fields',
+          )
+          pricing_banner_old = "          const SizedBox(height: 16),\n\n          if (_items.isEmpty)\n"
+          pricing_banner_new = r'''          const SizedBox(height: 16),
+
+          if (widget.debt == null && _loadingPricingPolicy)
+            const LinearProgressIndicator(minHeight: 2),
+          if (widget.debt == null && _pricingPolicyError != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.22)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.sync_problem_rounded, color: Colors.orange, size: 19),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _pricingPolicyError!,
+                      style: const TextStyle(fontSize: 11.5),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'دووبارە هەوڵ بدە',
+                    onPressed: _loadPricingPolicy,
+                    icon: const Icon(Icons.refresh_rounded, size: 19),
+                  ),
+                ],
+              ),
+            ),
+          if (!_loadingPricingPolicy &&
+              _pricingPolicyError == null &&
+              _discountPercent > 0)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.18)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.discount_outlined, color: Colors.green, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'داشکاندنی مارکێت: ${_discountPercent.toStringAsFixed(2)}% • خۆکارانە لە کۆی کۆتایی کەم دەکرێتەوە',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          if (_items.isEmpty)
+'''
+          text = replace_once(text, pricing_banner_old, pricing_banner_new, 'pricing policy banner')
+          text = replace_once(
+              text,
+              "    for (final item in _items) {\n      final itemCurrency = item['currency'] as String? ?? _currency;\n      final itemTotal = (item['price'] as double) * (item['qty'] as int);\n      if (itemCurrency == 'USD') {\n        totalUSD += itemTotal;\n        if (dollarRate > 0) totalIQD += itemTotal * dollarRate;\n      } else {\n        totalIQD += itemTotal;\n        if (dollarRate > 0) totalUSD += itemTotal / dollarRate;\n      }\n    }\n\n    return Container(\n",
+              "    for (final item in _items) {\n      final itemCurrency = item['currency'] as String? ?? _currency;\n      final itemTotal = (item['price'] as double) * (item['qty'] as int);\n      if (itemCurrency == 'USD') {\n        totalUSD += itemTotal;\n        if (dollarRate > 0) totalIQD += itemTotal * dollarRate;\n      } else {\n        totalIQD += itemTotal;\n        if (dollarRate > 0) totalUSD += itemTotal / dollarRate;\n      }\n    }\n    final discountIQD =\n        ((totalIQD * _discountPercent / 100) * 100).roundToDouble() / 100;\n    final grandTotalIQD = (totalIQD - discountIQD).clamp(0.0, double.infinity);\n    final discountUSD = totalUSD * _discountPercent / 100;\n    final grandTotalUSD = (totalUSD - discountUSD).clamp(0.0, double.infinity);\n\n    return Container(\n",
+              'bottom totals',
+          )
+          text = replace_once(text, "                  'کۆی گشتی',\n", "                  'کۆی کۆتایی',\n", 'bottom total label')
+          text = replace_once(
+              text,
+              "                  AppHelpers.formatCurrencyWithType(totalIQD, 'IQD'),\n",
+              "                  AppHelpers.formatCurrencyWithType(grandTotalIQD.toDouble(), 'IQD'),\n",
+              'bottom grand total iqd',
+          )
+          text = replace_once(
+              text,
+              "                if (totalUSD > 0)\n                  Text(\n                    AppHelpers.formatCurrencyWithType(totalUSD, 'USD'),\n",
+              "                if (_discountPercent > 0 && totalIQD > 0)\n                  Text(\n                    'پێش داشکاندن: ${AppHelpers.formatCurrencyWithType(totalIQD, 'IQD')} • -${AppHelpers.formatCurrencyWithType(discountIQD, 'IQD')}',\n                    style: const TextStyle(\n                      fontSize: 9.5,\n                      fontWeight: FontWeight.w600,\n                      color: Colors.orange,\n                    ),\n                    textDirection: TextDirection.ltr,\n                  ),\n                if (grandTotalUSD > 0)\n                  Text(\n                    AppHelpers.formatCurrencyWithType(grandTotalUSD.toDouble(), 'USD'),\n",
+              'bottom discount breakdown',
+          )
+          path.write_text(text)
+
+          # ---------- PBService: persist debt pricing metadata ----------
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text()
+          text = replace_once(
+              text,
+              "    required double amount,\n    required String dueDate,\n",
+              "    required double amount,\n    double? subtotal,\n    double discountPercent = 0,\n    required String dueDate,\n",
+              'create debt signature',
+          )
+          text = replace_once(
+              text,
+              "      'amount': amount,\n      'remaining': amount,\n",
+              "      'subtotal': subtotal ?? amount,\n      'discount_percent': discountPercent,\n      'amount': amount,\n      'remaining': amount,\n",
+              'create debt body',
+          )
+          path.write_text(text)
+
+          # ---------- Official receipt: subtotal -> discount -> grand total ----------
+          path = Path('lib/services/official_receipt_service.dart')
+          text = path.read_text()
+          text = replace_once(
+              text,
+              "  final double dollarRate;\n  final double amount;\n  final double paid;\n",
+              "  final double dollarRate;\n  final double subtotal;\n  final double discountPercent;\n  final double discountAmount;\n  final double amount;\n  final double paid;\n",
+              'receipt pricing fields',
+          )
+          text = replace_once(
+              text,
+              "    required this.dollarRate,\n    required this.amount,\n    required this.paid,\n",
+              "    required this.dollarRate,\n    required this.subtotal,\n    required this.discountPercent,\n    required this.discountAmount,\n    required this.amount,\n    required this.paid,\n",
+              'receipt pricing constructor',
+          )
+          text = replace_once(
+              text,
+              "        dollarRate: dollarRate,\n        amount: amount,\n        paid: paid,\n",
+              "        dollarRate: dollarRate,\n        subtotal: subtotal,\n        discountPercent: discountPercent,\n        discountAmount: discountAmount,\n        amount: amount,\n        paid: paid,\n",
+              'receipt pricing copy',
+          )
+          text = replace_once(
+              text,
+              "      'line_total': ['کۆ', 'المجموع', 'Total'],\n      'total': ['کۆی گشتی', 'المجموع الكلي', 'Grand total'],\n",
+              "      'line_total': ['کۆ', 'المجموع', 'Total'],\n      'subtotal': ['کۆی پێش داشکاندن', 'المجموع قبل الخصم', 'Subtotal'],\n      'total': ['کۆی کۆتایی', 'المجموع النهائي', 'Grand total'],\n",
+              'subtotal label',
+          )
+          text = replace_once(
+              text,
+              "    final amount = debt.getDoubleValue('amount');\n    final remaining = debt.getDoubleValue('remaining');\n",
+              "    final amount = debt.getDoubleValue('amount');\n    final storedSubtotal = debt.getDoubleValue('subtotal');\n    final subtotal = storedSubtotal > 0 ? storedSubtotal : amount;\n    final discountPercent = debt\n        .getDoubleValue('discount_percent')\n        .clamp(0.0, 100.0)\n        .toDouble();\n    final storedDiscountAmount = debt.getDoubleValue('discount_amount');\n    final discountAmount = storedDiscountAmount > 0\n        ? storedDiscountAmount\n        : ((subtotal * discountPercent / 100) * 100).roundToDouble() / 100;\n    final remaining = debt.getDoubleValue('remaining');\n",
+              'receipt pricing extraction',
+          )
+          text = replace_once(
+              text,
+              "      dollarRate: dollarRate,\n      amount: amount,\n      paid: paid,\n",
+              "      dollarRate: dollarRate,\n      subtotal: subtotal,\n      discountPercent: discountPercent,\n      discountAmount: discountAmount,\n      amount: amount,\n      paid: paid,\n",
+              'receipt data return pricing',
+          )
+          text = replace_once(
+              text,
+              "    final year = DateTime.now().year;\n    final data = _ReceiptData(\n",
+              "    final year = DateTime.now().year;\n    const previewSubtotal = 125000.0;\n    final previewDiscountPercent =\n        settings.discountPercent.clamp(0.0, 100.0).toDouble();\n    final previewDiscountAmount =\n        ((previewSubtotal * previewDiscountPercent / 100) * 100).roundToDouble() / 100;\n    final previewAmount = previewSubtotal - previewDiscountAmount;\n    final previewPaid = previewAmount > 50000 ? 50000.0 : previewAmount;\n    final data = _ReceiptData(\n",
+              'preview pricing setup',
+          )
+          text = replace_once(
+              text,
+              "      dollarRate: 0,\n      amount: 125000,\n      paid: 50000,\n      remaining: 75000,\n",
+              "      dollarRate: 0,\n      subtotal: previewSubtotal,\n      discountPercent: previewDiscountPercent,\n      discountAmount: previewDiscountAmount,\n      amount: previewAmount,\n      paid: previewPaid,\n      remaining: previewAmount - previewPaid,\n",
+              'preview pricing values',
+          )
+          text = replace_once(
+              text,
+              "    final totalText = AppHelpers.formatStoredFinancialAmount(\n      data.amount,\n",
+              "    final subtotalText = AppHelpers.formatStoredFinancialAmount(\n      data.subtotal,\n      data.currency,\n      dollarRate: data.dollarRate,\n      showConversion: true,\n    );\n    final discountAmountText = AppHelpers.formatStoredFinancialAmount(\n      data.discountAmount,\n      data.currency,\n      dollarRate: data.dollarRate,\n      showConversion: true,\n    );\n    final totalText = AppHelpers.formatStoredFinancialAmount(\n      data.amount,\n",
+              'receipt total strings',
+          )
+          text = replace_once(
+              text,
+              "                infoLine(_label('total', language), totalText),\n                if (settings.discountPercent > 0)\n                  infoLine(\n                    _label('discount', language),\n                    '${settings.discountPercent.toStringAsFixed(2)}%',\n                    ltr: true,\n                  ),\n",
+              "                infoLine(_label('subtotal', language), subtotalText),\n                if (data.discountPercent > 0)\n                  infoLine(\n                    _label('discount', language),\n                    '${data.discountPercent.toStringAsFixed(2)}% • -$discountAmountText',\n                    ltr: true,\n                  ),\n                infoLine(_label('total', language), totalText),\n",
+              'receipt discount rendering',
+          )
+          path.write_text(text)
+
+          # Clarify that receipt settings are the default for new transactions.
+          path = Path('lib/screens/admin/receipt_settings_screen.dart')
+          text = path.read_text()
+          text = replace_once(
+              text,
+              "decoration: _decoration('داشکاندن %', Icons.discount_outlined),",
+              "decoration: _decoration('داشکاندنی بنەڕەت %', Icons.discount_outlined),",
+              'discount settings label',
+          )
+          path.write_text(text)
+
+          migration = Path('supabase/migrations/20260912154500_apply_receipt_discount_to_debts.sql')
+          migration.write_text(r'''alter table public.debts
+  add column if not exists subtotal numeric not null default 0,
+  add column if not exists discount_percent numeric not null default 0,
+  add column if not exists discount_amount numeric not null default 0;
+
+update public.debts
+set subtotal = amount,
+    discount_percent = 0,
+    discount_amount = 0
+where subtotal = 0
+   or discount_percent <> 0
+   or discount_amount <> 0;
+
+alter table public.debts
+  drop constraint if exists debts_subtotal_check,
+  drop constraint if exists debts_discount_percent_check,
+  drop constraint if exists debts_discount_amount_check;
+
+alter table public.debts
+  add constraint debts_subtotal_check check (subtotal > 0),
+  add constraint debts_discount_percent_check check (discount_percent between 0 and 100),
+  add constraint debts_discount_amount_check check (discount_amount >= 0 and discount_amount < subtotal);
+
+create or replace function private.normalize_debt_discount()
+returns trigger
+language plpgsql
+set search_path to 'pg_catalog'
+as $function$
+declare
+  v_paid numeric := 0;
+begin
+  new.discount_percent := coalesce(new.discount_percent, 0);
+  new.discount_amount := coalesce(new.discount_amount, 0);
+  new.subtotal := coalesce(new.subtotal, 0);
+
+  if new.discount_percent < 0 or new.discount_percent > 100 then
+    raise exception 'invalid_discount_percent';
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.subtotal <= 0 and coalesce(new.amount, 0) > 0 then
+      new.subtotal := new.amount;
+    end if;
+    if new.subtotal <= 0 then
+      raise exception 'invalid_subtotal';
+    end if;
+    new.discount_amount := round(new.subtotal * new.discount_percent / 100.0, 2);
+    new.amount := new.subtotal - new.discount_amount;
+    if new.amount <= 0 then
+      raise exception 'discounted_total_must_be_positive';
+    end if;
+    new.remaining := new.amount;
+    new.status := 'pending';
+    return new;
+  end if;
+
+  if new.amount is distinct from old.amount
+     and new.subtotal is not distinct from old.subtotal
+     and new.discount_percent is not distinct from old.discount_percent
+     and new.discount_amount is not distinct from old.discount_amount then
+    if new.amount <= 0 then
+      raise exception 'discounted_total_must_be_positive';
+    end if;
+    new.subtotal := new.amount;
+    new.discount_percent := 0;
+    new.discount_amount := 0;
+    return new;
+  end if;
+
+  if new.subtotal is distinct from old.subtotal
+     or new.discount_percent is distinct from old.discount_percent
+     or new.discount_amount is distinct from old.discount_amount then
+    if new.subtotal <= 0 then
+      raise exception 'invalid_subtotal';
+    end if;
+    v_paid := greatest(old.amount - old.remaining, 0);
+    new.discount_amount := round(new.subtotal * new.discount_percent / 100.0, 2);
+    new.amount := new.subtotal - new.discount_amount;
+    if new.amount <= 0 then
+      raise exception 'discounted_total_must_be_positive';
+    end if;
+    if v_paid > new.amount then
+      raise exception 'discounted_total_below_paid';
+    end if;
+    new.remaining := new.amount - v_paid;
+    new.status := case
+      when new.remaining <= 0 then 'paid'
+      when v_paid > 0 then 'partial'
+      else 'pending'
+    end;
+  end if;
+  return new;
+end;
+$function$;
+
+drop trigger if exists trg_debts_normalize_discount on public.debts;
+create trigger trg_debts_normalize_discount
+before insert or update of amount, subtotal, discount_percent, discount_amount
+on public.debts
+for each row execute function private.normalize_debt_discount();
+''')
+
+          Path('.github/workflows/apply-real-discount-once.yml').unlink()
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply real receipt discount accounting"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
