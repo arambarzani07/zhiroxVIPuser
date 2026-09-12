@@ -80,9 +80,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
     String? loadError;
     try {
       freshStats = await PBService.getDashboardStats(adminId: auth.userId);
-    } catch (_) {
-      loadError =
-          'نەتوانرا زانیارییەکانی داشبۆرد نوێ بکرێنەوە. پەیوەندی ئینتەرنێت بپشکنە.';
+    } catch (error) {
+      loadError = AppHelpers.backendErrorMessage(
+        error,
+        fallback: 'نەتوانرا زانیارییەکانی داشبۆرد نوێ بکرێنەوە. دووبارە هەوڵ بدە.',
+      );
     }
 
     if (!mounted) return;
