@@ -505,6 +505,53 @@ class _UserListScreenState extends State<UserListScreen> {
           ),
 
           // ───── List ─────
+          if (!_isLoading &&
+              _loadError == null &&
+              _users.isNotEmpty &&
+              widget.role == 'customer' &&
+              _inboxError != null)
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 8, 8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: isDark ? 0.14 : 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.orange,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _inboxError!,
+                        textDirection: TextDirection.rtl,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark
+                              ? AppDarkColors.textPrimary
+                              : const Color(0xFF7A4D00),
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _loadCustomerInboxInBackground(
+                        List<RecordModel>.from(_users),
+                        generation: _loadGeneration,
+                      ),
+                      child: const Text('هەوڵدانەوە'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           _isLoading
               ? const SliverFillRemaining(
                   child: Center(child: CircularProgressIndicator()),
@@ -514,7 +561,12 @@ class _UserListScreenState extends State<UserListScreen> {
               : _users.isEmpty
               ? SliverFillRemaining(child: _buildEmptyState())
               : SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    _inboxError == null ? 16 : 10,
+                    16,
+                    16,
+                  ),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) =>
