@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/admin/admin_settings_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
@@ -27,11 +28,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String? _statsError;
   Future<void>? _statsLoad;
   StreamSubscription<bool>? _connectivitySub;
+  RealtimeChannel? _dashboardRealtimeChannel;
+  Timer? _dashboardRealtimeDebounce;
+  bool _dashboardRealtimeRefreshPending = false;
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadStats());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_subscribeDashboardRealtime());
+    });
     _connectivitySub = ConnectivityService.instance.statusStream.listen((online) {
       if (online && mounted) unawaited(_loadStats());
     });
@@ -39,8 +46,78 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   @override
   void dispose() {
+    _dashboardRealtimeDebounce?.cancel();
+    _dashboardRealtimeRefreshPending = false;
+    final channel = _dashboardRealtimeChannel;
+    if (channel != null) {
+      unawaited(PBService.client.removeChannel(channel));
+    }
     _connectivitySub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _subscribeDashboardRealtime() async {
+    try {
+      await PBService.ensureInitialized();
+      if (!mounted) return;
+      final previous = _dashboardRealtimeChannel;
+      if (previous != null) {
+        try {
+          await PBService.client.removeChannel(previous);
+        } catch (_) {}
+      }
+      final channel = PBService.client
+          .channel('admin-dashboard:${DateTime.now().microsecondsSinceEpoch}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'profiles',
+            callback: (_) => _scheduleDashboardRealtimeRefresh(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'debts',
+            callback: (_) => _scheduleDashboardRealtimeRefresh(),
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'payments',
+            callback: (_) => _scheduleDashboardRealtimeRefresh(),
+          )
+          .subscribe();
+      if (!mounted) {
+        await PBService.client.removeChannel(channel);
+        return;
+      }
+      _dashboardRealtimeChannel = channel;
+    } catch (_) {
+      // Pull-to-refresh and reconnect remain available if Realtime is offline.
+    }
+  }
+
+  void _scheduleDashboardRealtimeRefresh() {
+    if (!mounted) return;
+    _dashboardRealtimeDebounce?.cancel();
+    _dashboardRealtimeDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) unawaited(_refreshDashboardAfterRealtime());
+    });
+  }
+
+  Future<void> _refreshDashboardAfterRealtime() async {
+    if (!mounted) return;
+    final activeLoad = _statsLoad;
+    if (activeLoad != null) {
+      if (_dashboardRealtimeRefreshPending) return;
+      _dashboardRealtimeRefreshPending = true;
+      try {
+        await activeLoad;
+      } catch (_) {}
+      _dashboardRealtimeRefreshPending = false;
+      if (!mounted) return;
+    }
+    await _loadStats();
   }
 
   Future<void> _loadStats() {
