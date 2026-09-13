@@ -34,6 +34,57 @@ function safeAmount(value: unknown): number {
   return Math.round(n * 100) / 100;
 }
 
+type ImportEntityKind = "customer" | "debt" | "payment";
+
+async function findPreviousTarget(
+  admin: any,
+  adminId: string,
+  entityKind: ImportEntityKind,
+  sourceId: string,
+): Promise<{ targetId: string | null; conflict: boolean }> {
+  const { data, error } = await admin
+    .from("legacy_import_links")
+    .select("target_id")
+    .eq("admin_id", adminId)
+    .eq("entity_kind", entityKind)
+    .eq("source_id", sourceId)
+    .limit(20);
+  if (error) throw error;
+
+  const targetIds = [...new Set((data ?? []).map((row: { target_id: string }) => row.target_id))];
+  return {
+    targetId: targetIds.length === 1 ? targetIds[0] : null,
+    conflict: targetIds.length > 1,
+  };
+}
+
+async function addFingerprintLink(
+  admin: any,
+  adminId: string,
+  fingerprint: string,
+  entityKind: ImportEntityKind,
+  sourceId: string,
+  targetId: string,
+) {
+  const { error } = await admin.from("legacy_import_links").upsert({
+    admin_id: adminId,
+    source_fingerprint: fingerprint,
+    entity_kind: entityKind,
+    source_id: sourceId,
+    target_id: targetId,
+  }, {
+    onConflict: "admin_id,source_fingerprint,entity_kind,source_id",
+    ignoreDuplicates: true,
+  });
+  if (error) throw error;
+}
+
+function sameInstant(left: unknown, right: unknown): boolean {
+  const leftMs = Date.parse(String(left ?? ""));
+  const rightMs = Date.parse(String(right ?? ""));
+  return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -148,6 +199,7 @@ Deno.serve(async (req) => {
       const rows = Array.isArray(body.rows) ? body.rows : [];
       if (rows.length === 0 || rows.length > 100) return json({ error: "invalid_batch" }, 400);
       let imported = 0;
+      let reused = 0;
 
       for (const raw of rows) {
         const sourceId = String(raw.source_id ?? raw.legacy_customer_id ?? "").trim();
@@ -163,6 +215,24 @@ Deno.serve(async (req) => {
           .eq("source_id", sourceId)
           .maybeSingle();
         if (link) continue;
+
+        const previous = await findPreviousTarget(admin, adminId, "customer", sourceId);
+        if (previous.conflict) {
+          return json({ error: "source_id_conflict", entity_kind: "customer", source_id: sourceId }, 409);
+        }
+        if (previous.targetId) {
+          const { data: previousCustomer } = await admin.from("profiles")
+            .select("id, role, admin_id")
+            .eq("id", previous.targetId)
+            .maybeSingle();
+          if (!previousCustomer || previousCustomer.role !== "customer" || previousCustomer.admin_id !== adminId) {
+            return json({ error: "source_id_conflict", entity_kind: "customer", source_id: sourceId }, 409);
+          }
+          await addFingerprintLink(admin, adminId, fingerprint, "customer", sourceId, previous.targetId);
+          imported++;
+          reused++;
+          continue;
+        }
 
         let phone = String(raw.phone ?? raw.source_phone ?? "").trim();
         if (!phone) phone = `legacy_${adminId.slice(0, 8)}_${sourceId}`;
@@ -250,13 +320,14 @@ Deno.serve(async (req) => {
         .eq("source_fingerprint", fingerprint)
         .eq("entity_kind", "customer");
       await admin.from("legacy_import_jobs").update({ imported_customers: count ?? 0, updated_at: new Date().toISOString() }).eq("id", job.id);
-      return json({ ok: true, imported, total_imported: count ?? 0 });
+      return json({ ok: true, imported, reused, total_imported: count ?? 0 });
     }
 
     if (action === "debts") {
       const rows = Array.isArray(body.rows) ? body.rows : [];
       if (rows.length === 0 || rows.length > 150) return json({ error: "invalid_batch" }, 400);
       let imported = 0;
+      let reused = 0;
       for (const raw of rows) {
         const sourceId = String(raw.source_id ?? raw.legacy_transaction_id ?? "").trim();
         const customerSourceId = String(raw.customer_source_id ?? raw.legacy_customer_id ?? "").trim();
@@ -276,20 +347,49 @@ Deno.serve(async (req) => {
 
         const amount = safeAmount(raw.amount);
         if (amount <= 0) return json({ error: "invalid_amount", source_id: sourceId }, 400);
-        const debtId = crypto.randomUUID();
         const occurredAt = String(raw.occurred_at ?? raw.custom_date ?? raw.created_at ?? new Date().toISOString());
+        const description = String(raw.description ?? raw.note ?? "");
+        const currency = String(raw.currency ?? "IQD");
+
+        const previous = await findPreviousTarget(admin, adminId, "debt", sourceId);
+        if (previous.conflict) {
+          return json({ error: "source_id_conflict", entity_kind: "debt", source_id: sourceId }, 409);
+        }
+        if (previous.targetId) {
+          const { data: previousDebt } = await admin.from("debts")
+            .select("id, customer_id, amount, description, currency, custom_date, created_at, created_by")
+            .eq("id", previous.targetId)
+            .maybeSingle();
+          const previousOccurredAt = previousDebt?.custom_date ?? previousDebt?.created_at;
+          const matches = previousDebt
+            && previousDebt.created_by === adminId
+            && previousDebt.customer_id === customerLink.target_id
+            && safeAmount(previousDebt.amount) === amount
+            && String(previousDebt.description ?? "") === description
+            && String(previousDebt.currency ?? "IQD") === currency
+            && sameInstant(previousOccurredAt, occurredAt);
+          if (!matches) {
+            return json({ error: "source_id_conflict", entity_kind: "debt", source_id: sourceId }, 409);
+          }
+          await addFingerprintLink(admin, adminId, fingerprint, "debt", sourceId, previous.targetId);
+          imported++;
+          reused++;
+          continue;
+        }
+
+        const debtId = crypto.randomUUID();
         const { error: debtError } = await admin.from("debts").insert({
           id: debtId,
           customer_id: customerLink.target_id,
-          description: String(raw.description ?? raw.note ?? ""),
+          description,
           amount,
           remaining: amount,
           due_date: null,
           status: "pending",
           created_by: adminId,
-          currency: String(raw.currency ?? "IQD"),
+          currency,
           dollar_rate: 0,
-          amount_usd: String(raw.currency ?? "IQD") === "USD" ? amount : 0,
+          amount_usd: currency === "USD" ? amount : 0,
           items: [],
           custom_date: occurredAt,
           receipt_image_path: "",
@@ -314,13 +414,14 @@ Deno.serve(async (req) => {
         .select("source_id", { count: "exact", head: true })
         .eq("admin_id", adminId).eq("source_fingerprint", fingerprint).eq("entity_kind", "debt");
       await admin.from("legacy_import_jobs").update({ imported_debts: count ?? 0, updated_at: new Date().toISOString() }).eq("id", job.id);
-      return json({ ok: true, imported, total_imported: count ?? 0 });
+      return json({ ok: true, imported, reused, total_imported: count ?? 0 });
     }
 
     if (action === "payments") {
       const rows = Array.isArray(body.rows) ? body.rows : [];
       if (rows.length === 0 || rows.length > 150) return json({ error: "invalid_batch" }, 400);
       let imported = 0;
+      let reused = 0;
       for (const raw of rows) {
         const sourceId = String(raw.source_id ?? `${raw.legacy_transaction_id ?? ""}:${raw.allocation_part ?? "1"}`).trim();
         const debtSourceId = String(raw.debt_source_id ?? raw.legacy_debt_transaction_id ?? raw.debt_legacy_transaction_id ?? "").trim();
@@ -341,12 +442,38 @@ Deno.serve(async (req) => {
         const paymentId = crypto.randomUUID();
         const amount = safeAmount(raw.amount);
         const occurredAt = String(raw.occurred_at ?? raw.created_at ?? new Date().toISOString());
+        const note = String(raw.note ?? "");
+
+        const previous = await findPreviousTarget(admin, adminId, "payment", sourceId);
+        if (previous.conflict) {
+          return json({ error: "source_id_conflict", entity_kind: "payment", source_id: sourceId }, 409);
+        }
+        if (previous.targetId) {
+          const { data: previousPayment } = await admin.from("payments")
+            .select("id, debt_id, amount, note, created_at, created_by")
+            .eq("id", previous.targetId)
+            .maybeSingle();
+          const matches = previousPayment
+            && previousPayment.created_by === adminId
+            && previousPayment.debt_id === debtLink.target_id
+            && safeAmount(previousPayment.amount) === amount
+            && String(previousPayment.note ?? "") === note
+            && sameInstant(previousPayment.created_at, occurredAt);
+          if (!matches) {
+            return json({ error: "source_id_conflict", entity_kind: "payment", source_id: sourceId }, 409);
+          }
+          await addFingerprintLink(admin, adminId, fingerprint, "payment", sourceId, previous.targetId);
+          imported++;
+          reused++;
+          continue;
+        }
+
         const { error: paymentError } = await admin.rpc("legacy_import_apply_payment", {
           p_admin_id: adminId,
           p_debt_id: debtLink.target_id,
           p_payment_id: paymentId,
           p_amount: amount,
-          p_note: String(raw.note ?? ""),
+          p_note: note,
           p_created_at: occurredAt,
         });
         if (paymentError) return json({ error: paymentError.message, source_id: sourceId }, 400);
@@ -364,7 +491,7 @@ Deno.serve(async (req) => {
         .select("source_id", { count: "exact", head: true })
         .eq("admin_id", adminId).eq("source_fingerprint", fingerprint).eq("entity_kind", "payment");
       await admin.from("legacy_import_jobs").update({ imported_payments: count ?? 0, updated_at: new Date().toISOString() }).eq("id", job.id);
-      return json({ ok: true, imported, total_imported: count ?? 0 });
+      return json({ ok: true, imported, reused, total_imported: count ?? 0 });
     }
 
     if (action === "finalize") {
