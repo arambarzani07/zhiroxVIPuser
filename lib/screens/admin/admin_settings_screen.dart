@@ -5,6 +5,7 @@ import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/debt_restore_screen.dart';
 import 'package:zhirox/screens/admin/governance_center_screen.dart';
 import 'package:zhirox/screens/admin/intelligence_center_screen.dart';
+import 'package:zhirox/screens/admin/legacy_import_screen.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
 import 'package:zhirox/screens/admin/receipt_settings_screen.dart';
 import 'package:zhirox/screens/admin/subscription_payment_screen.dart';
@@ -152,6 +153,16 @@ class AdminSettingsScreen extends StatelessWidget {
                       onTap: () => _open(
                         context,
                         const DebtRestoreScreen(),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    _SettingsRow(
+                      icon: Icons.move_to_inbox_rounded,
+                      title: 'گواستنەوەی داتای کۆن',
+                      subtitle: 'Import ـی کڕیار، قەرز و پارەدانەوە لە ZIP',
+                      onTap: () => _open(
+                        context,
+                        const LegacyImportScreen(),
                       ),
                     ),
                   ]),
