@@ -1,3 +1,4 @@
+Online-only policy verification passed.
 from pathlib import Path
 import os
 import re
@@ -130,6 +131,17 @@ user_list_source = (LIB / 'screens/shared/user_list_screen.dart').read_text(
 for marker in ('_inboxError!', 'warning_amber_rounded', 'هەوڵدانەوە'):
     if marker not in user_list_source:
         fail(f'customer balance retry UI missing marker: {marker}')
+for marker in (
+    'PBService.getCustomerDirectoryPage',
+    'loadMore: true',
+    '_nextUserCursor',
+    '_hasMoreUsers',
+):
+    if marker not in user_list_source:
+        fail(f'customer directory pagination marker missing: {marker}')
+for marker in ('get_customer_directory_page', 'get_customer_debts_page'):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: scalable query marker missing: {marker}')
 
 
 # Financial Chat realtime/audit markers: business history remains server-backed
