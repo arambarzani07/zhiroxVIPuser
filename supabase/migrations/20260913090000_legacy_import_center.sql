@@ -82,11 +82,9 @@ begin
     raise exception 'invalid_payment_amount';
   end if;
 
-  select d.*,
-         p.admin_id
-    into v_debt, v_customer_admin
+  select d.*
+    into v_debt
   from public.debts d
-  join public.profiles p on p.id = d.customer_id
   where d.id = p_debt_id
     and coalesce(d.is_deleted, false) = false
   for update;
@@ -94,6 +92,12 @@ begin
   if not found then
     raise exception 'debt_not_found';
   end if;
+
+  select p.admin_id
+    into v_customer_admin
+  from public.profiles p
+  where p.id = v_debt.customer_id;
+
   if v_customer_admin is distinct from p_admin_id then
     raise exception 'cross_tenant_forbidden';
   end if;
