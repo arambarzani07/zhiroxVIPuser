@@ -357,8 +357,15 @@ class LegacyImportService {
   }
 
   static List<Map<String, dynamic>> _csv(Uint8List bytes) {
-    final text = utf8.decode(bytes, allowMalformed: false).replaceFirst('\ufeff', '');
-    final rows = const CsvToListConverter(shouldParseNumbers: false).convert(text);
+    final text = utf8
+        .decode(bytes, allowMalformed: false)
+        .replaceFirst('\ufeff', '')
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n');
+    final rows = const CsvToListConverter(
+      shouldParseNumbers: false,
+      eol: '\n',
+    ).convert(text);
     if (rows.isEmpty) return const [];
     final headers = rows.first.map((e) => '$e'.trim()).toList();
     return rows
