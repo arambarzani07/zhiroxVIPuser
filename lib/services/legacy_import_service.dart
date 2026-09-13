@@ -52,11 +52,7 @@ class LegacyImportService {
     for (final entry in archive) {
       if (!entry.isFile) continue;
       final normalized = entry.name.replaceAll('\\', '/');
-      final content = entry.content;
-      final data = content is Uint8List
-          ? content
-          : Uint8List.fromList(List<int>.from(content as Iterable));
-      files[normalized] = data;
+      files[normalized] = entry.content;
     }
 
     Uint8List requireBySuffix(String suffix) {
