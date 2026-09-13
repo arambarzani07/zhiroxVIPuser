@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/auth/admin_management_screen.dart';
+import 'package:zhirox/screens/auth/import_permission_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -107,7 +108,7 @@ class _OwnerHome extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'دەسەڵاتی سەرەکی بۆ بەشداریکردن، مارکێت و بڵاوکردنەوەی وەشان.',
+                    'دەسەڵاتی سەرەکی بۆ بەشداریکردن، مارکێت، مۆڵەت و بڵاوکردنەوەی وەشان.',
                     style: TextStyle(color: AppColors.textSecondary, height: 1.6),
                   ),
                 ],
@@ -134,6 +135,24 @@ class _OwnerHome extends StatelessWidget {
                     subtitle: const Text('زیادکردن و نوێکردنەوەی بەشداریکردن'),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: onOpenMarkets,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.10),
+                      child: const Icon(Icons.move_to_inbox_rounded,
+                          color: AppColors.primary),
+                    ),
+                    title: const Text('مۆڵەتی Import'),
+                    subtitle: const Text('کردنەوە یان داخستنی Import بۆ هەر مارکێت'),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ImportPermissionScreen(),
+                      ),
+                    ),
                   ),
                   const Divider(height: 1),
                   ListTile(
