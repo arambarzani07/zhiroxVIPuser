@@ -38,21 +38,51 @@ class LegacyImportService {
     );
     if (result == null || result.files.isEmpty) return null;
     final file = result.files.single;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
-      throw Exception('نەتوانرا فایلە ZIP ـەکە بخوێندرێتەوە');
+    var bytes = file.bytes ?? Uint8List(0);
+
+    // On iOS/iCloud/Safari downloads, file_picker can return a valid picked
+    // file while `bytes` is null. XFile reads from the provider-backed
+    // temporary URL/path and is the reliable fallback on those sources.
+    if (bytes.isEmpty) {
+      try {
+        bytes = await file.xFile.readAsBytes();
+      } catch (_) {
+        // Keep the localized error below if the provider cannot be read.
+      }
+    }
+
+    if (bytes.isEmpty) {
+      throw Exception('نەتوانرا ناوەڕۆکی فایلە ZIP ـەکە بخوێندرێتەوە');
     }
     return parseBundle(bytes, file.name);
   }
 
   static LegacyImportBundle parseBundle(Uint8List bytes, String fileName) {
+    if (bytes.length < 4 || bytes[0] != 0x50 || bytes[1] != 0x4b) {
+      throw Exception('فایلە هەڵبژێردراوەکە ZIP ـی دروست نییە');
+    }
+
     final fingerprint = sha256.convert(bytes).toString();
-    final archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    final Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    } catch (error) {
+      throw Exception('ZIP ـەکە زیان‌پێگەیشتووە یان ناتوانرێت بکرێتەوە: $error');
+    }
+
+    if (archive.isEmpty) {
+      throw Exception('ZIP ـەکە بەتاڵە');
+    }
+
     final files = <String, Uint8List>{};
     for (final entry in archive) {
       if (!entry.isFile) continue;
       final normalized = entry.name.replaceAll('\\', '/');
-      files[normalized] = entry.content;
+      final data = entry.readBytes();
+      if (data == null) {
+        throw Exception('نەتوانرا فایلێکی ناو ZIP بخوێندرێتەوە: $normalized');
+      }
+      files[normalized] = data;
     }
 
     Uint8List requireBySuffix(String suffix) {
