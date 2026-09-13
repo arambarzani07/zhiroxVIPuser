@@ -7,6 +7,7 @@ on:
       - 'lib/services/legacy_import_service.dart'
       - 'lib/screens/admin/legacy_import_screen.dart'
       - 'lib/screens/admin/pending_requests_screen.dart'
+      - 'test/widget_test.dart'
       - 'pubspec.yaml'
       - 'pubspec.lock'
       - '.github/workflows/validate-import-center.yml'
@@ -39,8 +40,8 @@ jobs:
       - name: Clean import service lint
         run: sed -i "/package:supabase_flutter\/supabase_flutter.dart/d" lib/services/legacy_import_service.dart
 
-      - name: Format import sources
-        run: dart format lib/services/legacy_import_service.dart lib/screens/admin/legacy_import_screen.dart lib/screens/admin/pending_requests_screen.dart
+      - name: Format import sources and tests
+        run: dart format lib/services/legacy_import_service.dart lib/screens/admin/legacy_import_screen.dart lib/screens/admin/pending_requests_screen.dart test/widget_test.dart
 
       - name: Commit resolved sources and lockfile
         shell: bash
@@ -50,6 +51,7 @@ jobs:
           git add lib/services/legacy_import_service.dart \
                   lib/screens/admin/legacy_import_screen.dart \
                   lib/screens/admin/pending_requests_screen.dart \
+                  test/widget_test.dart \
                   pubspec.lock
           if ! git diff --cached --quiet; then
             git commit -m "chore: format import center and lock dependencies"
