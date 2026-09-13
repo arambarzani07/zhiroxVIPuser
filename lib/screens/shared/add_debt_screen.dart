@@ -37,6 +37,9 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   final _formKey = GlobalKey<FormState>();
   final _descriptionController = TextEditingController();
   final _dollarRateController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _amountFocusNode = FocusNode();
+  bool _useItemDetails = false;
   double _discountPercent = 0;
   bool _loadingPricingPolicy = true;
   String? _pricingPolicyError;
@@ -83,7 +86,35 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         try {
           final List<dynamic> decoded = jsonDecode(itemsJson);
           _items.addAll(decoded.map((e) => Map<String, dynamic>.from(e)));
+          if (_items.length == 1 &&
+              (_items.first['name']?.toString().trim() == 'قەرز' ||
+                  _items.first['quick_entry'] == true) &&
+              (_items.first['qty'] as num? ?? 1).toInt() == 1) {
+            final price = (_items.first['price'] as num?)?.toDouble() ?? 0;
+            if (price > 0) {
+              _amountController.text = price == price.roundToDouble()
+                  ? price.toInt().toString()
+                  : price.toStringAsFixed(2);
+            }
+          } else if (_items.isNotEmpty) {
+            _useItemDetails = true;
+          }
         } catch (_) {}
+      }
+      if (_amountController.text.isEmpty && !_useItemDetails) {
+        final storedAmount = widget.debt!.getDoubleValue('amount');
+        final usdAmount = widget.debt!.getDoubleValue('amount_usd');
+        final rate = widget.debt!.getDoubleValue('dollar_rate');
+        final displayAmount = _currency == 'USD'
+            ? (usdAmount > 0
+                ? usdAmount
+                : (rate > 0 ? storedAmount / rate : storedAmount))
+            : storedAmount;
+        if (displayAmount > 0) {
+          _amountController.text = displayAmount == displayAmount.roundToDouble()
+              ? displayAmount.toInt().toString()
+              : displayAmount.toStringAsFixed(2);
+        }
       }
     } else {
       _selectedCustomerId = widget.customerId;
@@ -104,11 +135,16 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
 
     try {
       final auth = context.read<AuthProvider>();
-      final customers = await PBService.getUsers(
-        role: 'customer',
-        adminId: auth.adminId,
-        approved: true,
-      );
+      final lockedCustomerId = widget.debt?.getStringValue('customer') ??
+          widget.customerId ??
+          '';
+      final customers = lockedCustomerId.isNotEmpty
+          ? <RecordModel>[await PBService.getUser(lockedCustomerId)]
+          : await PBService.getUsers(
+              role: 'customer',
+              adminId: auth.adminId,
+              approved: true,
+            );
       if (!mounted) return;
 
       setState(() {
@@ -168,7 +204,23 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   void dispose() {
     _descriptionController.dispose();
     _dollarRateController.dispose();
+    _amountController.dispose();
+    _amountFocusNode.dispose();
     super.dispose();
+  }
+
+  double get _simpleAmount => double.tryParse(
+        _amountController.text.replaceAll(',', '').trim(),
+      ) ?? 0;
+
+  void _setSimpleAmount(double amount) {
+    _amountController.text = amount == amount.roundToDouble()
+        ? amount.toInt().toString()
+        : amount.toStringAsFixed(2);
+    _amountController.selection = TextSelection.collapsed(
+      offset: _amountController.text.length,
+    );
+    setState(() {});
   }
 
   void _addItem() {
@@ -712,6 +764,27 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       AppHelpers.showSnackBar(context, 'تکایە کڕیارێک هەڵبژێرە', isError: true);
       return;
     }
+    if (!_useItemDetails) {
+      final amount = _simpleAmount;
+      if (amount <= 0) {
+        _amountFocusNode.requestFocus();
+        AppHelpers.showSnackBar(
+          context,
+          'بڕی قەرز بنووسە',
+          isError: true,
+        );
+        return;
+      }
+      _items
+        ..clear()
+        ..add({
+          'name': 'قەرز',
+          'price': amount,
+          'qty': 1,
+          'currency': _currency,
+          'quick_entry': true,
+        });
+    }
     if (_items.isEmpty) {
       AppHelpers.showSnackBar(context, 'تکایە کاڵایەک زیاد بکە', isError: true);
       return;
@@ -1213,6 +1286,39 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         ? _selectedCustomerId
         : null;
 
+    if (selectedValue != null &&
+        (widget.customerId != null || widget.debt != null)) {
+      final customer = _customers.firstWhere((c) => c.id == selectedValue);
+      final fullName = [
+        customer.getStringValue('name'),
+        customer.getStringValue('father_name'),
+      ].where((part) => part.trim().isNotEmpty).join(' ');
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        decoration: BoxDecoration(
+          color: isDark ? AppDarkColors.inputFill : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE4E7EC),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                fullName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return DropdownButtonFormField<String>(
       initialValue: selectedValue,
       decoration: InputDecoration(
@@ -1630,6 +1736,129 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   }
 
   Widget _buildItemsCard() {
+    if (!_useItemDetails) return _buildSimpleAmountCard();
+    return _buildDetailedItemsCard();
+  }
+
+  Widget _buildSimpleAmountCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final presets = _currency == 'IQD'
+        ? const <double>[5000, 10000, 25000, 50000, 100000]
+        : const <double>[5, 10, 25, 50, 100];
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE9EDF3),
+        ),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'بڕی قەرز',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      'تەنها بڕەکە بنووسە؛ ئەوانی تر ئارەزوومەندانەن',
+                      style: TextStyle(fontSize: 11.5, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          TextFormField(
+            controller: _amountController,
+            focusNode: _amountFocusNode,
+            autofocus: widget.customerId != null && widget.debt == null,
+            enabled: !_isLoading,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textDirection: TextDirection.ltr,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+            inputFormatters: [
+              if (_currency == 'IQD') ThousandsSeparatorInputFormatter(),
+              if (_currency == 'USD')
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+            ],
+            decoration: InputDecoration(
+              hintText: '0',
+              suffixText: _currency == 'IQD' ? 'د.ع' : '\$',
+              prefixIcon: const Icon(Icons.payments_outlined),
+              filled: true,
+              fillColor: isDark ? AppDarkColors.inputFill : const Color(0xFFF8FAFC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            validator: (value) {
+              if (_useItemDetails) return null;
+              final amount = double.tryParse(
+                    (value ?? '').replaceAll(',', '').trim(),
+                  ) ??
+                  0;
+              return amount <= 0 ? 'بڕێکی دروست بنووسە' : null;
+            },
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: presets
+                .map(
+                  (amount) => ActionChip(
+                    label: Text(
+                      AppHelpers.formatCurrencyWithType(amount, _currency),
+                    ),
+                    onPressed: _isLoading ? null : () => _setSimpleAmount(amount),
+                    side: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.22),
+                    ),
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.06),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _isLoading
+                ? null
+                : () => setState(() {
+                    _useItemDetails = true;
+                    _items.clear();
+                  }),
+            icon: const Icon(Icons.receipt_long_outlined, size: 18),
+            label: const Text('وردەکاری کاڵاکان زیاد بکە (ئارەزوومەندانە)'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailedItemsCard() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
@@ -1665,13 +1894,24 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                   ),
                 ],
               ),
-              IconButton(
-                onPressed: _addItem,
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                  foregroundColor: AppColors.primary,
-                ),
-                icon: const Icon(Icons.add),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: _items.isEmpty
+                        ? () => setState(() => _useItemDetails = false)
+                        : null,
+                    child: const Text('بڕی تەنها'),
+                  ),
+                  IconButton(
+                    onPressed: _addItem,
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      foregroundColor: AppColors.primary,
+                    ),
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
               ),
             ],
           ),
