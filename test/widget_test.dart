@@ -32,22 +32,30 @@ Uint8List _buildPackage({
       '2024-01-02T00:00:00.000Z\n';
 
   final archive = Archive()
-    ..addFile(ArchiveFile.string(
-      'Kanichnar_ZhiroxVIPuser_Import_Ready/meta/migration_summary.csv',
-      summary,
-    ))
-    ..addFile(ArchiveFile.string(
-      'Kanichnar_ZhiroxVIPuser_Import_Ready/data/01_customers_zhirox.csv',
-      customers,
-    ))
-    ..addFile(ArchiveFile.string(
-      'Kanichnar_ZhiroxVIPuser_Import_Ready/data/02_debts_zhirox.csv',
-      debts,
-    ))
-    ..addFile(ArchiveFile.string(
-      'Kanichnar_ZhiroxVIPuser_Import_Ready/data/03_payments_zhirox.csv',
-      payments,
-    ));
+    ..addFile(
+      ArchiveFile.string(
+        'Kanichnar_ZhiroxVIPuser_Import_Ready/meta/migration_summary.csv',
+        summary,
+      ),
+    )
+    ..addFile(
+      ArchiveFile.string(
+        'Kanichnar_ZhiroxVIPuser_Import_Ready/data/01_customers_zhirox.csv',
+        customers,
+      ),
+    )
+    ..addFile(
+      ArchiveFile.string(
+        'Kanichnar_ZhiroxVIPuser_Import_Ready/data/02_debts_zhirox.csv',
+        debts,
+      ),
+    )
+    ..addFile(
+      ArchiveFile.string(
+        'Kanichnar_ZhiroxVIPuser_Import_Ready/data/03_payments_zhirox.csv',
+        payments,
+      ),
+    );
 
   return ZipEncoder().encodeBytes(archive);
 }
