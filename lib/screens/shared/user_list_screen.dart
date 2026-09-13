@@ -27,6 +27,7 @@ class _UserListScreenState extends State<UserListScreen> {
   bool _isLoading = true;
   String? _loadError;
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
   final Map<String, double> _balances = {};
   final Set<String> _balanceErrors = <String>{};
   final Map<String, Map<String, dynamic>> _customerInbox = {};
@@ -38,10 +39,15 @@ class _UserListScreenState extends State<UserListScreen> {
   Timer? _customerSearchDebounce;
   bool _inboxRefreshInFlight = false;
   bool _inboxRefreshPending = false;
+  bool _isLoadingMore = false;
+  bool _hasMoreUsers = false;
+  int _totalUsers = 0;
+  Map<String, dynamic>? _nextUserCursor;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadUsers();
     });
@@ -67,6 +73,7 @@ class _UserListScreenState extends State<UserListScreen> {
     }
     _connectivitySub?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -80,39 +87,108 @@ class _UserListScreenState extends State<UserListScreen> {
 
   bool get _isEmployee => widget.role == 'employee';
 
-  Future<void> _loadUsers({String? search}) async {
+  void _onScroll() {
+    if (widget.role != 'customer' ||
+        !_hasMoreUsers ||
+        _isLoadingMore ||
+        !_scrollController.hasClients) {
+      return;
+    }
+    if (_scrollController.position.extentAfter < 500) {
+      unawaited(
+        _loadUsers(
+          search: _searchController.text.trim(),
+          loadMore: true,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadUsers({String? search, bool loadMore = false}) async {
     if (!mounted) return;
+    if (loadMore && (_isLoadingMore || !_hasMoreUsers)) return;
     final generation = ++_loadGeneration;
     setState(() {
-      _isLoading = true;
+      if (loadMore) {
+        _isLoadingMore = true;
+      } else {
+        _isLoading = true;
+        _nextUserCursor = null;
+      }
       _loadError = null;
     });
 
     try {
       final adminId = _adminId;
-      final users = await PBService.getUsers(
-        role: widget.role,
-        search: search,
-        adminId: adminId.isNotEmpty ? adminId : null,
-      );
+      late final List<RecordModel> users;
+      Map<String, Map<String, dynamic>>? pageInbox;
+      var totalUsers = 0;
+      var hasMoreUsers = false;
+      Map<String, dynamic>? nextUserCursor;
+      if (widget.role == 'customer') {
+        final page = await PBService.getCustomerDirectoryPage(
+          search: search ?? '',
+          limit: 60,
+          cursor: loadMore ? _nextUserCursor : null,
+        );
+        users = page['items'] as List<RecordModel>;
+        pageInbox = page['inbox'] as Map<String, Map<String, dynamic>>;
+        totalUsers = page['totalItems'] as int;
+        hasMoreUsers = page['hasMore'] == true;
+        nextUserCursor = page['nextCursor'] as Map<String, dynamic>?;
+      } else {
+        users = await PBService.getUsers(
+          role: widget.role,
+          search: search,
+          adminId: adminId.isNotEmpty ? adminId : null,
+        );
+        totalUsers = users.length;
+      }
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
-        _users = users;
+        _totalUsers = totalUsers;
+        _hasMoreUsers = hasMoreUsers;
+        _nextUserCursor = nextUserCursor;
+        if (loadMore) {
+          _users.addAll(users);
+        } else {
+          _users = users;
+          _customerInbox.clear();
+          _balances.clear();
+          _balanceErrors.clear();
+        }
+        if (pageInbox != null) {
+          _customerInbox.addAll(pageInbox);
+          for (final user in users) {
+            final row = pageInbox[user.id];
+            _balances[user.id] =
+                (row?['remaining'] as num?)?.toDouble() ??
+                double.tryParse('${row?['remaining'] ?? ''}') ??
+                0;
+          }
+          _inboxError = null;
+        }
         _isLoading = false;
+        _isLoadingMore = false;
       });
-
-      if (widget.role == 'customer' && users.isNotEmpty) {
-        unawaited(_loadCustomerInboxInBackground(users, generation: generation));
+      if (!loadMore && _scrollController.hasClients) {
+        _scrollController.jumpTo(0);
       }
     } catch (error) {
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
-        _users = [];
+        if (!loadMore) _users = [];
         _isLoading = false;
-        _loadError = AppHelpers.backendErrorMessage(
+        _isLoadingMore = false;
+        final message = AppHelpers.backendErrorMessage(
           error,
           fallback: 'نەتوانرا لیستەکە باربکرێت. دووبارە هەوڵ بدە.',
         );
+        if (loadMore) {
+          _inboxError = message;
+        } else {
+          _loadError = message;
+        }
       });
     }
   }
@@ -132,19 +208,6 @@ class _UserListScreenState extends State<UserListScreen> {
     try {
       final rows = await PBService.getCustomerInboxRows(ids);
       if (!mounted || (generation != null && generation != _loadGeneration)) return;
-      final sorted = List<RecordModel>.from(_users);
-      DateTime? activityFor(String id) =>
-          DateTime.tryParse(rows[id]?['last_activity_at']?.toString() ?? '');
-      sorted.sort((a, b) {
-        final aAt = activityFor(a.id);
-        final bAt = activityFor(b.id);
-        if (aAt == null && bAt == null) {
-          return a.getStringValue('name').compareTo(b.getStringValue('name'));
-        }
-        if (aAt == null) return 1;
-        if (bAt == null) return -1;
-        return bAt.compareTo(aAt);
-      });
       setState(() {
         _customerInbox
           ..clear()
@@ -161,7 +224,6 @@ class _UserListScreenState extends State<UserListScreen> {
               double.tryParse('${row['remaining'] ?? ''}') ??
               0;
         }
-        _users = sorted;
         _inboxError = null;
       });
     } catch (error) {
@@ -359,6 +421,7 @@ class _UserListScreenState extends State<UserListScreen> {
           ? AppDarkColors.background
           : const Color(0xFFF5F7FA),
       body: CustomScrollView(
+        controller: _scrollController,
         slivers: [
           // ───── Gradient Header ─────
           SliverToBoxAdapter(
@@ -410,7 +473,7 @@ class _UserListScreenState extends State<UserListScreen> {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                '${_users.length} ${_isEmployee ? 'کارمەند' : 'کڕیار'}',
+                                '${_totalUsers == 0 ? _users.length : _totalUsers} ${_isEmployee ? 'کارمەند' : 'کڕیار'}',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
@@ -575,6 +638,14 @@ class _UserListScreenState extends State<UserListScreen> {
                     ),
                   ),
                 ),
+
+          if (_isLoadingMore)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
 
           const SliverPadding(padding: EdgeInsets.only(bottom: 50)),
         ],
