@@ -40,6 +40,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   final _amountController = TextEditingController();
   final _amountFocusNode = FocusNode();
   bool _useItemDetails = false;
+  bool _showAdvancedDetails = false;
   double _discountPercent = 0;
   bool _loadingPricingPolicy = true;
   String? _pricingPolicyError;
@@ -764,7 +765,9 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       AppHelpers.showSnackBar(context, 'تکایە کڕیارێک هەڵبژێرە', isError: true);
       return;
     }
-    if (!_useItemDetails) {
+    // A new debt is always a direct monetary entry. Item mode is retained only
+    // for editing old itemized debts so the legacy records remain editable.
+    if (widget.debt == null || !_useItemDetails) {
       final amount = _simpleAmount;
       if (amount <= 0) {
         _amountFocusNode.requestFocus();
@@ -1087,7 +1090,9 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       backgroundColor: background,
       appBar: AppBar(
         title: Text(
-          widget.debt != null ? 'دەستکاریکردنی قەرز' : AppStrings.addDebt,
+          widget.debt != null
+              ? 'دەستکاریکردنی قەرز'
+              : 'قەرز پێدان ـ فۆڕمی سادە',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -1115,11 +1120,24 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                 _buildCurrencyCard(),
                 const SizedBox(height: 10),
                 _buildItemsCard(),
-                const SizedBox(height: 10),
-                _buildDetailsCard(),
-                if (widget.debt == null) ...[
+                if (widget.debt != null || _showAdvancedDetails) ...[
                   const SizedBox(height: 10),
-                  _buildReceiptCard(),
+                  _buildDetailsCard(),
+                  if (widget.debt == null) ...[
+                    const SizedBox(height: 10),
+                    _buildReceiptCard(),
+                  ],
+                ] else ...[
+                  const SizedBox(height: 6),
+                  TextButton.icon(
+                    onPressed: _isLoading
+                        ? null
+                        : () => setState(() => _showAdvancedDetails = true),
+                    icon: const Icon(Icons.tune_rounded, size: 18),
+                    label: const Text(
+                      'تێبینی، بەروار یان وێنە زیاد بکە (ئارەزوومەندانە)',
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 12),
               ],
@@ -1736,6 +1754,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   }
 
   Widget _buildItemsCard() {
+    if (widget.debt == null) return _buildSimpleAmountCard();
     if (!_useItemDetails) return _buildSimpleAmountCard();
     return _buildDetailedItemsCard();
   }
@@ -1842,17 +1861,19 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                 )
                 .toList(),
           ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _isLoading
-                ? null
-                : () => setState(() {
-                    _useItemDetails = true;
-                    _items.clear();
-                  }),
-            icon: const Icon(Icons.receipt_long_outlined, size: 18),
-            label: const Text('وردەکاری کاڵاکان زیاد بکە (ئارەزوومەندانە)'),
-          ),
+          if (widget.debt != null) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _isLoading
+                  ? null
+                  : () => setState(() {
+                      _useItemDetails = true;
+                      _items.clear();
+                    }),
+              icon: const Icon(Icons.receipt_long_outlined, size: 18),
+              label: const Text('وردەکاری کاڵاکان'),
+            ),
+          ],
         ],
       ),
     );
