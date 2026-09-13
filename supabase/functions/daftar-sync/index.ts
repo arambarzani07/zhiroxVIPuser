@@ -288,7 +288,10 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const url = Deno.env.get("SUPABASE_URL")!;
-  const secret = envJsonKey("SUPABASE_SECRET_KEYS") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  // Prefer the stable built-in service-role key. Rotating secret-key bundles can
+  // contain more than one key, and selecting the first JSON value is not stable
+  // across warm Edge Function instances.
+  const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? envJsonKey("SUPABASE_SECRET_KEYS");
   if (!secret) return json({ error: "server_not_configured" }, 500);
   const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
 
