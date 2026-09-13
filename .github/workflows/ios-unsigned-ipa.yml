@@ -34,7 +34,7 @@ jobs:
               echo "BUNDLE_ID=com.karoxghafoor.zhirox.owner" >> "$GITHUB_ENV"
               echo "DISPLAY_NAME=ZHIROX Owner" >> "$GITHUB_ENV"
               echo "BUNDLE_NAME=zhirox_owner" >> "$GITHUB_ENV"
-              echo "IPA_FILE=ZHIROX-Owner.ipa" >> "$GITHUB_ENV"
+              echo "IPA_FILE=ZHIROX-Owner-${GITHUB_RUN_NUMBER}.ipa" >> "$GITHUB_ENV"
               echo "ARTIFACT_NAME=zhirox-owner-unsigned-ipa" >> "$GITHUB_ENV"
               ;;
             user-source)
@@ -46,7 +46,7 @@ jobs:
               echo "BUNDLE_ID=com.karoxghafoor.zhirox.user" >> "$GITHUB_ENV"
               echo "DISPLAY_NAME=ZHIROX User" >> "$GITHUB_ENV"
               echo "BUNDLE_NAME=zhirox_user" >> "$GITHUB_ENV"
-              echo "IPA_FILE=ZHIROX-User.ipa" >> "$GITHUB_ENV"
+              echo "IPA_FILE=ZHIROX-User-${GITHUB_RUN_NUMBER}.ipa" >> "$GITHUB_ENV"
               echo "ARTIFACT_NAME=zhiroxVIPuser-unsigned-ipa" >> "$GITHUB_ENV"
               ;;
             *)
