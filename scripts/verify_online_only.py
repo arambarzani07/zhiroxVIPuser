@@ -415,7 +415,7 @@ for marker in (
 ):
     if marker not in profile:
         fail(f'lib/screens/shared/user_profile_screen.dart: currency-safe summary marker missing: {marker}')
-for marker in ('AppHelpers.debtSummaryInIqd(allDebts)', '_totalsComplete'):
+for marker in ('PBService.getCustomerFinanceSnapshot(auth.userId)', '_totalsComplete'):
     if marker not in dashboard_source:
         fail(f'lib/screens/customer/customer_dashboard.dart: currency-safe dashboard marker missing: {marker}')
 
