@@ -365,7 +365,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 360 + (index * 60).clamp(0, 420)),
+      duration: Duration(
+        milliseconds: 360 + (index * 60).clamp(0, 420).toInt(),
+      ),
       curve: Curves.easeOutCubic,
       builder: (context, value, child) => Transform.translate(
         offset: Offset(0, 20 * (1 - value)),
