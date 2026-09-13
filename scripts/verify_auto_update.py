@@ -25,5 +25,7 @@ require('--dart-define=ZHIROX_BUILD_NUMBER="$GITHUB_RUN_NUMBER"' in workflow, 'i
 require('--dart-define=ZHIROX_APP_EDITION="$UPDATE_EDITION"' in workflow, 'iOS build must embed app edition')
 require('Generate update manifest' in workflow, 'workflow must generate update manifest')
 require('$UPDATE_MANIFEST' in workflow, 'workflow must publish update manifest')
+require('${GITHUB_RUN_NUMBER}.ipa' in workflow, 'every IPA must have a cache-safe unique build filename')
+require("'$ipaFileStem-${info.latestBuild}.ipa'" in service, 'update service must validate the unique IPA filename')
 
 print('Auto Update Center verification passed.')
