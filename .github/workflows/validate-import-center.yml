@@ -1,0 +1,53 @@
+name: Validate Legacy Import Center
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/services/legacy_import_service.dart'
+      - 'lib/screens/admin/legacy_import_screen.dart'
+      - 'lib/screens/admin/pending_requests_screen.dart'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/validate-import-center.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed lib/services/legacy_import_service.dart lib/screens/admin/legacy_import_screen.dart lib/screens/admin/pending_requests_screen.dart
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
+      - name: Upload resolved lockfile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-import-lockfile
+          path: pubspec.lock
+          if-no-files-found: error
+          retention-days: 3
