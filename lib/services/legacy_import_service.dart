@@ -4,14 +4,10 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:csv/csv.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/services/pb_service.dart';
 
-typedef LegacyImportProgress = void Function(
-  String stage,
-  int current,
-  int total,
-);
+typedef LegacyImportProgress =
+    void Function(String stage, int current, int total);
 
 class LegacyImportPackage {
   final String fileName;
@@ -88,23 +84,15 @@ class LegacyImportService {
       return utf8.decode(match.content, allowMalformed: false);
     }
 
-    final summaryRows = _decodeCsv(
-      readRequired('meta/migration_summary.csv'),
-    );
+    final summaryRows = _decodeCsv(readRequired('meta/migration_summary.csv'));
     if (summaryRows.length != 1) {
       throw const FormatException('migration_summary.csv دروست نییە');
     }
     final summary = summaryRows.first;
 
-    final customers = _decodeCsv(
-      readRequired('data/01_customers_zhirox.csv'),
-    );
-    final debts = _decodeCsv(
-      readRequired('data/02_debts_zhirox.csv'),
-    );
-    final payments = _decodeCsv(
-      readRequired('data/03_payments_zhirox.csv'),
-    );
+    final customers = _decodeCsv(readRequired('data/01_customers_zhirox.csv'));
+    final debts = _decodeCsv(readRequired('data/02_debts_zhirox.csv'));
+    final payments = _decodeCsv(readRequired('data/03_payments_zhirox.csv'));
 
     final targetProjectRef = summary['target_project_ref'] ?? '';
     final targetMarket = summary['target_market'] ?? '';
@@ -114,9 +102,7 @@ class LegacyImportService {
         double.nan;
 
     if (targetProjectRef != supportedProjectRef) {
-      throw FormatException(
-        'ئەم پاکەتە بۆ project ـی ترە: $targetProjectRef',
-      );
+      throw FormatException('ئەم پاکەتە بۆ project ـی ترە: $targetProjectRef');
     }
     if (targetMarket != supportedMarket) {
       throw FormatException('ناوی مارکێت ناگونجێت: $targetMarket');
@@ -144,29 +130,27 @@ class LegacyImportService {
       );
     }
 
-    _requireColumns(
-      customers,
-      const ['legacy_customer_id', 'name', 'zhirox_phone', 'auth_email'],
-      'customers',
-    );
-    _requireColumns(
-      debts,
-      const [
-        'debt_id',
-        'legacy_customer_id',
-        'customer_lookup_phone',
-        'amount',
-        'currency',
-        'custom_date',
-        'created_at',
-      ],
-      'debts',
-    );
-    _requireColumns(
-      payments,
-      const ['payment_id', 'debt_id', 'amount', 'created_at'],
-      'payments',
-    );
+    _requireColumns(customers, const [
+      'legacy_customer_id',
+      'name',
+      'zhirox_phone',
+      'auth_email',
+    ], 'customers');
+    _requireColumns(debts, const [
+      'debt_id',
+      'legacy_customer_id',
+      'customer_lookup_phone',
+      'amount',
+      'currency',
+      'custom_date',
+      'created_at',
+    ], 'debts');
+    _requireColumns(payments, const [
+      'payment_id',
+      'debt_id',
+      'amount',
+      'created_at',
+    ], 'payments');
 
     return LegacyImportPackage(
       fileName: fileName,
@@ -226,9 +210,7 @@ class LegacyImportService {
       throw Exception('پێویستە دووبارە بچیتە ژوورەوە');
     }
     if (user.id != package.targetAdminId) {
-      throw Exception(
-        'ئەم پاکەتە بۆ هەژماری ئەدمینی تر ئامادە کراوە',
-      );
+      throw Exception('ئەم پاکەتە بۆ هەژماری ئەدمینی تر ئامادە کراوە');
     }
 
     final profile = await PBService.client
@@ -244,9 +226,7 @@ class LegacyImportService {
       throw Exception('تەنها ئەدمینی چالاک دەتوانێت Import ئەنجام بدات');
     }
     if ((profile['market_name']?.toString() ?? '') != package.targetMarket) {
-      throw Exception(
-        'مارکێتی ئەم هەژمارە لەگەڵ پاکەتی Import ناگونجێت',
-      );
+      throw Exception('مارکێتی ئەم هەژمارە لەگەڵ پاکەتی Import ناگونجێت');
     }
 
     final subscription = profile['subscription_end']?.toString();
@@ -282,11 +262,7 @@ class LegacyImportService {
           customersReused++;
         }
       }
-      onProgress?.call(
-        'دروستکردنی کڕیارەکان',
-        end,
-        package.customerCount,
-      );
+      onProgress?.call('دروستکردنی کڕیارەکان', end, package.customerCount);
     }
 
     final customerByPhone = await _loadCustomerMap(adminId);
@@ -368,11 +344,9 @@ class LegacyImportService {
       }
 
       if (inserts.isNotEmpty) {
-        await PBService.client.from('debts').upsert(
-              inserts,
-              onConflict: 'id',
-              ignoreDuplicates: true,
-            );
+        await PBService.client
+            .from('debts')
+            .upsert(inserts, onConflict: 'id', ignoreDuplicates: true);
         debtsInserted += inserts.length;
       }
 
@@ -382,9 +356,11 @@ class LegacyImportService {
     final existingMarkers = await _loadImportedPaymentMarkers(package.debts);
     final sortedPayments = [...package.payments]
       ..sort((a, b) {
-        final ad = DateTime.tryParse(a['created_at'] ?? '') ??
+        final ad =
+            DateTime.tryParse(a['created_at'] ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-        final bd = DateTime.tryParse(b['created_at'] ?? '') ??
+        final bd =
+            DateTime.tryParse(b['created_at'] ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
         final byDate = ad.compareTo(bd);
         if (byDate != 0) return byDate;
@@ -421,11 +397,7 @@ class LegacyImportService {
           paymentsReused++;
         }
       }
-      onProgress?.call(
-        'گواستنەوەی پارەدانەکان',
-        end,
-        sortedPayments.length,
-      );
+      onProgress?.call('گواستنەوەی پارەدانەکان', end, sortedPayments.length);
     }
 
     onProgress?.call('پشتڕاستکردنەوەی کۆتایی', 0, package.debtCount);
@@ -464,10 +436,7 @@ class LegacyImportService {
     );
   }
 
-  Future<bool> _ensureCustomer(
-    Map<String, String> row,
-    String adminId,
-  ) async {
+  Future<bool> _ensureCustomer(Map<String, String> row, String adminId) async {
     final phone = (row['zhirox_phone'] ?? '').trim();
     final name = (row['name'] ?? '').trim();
     final email = (row['auth_email'] ?? '').trim();
@@ -544,8 +513,7 @@ class LegacyImportService {
 
     return {
       for (final dynamic row in rows as List)
-        (row as Map<String, dynamic>)['phone'].toString():
-            row['id'].toString(),
+        (row as Map<String, dynamic>)['phone'].toString(): row['id'].toString(),
     };
   }
 
@@ -554,9 +522,7 @@ class LegacyImportService {
   ) async {
     final debtIds = debts.map((e) => e['debt_id'] ?? '').toList();
     final result = <String>{};
-    final regex = RegExp(
-      r'\[#ZHIROX_LEGACY:([0-9a-fA-F-]{36})\]',
-    );
+    final regex = RegExp(r'\[#ZHIROX_LEGACY:([0-9a-fA-F-]{36})\]');
 
     for (var start = 0; start < debtIds.length; start += 80) {
       final end = min(start + 80, debtIds.length);
@@ -639,7 +605,8 @@ class LegacyImportService {
           .inFilter('id', debtIds.sublist(start, end));
       for (final dynamic raw in rows as List) {
         final row = raw as Map<String, dynamic>;
-        final remaining = (row['remaining'] as num?)?.toDouble() ??
+        final remaining =
+            (row['remaining'] as num?)?.toDouble() ??
             double.tryParse(row['remaining']?.toString() ?? '') ??
             0;
         final currency = (row['currency']?.toString() ?? 'IQD').toUpperCase();
@@ -650,11 +617,7 @@ class LegacyImportService {
         }
       }
       debtCount += (rows as List).length;
-      onProgress?.call(
-        'پشتڕاستکردنەوەی قەرزەکان',
-        end,
-        package.debtCount,
-      );
+      onProgress?.call('پشتڕاستکردنەوەی قەرزەکان', end, package.debtCount);
     }
 
     final markers = await _loadImportedPaymentMarkers(package.debts);

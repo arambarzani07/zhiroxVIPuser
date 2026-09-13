@@ -28,8 +28,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   void initState() {
     super.initState();
     _loadPending();
-    _connectivitySub =
-        ConnectivityService.instance.statusStream.listen((online) {
+    _connectivitySub = ConnectivityService.instance.statusStream.listen((
+      online,
+    ) {
       if (online && mounted) _loadPending();
     });
   }
@@ -64,8 +65,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         final cached = prefs.getString(cacheKey);
         if (cached != null) {
           final decoded = jsonDecode(cached) as List<dynamic>;
-          loadedUsers =
-              decoded.map((e) => RecordModel.fromJson(e)).toList();
+          loadedUsers = decoded.map((e) => RecordModel.fromJson(e)).toList();
         }
       } catch (_) {}
     }
@@ -109,11 +109,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   }
 
   Future<void> _openLegacyImport() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const LegacyImportScreen(),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const LegacyImportScreen()));
     if (mounted) await _loadPending();
   }
 
@@ -246,9 +244,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AppColors.primary.withOpacity(0.16),
-        ),
+        border: Border.all(color: AppColors.primary.withOpacity(0.16)),
         boxShadow: isDark
             ? const []
             : [
@@ -268,10 +264,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
               color: AppColors.primary.withOpacity(0.10),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(
-              Icons.folder_zip_rounded,
-              color: AppColors.primary,
-            ),
+            child: Icon(Icons.folder_zip_rounded, color: AppColors.primary),
           ),
           const SizedBox(width: 12),
           const Expanded(
@@ -280,10 +273,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
               children: [
                 Text(
                   'گواستنەوەی داتای کۆن',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
                 ),
                 SizedBox(height: 3),
                 Text(
@@ -327,9 +317,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
-                color: isDark
-                    ? AppDarkColors.textPrimary
-                    : Colors.black54,
+                color: isDark ? AppDarkColors.textPrimary : Colors.black54,
               ),
             ),
             const SizedBox(height: 6),
@@ -349,11 +337,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     );
   }
 
-  Widget _buildRequestCard(
-    RecordModel user,
-    int index,
-    bool isDark,
-  ) {
+  Widget _buildRequestCard(RecordModel user, int index, bool isDark) {
     final name = user.getStringValue('name');
     final fatherName = user.getStringValue('father_name');
     final grandfatherName = user.getStringValue('grandfather_name');
@@ -398,10 +382,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                   height: 50,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [
-                        avatarColor,
-                        avatarColor.withOpacity(0.72),
-                      ],
+                      colors: [avatarColor, avatarColor.withOpacity(0.72)],
                     ),
                     borderRadius: BorderRadius.circular(15),
                   ),

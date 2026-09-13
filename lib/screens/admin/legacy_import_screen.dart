@@ -152,8 +152,9 @@ class _LegacyImportScreenState extends State<LegacyImportScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor:
-            isDark ? AppDarkColors.background : const Color(0xFFF5F7FA),
+        backgroundColor: isDark
+            ? AppDarkColors.background
+            : const Color(0xFFF5F7FA),
         appBar: AppBar(
           title: const Text('گواستنەوەی داتای کۆن'),
           centerTitle: true,
@@ -206,10 +207,7 @@ class _LegacyImportScreenState extends State<LegacyImportScreen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppColors.primary,
-            AppColors.primary.withOpacity(0.78),
-          ],
+          colors: [AppColors.primary, AppColors.primary.withOpacity(0.78)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
@@ -239,11 +237,7 @@ class _LegacyImportScreenState extends State<LegacyImportScreen> {
             'پاکەتی تایبەتی سوپەرمارکێتی کانی چنار هەڵبژێرە. '
             'سیستەم پێش نووسین schema، tenant، ژمارەی تۆمارەکان و '
             'بالانسی چاوەڕوانکراو دەپشکنێت.',
-            style: TextStyle(
-              color: Colors.white,
-              height: 1.7,
-              fontSize: 13,
-            ),
+            style: TextStyle(color: Colors.white, height: 1.7, fontSize: 13),
           ),
         ],
       ),
@@ -319,10 +313,7 @@ class _LegacyImportScreenState extends State<LegacyImportScreen> {
             'بالانسی چاوەڕوانکراو',
             '${_formatMoney(package.expectedBalanceIqd)} IQD',
           ),
-          _detailRow(
-            'USD',
-            package.expectedBalanceUsd.toStringAsFixed(2),
-          ),
+          _detailRow('USD', package.expectedBalanceUsd.toStringAsFixed(2)),
         ],
       ),
     );
@@ -479,12 +470,7 @@ class _LegacyImportScreenState extends State<LegacyImportScreen> {
         children: [
           const Icon(Icons.error_outline_rounded, color: Colors.red),
           const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _error!,
-              style: const TextStyle(height: 1.6),
-            ),
-          ),
+          Expanded(child: Text(_error!, style: const TextStyle(height: 1.6))),
         ],
       ),
     );
@@ -546,10 +532,7 @@ class _LegacyImportScreenState extends State<LegacyImportScreen> {
 
   String _formatInt(int value) {
     final text = value.toString();
-    return text.replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (_) => ',',
-    );
+    return text.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
   }
 
   String _formatMoney(double value) {
