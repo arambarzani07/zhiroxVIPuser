@@ -318,7 +318,13 @@ Deno.serve(async (req) => {
       .eq("id", sourceId)
       .eq("enabled", true)
       .maybeSingle();
-    if (sourceError || !sourceRow) return json({ error: "sync_source_not_found" }, 404);
+    if (sourceError || !sourceRow) {
+      return json({
+        error: "sync_source_not_found",
+        database_code: sourceError?.code ?? null,
+        database_message: sourceError?.message ?? null,
+      }, 404);
+    }
     source = sourceRow as SyncSource;
 
     const providedHash = await sha256Hex(providedSecret);
