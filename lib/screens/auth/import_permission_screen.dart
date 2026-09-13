@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:pocketbase/pocketbase.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 
@@ -22,18 +21,37 @@ class _ImportPermissionScreenState extends State<ImportPermissionScreen> {
     _load();
   }
 
+  Future<Map<String, dynamic>> _invoke(
+    String action, {
+    Map<String, dynamic> extra = const {},
+  }) async {
+    await PBService.ensureInitialized();
+    final response = await PBService.client.functions.invoke(
+      'import-permission-admin',
+      body: {'action': action, ...extra},
+    );
+    if (response.data is! Map) throw Exception('invalid_response');
+    final map = Map<String, dynamic>.from(response.data as Map);
+    if (map['error'] != null) throw Exception('${map['error']}');
+    return map;
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final result = await PBService.getAdminsPage(page: 1, perPage: 100);
+      final result = await _invoke('list');
       if (!mounted) return;
+      final rows = (result['admins'] as List? ?? const [])
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
       setState(() {
         _admins
           ..clear()
-          ..addAll((result['admins'] as List).cast<Map<String, dynamic>>());
+          ..addAll(rows);
         _loading = false;
       });
     } catch (_) {
@@ -45,17 +63,14 @@ class _ImportPermissionScreenState extends State<ImportPermissionScreen> {
     }
   }
 
-  Future<void> _setPermission(RecordModel admin, bool value) async {
-    if (_saving.contains(admin.id)) return;
-    setState(() => _saving.add(admin.id));
+  Future<void> _setPermission(Map<String, dynamic> admin, bool value) async {
+    final id = '${admin['id'] ?? ''}';
+    if (id.isEmpty || _saving.contains(id)) return;
+    setState(() => _saving.add(id));
     try {
-      await PBService.ensureInitialized();
-      final result = await PBService.client.rpc(
-        'owner_set_admin_import_permission',
-        params: {'p_admin_id': admin.id, 'p_allowed': value},
-      );
-      if (result != true) throw Exception('update_failed');
-      await _load();
+      await _invoke('set', extra: {'admin_id': id, 'allowed': value});
+      if (!mounted) return;
+      setState(() => admin['can_import_data'] = value);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -63,7 +78,7 @@ class _ImportPermissionScreenState extends State<ImportPermissionScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _saving.remove(admin.id));
+      if (mounted) setState(() => _saving.remove(id));
     }
   }
 
@@ -103,12 +118,14 @@ class _ImportPermissionScreenState extends State<ImportPermissionScreen> {
                           ),
                         );
                       }
-                      final row = _admins[index - 1];
-                      final admin = row['admin'] as RecordModel;
-                      final enabled = admin.getBoolValue('can_import_data');
-                      final saving = _saving.contains(admin.id);
-                      final active = admin.getBoolValue('active');
-                      final approved = admin.getBoolValue('approved');
+                      final admin = _admins[index - 1];
+                      final id = '${admin['id'] ?? ''}';
+                      final enabled = admin['can_import_data'] == true;
+                      final saving = _saving.contains(id);
+                      final active = admin['active'] == true;
+                      final approved = admin['approved'] == true;
+                      final marketName = '${admin['market_name'] ?? ''}'.trim();
+                      final name = '${admin['name'] ?? ''}'.trim();
                       return Card(
                         color: isDark ? AppDarkColors.card : Colors.white,
                         child: SwitchListTile(
@@ -126,9 +143,7 @@ class _ImportPermissionScreenState extends State<ImportPermissionScreen> {
                             ),
                           ),
                           title: Text(
-                            admin.getStringValue('market_name').isEmpty
-                                ? admin.getStringValue('name')
-                                : admin.getStringValue('market_name'),
+                            marketName.isEmpty ? name : marketName,
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           subtitle: Text(
