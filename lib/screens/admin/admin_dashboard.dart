@@ -325,6 +325,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final totalDebt = (_stats['totalDebt'] ?? 0).toDouble();
     final totalRemaining = (_stats['totalRemaining'] ?? 0).toDouble();
     final totalPayments = (_stats['totalPayments'] ?? 0).toDouble();
+    final totalDebtUsd = (_stats['totalDebtUsd'] ?? 0).toDouble();
+    final totalRemainingUsd = (_stats['totalRemainingUsd'] ?? 0).toDouble();
+    final totalPaymentsUsd = (_stats['totalPaymentsUsd'] ?? 0).toDouble();
 
     return RefreshIndicator(
       onRefresh: _loadStats,
@@ -462,6 +465,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 'کۆی قەرز',
                                 totalDebt,
                                 true,
+                                usdValue: totalDebtUsd,
                               ),
                             ],
                           ),
@@ -473,6 +477,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 'ماوە',
                                 totalRemaining,
                                 true,
+                                usdValue: totalRemainingUsd,
                               ),
                               const SizedBox(width: 10),
                               _buildHeaderStat(
@@ -480,6 +485,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 'وەرگیراو',
                                 totalPayments,
                                 true,
+                                usdValue: totalPaymentsUsd,
                               ),
                             ],
                           ),
@@ -1169,8 +1175,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     IconData icon,
     String label,
     double value,
-    bool isCurrency,
-  ) {
+    bool isCurrency, {
+    double usdValue = 0,
+  }) {
     return Expanded(
       child: Container(
         height: 82,
@@ -1221,6 +1228,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       fontSize: 15,
                     ),
                   ),
+                  if (isCurrency && usdValue != 0) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      AppHelpers.formatCurrencyWithType(
+                        usdValue,
+                        'USD',
+                        showConversion: false,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.82),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
