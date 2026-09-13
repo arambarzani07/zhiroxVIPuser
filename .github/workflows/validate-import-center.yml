@@ -18,7 +18,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout feature branch
         uses: actions/checkout@v4
@@ -63,6 +63,9 @@ jobs:
 
       - name: Tests
         run: flutter test
+
+      - name: Production web build
+        run: flutter build web --release
 
       - name: Upload resolved lockfile
         if: always()
