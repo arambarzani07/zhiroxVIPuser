@@ -56,6 +56,31 @@ function envJsonKey(name: string): string | null {
   }
 }
 
+function isTransientDatabaseError(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  const message = String(error.message ?? "").toLowerCase();
+  return message.includes("timeout") ||
+    message.includes("gateway") ||
+    message.includes("temporarily unavailable") ||
+    String(error.code ?? "").startsWith("5");
+}
+
+async function loadSyncSource(admin: any, sourceId: string) {
+  let lastError: any = null;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const { data, error } = await admin.from("daftar_sync_sources")
+      .select("*")
+      .eq("id", sourceId)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (!error) return { data, error: null };
+    lastError = error;
+    if (!isTransientDatabaseError(error) || attempt === 4) break;
+    await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+  }
+  return { data: null, error: lastError };
+}
+
 function amount(value: unknown): number {
   const parsed = Number(value ?? 0);
   if (!Number.isFinite(parsed) || parsed < 0) throw new Error("invalid_amount");
@@ -313,17 +338,13 @@ Deno.serve(async (req) => {
     const providedSecret = req.headers.get("x-daftar-sync-secret") ?? "";
     if (!sourceId || !providedSecret) return json({ error: "unauthorized" }, 401);
 
-    const { data: sourceRow, error: sourceError } = await admin.from("daftar_sync_sources")
-      .select("*")
-      .eq("id", sourceId)
-      .eq("enabled", true)
-      .maybeSingle();
+    const { data: sourceRow, error: sourceError } = await loadSyncSource(admin, sourceId);
     if (sourceError || !sourceRow) {
       return json({
         error: "sync_source_not_found",
         database_code: sourceError?.code ?? null,
         database_message: sourceError?.message ?? null,
-      }, 404);
+      }, sourceError && isTransientDatabaseError(sourceError) ? 503 : 404);
     }
     source = sourceRow as SyncSource;
 
