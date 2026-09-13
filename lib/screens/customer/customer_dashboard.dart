@@ -165,27 +165,24 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         } catch (_) {}
       }
 
-      final allDebts = await PBService.getDebts(customerId: auth.userId);
-      final summary = AppHelpers.debtSummaryInIqd(allDebts);
-      final totalDebt = summary.totalDebt;
-      final totalRemaining = summary.totalRemaining;
-
-      final activeDebts = allDebts
-          .where((debt) => debt.getStringValue('status') != 'paid')
-          .toList();
-      final historyResult = await PBService.getDebtsPaginated(
-        customerId: auth.userId,
-        status: 'paid',
-        page: 1,
-        perPage: _pageSize,
-      );
+      final results = await Future.wait<dynamic>([
+        PBService.getCustomerFinanceSnapshot(auth.userId),
+        PBService.getDebtsPaginated(
+          customerId: auth.userId,
+          status: 'paid',
+          page: 1,
+          perPage: _pageSize,
+        ),
+      ]);
+      final snapshot = results[0] as Map<String, dynamic>;
+      final historyResult = results[1] as Map<String, dynamic>;
 
       if (!mounted) return;
       setState(() {
-        _totalDebtAmount = totalDebt;
-        _totalRemainingAmount = totalRemaining;
-        _totalsComplete = summary.complete;
-        _activeDebts = activeDebts;
+        _totalDebtAmount = snapshot['totalDebtIqd'] as double;
+        _totalRemainingAmount = snapshot['totalRemainingIqd'] as double;
+        _totalsComplete = snapshot['complete'] == true;
+        _activeDebts = snapshot['openDebts'] as List<RecordModel>;
         _historyDebts = historyResult['items'] as List<RecordModel>;
         _historyTotalItems = historyResult['totalItems'] as int;
         _historyPage = 1;
