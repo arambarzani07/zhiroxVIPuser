@@ -445,6 +445,62 @@ class PBService {
     return result.items;
   }
 
+  static Future<Map<String, dynamic>> getCustomerDirectoryPage({
+    String search = '',
+    int limit = 60,
+    Map<String, dynamic>? cursor,
+  }) async {
+    await ensureInitialized();
+    final params = <String, dynamic>{
+      'p_search': search.trim(),
+      'p_limit': limit.clamp(1, 100),
+    };
+    final cursorCreatedAt = cursor?['created_at']?.toString() ?? '';
+    final cursorId = cursor?['id']?.toString() ?? '';
+    if (cursorCreatedAt.isNotEmpty && cursorId.isNotEmpty) {
+      params['p_cursor_created_at'] = cursorCreatedAt;
+      params['p_cursor_id'] = cursorId;
+    }
+
+    final raw = await client.rpc(
+      'get_customer_directory_page',
+      params: params,
+    );
+    if (raw is! Map) throw Exception('invalid customer directory page');
+    final data = Map<String, dynamic>.from(raw);
+    final users = <RecordModel>[];
+    final inbox = <String, Map<String, dynamic>>{};
+    final items = data['items'];
+    if (items is List) {
+      for (final item in items) {
+        if (item is! Map) continue;
+        final row = Map<String, dynamic>.from(item);
+        final user = _profileRecord(row);
+        users.add(user);
+        inbox[user.id] = {
+          'customer_id': user.id,
+          'remaining': row['remaining'],
+          'open_debt_count': row['open_debt_count'],
+          'last_activity_at': row['last_activity_at'],
+          'last_kind': row['last_kind'],
+          'last_amount': row['last_amount'],
+          'last_preview': row['last_preview'],
+          'last_event_type': row['last_event_type'],
+          'unread': row['unread'] == true,
+        };
+      }
+    }
+    return {
+      'items': users,
+      'inbox': inbox,
+      'totalItems': int.tryParse('${data['total_count'] ?? 0}') ?? 0,
+      'hasMore': data['has_more'] == true,
+      'nextCursor': data['next_cursor'] is Map
+          ? Map<String, dynamic>.from(data['next_cursor'] as Map)
+          : null,
+    };
+  }
+
   static Future<RecordModel> getUser(String id) async {
     var user = await pb.collection('users').getOne(id);
     await ensureInitialized();
@@ -663,6 +719,39 @@ class PBService {
     int perPage = 20,
     String? filter,
   }) async {
+    if (customerId != null &&
+        createdBy == null &&
+        adminId == null &&
+        (filter == null || filter.isEmpty)) {
+      await ensureInitialized();
+      final raw = await client.rpc(
+        'get_customer_debts_page',
+        params: {
+          'p_customer_id': customerId,
+          'p_status': status,
+          'p_page': page,
+          'p_limit': perPage,
+        },
+      );
+      if (raw is! Map) throw Exception('invalid customer debt page');
+      final data = Map<String, dynamic>.from(raw);
+      final items = <RecordModel>[];
+      final rawItems = data['items'];
+      if (rawItems is List) {
+        for (final item in rawItems) {
+          if (item is Map) {
+            items.add(_debtRecordFromRaw(Map<String, dynamic>.from(item)));
+          }
+        }
+      }
+      final totalItems = int.tryParse('${data['total_count'] ?? 0}') ?? 0;
+      return {
+        'items': items,
+        'totalItems': totalItems,
+        'totalPages': totalItems == 0 ? 0 : (totalItems / perPage).ceil(),
+      };
+    }
+
     final filters = <String>[];
     if (customerId != null) filters.add('customer = "${_sanitize(customerId)}"');
     if (status != null) filters.add('status = "${_sanitize(status)}"');
