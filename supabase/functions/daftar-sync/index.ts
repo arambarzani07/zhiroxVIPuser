@@ -14,6 +14,8 @@ type SyncSource = {
   trigger_secret_hash: string;
   last_contact_id: number;
   last_transaction_id: number;
+  contacts_etag?: string | null;
+  transactions_etag?: string | null;
 };
 
 type LegacyContact = {
@@ -122,17 +124,37 @@ async function stableUuid(namespace: string): Promise<string> {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-async function fetchRows<T>(url: string, legacyUserId: number): Promise<T[]> {
+type SourceFetch<T> = {
+  rows: T[] | null;
+  etag: string | null;
+  notModified: boolean;
+};
+
+async function fetchRows<T>(
+  url: string,
+  legacyUserId: number,
+  etag?: string | null,
+): Promise<SourceFetch<T>> {
   const endpoint = new URL(url);
   endpoint.searchParams.set("user_id", String(legacyUserId));
   const response = await fetch(endpoint, {
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      ...(etag ? { "If-None-Match": etag } : {}),
+    },
     signal: AbortSignal.timeout(120_000),
   });
+  if (response.status === 304) {
+    return { rows: null, etag: response.headers.get("etag") ?? etag ?? null, notModified: true };
+  }
   if (!response.ok) throw new Error(`source_http_${response.status}`);
   const payload = await response.json();
   if (payload?.success !== true || !Array.isArray(payload?.data)) throw new Error("invalid_source_response");
-  return payload.data as T[];
+  return {
+    rows: payload.data as T[],
+    etag: response.headers.get("etag"),
+    notModified: false,
+  };
 }
 
 async function upsertSeen(
@@ -362,10 +384,20 @@ Deno.serve(async (req) => {
     if (runError) throw runError;
     runId = run.id;
 
-    const [contactsRaw, transactionsRaw] = await Promise.all([
-      fetchRows<LegacyContact>(`${source.api_base_url}/contacts`, source.legacy_user_id),
-      fetchRows<LegacyTransaction>(`${source.api_base_url}/transactions`, source.legacy_user_id),
+    let [contactsFetch, transactionsFetch] = await Promise.all([
+      fetchRows<LegacyContact>(`${source.api_base_url}/contacts`, source.legacy_user_id, source.contacts_etag),
+      fetchRows<LegacyTransaction>(`${source.api_base_url}/transactions`, source.legacy_user_id, source.transactions_etag),
     ]);
+    // A changed transaction may refer to an unchanged contact. Fetch the small
+    // contact list once without ETag so customer mapping remains complete.
+    if (!transactionsFetch.notModified && contactsFetch.notModified) {
+      contactsFetch = await fetchRows<LegacyContact>(
+        `${source.api_base_url}/contacts`,
+        source.legacy_user_id,
+      );
+    }
+    const contactsRaw = contactsFetch.rows ?? [];
+    const transactionsRaw = transactionsFetch.rows ?? [];
     const contacts = contactsRaw.filter((row) => Number(row.user_id) === Number(source!.legacy_user_id));
     const transactions = transactionsRaw.filter((row) => Number(row.user_id) === Number(source!.legacy_user_id));
     counters.fetched_contacts = contacts.length;
@@ -610,6 +642,8 @@ Deno.serve(async (req) => {
     await admin.from("daftar_sync_sources").update({
       last_contact_id: newContactCheckpoint,
       last_transaction_id: newTransactionCheckpoint,
+      contacts_etag: contactsFetch.etag ?? source.contacts_etag ?? null,
+      transactions_etag: transactionsFetch.etag ?? source.transactions_etag ?? null,
       lease_until: null,
       last_success_at: finishedAt,
       last_status: "success",
@@ -625,7 +659,9 @@ Deno.serve(async (req) => {
     return json({ ok: true, result });
   } catch (error) {
     console.error(error);
-    const message = error instanceof Error ? error.message : "internal_error";
+    const message = error instanceof Error
+      ? error.message
+      : String((error as { message?: unknown } | null)?.message ?? "internal_error");
     const finishedAt = new Date().toISOString();
     if (source) await admin.from("daftar_sync_sources").update({
       lease_until: null,
