@@ -79,8 +79,8 @@ class AppUpdateService {
 
   static String get releaseTag => '$edition-latest';
   static String get manifestFileName => '$edition-update.json';
-  static String get ipaFileName =>
-      edition == 'owner' ? 'ZHIROX-Owner.ipa' : 'ZHIROX-User.ipa';
+  static String get ipaFileStem =>
+      edition == 'owner' ? 'ZHIROX-Owner' : 'ZHIROX-User';
 
   static Uri get manifestUri {
     final base = Uri.parse(
@@ -152,8 +152,11 @@ class AppUpdateService {
       throw const FormatException('invalid_update_download_url');
     }
 
+    // Every build has a unique filename. This prevents Safari and sideloading
+    // tools from serving an older IPA cached under a permanent filename.
+    final expectedFileName = '$ipaFileStem-${info.latestBuild}.ipa';
     final expectedPath =
-        '/$_repository/releases/download/$releaseTag/$ipaFileName';
+        '/$_repository/releases/download/$releaseTag/$expectedFileName';
     if (downloadUri.path != expectedPath) {
       throw const FormatException('invalid_update_download_identity');
     }
