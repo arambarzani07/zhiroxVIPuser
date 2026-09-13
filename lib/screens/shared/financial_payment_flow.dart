@@ -222,6 +222,7 @@ class FinancialPaymentFlow {
     }
 
     var saving = false;
+    var showNote = false;
     String? localError;
     var saved = false;
     RecordModel? savedPayment;
@@ -238,8 +239,18 @@ class FinancialPaymentFlow {
             final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
             final debt = selectedDebt();
             final remainingStorage = debt.getDoubleValue('remaining');
-            final remainingDisplay = _storageToDisplay(debt, remainingStorage);
             final currency = _currency(debt);
+            final typedDisplayAmount = double.tryParse(
+                  amountController.text.trim().replaceAll(',', ''),
+                ) ??
+                0;
+            final typedStorageAmount = _displayToStorage(
+              debt,
+              typedDisplayAmount,
+            );
+            final remainingAfter = (remainingStorage - typedStorageAmount)
+                .clamp(0.0, remainingStorage)
+                .toDouble();
 
             void applyQuickAmount(double storageValue) {
               final safeStorage = storageValue
@@ -378,10 +389,9 @@ class FinancialPaymentFlow {
                         FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                       ],
                       textDirection: TextDirection.ltr,
+                      onChanged: (_) => setSheetState(() => localError = null),
                       decoration: InputDecoration(
                         labelText: 'بڕی پارەدانەوە',
-                        helperText:
-                            'ماوە: ${AppHelpers.formatCurrencyWithType(remainingDisplay, currency, showConversion: false)}',
                         suffixText: currency == 'USD' ? '\$' : 'د.ع',
                         prefixIcon: const Icon(Icons.payments_outlined),
                         border: const OutlineInputBorder(),
@@ -418,17 +428,84 @@ class FinancialPaymentFlow {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: noteController,
-                      enabled: !saving,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'تێبینی (ئارەزوومەندانە)',
-                        prefixIcon: Icon(Icons.notes_rounded),
-                        border: OutlineInputBorder(),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.04)
+                            : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.07)
+                              : const Color(0xFFE4E7EC),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _confirmationRow(
+                              'ماوەی ئێستا',
+                              _formatDisplay(debt, remainingStorage),
+                              isDark,
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Icon(Icons.arrow_back_rounded, size: 17),
+                          ),
+                          Expanded(
+                            child: _confirmationRow(
+                              'دوای پارەدان',
+                              _formatDisplay(debt, remainingAfter),
+                              isDark,
+                              valueColor: remainingAfter <= 0
+                                  ? Colors.green
+                                  : Colors.orange,
+                              emphasized: true,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    if (showNote)
+                      TextField(
+                        controller: noteController,
+                        enabled: !saving,
+                        autofocus: true,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          labelText: 'تێبینی (ئارەزوومەندانە)',
+                          prefixIcon: const Icon(Icons.notes_rounded),
+                          suffixIcon: IconButton(
+                            tooltip: 'لابردن',
+                            onPressed: saving
+                                ? null
+                                : () {
+                                    noteController.clear();
+                                    setSheetState(() => showNote = false);
+                                  },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                          border: const OutlineInputBorder(),
+                        ),
+                      )
+                    else
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: saving
+                              ? null
+                              : () => setSheetState(() => showNote = true),
+                          icon: const Icon(Icons.add_comment_outlined, size: 18),
+                          label: const Text('زیادکردنی تێبینی'),
+                        ),
+                      ),
                     if (localError != null) ...[
                       const SizedBox(height: 10),
                       Text(
@@ -516,7 +593,9 @@ class FinancialPaymentFlow {
                               ),
                             )
                           : const Icon(Icons.check_rounded),
-                      label: Text(saving ? 'تۆمار دەکرێت...' : 'تۆمارکردن'),
+                      label: Text(
+                        saving ? 'تۆمار دەکرێت...' : 'پێداچوونەوە و تۆمارکردن',
+                      ),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
                         backgroundColor: Colors.green.shade700,
