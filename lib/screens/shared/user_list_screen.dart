@@ -131,6 +131,14 @@ class _UserListScreenState extends State<UserListScreen> {
     int limit = 60,
     Map<String, dynamic>? cursor,
   }) async {
+    if (_customerFilter == 'all') {
+      return PBService.getCustomerDirectoryPage(
+        search: search,
+        limit: limit,
+        cursor: cursor,
+      );
+    }
+
     await PBService.ensureInitialized();
     final params = <String, dynamic>{
       'p_search': search.trim(),
