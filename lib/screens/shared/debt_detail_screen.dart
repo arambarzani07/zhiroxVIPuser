@@ -25,6 +25,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
   List<RecordModel> _payments = [];
   bool _isLoading = true;
   String? _loadError;
+  final Set<String> _deletingPaymentIds = <String>{};
   late AnimationController _animController;
 
   @override
@@ -1036,14 +1037,42 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            displayAmount,
-            style: const TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w800,
-              color: Colors.green,
-            ),
-            textDirection: TextDirection.ltr,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                displayAmount,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.green,
+                ),
+                textDirection: TextDirection.ltr,
+              ),
+              if (context.read<AuthProvider>().userRole == 'admin') ...[
+                const SizedBox(height: 2),
+                SizedBox(
+                  width: 30,
+                  height: 30,
+                  child: IconButton(
+                    tooltip: 'سڕینەوەی پارەدانەوە',
+                    padding: EdgeInsets.zero,
+                    iconSize: 18,
+                    color: Colors.red,
+                    onPressed: _deletingPaymentIds.contains(payment.id)
+                        ? null
+                        : () => _confirmDeletePayment(payment),
+                    icon: _deletingPaymentIds.contains(payment.id)
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_outline_rounded),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
@@ -1051,6 +1080,39 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
   }
 
   // ───── Actions ─────
+
+  Future<void> _confirmDeletePayment(RecordModel payment) async {
+    final confirm = await AppHelpers.showConfirmDialog(
+      context,
+      title: 'سڕینەوەی پارەدانەوە',
+      message:
+          'بڕی ئەم پارەدانەوەیە دەگەڕێتەوە سەر ماوەی قەرز. دڵنیایت؟',
+    );
+    if (!mounted || !confirm) return;
+
+    setState(() => _deletingPaymentIds.add(payment.id));
+    try {
+      await PBService.deletePayment(payment.id);
+      if (!mounted) return;
+      await _loadData();
+      if (!mounted) return;
+      AppHelpers.showSnackBar(context, 'پارەدانەوەکە سڕایەوە');
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا پارەدانەوەکە بسڕدرێتەوە. دووبارە هەوڵ بدە.',
+        ),
+        isError: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _deletingPaymentIds.remove(payment.id));
+      }
+    }
+  }
 
   Future<void> _confirmDelete() async {
     final confirm = await AppHelpers.showConfirmDialog(
@@ -1060,15 +1122,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     );
     if (!mounted || !confirm) return;
     try {
-      final response = await PBService.client.functions.invoke(
-      'debt-restore-admin',
-      body: {'action': 'delete', 'debt_id': widget.debtId},
-    );
-    final data = response.data;
-    if (data is! Map || data['deleted'] != true) {
-      final code = data is Map ? data['error']?.toString() : null;
-      throw Exception(code ?? 'delete_failed');
-    }
+      await PBService.deleteDebt(widget.debtId);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;

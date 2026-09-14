@@ -119,6 +119,14 @@ class PBService {
         return 'دروستکردنی پارەدانی FIB سەرکەوتوو نەبوو';
       case 'payment_not_found':
         return 'پارەدانەکە نەدۆزرایەوە';
+      case 'payment_not_found_or_forbidden':
+        return 'پارەدانەکە نەدۆزرایەوە یان دەسەڵاتی سڕینەوەت نییە';
+      case 'payment_delete_failed':
+        return 'سڕینەوەی پارەدانەوەکە سەرکەوتوو نەبوو';
+      case 'debt_not_found_or_forbidden':
+        return 'قەرزەکە نەدۆزرایەوە یان دەسەڵاتی سڕینەوەت نییە';
+      case 'delete_failed':
+        return 'سڕینەوەی قەرزەکە سەرکەوتوو نەبوو';
       default:
         return code.isEmpty ? 'هەڵەیەک لە سێرڤەر ڕوویدا' : code;
     }
@@ -668,20 +676,18 @@ class PBService {
   }
 
   static Future<void> deleteDebt(String id) async {
-    final debt = await getDebt(id);
-    final receiptPath = debt.getStringValue('receipt_image');
-
-    // payments.debt_id is ON DELETE CASCADE in Postgres, so one debt delete
-    // keeps the financial delete atomic instead of deleting payments piecemeal.
-    await pb.collection('debts').delete(id);
-
-    if (receiptPath.isNotEmpty) {
-      try {
-        await client.storage.from('receipts').remove([receiptPath]);
-      } catch (_) {
-        // Database deletion already succeeded. A storage cleanup failure must
-        // not turn a completed financial transaction into an app-level error.
+    await ensureInitialized();
+    try {
+      final response = await client.functions.invoke(
+        'debt-restore-admin',
+        body: {'action': 'delete', 'debt_id': id},
+      );
+      final data = response.data;
+      if (data is! Map || data['deleted'] != true) {
+        throw _functionError(data);
       }
+    } on FunctionsException catch (e) {
+      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
     }
   }
 
@@ -777,6 +783,22 @@ class PBService {
   }
 
   // ==================== Payments ====================
+
+  static Future<void> deletePayment(String id) async {
+    await ensureInitialized();
+    try {
+      final response = await client.functions.invoke(
+        'debt-restore-admin',
+        body: {'action': 'delete_payment', 'payment_id': id},
+      );
+      final data = response.data;
+      if (data is! Map || data['payment_deleted'] != true) {
+        throw _functionError(data);
+      }
+    } on FunctionsException catch (e) {
+      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
+    }
+  }
 
   static Future<RecordModel> createPayment({
     required String debtId,

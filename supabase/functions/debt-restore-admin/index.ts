@@ -1,24 +1,63 @@
-import { withSupabase } from 'npm:@supabase/server';
+import { createClient } from "npm:@supabase/supabase-js@2.116.0";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
+function envJsonKey(name: string): string | null {
+  const raw = Deno.env.get(name);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed.default ?? Object.values(parsed)[0] ?? null;
+  } catch (_) {
+    return raw;
+  }
+}
 
 const json = (body: Record<string, unknown>, status = 200) =>
-  Response.json(body, { status });
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 
 type ActionBody = {
   action?: string;
   debt_id?: string;
+  payment_id?: string;
   limit?: number;
 };
 
 export default {
-  fetch: withSupabase({ auth: 'user' }, async (req, ctx) => {
+  async fetch(req: Request) {
+    if (req.method === "OPTIONS") {
+      return new Response("ok", { headers: corsHeaders });
+    }
     if (req.method !== 'POST') {
       return json({ error: 'method_not_allowed' }, 405);
     }
 
-    const userId = ctx.userClaims?.sub;
-    if (!userId) return json({ error: 'unauthorized' }, 401);
+    const url = Deno.env.get("SUPABASE_URL") ?? "";
+    const secret = envJsonKey("SUPABASE_SECRET_KEYS") ??
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !secret) return json({ error: 'server_not_configured' }, 500);
 
-    const { data: profile, error: profileError } = await ctx.supabaseAdmin
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!token) return json({ error: 'authentication_required' }, 401);
+
+    const admin = createClient(url, secret, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: userData, error: userError } = await admin.auth.getUser(token);
+    if (userError || !userData.user) {
+      return json({ error: 'authentication_required' }, 401);
+    }
+    const userId = userData.user.id;
+
+    const { data: profile, error: profileError } = await admin
       .from('profiles')
       .select('id, role, active, approved, subscription_end, is_system_owner')
       .eq('id', userId)
@@ -51,33 +90,13 @@ export default {
 
     const action = String(body.action ?? '').trim();
 
-    const fetchOwnedDebt = async (debtId: string, deleted: boolean) => {
-      const { data: debt, error: debtError } = await ctx.supabaseAdmin
-        .from('debts')
-        .select('id, customer_id, is_deleted')
-        .eq('id', debtId)
-        .eq('is_deleted', deleted)
-        .maybeSingle();
-      if (debtError || !debt) return null;
-
-      const { data: customer, error: customerError } = await ctx.supabaseAdmin
-        .from('profiles')
-        .select('id')
-        .eq('id', debt.customer_id)
-        .eq('admin_id', userId)
-        .eq('role', 'customer')
-        .maybeSingle();
-      if (customerError || !customer) return null;
-      return debt;
-    };
-
     if (action === 'list') {
       const requestedLimit = Number(body.limit ?? 200);
       const limit = Number.isFinite(requestedLimit)
         ? Math.max(1, Math.min(Math.trunc(requestedLimit), 500))
         : 200;
 
-      const { data: customers, error: customersError } = await ctx.supabaseAdmin
+      const { data: customers, error: customersError } = await admin
         .from('profiles')
         .select('id, name')
         .eq('admin_id', userId)
@@ -91,7 +110,7 @@ export default {
         customers.map((row) => [row.id, row.name ?? '']),
       );
 
-      const { data: debts, error: debtsError } = await ctx.supabaseAdmin
+      const { data: debts, error: debtsError } = await admin
         .from('debts')
         .select(
           'id, customer_id, description, amount, remaining, status, currency, due_date, custom_date, created_at, deleted_at',
@@ -114,51 +133,62 @@ export default {
       const debtId = String(body.debt_id ?? '').trim();
       if (!debtId) return json({ error: 'invalid_input' }, 400);
 
-      const debt = await fetchOwnedDebt(debtId, false);
-      if (!debt) return json({ error: 'debt_not_found_or_forbidden' }, 404);
-
-      const now = new Date().toISOString();
-      const { data: updated, error: deleteError } = await ctx.supabaseAdmin
-        .from('debts')
-        .update({
-          is_deleted: true,
-          deleted_at: now,
-          deleted_by: userId,
-          updated_at: now,
-        })
-        .eq('id', debtId)
-        .eq('is_deleted', false)
-        .select('id')
-        .maybeSingle();
-
-      if (deleteError || !updated) return json({ error: 'delete_failed' }, 500);
+      const { data: deleted, error: deleteError } = await admin.rpc(
+        'delete_debt_service',
+        { p_actor_id: userId, p_debt_id: debtId },
+      );
+      if (deleteError || deleted !== true) {
+        return json(
+          {
+            error: deleteError?.message ?? 'delete_failed',
+            code: deleteError?.code,
+          },
+          deleteError?.code === '42501' ? 403 : 500,
+        );
+      }
       return json({ deleted: true });
+    }
+
+    if (action === 'delete_payment') {
+      const paymentId = String(body.payment_id ?? '').trim();
+      if (!paymentId) return json({ error: 'invalid_input' }, 400);
+
+      const { data: result, error: deleteError } = await admin.rpc(
+        'delete_payment_service',
+        { p_actor_id: userId, p_payment_id: paymentId },
+      );
+      if (deleteError || !result?.payment_deleted) {
+        return json(
+          {
+            error: deleteError?.message ?? 'payment_delete_failed',
+            code: deleteError?.code,
+          },
+          deleteError?.code === '42501' ? 403 : 500,
+        );
+      }
+      return json(result);
     }
 
     if (action === 'restore') {
       const debtId = String(body.debt_id ?? '').trim();
       if (!debtId) return json({ error: 'invalid_input' }, 400);
 
-      const debt = await fetchOwnedDebt(debtId, true);
-      if (!debt) return json({ error: 'debt_not_found_or_forbidden' }, 404);
-
-      const { data: updated, error: restoreError } = await ctx.supabaseAdmin
-        .from('debts')
-        .update({
-          is_deleted: false,
-          deleted_at: null,
-          deleted_by: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', debtId)
-        .eq('is_deleted', true)
-        .select('id')
-        .maybeSingle();
-
-      if (restoreError || !updated) return json({ error: 'restore_failed' }, 500);
+      const { data: restored, error: restoreError } = await admin.rpc(
+        'restore_debt_service',
+        { p_actor_id: userId, p_debt_id: debtId },
+      );
+      if (restoreError || restored !== true) {
+        return json(
+          {
+            error: restoreError?.message ?? 'restore_failed',
+            code: restoreError?.code,
+          },
+          restoreError?.code === '42501' ? 403 : 500,
+        );
+      }
       return json({ restored: true });
     }
 
     return json({ error: 'invalid_action' }, 400);
-  }),
+  },
 };
