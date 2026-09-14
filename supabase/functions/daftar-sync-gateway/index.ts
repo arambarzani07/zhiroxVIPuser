@@ -119,8 +119,6 @@ async function probeEndpoint(
       }
 
       if (response.ok) {
-        // We only need the validators here. The main sync fetches and validates
-        // the payload if a change is detected, so do not buffer a multi-MB body.
         try {
           await response.body?.cancel();
         } catch (_) {}
@@ -174,6 +172,7 @@ async function markUpToDate(admin: any, sourceId: string) {
       await admin.from("daftar_sync_runs").insert({
         sync_source_id: sourceId,
         status: "skipped",
+        started_at: finishedAt,
         completed_at: finishedAt,
       });
       return;
