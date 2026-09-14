@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -46,7 +45,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
   }
 
   List<Map<String, dynamic>> _maps(dynamic value) {
-    if (value is! List) return const [];
+    if (value is! List) return const <Map<String, dynamic>>[];
     return value
         .whereType<Map>()
         .map((row) => Map<String, dynamic>.from(row))
@@ -77,6 +76,22 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
     }
   }
 
+  String _transportMessage(Object error) {
+    final text = error.toString().toLowerCase();
+    if (text.contains('401') ||
+        text.contains('jwt') ||
+        text.contains('unauthorized')) {
+      return _functionMessage({'error': 'unauthorized'});
+    }
+    if (text.contains('timeout') ||
+        text.contains('socket') ||
+        text.contains('network') ||
+        text.contains('fetch')) {
+      return 'پەیوەندی ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.';
+    }
+    return 'هەڵەیەک لە ZHIROX AI ڕوویدا.';
+  }
+
   Future<Map<String, dynamic>> _invoke(
     String action, {
     String question = '',
@@ -93,10 +108,8 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
       final data = response.data;
       if (data is! Map) throw const FormatException('invalid_ai_response');
       return Map<String, dynamic>.from(data);
-    } on FunctionsException catch (error) {
-      throw Exception(
-        _functionMessage(error.details ?? error.reasonPhrase ?? error.status),
-      );
+    } catch (error) {
+      throw Exception(_transportMessage(error));
     }
   }
 
@@ -138,7 +151,6 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
         question: _questionController.text,
       );
       if (!mounted) return;
-
       final nextSnapshot = _map(data['snapshot']);
       final nextAi = _map(data['ai']);
       setState(() {
@@ -174,6 +186,8 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final background =
+        isDark ? AppDarkColors.background : const Color(0xFFF5F7FA);
 
     if (!auth.isLoggedIn || auth.userRole != 'admin') {
       return const SafeArea(
@@ -188,9 +202,6 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
         ),
       );
     }
-
-    final background =
-        isDark ? AppDarkColors.background : const Color(0xFFF5F7FA);
 
     if (_loading && _snapshot == null) {
       return ColoredBox(
@@ -357,42 +368,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: (_aiEnabled ? Colors.green : Colors.orange)
-                      .withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: (_aiEnabled ? Colors.greenAccent : Colors.orangeAccent)
-                        .withValues(alpha: 0.65),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _aiEnabled
-                          ? Icons.bolt_rounded
-                          : Icons.info_outline_rounded,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _aiEnabled ? 'AI چالاک' : 'AI ناچالاک',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _statusPill(),
             ],
           ),
           const SizedBox(height: 18),
@@ -437,6 +413,37 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
     );
   }
 
+  Widget _statusPill() {
+    final color = _aiEnabled ? Colors.greenAccent : Colors.orangeAccent;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.65)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _aiEnabled ? Icons.bolt_rounded : Icons.info_outline_rounded,
+            color: Colors.white,
+            size: 14,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            _aiEnabled ? 'AI چالاک' : 'AI ناچالاک',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMetrics(Map<String, dynamic> totals, bool isDark) {
     return Column(
       children: [
@@ -459,9 +466,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
                 isDark: isDark,
                 icon: Icons.warning_amber_rounded,
                 title: 'دواکەوتوو',
-                value: AppHelpers.formatCurrency(
-                  _num(totals['overdue_iqd']),
-                ),
+                value: AppHelpers.formatCurrency(_num(totals['overdue_iqd'])),
                 subtitle: '${_num(totals['overdue_count']).round()} قەرز',
                 accent: Colors.orange,
               ),
@@ -503,17 +508,16 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
   }
 
   Widget _buildAiConsole(bool isDark) {
-    final surface = isDark ? AppDarkColors.card : Colors.white;
-    final border = isDark
-        ? Colors.white.withValues(alpha: 0.08)
-        : const Color(0xFFE4E7EC);
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: surface,
+        color: isDark ? AppDarkColors.card : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: border),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : const Color(0xFFE4E7EC),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -545,8 +549,8 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
           const SizedBox(height: 6),
           Text(
             _aiEnabled
-                ? 'دەتوانیت پرسیاری تایبەت بکەیت، یان خانەکە بەتاڵ بهێڵیت بۆ تحلیلی گشتی.'
-                : 'بەشی هەژمار و Risk Score کار دەکات، بەڵام AI provider هێشتا لە سێرڤەر چالاک نەکراوە.',
+                ? 'پرسیاری تایبەت بکە، یان خانەکە بەتاڵ بهێڵە بۆ تحلیلی گشتی.'
+                : 'هەژمار و Risk Score کار دەکات، بەڵام AI provider هێشتا لە سێرڤەر چالاک نەکراوە.',
             style: TextStyle(
               fontSize: 11,
               height: 1.6,
@@ -646,7 +650,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
           const SizedBox(height: 14),
           _smallTitle('ئاگادارکردنەوەکانی AI', isDark),
           const SizedBox(height: 8),
-          ...alerts.map((alert) => _aiAlertCard(alert, isDark)),
+          ...alerts.map((item) => _aiAlertCard(item, isDark)),
         ],
         if (recommendations.isNotEmpty) ...[
           const SizedBox(height: 14),
