@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -12,46 +13,94 @@ class IntelligenceCenterScreen extends StatefulWidget {
   const IntelligenceCenterScreen({super.key});
 
   @override
-  State<IntelligenceCenterScreen> createState() => _IntelligenceCenterScreenState();
+  State<IntelligenceCenterScreen> createState() =>
+      _IntelligenceCenterScreenState();
 }
 
 class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
-  _IntelligenceSnapshot? _snapshot;
+  final _questionController = TextEditingController();
+
+  Map<String, dynamic>? _snapshot;
+  Map<String, dynamic>? _ai;
+  bool _aiEnabled = false;
   bool _loading = true;
+  bool _analyzing = false;
   String? _error;
+  String? _aiError;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
+    unawaited(_loadSnapshot());
   }
 
-  Future<List<Map<String, dynamic>>> _fetchAll(
-    String table,
-    String columns,
-  ) async {
-    await PBService.ensureInitialized();
-    const pageSize = 500;
-    var from = 0;
-    final rows = <Map<String, dynamic>>[];
+  @override
+  void dispose() {
+    _questionController.dispose();
+    super.dispose();
+  }
 
-    while (true) {
-      final raw = await PBService.client
-          .from(table)
-          .select(columns)
-          .range(from, from + pageSize - 1);
-      final page = (raw as List)
-          .whereType<Map>()
-          .map((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false);
-      rows.addAll(page);
-      if (page.length < pageSize) break;
-      from += pageSize;
+  Map<String, dynamic> _map(dynamic value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  List<Map<String, dynamic>> _maps(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
+
+  double _num(dynamic value) =>
+      value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+
+  String _functionMessage(dynamic value) {
+    final code = value is Map ? value['error']?.toString() ?? '' : '$value';
+    switch (code) {
+      case 'unauthorized':
+        return 'پەیوەندی هەژمارەکەت نوێ بکەرەوە و دووبارە هەوڵ بدە.';
+      case 'admin_required':
+        return 'ZHIROX AI تەنها بۆ بەڕێوەبەر بەردەستە.';
+      case 'account_inactive':
+        return 'هەژماری بەڕێوەبەر ناچالاکە.';
+      case 'subscription_expired':
+        return 'ماوەی بەشداریکردن تەواو بووە.';
+      case 'ai_not_configured':
+        return 'AI provider هێشتا لە سێرڤەر چالاک نەکراوە.';
+      default:
+        if (code.startsWith('openai_')) {
+          return 'خزمەتگوزاری AI کاتییەکە بەردەست نییە؛ دووبارە هەوڵ بدە.';
+        }
+        return 'هەڵەیەک لە ZHIROX AI ڕوویدا.';
     }
-    return rows;
   }
 
-  Future<void> _load() async {
+  Future<Map<String, dynamic>> _invoke(
+    String action, {
+    String question = '',
+  }) async {
+    await PBService.ensureInitialized();
+    try {
+      final response = await PBService.client.functions.invoke(
+        'intelligence-ai',
+        body: {
+          'action': action,
+          if (question.trim().isNotEmpty) 'question': question.trim(),
+        },
+      );
+      final data = response.data;
+      if (data is! Map) throw const FormatException('invalid_ai_response');
+      return Map<String, dynamic>.from(data);
+    } on FunctionsException catch (error) {
+      throw Exception(
+        _functionMessage(error.details ?? error.reasonPhrase ?? error.status),
+      );
+    }
+  }
+
+  Future<void> _loadSnapshot() async {
     if (!mounted) return;
     setState(() {
       _loading = true;
@@ -59,51 +108,66 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
     });
 
     try {
-      final auth = context.read<AuthProvider>();
-      if (!auth.isLoggedIn || auth.userRole != 'admin') {
-        throw StateError('admin_required');
-      }
-
-      final results = await Future.wait([
-        _fetchAll(
-          'debts',
-          'id,customer_id,amount,remaining,due_date,status,created_at',
-        ),
-        _fetchAll('payments', 'id,debt_id,amount,created_at'),
-        _fetchAll('profiles', 'id,name,phone,role,active'),
-      ]);
-
-      final snapshot = _IntelligenceSnapshot.build(
-        debts: results[0],
-        payments: results[1],
-        profiles: results[2],
-      );
-
+      final data = await _invoke('snapshot');
+      if (data['ok'] != true) throw Exception(_functionMessage(data));
       if (!mounted) return;
       setState(() {
-        _snapshot = snapshot;
+        _snapshot = _map(data['snapshot']);
+        _aiEnabled = data['ai_enabled'] == true;
         _loading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error =
-            'نەتوانرا زانیارییە زیرەکەکان باربکرێن. پەیوەندی ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.';
+        _error = error.toString().replaceFirst('Exception: ', '');
       });
     }
   }
 
-  Future<void> _openCustomer(_CustomerRisk risk) async {
+  Future<void> _runAi() async {
+    if (_analyzing || !_aiEnabled) return;
+    setState(() {
+      _analyzing = true;
+      _aiError = null;
+    });
+
+    try {
+      final data = await _invoke(
+        'analyze',
+        question: _questionController.text,
+      );
+      if (!mounted) return;
+
+      final nextSnapshot = _map(data['snapshot']);
+      final nextAi = _map(data['ai']);
+      setState(() {
+        if (nextSnapshot.isNotEmpty) _snapshot = nextSnapshot;
+        _aiEnabled = data['ai_enabled'] == true;
+        _ai = nextAi.isEmpty ? null : nextAi;
+        _aiError = data['error'] == null ? null : _functionMessage(data);
+        _analyzing = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _analyzing = false;
+        _aiError = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _openCustomer(String customerId) async {
+    if (customerId.isEmpty) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => UserProfileScreen(
-          userId: risk.customerId,
+          userId: customerId,
           openFinancialChat: true,
         ),
       ),
     );
-    if (mounted) unawaited(_load());
+    if (mounted) unawaited(_loadSnapshot());
   }
 
   @override
@@ -117,7 +181,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'Intelligence Center تەنها بۆ بەڕێوەبەر بەردەستە.',
+              'ZHIROX AI Intelligence تەنها بۆ بەڕێوەبەر بەردەستە.',
               textAlign: TextAlign.center,
             ),
           ),
@@ -125,154 +189,98 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
       );
     }
 
+    final background =
+        isDark ? AppDarkColors.background : const Color(0xFFF5F7FA);
+
     if (_loading && _snapshot == null) {
-      return const SafeArea(child: Center(child: CircularProgressIndicator()));
+      return ColoredBox(
+        color: background,
+        child: const SafeArea(
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
     }
 
     if (_snapshot == null) {
-      return SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(28),
-            children: [
-              const SizedBox(height: 100),
-              const Icon(Icons.insights_rounded, size: 58, color: Colors.orange),
-              const SizedBox(height: 18),
-              Text(
-                _error ?? 'هەڵەیەک ڕوویدا.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(height: 1.7),
-              ),
-              const SizedBox(height: 20),
-              Center(
-                child: ElevatedButton.icon(
-                  onPressed: _load,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('دووبارە هەوڵ بدە'),
+      return ColoredBox(
+        color: background,
+        child: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: _loadSnapshot,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(28),
+              children: [
+                const SizedBox(height: 120),
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 58,
+                  color: Colors.orange,
                 ),
-              ),
-            ],
+                const SizedBox(height: 18),
+                Text(
+                  _error ?? 'نەتوانرا زانیارییەکان باربکرێن.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(height: 1.7),
+                ),
+                const SizedBox(height: 18),
+                Center(
+                  child: ElevatedButton.icon(
+                    onPressed: _loadSnapshot,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('دووبارە هەوڵ بدە'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
     final snapshot = _snapshot!;
-    final background =
-        isDark ? AppDarkColors.background : const Color(0xFFF5F7FA);
+    final totals = _map(snapshot['totals']);
+    final risks = _maps(snapshot['top_risks']);
 
     return ColoredBox(
       color: background,
       child: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: _load,
+          onRefresh: _loadSnapshot,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
             children: [
-              _buildHeader(snapshot, isDark),
-              const SizedBox(height: 16),
-              _buildSectionTitle(
-                icon: Icons.query_stats_rounded,
-                title: 'پێشبینی پارە و قەرز',
-                subtitle: 'کورتەی ٧ و ٣٠ ڕۆژی داهاتوو',
-                isDark: isDark,
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _metricCard(
-                      isDark: isDark,
-                      icon: Icons.warning_amber_rounded,
-                      title: 'دواکەوتوو',
-                      value: AppHelpers.formatCurrency(snapshot.overdueAmount),
-                      subtitle: '${snapshot.overdueCount} قەرز',
-                      accent: Colors.red,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _metricCard(
-                      isDark: isDark,
-                      icon: Icons.event_note_rounded,
-                      title: 'تا ٧ ڕۆژ',
-                      value: AppHelpers.formatCurrency(snapshot.due7Amount),
-                      subtitle: '${snapshot.due7Count} قەرز',
-                      accent: Colors.orange,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _metricCard(
-                      isDark: isDark,
-                      icon: Icons.calendar_month_rounded,
-                      title: 'تا ٣٠ ڕۆژ',
-                      value: AppHelpers.formatCurrency(snapshot.due30Amount),
-                      subtitle: '${snapshot.due30Count} قەرز',
-                      accent: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _metricCard(
-                      isDark: isDark,
-                      icon: Icons.payments_rounded,
-                      title: 'وەرگیراوی ٣٠ ڕۆژ',
-                      value: AppHelpers.formatCurrency(snapshot.collected30),
-                      subtitle: snapshot.collectionTrendLabel,
-                      accent: Colors.green,
-                    ),
-                  ),
-                ],
-              ),
+              _buildHeader(snapshot),
+              const SizedBox(height: 14),
+              _buildMetrics(totals, isDark),
+              const SizedBox(height: 18),
+              _buildAiConsole(isDark),
+              if (_ai != null) ...[
+                const SizedBox(height: 16),
+                _buildAiResult(_ai!, isDark),
+              ],
               const SizedBox(height: 20),
-              _buildSectionTitle(
-                icon: Icons.auto_awesome_rounded,
-                title: 'Smart Alerts',
-                subtitle: 'خاڵە گرنگەکان کە پێویستیان بە سەرنجە',
-                isDark: isDark,
-              ),
-              const SizedBox(height: 10),
-              ...snapshot.alerts.map(
-                (alert) => _alertCard(alert, isDark),
-              ),
-              const SizedBox(height: 20),
-              _buildSectionTitle(
+              _sectionTitle(
                 icon: Icons.shield_outlined,
-                title: 'Risk Score ـی کڕیارەکان',
+                title: 'مەترسیی کڕیارەکان',
                 subtitle:
-                    'نمرەی ٠ تا ١٠٠ • لەسەر کڕیار بکە بۆ کردنەوەی هەژمار',
+                    'Risk Score ـی هەژماری • AI بۆ شیکردنەوەی هۆکار بەکاردێت',
                 isDark: isDark,
               ),
               const SizedBox(height: 10),
-              if (snapshot.risks.isEmpty)
-                _emptyCard(
-                  isDark,
-                  'هیچ قەرزی کراوەیەک نییە بۆ هەژمارکردنی Risk Score.',
-                )
+              if (risks.isEmpty)
+                _emptyCard(isDark, 'هیچ قەرزی کراوەیەک نییە.')
               else
-                ...snapshot.risks.take(8).map(
-                      (risk) => GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => unawaited(_openCustomer(risk)),
-                        child: _riskCard(risk, isDark),
-                      ),
-                    ),
-              const SizedBox(height: 12),
+                ...risks.take(8).map((risk) => _riskCard(risk, isDark)),
+              const SizedBox(height: 16),
               Text(
-                'تێبینی: Risk Score لەم قۆناغەدا مۆدێلێکی هەژمارییە و لە دواکەوتن، بڕی قەرزی ماوە و ماوەی دواکەوتن دروست دەکرێت؛ بڕیاری کۆتایی لەلایەن بەڕێوەبەرە.',
+                'ZHIROX AI تەنها پێشنیار و شیکردنەوە دەدات؛ هیچ قەرز، پارەدانەوە، نامە یان بڕیارێک بەخۆکار جێبەجێ ناکات.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 10.5,
-                  height: 1.65,
+                  height: 1.7,
                   color: isDark
                       ? AppDarkColors.textSecondary
                       : const Color(0xFF667085),
@@ -285,13 +293,9 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
     );
   }
 
-  Widget _buildHeader(_IntelligenceSnapshot snapshot, bool isDark) {
-    final health = snapshot.healthScore;
-    final healthLabel = health >= 80
-        ? 'باش'
-        : health >= 60
-            ? 'مامناوەند'
-            : 'پێویستی بە سەرنج هەیە';
+  Widget _buildHeader(Map<String, dynamic> snapshot) {
+    final health = _num(snapshot['health_score']).round();
+    final marketName = snapshot['market_name']?.toString().trim() ?? '';
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -299,7 +303,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
         gradient: LinearGradient(
           colors: [
             AppColors.primary,
-            AppColors.primary.withValues(alpha: 0.78),
+            AppColors.primary.withValues(alpha: 0.76),
           ],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
@@ -312,126 +316,118 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
           Row(
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: 48,
+                height: 48,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(15),
                 ),
                 child: const Icon(
                   Icons.auto_awesome_rounded,
                   color: Colors.white,
-                  size: 24,
+                  size: 25,
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'ZHIROX Intelligence Center',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'پێشبینی، مەترسی و خاڵە گرنگەکان لە یەک شوێن',
-                      style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: _loading ? null : _load,
-                icon: _loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.refresh_rounded, color: Colors.white),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Health Score',
+                    const Text(
+                      'ZHIROX AI Intelligence',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.72),
-                        fontSize: 11,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$health / 100',
-                      textDirection: TextDirection.ltr,
-                      style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 28,
+                        fontSize: 17,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
+                    const SizedBox(height: 3),
                     Text(
-                      healthLabel,
+                      marketName.isEmpty
+                          ? 'شیکردنەوەی زیرەکی دارایی'
+                          : marketName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        color: Colors.white70,
+                        fontSize: 11.5,
                       ),
                     ),
                   ],
                 ),
               ),
               Container(
-                width: 1,
-                height: 58,
-                color: Colors.white.withValues(alpha: 0.18),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: (_aiEnabled ? Colors.green : Colors.orange)
+                      .withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: (_aiEnabled ? Colors.greenAccent : Colors.orangeAccent)
+                        .withValues(alpha: 0.65),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'کۆی قەرزی ماوە',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.72),
-                        fontSize: 11,
-                      ),
+                    Icon(
+                      _aiEnabled
+                          ? Icons.bolt_rounded
+                          : Icons.info_outline_rounded,
+                      color: Colors.white,
+                      size: 14,
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(width: 4),
                     Text(
-                      AppHelpers.formatCurrency(snapshot.totalRemaining),
-                      textDirection: TextDirection.ltr,
+                      _aiEnabled ? 'AI چالاک' : 'AI ناچالاک',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 15,
+                        fontSize: 10.5,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${snapshot.openCount} قەرزی کراوە',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 10.5,
-                      ),
-                    ),
                   ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Text(
+                '$health',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const Text(
+                ' / 100',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  health >= 80
+                      ? 'دۆخی دارایی باشە'
+                      : health >= 60
+                          ? 'دۆخ مامناوەندە'
+                          : 'پێویستی بە سەرنجی زیاترە',
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -441,7 +437,580 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
     );
   }
 
-  Widget _buildSectionTitle({
+  Widget _buildMetrics(Map<String, dynamic> totals, bool isDark) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _metricCard(
+                isDark: isDark,
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'کۆی قەرزی ماوە',
+                value: AppHelpers.formatCurrency(
+                  _num(totals['total_remaining_iqd']),
+                ),
+                accent: Colors.red,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _metricCard(
+                isDark: isDark,
+                icon: Icons.warning_amber_rounded,
+                title: 'دواکەوتوو',
+                value: AppHelpers.formatCurrency(
+                  _num(totals['overdue_iqd']),
+                ),
+                subtitle: '${_num(totals['overdue_count']).round()} قەرز',
+                accent: Colors.orange,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _metricCard(
+                isDark: isDark,
+                icon: Icons.payments_outlined,
+                title: 'وەرگیراوی ٣٠ ڕۆژ',
+                value: AppHelpers.formatCurrency(
+                  _num(totals['collected_30_iqd']),
+                ),
+                subtitle:
+                    '${_num(totals['collection_change_percent']).toStringAsFixed(1)}%',
+                accent: Colors.green,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _metricCard(
+                isDark: isDark,
+                icon: Icons.people_outline_rounded,
+                title: 'کڕیار',
+                value: '${_num(totals['customers']).round()}',
+                subtitle:
+                    '${_num(totals['high_risk_customers']).round()} مەترسی بەرز',
+                accent: Colors.blue,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAiConsole(bool isDark) {
+    final surface = isDark ? AppDarkColors.card : Colors.white;
+    final border = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : const Color(0xFFE4E7EC);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.psychology_alt_rounded, color: AppColors.primary),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'پرسیار لە ZHIROX AI',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF101828),
+                  ),
+                ),
+              ),
+              if (_analyzing)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _aiEnabled
+                ? 'دەتوانیت پرسیاری تایبەت بکەیت، یان خانەکە بەتاڵ بهێڵیت بۆ تحلیلی گشتی.'
+                : 'بەشی هەژمار و Risk Score کار دەکات، بەڵام AI provider هێشتا لە سێرڤەر چالاک نەکراوە.',
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.6,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF667085),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _questionController,
+            enabled: _aiEnabled && !_analyzing,
+            minLines: 2,
+            maxLines: 4,
+            textDirection: TextDirection.rtl,
+            decoration: InputDecoration(
+              hintText:
+                  'نموونە: کام کڕیاران پێویستە ئەم هەفتەیە پەیوەندییان پێوە بکرێت؟',
+              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 11),
+              filled: true,
+              fillColor: isDark
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : const Color(0xFFF8FAFC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          if (_aiError != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _aiError!,
+              style: const TextStyle(
+                color: Colors.orange,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _aiEnabled && !_analyzing ? _runAi : null,
+              icon: _analyzing
+                  ? const SizedBox(
+                      width: 17,
+                      height: 17,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.auto_awesome_rounded),
+              label: Text(_analyzing ? 'AI شیکاری دەکات...' : 'تحلیلی AI'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiResult(Map<String, dynamic> ai, bool isDark) {
+    final alerts = _maps(ai['alerts']);
+    final recommendations = _maps(ai['recommendations']);
+    final customers = _maps(ai['customer_insights']);
+    final model = ai['model']?.toString() ?? '';
+    final confidence = (_num(ai['confidence']) * 100).round();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle(
+          icon: Icons.auto_awesome_rounded,
+          title: 'تحلیلی AI',
+          subtitle: model.isEmpty
+              ? 'پێشنیاری زیرەکی'
+              : '$model • confidence $confidence%',
+          isDark: isDark,
+        ),
+        const SizedBox(height: 10),
+        _textCard(
+          isDark,
+          ai['executive_summary']?.toString() ?? '',
+          icon: Icons.summarize_rounded,
+        ),
+        if ((ai['health_assessment']?.toString() ?? '').isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _textCard(
+            isDark,
+            ai['health_assessment'].toString(),
+            icon: Icons.monitor_heart_outlined,
+          ),
+        ],
+        if (alerts.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _smallTitle('ئاگادارکردنەوەکانی AI', isDark),
+          const SizedBox(height: 8),
+          ...alerts.map((alert) => _aiAlertCard(alert, isDark)),
+        ],
+        if (recommendations.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _smallTitle('پێشنیارەکان', isDark),
+          const SizedBox(height: 8),
+          ...recommendations.map((item) => _recommendationCard(item, isDark)),
+        ],
+        if (customers.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _smallTitle('شیکردنەوەی کڕیار', isDark),
+          const SizedBox(height: 8),
+          ...customers.take(5).map((item) => _customerAiCard(item, isDark)),
+        ],
+      ],
+    );
+  }
+
+  Widget _riskCard(Map<String, dynamic> risk, bool isDark) {
+    final score = _num(risk['risk_score']).round();
+    final color = score >= 70
+        ? Colors.red
+        : score >= 40
+            ? Colors.orange
+            : Colors.green;
+    final customerId = risk['customer_id']?.toString() ?? '';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Material(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: customerId.isEmpty
+              ? null
+              : () => unawaited(_openCustomer(customerId)),
+          child: Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.07)
+                    : const Color(0xFFE9EDF3),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    '$score',
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        risk['name']?.toString() ?? 'کڕیار',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: isDark
+                              ? AppDarkColors.textPrimary
+                              : const Color(0xFF1D2939),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'ماوە: ${AppHelpers.formatCurrency(_num(risk['remaining_iqd']))} • '
+                        'دواکەوتوو: ${AppHelpers.formatCurrency(_num(risk['overdue_iqd']))}',
+                        maxLines: 2,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          height: 1.5,
+                          color: isDark
+                              ? AppDarkColors.textSecondary
+                              : const Color(0xFF667085),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_left_rounded, color: Colors.grey),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _aiAlertCard(Map<String, dynamic> item, bool isDark) {
+    final severity = item['severity']?.toString() ?? 'low';
+    final color = severity == 'high'
+        ? Colors.red
+        : severity == 'medium'
+            ? Colors.orange
+            : Colors.blue;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.10 : 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 19, color: color),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item['title']?.toString() ?? '',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    color: isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF1D2939),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  item['detail']?.toString() ?? '',
+                  style: TextStyle(
+                    height: 1.55,
+                    fontSize: 10.5,
+                    color: isDark
+                        ? AppDarkColors.textSecondary
+                        : const Color(0xFF667085),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _recommendationCard(Map<String, dynamic> item, bool isDark) {
+    final priority = item['priority']?.toString() ?? 'low';
+    final color = priority == 'high'
+        ? Colors.red
+        : priority == 'medium'
+            ? Colors.orange
+            : Colors.green;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.07)
+              : const Color(0xFFE9EDF3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  item['title']?.toString() ?? '',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12.5,
+                    color: isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF1D2939),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if ((item['why']?.toString() ?? '').isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              item['why'].toString(),
+              style: TextStyle(
+                fontSize: 10.5,
+                height: 1.55,
+                color: isDark
+                    ? AppDarkColors.textSecondary
+                    : const Color(0xFF667085),
+              ),
+            ),
+          ],
+          if ((item['action']?.toString() ?? '').isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'هەنگاو: ${item['action']}',
+              style: TextStyle(
+                fontSize: 10.5,
+                height: 1.55,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _customerAiCard(Map<String, dynamic> item, bool isDark) {
+    final customerId = item['customer_id']?.toString() ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: customerId.isEmpty
+              ? null
+              : () => unawaited(_openCustomer(customerId)),
+          child: Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.07)
+                    : const Color(0xFFE9EDF3),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item['customer_name']?.toString() ?? 'کڕیار',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12.5,
+                    color: isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF1D2939),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  item['assessment']?.toString() ?? '',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    height: 1.55,
+                    color: isDark
+                        ? AppDarkColors.textSecondary
+                        : const Color(0xFF667085),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  item['next_action']?.toString() ?? '',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    height: 1.55,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _metricCard({
+    required bool isDark,
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color accent,
+    String? subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.07)
+              : const Color(0xFFE9EDF3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: accent, size: 20),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 10.5,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF667085),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textDirection: TextDirection.ltr,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: isDark
+                  ? AppDarkColors.textPrimary
+                  : const Color(0xFF101828),
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 9.5,
+                color: accent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle({
     required IconData icon,
     required String title,
     required String subtitle,
@@ -460,7 +1029,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
                 title,
                 style: TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w900,
                   color: isDark
                       ? AppDarkColors.textPrimary
                       : const Color(0xFF101828),
@@ -483,257 +1052,48 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
     );
   }
 
-  Widget _metricCard({
-    required bool isDark,
+  Widget _smallTitle(String title, bool isDark) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w900,
+        color: isDark ? AppDarkColors.textPrimary : const Color(0xFF1D2939),
+      ),
+    );
+  }
+
+  Widget _textCard(
+    bool isDark,
+    String text, {
     required IconData icon,
-    required String title,
-    required String value,
-    required String subtitle,
-    required Color accent,
   }) {
     return Container(
-      padding: const EdgeInsets.all(13),
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isDark ? AppDarkColors.card : Colors.white,
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(
-          color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE7EAF0),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: accent, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: isDark
-                        ? AppDarkColors.textSecondary
-                        : const Color(0xFF475467),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 11),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textDirection: TextDirection.ltr,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: isDark
-                  ? AppDarkColors.textPrimary
-                  : const Color(0xFF101828),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10,
-              color: isDark
-                  ? AppDarkColors.textSecondary
-                  : const Color(0xFF98A2B3),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _alertCard(_SmartAlert alert, bool isDark) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-      decoration: BoxDecoration(
-        color: isDark ? AppDarkColors.card : Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE7EAF0),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: alert.color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(alert.icon, color: alert.color, size: 20),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  alert.title,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
-                    color: isDark
-                        ? AppDarkColors.textPrimary
-                        : const Color(0xFF344054),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  alert.message,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    height: 1.55,
-                    color: isDark
-                        ? AppDarkColors.textSecondary
-                        : const Color(0xFF667085),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _riskCard(_CustomerRisk risk, bool isDark) {
-    final accent = risk.score >= 70
-        ? Colors.red
-        : risk.score >= 40
-            ? Colors.orange
-            : Colors.green;
-    final label = risk.score >= 70
-        ? 'مەترسی بەرز'
-        : risk.score >= 40
-            ? 'مامناوەند'
-            : 'کەم';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: isDark ? AppDarkColors.card : Colors.white,
+        color: AppColors.primary.withValues(alpha: isDark ? 0.10 : 0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE7EAF0),
+          color: AppColors.primary.withValues(alpha: 0.16),
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 52,
-            height: 52,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: risk.score / 100,
-                  strokeWidth: 5,
-                  backgroundColor: accent.withValues(alpha: 0.12),
-                  valueColor: AlwaysStoppedAnimation<Color>(accent),
-                ),
-                Text(
-                  '${risk.score}',
-                  textDirection: TextDirection.ltr,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    color: accent,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
+          Icon(icon, color: AppColors.primary, size: 20),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  risk.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: isDark
-                        ? AppDarkColors.textPrimary
-                        : const Color(0xFF101828),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '$label  •  ${risk.overdueCount} دواکەوتوو  •  ${risk.maxOverdueDays} ڕۆژ',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10.3,
-                    color: isDark
-                        ? AppDarkColors.textSecondary
-                        : const Color(0xFF667085),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                AppHelpers.formatCurrency(risk.remaining),
-                textDirection: TextDirection.ltr,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                  color: isDark
-                      ? AppDarkColors.textPrimary
-                      : const Color(0xFF344054),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'ماوە',
-                style: TextStyle(
-                  fontSize: 9.5,
-                  color: isDark
-                      ? AppDarkColors.textSecondary
-                      : const Color(0xFF98A2B3),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Icon(
-                Icons.chevron_left_rounded,
-                size: 18,
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.7,
                 color: isDark
-                    ? AppDarkColors.textSecondary
-                    : const Color(0xFF98A2B3),
+                    ? AppDarkColors.textPrimary
+                    : const Color(0xFF344054),
               ),
-            ],
+            ),
           ),
         ],
       ),
@@ -743,18 +1103,16 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
   Widget _emptyCard(bool isDark, String text) {
     return Container(
       padding: const EdgeInsets.all(18),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE7EAF0),
-        ),
       ),
       child: Text(
         text,
         textAlign: TextAlign.center,
         style: TextStyle(
-          fontSize: 11.5,
+          fontSize: 11,
           color: isDark
               ? AppDarkColors.textSecondary
               : const Color(0xFF667085),
@@ -762,293 +1120,4 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
       ),
     );
   }
-}
-
-class _IntelligenceSnapshot {
-  const _IntelligenceSnapshot({
-    required this.totalRemaining,
-    required this.openCount,
-    required this.overdueAmount,
-    required this.overdueCount,
-    required this.due7Amount,
-    required this.due7Count,
-    required this.due30Amount,
-    required this.due30Count,
-    required this.collected30,
-    required this.previousCollected30,
-    required this.paymentCount30,
-    required this.healthScore,
-    required this.risks,
-    required this.alerts,
-  });
-
-  final double totalRemaining;
-  final int openCount;
-  final double overdueAmount;
-  final int overdueCount;
-  final double due7Amount;
-  final int due7Count;
-  final double due30Amount;
-  final int due30Count;
-  final double collected30;
-  final double previousCollected30;
-  final int paymentCount30;
-  final int healthScore;
-  final List<_CustomerRisk> risks;
-  final List<_SmartAlert> alerts;
-
-  String get collectionTrendLabel {
-    final countLabel = '$paymentCount30 پارەدان';
-    if (previousCollected30 <= 0) return countLabel;
-    final change =
-        ((collected30 - previousCollected30) / previousCollected30 * 100).round();
-    final prefix = change > 0 ? '+' : '';
-    return '$countLabel • $prefix$change% بەراورد بە ٣٠ ڕۆژی پێشوو';
-  }
-
-  static double _number(dynamic value) {
-    if (value is num) return value.toDouble();
-    return double.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  static DateTime? _date(dynamic value) {
-    final raw = value?.toString().trim() ?? '';
-    if (raw.isEmpty) return null;
-    return DateTime.tryParse(raw);
-  }
-
-  static _IntelligenceSnapshot build({
-    required List<Map<String, dynamic>> debts,
-    required List<Map<String, dynamic>> payments,
-    required List<Map<String, dynamic>> profiles,
-  }) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final next7 = today.add(const Duration(days: 7));
-    final next30 = today.add(const Duration(days: 30));
-    final last30 = now.subtract(const Duration(days: 30));
-    final previous30Start = now.subtract(const Duration(days: 60));
-
-    final customerNames = <String, String>{};
-    for (final profile in profiles) {
-      if (profile['role']?.toString() != 'customer') continue;
-      final id = profile['id']?.toString() ?? '';
-      if (id.isEmpty) continue;
-      final name = profile['name']?.toString().trim() ?? '';
-      customerNames[id] = name.isEmpty ? 'کڕیار' : name;
-    }
-
-    var totalRemaining = 0.0;
-    var openCount = 0;
-    var overdueAmount = 0.0;
-    var overdueCount = 0;
-    var due7Amount = 0.0;
-    var due7Count = 0;
-    var due30Amount = 0.0;
-    var due30Count = 0;
-    final aggregates = <String, _RiskAccumulator>{};
-
-    for (final debt in debts) {
-      final remaining = _number(debt['remaining']);
-      if (remaining <= 0) continue;
-      final customerId = debt['customer_id']?.toString() ?? '';
-      if (customerId.isEmpty) continue;
-
-      openCount++;
-      totalRemaining += remaining;
-      final acc = aggregates.putIfAbsent(
-        customerId,
-        () => _RiskAccumulator(customerId),
-      );
-      acc.remaining += remaining;
-      acc.openCount++;
-
-      final due = _date(debt['due_date']);
-      if (due == null) continue;
-      final dueDay = DateTime(due.year, due.month, due.day);
-
-      if (dueDay.isBefore(today)) {
-        final days = today.difference(dueDay).inDays;
-        overdueAmount += remaining;
-        overdueCount++;
-        acc.overdueRemaining += remaining;
-        acc.overdueCount++;
-        if (days > acc.maxOverdueDays) acc.maxOverdueDays = days;
-      } else if (!dueDay.isAfter(next7)) {
-        due7Amount += remaining;
-        due7Count++;
-        acc.due7Amount += remaining;
-      }
-
-      if (!dueDay.isBefore(today) && !dueDay.isAfter(next30)) {
-        due30Amount += remaining;
-        due30Count++;
-      }
-    }
-
-    var collected30 = 0.0;
-    var previousCollected30 = 0.0;
-    var paymentCount30 = 0;
-    for (final payment in payments) {
-      final created = _date(payment['created_at']);
-      if (created == null) continue;
-      final amount = _number(payment['amount']);
-      if (!created.isBefore(last30)) {
-        collected30 += amount;
-        paymentCount30++;
-      } else if (!created.isBefore(previous30Start)) {
-        previousCollected30 += amount;
-      }
-    }
-
-    final risks = <_CustomerRisk>[];
-    for (final acc in aggregates.values) {
-      final overdueShare =
-          acc.remaining <= 0 ? 0.0 : acc.overdueRemaining / acc.remaining;
-      final overdueFrequency =
-          acc.openCount <= 0 ? 0.0 : acc.overdueCount / acc.openCount;
-      final severity = (acc.maxOverdueDays / 60).clamp(0.0, 1.0);
-      final dueSoonShare =
-          acc.remaining <= 0 ? 0.0 : (acc.due7Amount / acc.remaining).clamp(0.0, 1.0);
-      final score = (overdueShare * 45 +
-              overdueFrequency * 25 +
-              severity * 25 +
-              dueSoonShare * 5)
-          .round()
-          .clamp(0, 100);
-      risks.add(
-        _CustomerRisk(
-          customerId: acc.customerId,
-          name: customerNames[acc.customerId] ?? 'کڕیار',
-          remaining: acc.remaining,
-          overdueRemaining: acc.overdueRemaining,
-          overdueCount: acc.overdueCount,
-          maxOverdueDays: acc.maxOverdueDays,
-          score: score,
-        ),
-      );
-    }
-    risks.sort((a, b) {
-      final byScore = b.score.compareTo(a.score);
-      if (byScore != 0) return byScore;
-      return b.overdueRemaining.compareTo(a.overdueRemaining);
-    });
-
-    final highRiskCount = risks.where((risk) => risk.score >= 70).length;
-    final overdueRatio =
-        totalRemaining <= 0 ? 0.0 : (overdueAmount / totalRemaining).clamp(0.0, 1.0);
-    final highRiskRatio =
-        risks.isEmpty ? 0.0 : (highRiskCount / risks.length).clamp(0.0, 1.0);
-    final healthScore =
-        (100 - (overdueRatio * 65) - (highRiskRatio * 35)).round().clamp(0, 100);
-
-    final alerts = <_SmartAlert>[];
-    if (overdueAmount > 0) {
-      alerts.add(
-        _SmartAlert(
-          title: 'قەرزی دواکەوتوو پێویستی بە سەرنج هەیە',
-          message:
-              '${AppHelpers.formatCurrency(overdueAmount)} لە $overdueCount قەرزدا دواکەوتووە.',
-          icon: Icons.warning_amber_rounded,
-          color: Colors.red,
-        ),
-      );
-    }
-    if (due7Amount > 0) {
-      alerts.add(
-        _SmartAlert(
-          title: '٧ ڕۆژی داهاتوو',
-          message:
-              '${AppHelpers.formatCurrency(due7Amount)} لە $due7Count قەرزدا نزیکە لە بەرواری دانەوە.',
-          icon: Icons.schedule_rounded,
-          color: Colors.orange,
-        ),
-      );
-    }
-    if (highRiskCount > 0) {
-      alerts.add(
-        _SmartAlert(
-          title: 'کڕیاری مەترسیدار',
-          message:
-              '$highRiskCount کڕیار Risk Score ـی ٧٠ یان زیاتر هەیە؛ پێداچوونەوەیان پێشنیار دەکرێت.',
-          icon: Icons.person_search_rounded,
-          color: Colors.deepOrange,
-        ),
-      );
-    }
-    if (alerts.isEmpty) {
-      alerts.add(
-        const _SmartAlert(
-          title: 'دۆخی گشتی باشە',
-          message:
-              'لە ئێستادا ئاگادارکردنەوەی گرنگ نییە. بەردەوام بە لە پشکنینی قەرز و دانەوەکان.',
-          icon: Icons.verified_rounded,
-          color: Colors.green,
-        ),
-      );
-    }
-
-    return _IntelligenceSnapshot(
-      totalRemaining: totalRemaining,
-      openCount: openCount,
-      overdueAmount: overdueAmount,
-      overdueCount: overdueCount,
-      due7Amount: due7Amount,
-      due7Count: due7Count,
-      due30Amount: due30Amount,
-      due30Count: due30Count,
-      collected30: collected30,
-      previousCollected30: previousCollected30,
-      paymentCount30: paymentCount30,
-      healthScore: healthScore,
-      risks: risks,
-      alerts: alerts,
-    );
-  }
-}
-
-class _RiskAccumulator {
-  _RiskAccumulator(this.customerId);
-
-  final String customerId;
-  double remaining = 0;
-  double overdueRemaining = 0;
-  double due7Amount = 0;
-  int openCount = 0;
-  int overdueCount = 0;
-  int maxOverdueDays = 0;
-}
-
-class _CustomerRisk {
-  const _CustomerRisk({
-    required this.customerId,
-    required this.name,
-    required this.remaining,
-    required this.overdueRemaining,
-    required this.overdueCount,
-    required this.maxOverdueDays,
-    required this.score,
-  });
-
-  final String customerId;
-  final String name;
-  final double remaining;
-  final double overdueRemaining;
-  final int overdueCount;
-  final int maxOverdueDays;
-  final int score;
-}
-
-class _SmartAlert {
-  const _SmartAlert({
-    required this.title,
-    required this.message,
-    required this.icon,
-    required this.color,
-  });
-
-  final String title;
-  final String message;
-  final IconData icon;
-  final Color color;
 }
