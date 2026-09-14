@@ -43,6 +43,15 @@ class _UserListScreenState extends State<UserListScreen> {
   bool _hasMoreUsers = false;
   int _totalUsers = 0;
   Map<String, dynamic>? _nextUserCursor;
+  String _customerFilter = 'all';
+
+  static const Map<String, String> _customerFilterLabels = {
+    'all': 'هەموو',
+    'with_debt': 'قەرزدار',
+    'debt_free': 'بێ قەرز',
+    'active': 'چالاک',
+    'inactive': 'ناچالاک',
+  };
 
   @override
   void initState() {
@@ -104,6 +113,86 @@ class _UserListScreenState extends State<UserListScreen> {
     }
   }
 
+  RecordModel _customerRecord(Map<String, dynamic> row) {
+    final phone = row['phone']?.toString() ?? '';
+    return RecordModel.fromJson({
+      ...row,
+      'id': row['id']?.toString() ?? '',
+      'collectionId': '',
+      'collectionName': 'users',
+      'email': phone.isEmpty ? '' : '$phone@zhirox.local',
+      'created': row['created_at']?.toString() ?? '',
+      'updated': row['updated_at']?.toString() ?? row['created_at']?.toString() ?? '',
+    });
+  }
+
+  Future<Map<String, dynamic>> _getCustomerDirectoryPage({
+    required String search,
+    int limit = 60,
+    Map<String, dynamic>? cursor,
+  }) async {
+    await PBService.ensureInitialized();
+    final params = <String, dynamic>{
+      'p_search': search.trim(),
+      'p_filter': _customerFilter,
+      'p_limit': limit.clamp(1, 100),
+    };
+    final cursorCreatedAt = cursor?['created_at']?.toString() ?? '';
+    final cursorId = cursor?['id']?.toString() ?? '';
+    if (cursorCreatedAt.isNotEmpty && cursorId.isNotEmpty) {
+      params['p_cursor_created_at'] = cursorCreatedAt;
+      params['p_cursor_id'] = cursorId;
+    }
+
+    final raw = await PBService.client.rpc(
+      'get_customer_directory_page_filtered',
+      params: params,
+    );
+    if (raw is! Map) throw Exception('invalid customer directory page');
+
+    final data = Map<String, dynamic>.from(raw);
+    final users = <RecordModel>[];
+    final inbox = <String, Map<String, dynamic>>{};
+    final items = data['items'];
+    if (items is List) {
+      for (final item in items) {
+        if (item is! Map) continue;
+        final row = Map<String, dynamic>.from(item);
+        final user = _customerRecord(row);
+        users.add(user);
+        inbox[user.id] = {
+          'customer_id': user.id,
+          'remaining': row['remaining'],
+          'open_debt_count': row['open_debt_count'],
+          'last_activity_at': row['last_activity_at'],
+          'last_kind': row['last_kind'],
+          'last_amount': row['last_amount'],
+          'last_preview': row['last_preview'],
+          'last_event_type': row['last_event_type'],
+          'unread': row['unread'] == true,
+        };
+      }
+    }
+
+    return {
+      'items': users,
+      'inbox': inbox,
+      'totalItems': int.tryParse('${data['total_count'] ?? 0}') ?? 0,
+      'hasMore': data['has_more'] == true,
+      'nextCursor': data['next_cursor'] is Map
+          ? Map<String, dynamic>.from(data['next_cursor'] as Map)
+          : null,
+    };
+  }
+
+  void _selectCustomerFilter(String value) {
+    if (_customerFilter == value || !_customerFilterLabels.containsKey(value)) {
+      return;
+    }
+    setState(() => _customerFilter = value);
+    unawaited(_loadUsers(search: _searchController.text.trim()));
+  }
+
   Future<void> _loadUsers({String? search, bool loadMore = false}) async {
     if (!mounted) return;
     if (loadMore && (_isLoadingMore || !_hasMoreUsers)) return;
@@ -126,7 +215,7 @@ class _UserListScreenState extends State<UserListScreen> {
       var hasMoreUsers = false;
       Map<String, dynamic>? nextUserCursor;
       if (widget.role == 'customer') {
-        final page = await PBService.getCustomerDirectoryPage(
+        final page = await _getCustomerDirectoryPage(
           search: search ?? '',
           limit: 60,
           cursor: loadMore ? _nextUserCursor : null,
@@ -560,6 +649,56 @@ class _UserListScreenState extends State<UserListScreen> {
                           onChanged: _scheduleCustomerSearch,
                         ),
                       ),
+                      if (widget.role == 'customer') ...[
+                        const SizedBox(height: 10),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.filter_list_rounded,
+                                color: Colors.white70,
+                                size: 19,
+                              ),
+                              const SizedBox(width: 7),
+                              ..._customerFilterLabels.entries.map((entry) {
+                                final selected = _customerFilter == entry.key;
+                                return Padding(
+                                  padding: const EdgeInsetsDirectional.only(end: 7),
+                                  child: ChoiceChip(
+                                    label: Text(entry.value),
+                                    selected: selected,
+                                    onSelected: (_) =>
+                                        _selectCustomerFilter(entry.key),
+                                    showCheckmark: false,
+                                    selectedColor: Colors.white,
+                                    backgroundColor:
+                                        Colors.white.withValues(alpha: 0.14),
+                                    side: BorderSide(
+                                      color: Colors.white.withValues(
+                                        alpha: selected ? 0.95 : 0.28,
+                                      ),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    labelStyle: TextStyle(
+                                      color: selected
+                                          ? AppColors.primary
+                                          : Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -671,7 +810,9 @@ class _UserListScreenState extends State<UserListScreen> {
         );
       },
     ).then((result) {
-      if (result == true) _loadUsers();
+      if (result == true) {
+        _loadUsers(search: _searchController.text.trim());
+      }
     });
   }
 
@@ -723,7 +864,8 @@ class _UserListScreenState extends State<UserListScreen> {
           ),
           const SizedBox(height: 16),
           TextButton.icon(
-            onPressed: () => _loadUsers(),
+            onPressed: () =>
+                _loadUsers(search: _searchController.text.trim()),
             icon: const Icon(Icons.refresh),
             label: const Text('نوێکردنەوە'),
           ),
@@ -939,7 +1081,11 @@ class _UserListScreenState extends State<UserListScreen> {
                           MaterialPageRoute(
                             builder: (_) => AddDebtScreen(customerId: user.id),
                           ),
-                        ).then((_) => _loadUsers());
+                        ).then(
+                          (_) => _loadUsers(
+                            search: _searchController.text.trim(),
+                          ),
+                        );
                       } else if (value == 'payment') {
                         unawaited(
                           _markFinancialChatReadBestEffort(
@@ -957,7 +1103,11 @@ class _UserListScreenState extends State<UserListScreen> {
                               openFinancialChat: true,
                             ),
                           ),
-                        ).then((_) => _loadUsers());
+                        ).then(
+                          (_) => _loadUsers(
+                            search: _searchController.text.trim(),
+                          ),
+                        );
                       }
                     },
                     itemBuilder: (_) => [
@@ -1011,5 +1161,4 @@ class _UserListScreenState extends State<UserListScreen> {
       ),
     );
   }
-
 }
