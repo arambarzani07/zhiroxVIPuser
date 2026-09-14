@@ -79,7 +79,7 @@ class _LegacyImportScreenState extends State<LegacyImportScreen> {
       setState(() {
         _error = raw.contains('market_mismatch')
             ? 'ناوی مارکێتی ناو فایلەکە لەگەڵ هەژمارەکەت یەک ناگرێتەوە.'
-            : 'فایلە CSV/ZIP ـەکە ناتوانرێت وەک Zhirox Import Package بخوێندرێتەوە. ($raw)';
+            : 'فایلە CSV/ZIP/JSON ـەکە ناتوانرێت وەک Zhirox Import Package بخوێندرێتەوە. ($raw)';
       });
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -168,7 +168,7 @@ class _LegacyImportScreenState extends State<LegacyImportScreen> {
                                 children: [
                                   Text('Zhirox Import Center', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
                                   SizedBox(height: 3),
-                                  Text('CSV یان ZIP ـی داتای کڕیار، قەرز و پارەدانەوە', style: TextStyle(fontSize: 12)),
+                                  Text('CSV، ZIP یان JSON ـی مۆڵەتپێدراوی داتای کڕیار، قەرز و پارەدانەوە', style: TextStyle(fontSize: 12)),
                                 ],
                               ),
                             ),
@@ -189,14 +189,14 @@ class _LegacyImportScreenState extends State<LegacyImportScreen> {
                           ),
                         if (_allowed) ...[
                           const Text(
-                            'فایلەکە پێش هیچ نووسینێک پشکنین دەکرێت. CSV ـی یەک‌فایل یان ZIP هەردووکیان پشتگیری دەکرێن. داتا تەنها بە admin_id ـی هەژمارەکەت دەبەسترێتەوە و ناتوانێت بچێتە tenant ـێکی تر.',
+                            'فایلەکە پێش هیچ نووسینێک پشکنین دەکرێت. CSV ـی یەک‌فایل، ZIP یان JSON ـی Authorized Export پشتگیری دەکرێن. داتا تەنها بە admin_id ـی هەژمارەکەت دەبەسترێتەوە و ناتوانێت بچێتە tenant ـێکی تر.',
                             style: TextStyle(height: 1.7),
                           ),
                           const SizedBox(height: 14),
                           FilledButton.icon(
                             onPressed: _busy ? null : _pick,
                             icon: const Icon(Icons.file_open_rounded),
-                            label: Text(bundle == null ? 'هەڵبژاردنی CSV یان ZIP' : 'گۆڕینی فایل'),
+                            label: Text(bundle == null ? 'هەڵبژاردنی CSV / ZIP / JSON' : 'گۆڕینی فایل'),
                           ),
                         ],
                       ],
