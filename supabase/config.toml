@@ -1,2 +1,5 @@
 [functions.fib-subscription-payment]
 verify_jwt = false
+
+[functions.customer-read-link]
+verify_jwt = false
