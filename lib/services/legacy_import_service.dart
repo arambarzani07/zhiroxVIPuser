@@ -27,13 +27,29 @@ class LegacyImportBundle {
   final double expectedBalanceIqd;
 }
 
+class _LegacyDebtAllocation {
+  _LegacyDebtAllocation({
+    required this.sourceId,
+    required this.customerSourceId,
+    required this.currency,
+    required this.occurredAt,
+    required this.remaining,
+  });
+
+  final String sourceId;
+  final String customerSourceId;
+  final String currency;
+  final String occurredAt;
+  double remaining;
+}
+
 class LegacyImportService {
   static Future<Map<String, dynamic>> preflight() => _invoke('preflight');
 
   static Future<LegacyImportBundle?> pickBundle() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['csv', 'zip'],
+      allowedExtensions: const ['csv', 'zip', 'json'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return null;
@@ -60,9 +76,13 @@ class LegacyImportService {
     if (lowerName.endsWith('.zip')) {
       return parseZipBundle(bytes, file.name);
     }
+    if (lowerName.endsWith('.json')) {
+      return parseAuthorizedApiJsonBundle(bytes, file.name);
+    }
 
     // Defensive sniffing in case a provider strips the extension.
     if (_looksLikeZip(bytes)) return parseZipBundle(bytes, file.name);
+    if (_looksLikeJson(bytes)) return parseAuthorizedApiJsonBundle(bytes, file.name);
     return parseCsvBundle(bytes, file.name);
   }
 
@@ -260,6 +280,271 @@ class LegacyImportService {
     );
   }
 
+  /// Parses the read-only exporter created for an authorized Daftar Qarz
+  /// account. Payments in the source are contact-level events, so they are
+  /// deterministically allocated over that contact's debts by currency.
+  static LegacyImportBundle parseAuthorizedApiJsonBundle(
+    Uint8List bytes,
+    String fileName,
+  ) {
+    final fingerprint = sha256.convert(bytes).toString();
+    final String text;
+    try {
+      text = utf8.decode(bytes, allowMalformed: false).replaceFirst('\ufeff', '');
+    } catch (_) {
+      throw Exception('JSON ـەکە UTF-8 ـی دروست نییە');
+    }
+
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(text);
+    } catch (_) {
+      throw Exception('JSON ـەکە دروست نییە');
+    }
+    if (decoded is! Map) throw Exception('ڕەگی JSON دەبێت object بێت');
+    final root = _stringKeyedMap(decoded);
+    if ('${root['format'] ?? ''}' != 'daftar-qarz-authorized-api-export-v1') {
+      throw Exception('فۆرماتی JSON ـەکە پشتگیری ناکرێت');
+    }
+
+    final contacts = _authorizedExportRows(root['contacts'], 'contacts');
+    final transactions = _authorizedExportRows(root['transactions'], 'transactions');
+    var accountUserId = '${root['account_user_id'] ?? ''}'.trim();
+    final observedUserIds = <String>{};
+    for (final row in [...contacts, ...transactions]) {
+      final userId = '${row['user_id'] ?? ''}'.trim();
+      if (userId.isNotEmpty) observedUserIds.add(userId);
+    }
+    if (accountUserId.isEmpty && observedUserIds.length == 1) {
+      accountUserId = observedUserIds.single;
+    }
+    if (observedUserIds.length > 1 ||
+        (accountUserId.isNotEmpty && observedUserIds.any((id) => id != accountUserId))) {
+      throw Exception('JSON ـەکە داتای زیاتر لە یەک هەژماری کۆنی تێدایە');
+    }
+
+    final customers = <Map<String, dynamic>>[];
+    final customerIds = <String>{};
+    for (final contact in contacts) {
+      final sourceId = '${contact['id'] ?? ''}'.trim();
+      final name = '${contact['name'] ?? ''}'.trim();
+      if (sourceId.isEmpty || name.isEmpty) {
+        throw Exception('کۆنتاکتێک ID یان ناوی دروستی نییە');
+      }
+      if (!customerIds.add(sourceId)) {
+        throw Exception('کۆنتاکتی دووبارە لە JSON: $sourceId');
+      }
+      customers.add({
+        'source_id': sourceId,
+        'name': name,
+        'phone': '${contact['phone'] ?? ''}'.trim(),
+        'debt_limit': 0.0,
+        'debt_duration': 30,
+      });
+    }
+
+    final transactionIds = <String>{};
+    final normalizedTransactions = <Map<String, dynamic>>[];
+    for (final transaction in transactions) {
+      final sourceId = '${transaction['id'] ?? ''}'.trim();
+      final customerSourceId = '${transaction['contact_id'] ?? ''}'.trim();
+      final type = '${transaction['transaction_type'] ?? ''}'.trim().toUpperCase();
+      if (sourceId.isEmpty || customerSourceId.isEmpty) {
+        throw Exception('مامەڵەیەک ID یان contact_id ـی نییە');
+      }
+      if (!transactionIds.add(sourceId)) {
+        throw Exception('مامەڵەی دووبارە لە JSON: $sourceId');
+      }
+      if (!customerIds.contains(customerSourceId)) {
+        throw Exception('کۆنتاکتی مامەڵە نەدۆزرایەوە: $customerSourceId');
+      }
+      if (type != 'LOAN' && type != 'PAYMENT') {
+        throw Exception('transaction_type ـی نەناسراو: $type');
+      }
+      final transactionAmount = _money(transaction['amount']);
+      if (transactionAmount <= 0) {
+        throw Exception(
+          'مامەڵەی بڕی سفر/نەرێنی دۆزرایەوە ($sourceId). '
+          'بۆ ئەوەی هیچ مێژوویەک ون نەبێت Import وەستێنرا.',
+        );
+      }
+      final occurredAt = _legacyOccurredAt(transaction, sourceId);
+      final rawCurrency = '${transaction['currency'] ?? 'IQD'}'.trim().toUpperCase();
+      normalizedTransactions.add({
+        ...transaction,
+        '_source_id': sourceId,
+        '_customer_source_id': customerSourceId,
+        '_type': type,
+        '_amount': transactionAmount,
+        '_currency': rawCurrency.isEmpty ? 'IQD' : rawCurrency,
+        '_occurred_at': occurredAt,
+      });
+    }
+
+    normalizedTransactions.sort((left, right) {
+      final leftId = '${left['_source_id']}';
+      final rightId = '${right['_source_id']}';
+      final leftNumeric = int.tryParse(leftId);
+      final rightNumeric = int.tryParse(rightId);
+      if (leftNumeric != null && rightNumeric != null) {
+        final byNumber = leftNumeric.compareTo(rightNumeric);
+        if (byNumber != 0) return byNumber;
+      }
+      return leftId.compareTo(rightId);
+    });
+
+    final debts = <Map<String, dynamic>>[];
+    final allocations = <_LegacyDebtAllocation>[];
+    for (final transaction in normalizedTransactions.where((row) => row['_type'] == 'LOAN')) {
+      final sourceId = '${transaction['_source_id']}';
+      final customerSourceId = '${transaction['_customer_source_id']}';
+      final currency = '${transaction['_currency']}';
+      final occurredAt = '${transaction['_occurred_at']}';
+      final transactionAmount = transaction['_amount'] as double;
+      debts.add({
+        'source_id': sourceId,
+        'customer_source_id': customerSourceId,
+        'description': '${transaction['note'] ?? ''}',
+        'amount': transactionAmount,
+        'currency': currency,
+        'occurred_at': occurredAt,
+      });
+      allocations.add(_LegacyDebtAllocation(
+        sourceId: sourceId,
+        customerSourceId: customerSourceId,
+        currency: currency,
+        occurredAt: occurredAt,
+        remaining: transactionAmount,
+      ));
+    }
+
+    final payments = <Map<String, dynamic>>[];
+    for (final transaction in normalizedTransactions.where((row) => row['_type'] == 'PAYMENT')) {
+      final sourceId = '${transaction['_source_id']}';
+      final customerSourceId = '${transaction['_customer_source_id']}';
+      final currency = '${transaction['_currency']}';
+      final occurredAt = '${transaction['_occurred_at']}';
+      final transactionAmount = transaction['_amount'] as double;
+      var remaining = transactionAmount;
+      var part = 0;
+      final candidates = allocations
+          .where((debt) =>
+              debt.customerSourceId == customerSourceId &&
+              debt.currency == currency &&
+              debt.remaining > 0)
+          .toList()
+        ..sort(_compareDebtAllocation);
+
+      for (final debt in candidates) {
+        if (remaining <= 0) break;
+        final allocated = remaining < debt.remaining ? remaining : debt.remaining;
+        if (allocated <= 0) continue;
+        part += 1;
+        final roundedAllocation = _roundMoney(allocated);
+        payments.add({
+          'source_id': '$sourceId:$part',
+          'debt_source_id': debt.sourceId,
+          'amount': roundedAllocation,
+          'note': '${transaction['note'] ?? ''}',
+          'occurred_at': occurredAt,
+        });
+        debt.remaining = _roundMoney(debt.remaining - roundedAllocation);
+        remaining = _roundMoney(remaining - roundedAllocation);
+      }
+      if (remaining > 0.009) {
+        throw Exception(
+          'پارەدانەوەی $sourceId بە تەواوی بە قەرزەکان نەبەستراوە؛ '
+          '${remaining.toStringAsFixed(2)} $currency ماوەتەوە. Import وەستێنرا.',
+        );
+      }
+    }
+
+    final expectedBalanceIqd = _roundMoney(
+      allocations
+          .where((debt) => debt.currency == 'IQD')
+          .fold<double>(0, (sum, debt) => sum + debt.remaining),
+    );
+    final marketName = '${root['market_name'] ?? root['source_market_name'] ?? ''}'.trim();
+
+    return _buildBundle(
+      fileName: fileName,
+      fingerprint: fingerprint,
+      marketName: marketName,
+      expectedBalanceIqd: expectedBalanceIqd,
+      customers: customers,
+      debts: debts,
+      payments: payments,
+    );
+  }
+
+  static List<Map<String, dynamic>> _authorizedExportRows(
+    Object? rawSection,
+    String sectionName,
+  ) {
+    if (rawSection is! Map) throw Exception('$sectionName section نییە');
+    final section = _stringKeyedMap(rawSection);
+    if (section['pagination_incomplete_or_unknown'] == true) {
+      throw Exception('$sectionName ناتەواوە؛ هەموو پەڕەکان وەرنەگیراون');
+    }
+    final pages = section['pages'];
+    if (pages is! List) throw Exception('$sectionName.pages لیست نییە');
+    final declaredPageCount = int.tryParse('${section['page_count'] ?? ''}');
+    if (declaredPageCount != null && declaredPageCount != pages.length) {
+      throw Exception('$sectionName page_count لەگەڵ ژمارەی پەڕەکان یەک ناگرێتەوە');
+    }
+
+    final rows = <Map<String, dynamic>>[];
+    for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+      final page = pages[pageIndex];
+      List<dynamic> pageRows;
+      if (page is List) {
+        pageRows = page;
+      } else if (page is Map) {
+        final pageMap = _stringKeyedMap(page);
+        if (pageMap['success'] == false) {
+          throw Exception('$sectionName page ${pageIndex + 1} سەرکەوتوو نییە');
+        }
+        final data = pageMap['data'];
+        if (data is! List) {
+          throw Exception('$sectionName page ${pageIndex + 1} data لیست نییە');
+        }
+        pageRows = data;
+      } else {
+        throw Exception('$sectionName page ${pageIndex + 1} فۆرماتی نادروستی هەیە');
+      }
+      for (final row in pageRows) {
+        if (row is! Map) {
+          throw Exception('$sectionName row فۆرماتی نادروستی هەیە');
+        }
+        rows.add(_stringKeyedMap(row));
+      }
+    }
+    return rows;
+  }
+
+  static Map<String, dynamic> _stringKeyedMap(Map value) => {
+        for (final entry in value.entries) '${entry.key}': entry.value,
+      };
+
+  static String _legacyOccurredAt(Map<String, dynamic> transaction, String sourceId) {
+    final value = '${transaction['transaction_date'] ?? transaction['created_at'] ?? ''}'.trim();
+    if (value.isEmpty || DateTime.tryParse(value) == null) {
+      throw Exception('بەرواری مامەڵەی $sourceId دروست نییە');
+    }
+    return value;
+  }
+
+  static int _compareDebtAllocation(_LegacyDebtAllocation left, _LegacyDebtAllocation right) {
+    final leftDate = DateTime.parse(left.occurredAt);
+    final rightDate = DateTime.parse(right.occurredAt);
+    final byDate = leftDate.compareTo(rightDate);
+    if (byDate != 0) return byDate;
+    final leftId = int.tryParse(left.sourceId);
+    final rightId = int.tryParse(right.sourceId);
+    if (leftId != null && rightId != null) return leftId.compareTo(rightId);
+    return left.sourceId.compareTo(right.sourceId);
+  }
+
   static LegacyImportBundle _buildBundle({
     required String fileName,
     required String fingerprint,
@@ -269,8 +554,8 @@ class LegacyImportService {
     required List<Map<String, dynamic>> debts,
     required List<Map<String, dynamic>> payments,
   }) {
-    if (customers.isEmpty) throw Exception('CSV/ZIP هیچ کڕیارێکی تێدا نییە');
-    if (debts.isEmpty) throw Exception('CSV/ZIP هیچ قەرزێکی تێدا نییە');
+    if (customers.isEmpty) throw Exception('CSV/ZIP/JSON هیچ کڕیارێکی تێدا نییە');
+    if (debts.isEmpty) throw Exception('CSV/ZIP/JSON هیچ قەرزێکی تێدا نییە');
     if (customers.any((e) => '${e['source_id']}'.isEmpty || '${e['name']}'.isEmpty)) {
       throw Exception('هەندێک کڕیار source ID یان ناویان نییە');
     }
@@ -383,9 +668,22 @@ class LegacyImportService {
   static bool _looksLikeZip(Uint8List bytes) =>
       bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4b;
 
+  static bool _looksLikeJson(Uint8List bytes) {
+    for (final byte in bytes) {
+      if (byte == 0xef || byte == 0xbb || byte == 0xbf) continue;
+      if (byte == 0x20 || byte == 0x09 || byte == 0x0a || byte == 0x0d) continue;
+      return byte == 0x7b || byte == 0x5b;
+    }
+    return false;
+  }
+
   static double _number(Object? value) {
     final n = double.tryParse('${value ?? ''}'.replaceAll(',', '').trim()) ?? 0;
     if (!n.isFinite) return 0;
     return n;
   }
+
+  static double _money(Object? value) => _roundMoney(_number(value));
+
+  static double _roundMoney(double value) => (value * 100).roundToDouble() / 100;
 }
