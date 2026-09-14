@@ -680,21 +680,21 @@ class _UserListScreenState extends State<UserListScreen> {
                                         _selectCustomerFilter(entry.key),
                                     showCheckmark: false,
                                     selectedColor: Colors.white,
-                                    backgroundColor:
-                                        Colors.white.withValues(alpha: 0.14),
+                                    backgroundColor: const Color(0xFFDCE6FF),
                                     side: BorderSide(
-                                      color: Colors.white.withValues(
-                                        alpha: selected ? 0.95 : 0.28,
-                                      ),
+                                      color: selected
+                                          ? Colors.white
+                                          : const Color(0xFFAFC3FF),
+                                      width: selected ? 1.4 : 1,
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     labelStyle: TextStyle(
-                                      color: selected
-                                          ? AppColors.primary
-                                          : Colors.white,
-                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                      fontWeight: selected
+                                          ? FontWeight.w800
+                                          : FontWeight.w700,
                                       fontSize: 12,
                                     ),
                                     materialTapTargetSize:
