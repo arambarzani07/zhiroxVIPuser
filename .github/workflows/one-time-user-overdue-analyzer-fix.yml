@@ -1,0 +1,73 @@
+name: One-time user overdue analyzer fix
+
+on:
+  push:
+    branches:
+      - user-source
+    paths:
+      - .github/workflows/one-time-user-overdue-analyzer-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove redundant Supabase result checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  "        if (raw is! List) throw const FormatException('invalid overdue debts');\n\n",
+                  "",
+              ),
+              (
+                  "        for (final item in raw) {\n          if (item is! Map) continue;\n          final debt = Map<String, dynamic>.from(item);\n",
+                  "        for (final item in raw) {\n          final debt = Map<String, dynamic>.from(item);\n",
+              ),
+              (
+                  "          if (existing is List && existing.isNotEmpty) continue;\n",
+                  "          if (existing.isNotEmpty) continue;\n",
+              ),
+          ]
+
+          changed = False
+          for old, new in replacements:
+              if old in text:
+                  text = text.replace(old, new, 1)
+                  changed = True
+              elif new and new in text:
+                  pass
+              elif not new and "invalid overdue debts" not in text:
+                  pass
+              else:
+                  raise SystemExit(f'expected analyzer pattern not found: {old!r}')
+
+          if changed:
+              path.write_text(text, encoding='utf-8')
+              print('patched user overdue analyzer warnings')
+          else:
+              print('already patched')
+          PY
+
+          if ! git diff --quiet -- lib/services/pb_service.dart; then
+            git diff --check -- lib/services/pb_service.dart
+            git add lib/services/pb_service.dart
+            git commit -m "fix overdue notification analyzer warnings"
+            git push origin HEAD:user-source
+          fi
