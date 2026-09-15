@@ -528,26 +528,51 @@ class PBService {
     }
   }
 
+
   static Future<List<RecordModel>> getUsers({
     String? role,
     String? search,
     String? adminId,
     bool? approved,
   }) async {
-    final filters = <String>[];
-    if (role != null) filters.add('role = "${_sanitize(role)}"');
-    if (adminId != null) filters.add('admin_id = "${_sanitize(adminId)}"');
-    if (approved != null) filters.add('approved = $approved');
     if (search != null && search.isNotEmpty) {
+      final filters = <String>[];
+      if (role != null) filters.add('role = \"${_sanitize(role)}\"');
+      if (adminId != null) {
+        filters.add('admin_id = \"${_sanitize(adminId)}\"');
+      }
+      if (approved != null) filters.add('approved = $approved');
       final q = _sanitize(search);
-      filters.add('(name ~ "$q" || father_name ~ "$q" || phone ~ "$q")');
+      filters.add('(name ~ \"$q\" || father_name ~ \"$q\" || phone ~ \"$q\")');
+      final result = await pb.collection('users').getList(
+        filter: filters.join(' && '),
+        sort: '-created',
+        perPage: 500,
+      );
+      return result.items;
     }
-    final result = await pb.collection('users').getList(
-      filter: filters.join(' && '),
-      sort: '-created',
-      perPage: 500,
-    );
-    return result.items;
+
+    await ensureInitialized();
+    const pageSize = 500;
+    var offset = 0;
+    final users = <RecordModel>[];
+    while (true) {
+      dynamic query = client.from('profiles').select();
+      if (role != null) query = query.eq('role', role);
+      if (adminId != null) query = query.eq('admin_id', adminId);
+      if (approved != null) query = query.eq('approved', approved);
+      final raw = await query
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .range(offset, offset + pageSize - 1);
+      final page = (raw as List)
+          .map((row) => _profileRecord(Map<String, dynamic>.from(row as Map)))
+          .toList(growable: false);
+      users.addAll(page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
+    return users;
   }
 
   static Future<RecordModel> getUser(String id) async {
