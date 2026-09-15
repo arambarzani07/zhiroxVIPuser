@@ -763,22 +763,55 @@ class PBService {
   /// truncating account statements at Supabase/PocketBase's page boundary.
   static Future<List<RecordModel>> getAllAdminDebts({
     required String adminId,
-    String? filter,
+    DateTime? fromDate,
+    DateTime? toDate,
   }) async {
+    await ensureInitialized();
     const pageSize = 500;
-    var page = 1;
+    var offset = 0;
     final records = <RecordModel>[];
 
+    // Customer ownership must be resolved independently from the debts query.
+    // PostgREST applies its own server row limit, so the compatibility layer's
+    // in-memory pagination cannot be used for a complete account statement.
+    final profileData = await client
+        .from('profiles')
+        .select()
+        .eq('admin_id', adminId);
+    final profiles = <String, Map<String, dynamic>>{
+      for (final raw in (profileData as List).whereType<Map>())
+        '${raw['id']}': Map<String, dynamic>.from(raw),
+    };
+
     while (true) {
-      final batch = await getDebts(
-        adminId: adminId,
-        filter: filter,
-        page: page,
-        perPage: pageSize,
-      );
-      records.addAll(batch);
-      if (batch.length < pageSize) break;
-      page += 1;
+      final data = await client
+          .from('debts')
+          .select()
+          .isFilter('deleted_at', null)
+          .order('created_at', ascending: false)
+          .range(offset, offset + pageSize - 1);
+      final rows = (data as List)
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
+
+      for (final row in rows) {
+        final profile = profiles['${row['customer_id']}'];
+        if (profile == null) continue;
+        final created = DateTime.tryParse('${row['created_at']}');
+        if (created == null) continue;
+        if (fromDate != null && created.isBefore(fromDate)) continue;
+        if (toDate != null && !created.isBefore(toDate)) continue;
+
+        final json = _debtRecordFromRaw(row).toJson();
+        json['expand'] = <String, dynamic>{
+          'customer': _profileRecord(profile).toJson(),
+        };
+        records.add(RecordModel.fromJson(json));
+      }
+
+      if (rows.length < pageSize) break;
+      offset += pageSize;
     }
 
     return records;
