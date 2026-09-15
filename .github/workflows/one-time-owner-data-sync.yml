@@ -1,0 +1,146 @@
+name: One-time owner scalable data sync
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/one-time-owner-data-sync.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Patch owner stats and overdue paths
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text()
+
+          stats_start = text.index('  static Future<Map<String, double>> getEmployeeStats(')
+          stats_end = text.index('  static Future<Map<String, int>> getDebtCounts', stats_start)
+          stats = r'''  static Future<Map<String, double>> getEmployeeStats(String employeeId) async {
+            await ensureInitialized();
+            final debtTotal = await _sumPagedAmounts(
+              table: 'debts',
+              createdBy: employeeId,
+              excludeDeletedDebts: true,
+            );
+            final paymentTotal = await _sumPagedAmounts(
+              table: 'payments',
+              createdBy: employeeId,
+            );
+            return {
+              'totalDebtsCreated': debtTotal,
+              'totalPaymentsCollected': paymentTotal,
+            };
+          }
+
+          static Future<double> _sumPagedAmounts({
+            required String table,
+            required String createdBy,
+            bool excludeDeletedDebts = false,
+          }) async {
+            const pageSize = 500;
+            var offset = 0;
+            var total = 0.0;
+            while (true) {
+              dynamic query = client
+                  .from(table)
+                  .select('amount')
+                  .eq('created_by', createdBy);
+              if (excludeDeletedDebts) {
+                query = query.isFilter('deleted_at', null);
+              }
+              final raw = await query.range(offset, offset + pageSize - 1);
+              if (raw is! List) throw FormatException('invalid $table statistics');
+              for (final item in raw) {
+                if (item is Map) total += _financeDouble(item['amount']);
+              }
+              if (raw.length < pageSize) return total;
+              offset += pageSize;
+            }
+          }
+
+          '''
+          text = text[:stats_start] + stats + text[stats_end:]
+
+          overdue_start = text.index('  static Future<void> checkAndNotifyOverdueDebts() async {')
+          class_end = text.rfind('\n}')
+          overdue = r'''  static Future<void> checkAndNotifyOverdueDebts() async {
+            try {
+              await ensureInitialized();
+              final senderId = client.auth.currentUser?.id;
+              if (senderId == null || senderId.isEmpty) return;
+              final now = DateTime.now();
+              final today =
+                  '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+              const pageSize = 500;
+              var offset = 0;
+              while (true) {
+                final raw = await client
+                    .from('debts')
+                    .select('id, customer_id, remaining, due_date')
+                    .lt('due_date', today)
+                    .neq('status', 'paid')
+                    .gt('remaining', 0)
+                    .isFilter('deleted_at', null)
+                    .order('due_date')
+                    .order('id')
+                    .range(offset, offset + pageSize - 1);
+                for (final item in raw) {
+                  final debt = Map<String, dynamic>.from(item);
+                  final customerId = debt['customer_id']?.toString() ?? '';
+                  final debtId = debt['id']?.toString() ?? '';
+                  if (customerId.isEmpty || debtId.isEmpty) continue;
+                  final existing = await client
+                      .from('notifications')
+                      .select('id')
+                      .eq('customer_id', customerId)
+                      .eq('type', 'debt_overdue')
+                      .ilike('message', '%[#$debtId]%')
+                      .gte('created_at', '${today}T00:00:00Z')
+                      .limit(1);
+                  if (existing.isNotEmpty) continue;
+
+                  final remaining = _financeDouble(debt['remaining']);
+                  final dueDate = debt['due_date']?.toString() ?? '';
+                  final formattedAmount =
+                      '${remaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
+                  await createNotification(
+                    customerId: customerId,
+                    message:
+                        '⚠️ قەرزی $formattedAmount دواکەوتووە!\nبەرواری دانەوە: ${dueDate.replaceAll('-', '/')} بووە.\nتکایە هەرچی زووتر بیگەڕێنەوە.\n[#$debtId]',
+                    senderId: senderId,
+                    type: 'debt_overdue',
+                  );
+                }
+                if (raw.length < pageSize) break;
+                offset += pageSize;
+              }
+            } catch (_) {}
+          }
+          '''
+          text = text[:overdue_start] + overdue + text[class_end:]
+
+          assert '_sumPagedAmounts(' in text
+          assert "senderId: customerId" not in text
+          assert ".from('notifications')" in text
+          assert "client.auth.currentUser?.id" in text
+          path.write_text(text)
+          PY
+      - name: Commit patch and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-owner-data-sync.yml
+          git add lib/services/pb_service.dart
+          git commit -m 'perf(owner): page employee stats and overdue notifications'
+          git push origin owner-source
