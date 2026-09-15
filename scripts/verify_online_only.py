@@ -426,6 +426,12 @@ for marker in ('referenceKind', 'referenceId'):
 # stored in IQD; USD is display metadata and must never be multiplied twice.
 helpers_source = (LIB / 'utils/helpers.dart').read_text(encoding='utf-8')
 dashboard_source = (LIB / 'screens/customer/customer_dashboard.dart').read_text(encoding='utf-8')
+print_body = dashboard_source.split('Future<void> _printStatement() async {', 1)[-1].split('@override', 1)[0]
+if 'Navigator.pop' in print_body:
+    fail('Statement failures must not pop the customer dashboard route')
+for marker in ('if (_printingStatement || !mounted) return;', 'finally {', '_printingStatement = false'):
+    if marker not in print_body:
+        fail(f'Statement single-flight/retry marker missing: {marker}')
 for marker in (
     'debtValueInIqd',
     'storageAmountToDisplay',
