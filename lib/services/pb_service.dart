@@ -963,47 +963,47 @@ class PBService {
   }
 
   static Future<Map<String, double>> getEmployeeStats(String employeeId) async {
-  await ensureInitialized();
-  final debtTotal = await _sumPagedAmounts(
-    table: 'debts',
-    createdBy: employeeId,
-    excludeDeletedDebts: true,
-  );
-  final paymentTotal = await _sumPagedAmounts(
-    table: 'payments',
-    createdBy: employeeId,
-  );
-  return {
-    'totalDebtsCreated': debtTotal,
-    'totalPaymentsCollected': paymentTotal,
-  };
-}
-
-static Future<double> _sumPagedAmounts({
-  required String table,
-  required String createdBy,
-  bool excludeDeletedDebts = false,
-}) async {
-  const pageSize = 500;
-  var offset = 0;
-  var total = 0.0;
-  while (true) {
-    dynamic query = client
-        .from(table)
-        .select('amount')
-        .eq('created_by', createdBy);
-    if (excludeDeletedDebts) {
-      query = query.isFilter('deleted_at', null);
-    }
-    final raw = await query.range(offset, offset + pageSize - 1);
-    if (raw is! List) throw FormatException('invalid $table statistics');
-    for (final item in raw) {
-      if (item is Map) total += _financeDouble(item['amount']);
-    }
-    if (raw.length < pageSize) return total;
-    offset += pageSize;
+    await ensureInitialized();
+    final debtTotal = await _sumPagedAmounts(
+      table: 'debts',
+      createdBy: employeeId,
+      excludeDeletedDebts: true,
+    );
+    final paymentTotal = await _sumPagedAmounts(
+      table: 'payments',
+      createdBy: employeeId,
+    );
+    return {
+      'totalDebtsCreated': debtTotal,
+      'totalPaymentsCollected': paymentTotal,
+    };
   }
-}
+
+  static Future<double> _sumPagedAmounts({
+    required String table,
+    required String createdBy,
+    bool excludeDeletedDebts = false,
+  }) async {
+    const pageSize = 500;
+    var offset = 0;
+    var total = 0.0;
+    while (true) {
+      dynamic query = client
+          .from(table)
+          .select('amount')
+          .eq('created_by', createdBy);
+      if (excludeDeletedDebts) {
+        query = query.isFilter('deleted_at', null);
+      }
+      final raw = await query.range(offset, offset + pageSize - 1);
+      if (raw is! List) throw FormatException('invalid $table statistics');
+      for (final item in raw) {
+        if (item is Map) total += _financeDouble(item['amount']);
+      }
+      if (raw.length < pageSize) return total;
+      offset += pageSize;
+    }
+  }
 
   static Future<Map<String, int>> getDebtCounts({required String adminId}) async {
     final safeAdminId = _sanitize(adminId);
@@ -1382,57 +1382,57 @@ static Future<double> _sumPagedAmounts({
   }
 
   static Future<void> checkAndNotifyOverdueDebts() async {
-  try {
-    await ensureInitialized();
-    final senderId = client.auth.currentUser?.id;
-    if (senderId == null || senderId.isEmpty) return;
-    final now = DateTime.now();
-    final today =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    const pageSize = 500;
-    var offset = 0;
-    while (true) {
-      final raw = await client
-          .from('debts')
-          .select('id, customer_id, remaining, due_date')
-          .lt('due_date', today)
-          .neq('status', 'paid')
-          .gt('remaining', 0)
-          .isFilter('deleted_at', null)
-          .order('due_date')
-          .order('id')
-          .range(offset, offset + pageSize - 1);
-      for (final item in raw) {
-        final debt = Map<String, dynamic>.from(item);
-        final customerId = debt['customer_id']?.toString() ?? '';
-        final debtId = debt['id']?.toString() ?? '';
-        if (customerId.isEmpty || debtId.isEmpty) continue;
-        final existing = await client
-            .from('notifications')
-            .select('id')
-            .eq('customer_id', customerId)
-            .eq('type', 'debt_overdue')
-            .ilike('message', '%[#$debtId]%')
-            .gte('created_at', '${today}T00:00:00Z')
-            .limit(1);
-        if (existing.isNotEmpty) continue;
+    try {
+      await ensureInitialized();
+      final senderId = client.auth.currentUser?.id;
+      if (senderId == null || senderId.isEmpty) return;
+      final now = DateTime.now();
+      final today =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      const pageSize = 500;
+      var offset = 0;
+      while (true) {
+        final raw = await client
+            .from('debts')
+            .select('id, customer_id, remaining, due_date')
+            .lt('due_date', today)
+            .neq('status', 'paid')
+            .gt('remaining', 0)
+            .isFilter('deleted_at', null)
+            .order('due_date')
+            .order('id')
+            .range(offset, offset + pageSize - 1);
+        for (final item in raw) {
+          final debt = Map<String, dynamic>.from(item);
+          final customerId = debt['customer_id']?.toString() ?? '';
+          final debtId = debt['id']?.toString() ?? '';
+          if (customerId.isEmpty || debtId.isEmpty) continue;
+          final existing = await client
+              .from('notifications')
+              .select('id')
+              .eq('customer_id', customerId)
+              .eq('type', 'debt_overdue')
+              .ilike('message', '%[#$debtId]%')
+              .gte('created_at', '${today}T00:00:00Z')
+              .limit(1);
+          if (existing.isNotEmpty) continue;
 
-        final remaining = _financeDouble(debt['remaining']);
-        final dueDate = debt['due_date']?.toString() ?? '';
-        final formattedAmount =
-            '${remaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
-        await createNotification(
-          customerId: customerId,
-          message:
-              '⚠️ قەرزی $formattedAmount دواکەوتووە!\nبەرواری دانەوە: ${dueDate.replaceAll('-', '/')} بووە.\nتکایە هەرچی زووتر بیگەڕێنەوە.\n[#$debtId]',
-          senderId: senderId,
-          type: 'debt_overdue',
-        );
+          final remaining = _financeDouble(debt['remaining']);
+          final dueDate = debt['due_date']?.toString() ?? '';
+          final formattedAmount =
+              '${remaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
+          await createNotification(
+            customerId: customerId,
+            message:
+                '⚠️ قەرزی $formattedAmount دواکەوتووە!\nبەرواری دانەوە: ${dueDate.replaceAll('-', '/')} بووە.\nتکایە هەرچی زووتر بیگەڕێنەوە.\n[#$debtId]',
+            senderId: senderId,
+            type: 'debt_overdue',
+          );
+        }
+        if (raw.length < pageSize) break;
+        offset += pageSize;
       }
-      if (raw.length < pageSize) break;
-      offset += pageSize;
-    }
-  } catch (_) {}
-}
+    } catch (_) {}
+  }
 
 }
