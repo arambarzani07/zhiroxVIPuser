@@ -705,7 +705,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     DateTime? fromDate;
     DateTime? toDate;
-    String? dateFilter;
+    DateTime? reportToDate;
     if (choice == 'custom') {
       final now = DateTime.now();
       final picked = await showDateRangePicker(
@@ -719,19 +719,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
       );
       if (picked == null || !mounted) return;
       fromDate = picked.start;
-      toDate = picked.end;
-      final fromStr = DateFormat('yyyy-MM-dd').format(fromDate);
-      final toStr = DateFormat(
-        'yyyy-MM-dd',
-      ).format(toDate.add(const Duration(days: 1)));
-      dateFilter =
-          'created >= "$fromStr 00:00:00" && created < "$toStr 00:00:00"';
+      reportToDate = picked.end;
+      toDate = DateTime(
+        picked.end.year,
+        picked.end.month,
+        picked.end.day + 1,
+      );
     }
 
     try {
       final allDebts = await PBService.getAllAdminDebts(
         adminId: auth.userId,
-        filter: dateFilter,
+        fromDate: fromDate,
+        toDate: toDate,
       );
       double reportDebt = 0;
       double reportRemaining = 0;
@@ -755,7 +755,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         totalPaid: reportPaid,
         totalCustomers: customerIds.length,
         fromDate: fromDate,
-        toDate: toDate,
+        toDate: reportToDate,
       );
     } catch (e) {
       if (mounted) {
