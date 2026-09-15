@@ -509,6 +509,35 @@ class PBService {
     };
   }
 
+  /// Loads every approved customer through the server-paginated directory.
+  /// This is used by selectors that must not silently hide customers after
+  /// the first 500 records.
+  static Future<List<RecordModel>> getAllApprovedCustomers() async {
+    final customers = <RecordModel>[];
+    Map<String, dynamic>? cursor;
+
+    while (true) {
+      final page = await getCustomerDirectoryPage(
+        limit: 100,
+        cursor: cursor,
+      );
+      final items = List<RecordModel>.from(
+        page['items'] as List? ?? const [],
+      );
+      customers.addAll(
+        items.where((customer) => customer.getBoolValue('approved')),
+      );
+      if (page['hasMore'] != true) break;
+      final next = page['nextCursor'];
+      if (next is! Map || next.isEmpty) {
+        throw const FormatException('invalid customer directory cursor');
+      }
+      cursor = Map<String, dynamic>.from(next);
+    }
+
+    return customers;
+  }
+
   static Future<RecordModel> getUser(String id) async {
     var user = await pb.collection('users').getOne(id);
     await ensureInitialized();
@@ -957,12 +986,46 @@ class PBService {
   }
 
   static Future<Map<String, double>> getEmployeeStats(String employeeId) async {
-    final debts = await getDebts(createdBy: employeeId);
-    final payments = await getPayments(createdBy: employeeId);
+    await ensureInitialized();
+    final debtTotal = await _sumPagedAmounts(
+      table: 'debts',
+      createdBy: employeeId,
+      excludeDeletedDebts: true,
+    );
+    final paymentTotal = await _sumPagedAmounts(
+      table: 'payments',
+      createdBy: employeeId,
+    );
     return {
-      'totalDebtsCreated': debts.fold<double>(0, (s, d) => s + d.getDoubleValue('amount')),
-      'totalPaymentsCollected': payments.fold<double>(0, (s, p) => s + p.getDoubleValue('amount')),
+      'totalDebtsCreated': debtTotal,
+      'totalPaymentsCollected': paymentTotal,
     };
+  }
+
+  static Future<double> _sumPagedAmounts({
+    required String table,
+    required String createdBy,
+    bool excludeDeletedDebts = false,
+  }) async {
+    const pageSize = 500;
+    var offset = 0;
+    var total = 0.0;
+    while (true) {
+      dynamic query = client
+          .from(table)
+          .select('amount')
+          .eq('created_by', createdBy);
+      if (excludeDeletedDebts) {
+        query = query.isFilter('deleted_at', null);
+      }
+      final raw = await query.range(offset, offset + pageSize - 1);
+      if (raw is! List) throw FormatException('invalid $table statistics');
+      for (final item in raw) {
+        if (item is Map) total += _financeDouble(item['amount']);
+      }
+      if (raw.length < pageSize) return total;
+      offset += pageSize;
+    }
   }
 
   static Future<Map<String, int>> getDebtCounts({required String adminId}) async {
@@ -1346,36 +1409,57 @@ class PBService {
 
   static Future<void> checkAndNotifyOverdueDebts() async {
     try {
+      await ensureInitialized();
+      final senderId = client.auth.currentUser?.id;
+      if (senderId == null || senderId.isEmpty) return;
       final now = DateTime.now();
       final today =
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      final overdue = await pb.collection('debts').getList(
-        filter: 'due_date < "$today" && status != "paid" && remaining > 0',
-        perPage: 500,
-        expand: 'customer',
-      );
+      const pageSize = 500;
+      var offset = 0;
+      while (true) {
+        final raw = await client
+            .from('debts')
+            .select('id, customer_id, remaining, due_date')
+            .lt('due_date', today)
+            .neq('status', 'paid')
+            .gt('remaining', 0)
+            .isFilter('deleted_at', null)
+            .order('due_date')
+            .order('id')
+            .range(offset, offset + pageSize - 1);
+        if (raw is! List) throw const FormatException('invalid overdue debts');
 
-      for (final debt in overdue.items) {
-        final customerId = debt.getStringValue('customer');
-        final debtId = debt.id;
-        final existing = await pb.collection('notifications').getList(
-          filter:
-              'customer = "${_sanitize(customerId)}" && type = "debt_overdue" && message ~ "${_sanitize(debtId)}" && created >= "$today 00:00:00"',
-          perPage: 1,
-        );
-        if (existing.items.isNotEmpty) continue;
+        for (final item in raw) {
+          if (item is! Map) continue;
+          final debt = Map<String, dynamic>.from(item);
+          final customerId = debt['customer_id']?.toString() ?? '';
+          final debtId = debt['id']?.toString() ?? '';
+          if (customerId.isEmpty || debtId.isEmpty) continue;
+          final existing = await client
+              .from('notifications')
+              .select('id')
+              .eq('customer_id', customerId)
+              .eq('type', 'debt_overdue')
+              .ilike('message', '%[#$debtId]%')
+              .gte('created_at', '${today}T00:00:00Z')
+              .limit(1);
+          if (existing is List && existing.isNotEmpty) continue;
 
-        final remaining = debt.getDoubleValue('remaining');
-        final dueDate = debt.getStringValue('due_date');
-        final formattedAmount =
-            '${remaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
-        await createNotification(
-          customerId: customerId,
-          message:
-              '⚠️ قەرزی $formattedAmount دواکەوتووە!\nبەرواری دانەوە: ${dueDate.replaceAll('-', '/')} بووە.\nتکایە هەرچی زووتر بیگەڕێنەوە.\n[#$debtId]',
-          senderId: customerId,
-          type: 'debt_overdue',
-        );
+          final remaining = _financeDouble(debt['remaining']);
+          final dueDate = debt['due_date']?.toString() ?? '';
+          final formattedAmount =
+              '${remaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} د.ع';
+          await createNotification(
+            customerId: customerId,
+            message:
+                '⚠️ قەرزی $formattedAmount دواکەوتووە!\nبەرواری دانەوە: ${dueDate.replaceAll('-', '/')} بووە.\nتکایە هەرچی زووتر بیگەڕێنەوە.\n[#$debtId]',
+            senderId: senderId,
+            type: 'debt_overdue',
+          );
+        }
+        if (raw.length < pageSize) break;
+        offset += pageSize;
       }
     } catch (_) {}
   }
