@@ -1026,7 +1026,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ? _generateCurrentFinancialStatement
                   : _showIncompleteCurrencySummaryMessage,
               icon: const Icon(Icons.receipt_long_rounded, size: 19),
-              label: const Text('کەشف حیساب'),
+              label: const Text('پوختەی قەرز'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
                 foregroundColor: _accentColor,
@@ -1515,7 +1515,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               child: OutlinedButton.icon(
                 onPressed: _generateFilteredFinancialChatStatement,
                 icon: const Icon(Icons.ios_share_rounded, size: 17),
-                label: const Text('کەشف / هاوبەشکردن'),
+                label: const Text('کەشفی مامەڵەکان'),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(42),
                   textStyle: const TextStyle(
@@ -2597,7 +2597,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'وەصڵ',
+                            'وەسڵ',
                             style: TextStyle(
                               color: color,
                               fontSize: 9.5,
@@ -2853,7 +2853,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     Icon(Icons.broken_image_outlined, size: 17, color: accent),
                     const SizedBox(width: 5),
                     Text(
-                      'وێنەی وەصڵ بەردەست نییە',
+                      'وێنەی وەسڵ بەردەست نییە',
                       style: TextStyle(
                         fontSize: 9.5,
                         fontWeight: FontWeight.w600,
@@ -2879,7 +2879,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     Icon(Icons.receipt_long_outlined, size: 12, color: Colors.white),
                     SizedBox(width: 4),
                     Text(
-                      'وەصڵ',
+                      'وەسڵ',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 9,
@@ -2997,19 +2997,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               if (receiptPath.isNotEmpty)
                 ListTile(
                   leading: const Icon(Icons.image_outlined),
-                  title: const Text('بینینی وەصڵ'),
+                  title: const Text('بینینی وەسڵ'),
                   subtitle: const Text('گەورەکردن و جوڵاندنی وێنە'),
                   onTap: () => Navigator.pop(sheetContext, 'receipt'),
                 ),
               if (debt != null)
                 ListTile(
                   leading: const Icon(Icons.print_outlined),
-                  title: const Text('چاپکردنی وەصڵ / Invoice'),
+                  title: const Text('چاپکردنی وەسڵ'),
                   onTap: () => Navigator.pop(sheetContext, 'invoice'),
                 ),
               ListTile(
                 leading: const Icon(Icons.receipt_long_outlined),
-                title: const Text('کەشف حیساب'),
+                title: const Text('پوختەی قەرز'),
                 onTap: () => Navigator.pop(sheetContext, 'statement'),
               ),
             ],
