@@ -439,22 +439,30 @@ class PBService {
     bool? approved,
   }) async {
     if (search != null && search.isNotEmpty) {
-      final filters = <String>[];
-      if (role != null) filters.add('role = "${_sanitize(role)}"');
-      if (adminId != null) {
-        filters.add('admin_id = "${_sanitize(adminId)}"');
+      await ensureInitialized();
+      const pageSize = 100;
+      var offset = 0;
+      final users = <RecordModel>[];
+      while (true) {
+        final raw = await client.rpc('search_profiles_page', params: {
+          'p_search': search,
+          'p_role': role,
+          'p_admin_id': adminId,
+          'p_approved': approved,
+          'p_limit': pageSize,
+          'p_offset': offset,
+        });
+        if (raw is! List) throw const FormatException('invalid profile search');
+        for (final item in raw) {
+          if (item is Map) {
+            users.add(_profileRecord(Map<String, dynamic>.from(item)));
+          }
+        }
+        if (raw.length < pageSize) break;
+        offset += pageSize;
       }
-      if (approved != null) filters.add('approved = $approved');
-      final q = _sanitize(search);
-      filters.add('(name ~ "$q" || father_name ~ "$q" || phone ~ "$q")');
-      final result = await pb.collection('users').getList(
-        filter: filters.join(' && '),
-        sort: '-created',
-        perPage: 500,
-      );
-      return result.items;
+      return users;
     }
-
     await ensureInitialized();
     const pageSize = 500;
     var offset = 0;
