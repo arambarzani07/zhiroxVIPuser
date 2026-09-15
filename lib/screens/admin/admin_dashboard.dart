@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart' hide TextDirection;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
@@ -705,7 +704,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     DateTime? fromDate;
     DateTime? toDate;
-    DateTime? reportToDate;
+    String? dateFilter;
     if (choice == 'custom') {
       final now = DateTime.now();
       final picked = await showDateRangePicker(
@@ -719,19 +718,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
       );
       if (picked == null || !mounted) return;
       fromDate = picked.start;
-      reportToDate = picked.end;
-      toDate = DateTime(
-        picked.end.year,
-        picked.end.month,
-        picked.end.day + 1,
-      );
+      toDate = picked.end;
+      final fromStr = DateFormat('yyyy-MM-dd').format(fromDate);
+      final toStr = DateFormat(
+        'yyyy-MM-dd',
+      ).format(toDate.add(const Duration(days: 1)));
+      dateFilter =
+          'created >= "$fromStr 00:00:00" && created <= "$toStr 00:00:00"';
     }
 
     try {
-      final allDebts = await PBService.getAllAdminDebts(
+      final allDebts = await PBService.getDebts(
         adminId: auth.userId,
-        fromDate: fromDate,
-        toDate: toDate,
+        filter: dateFilter,
       );
       double reportDebt = 0;
       double reportRemaining = 0;
@@ -755,7 +754,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         totalPaid: reportPaid,
         totalCustomers: customerIds.length,
         fromDate: fromDate,
-        toDate: reportToDate,
+        toDate: toDate,
       );
     } catch (e) {
       if (mounted) {
