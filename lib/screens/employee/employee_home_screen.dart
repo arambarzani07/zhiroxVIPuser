@@ -62,14 +62,6 @@ class EmployeeHomeScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_left_rounded),
                 onTap: onOpenCustomers,
               ),
-              if (auth.canAddCustomers) ...[
-                const Divider(),
-                FilledButton.icon(
-                  onPressed: onOpenCustomers,
-                  icon: const Icon(Icons.person_add_alt_1_rounded),
-                  label: const Text('زیادکردنی کڕیاری نوێ'),
-                ),
-              ],
             ])),
             const SizedBox(height: 22),
             const AppSectionHeader(
