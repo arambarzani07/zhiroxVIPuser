@@ -220,15 +220,15 @@ class SupabasePBCompat {
     }
 
     if (logicalName == 'debts') {
-    // Optional PostgreSQL date/timestamp columns must receive NULL,
-    // never an empty string (which raises Postgres error 22007).
-    for (final key in const ['due_date', 'custom_date']) {
-      final value = result[key];
-      if (value is String && value.trim().isEmpty) {
-        result[key] = null;
+      // Optional PostgreSQL date/timestamp columns must receive NULL,
+      // never an empty string (which raises Postgres error 22007).
+      for (final key in const ['due_date', 'custom_date']) {
+        final value = result[key];
+        if (value is String && value.trim().isEmpty) {
+          result[key] = null;
+        }
       }
-    }
-    if (result.containsKey('customer')) {
+      if (result.containsKey('customer')) {
         result['customer_id'] = result.remove('customer');
       }
       if (result.containsKey('receipt_image')) {
@@ -250,7 +250,11 @@ class SupabasePBCompat {
         result['customer_id'] = result.remove('customer');
       }
       if (result.containsKey('sender')) {
-        result['sender_id'] = result.remove('sender');
+        final requestedSender = result.remove('sender');
+        final authenticatedSender = _client.auth.currentUser?.id ?? '';
+        result['sender_id'] = authenticatedSender.isNotEmpty
+            ? authenticatedSender
+            : requestedSender;
       }
     }
 
@@ -565,11 +569,22 @@ class SupabaseCollectionCompat {
     final total = rows.length;
     final safePerPage = perPage <= 0 ? 30 : perPage;
     final safePage = page <= 0 ? 1 : page;
+
+    // The migrated PocketBase callers historically use 500+ as an "all rows"
+    // request. Because this compatibility layer already loads the complete
+    // server-paginated dataset before filtering, slicing those calls back to
+    // 500 would silently reintroduce incomplete balances/stats/overdue scans.
+    final legacyFullList = safePage == 1 && safePerPage >= 500;
     final start = (safePage - 1) * safePerPage;
     final end = (start + safePerPage).clamp(0, total).toInt();
-    final pageRows = start >= total
-        ? <Map<String, dynamic>>[]
-        : rows.sublist(start, end);
+    final pageRows = legacyFullList
+        ? rows
+        : start >= total
+            ? <Map<String, dynamic>>[]
+            : rows.sublist(start, end);
+    final effectivePerPage = legacyFullList && total > safePerPage
+        ? total
+        : safePerPage;
 
     if (logicalName == 'debts') {
       for (final row in pageRows) {
@@ -584,9 +599,13 @@ class SupabaseCollectionCompat {
     return PBListResult(
       items: items,
       totalItems: total,
-      totalPages: total == 0 ? 0 : (total / safePerPage).ceil(),
+      totalPages: total == 0
+          ? 0
+          : legacyFullList
+              ? 1
+              : (total / safePerPage).ceil(),
       page: safePage,
-      perPage: safePerPage,
+      perPage: effectivePerPage,
     );
   }
 
