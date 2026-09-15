@@ -449,7 +449,7 @@ class PdfService {
                     padding: const pw.EdgeInsets.symmetric(vertical: 10),
                     child: pw.Center(
                       child: pw.Text(
-                        _reshape('وەصڵی قەرز'),
+                        _reshape('وەسڵی قەرز'),
                         style: pw.TextStyle(
                           font: ttfBold,
                           fontSize: 16,
@@ -556,7 +556,7 @@ class PdfService {
                         crossAxisAlignment: pw.CrossAxisAlignment.center,
                         children: [
                           pw.Text(
-                            _reshape('ژ.وەصڵ'),
+                            _reshape('ژ.وەسڵ'),
                             style: pw.TextStyle(
                               font: ttf,
                               fontSize: 9,
