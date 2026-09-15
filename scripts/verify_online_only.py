@@ -82,7 +82,7 @@ else:
 
 if 'PBService.getCustomerBalance' not in add_debt:
     fail('lib/screens/shared/add_debt_screen.dart: debt-limit flow must verify live customer balance')
-if 'PBService.getAllApprovedCustomers()' not in add_debt:
+if 'PBService.getAllApprovedCustomers(adminId: auth.adminId)' not in add_debt:
     fail('Customer picker must use complete customer reads')
 if "query.order('id').range(offset, offset + pageSize - 1)" not in pb:
     fail('Employee totals must page in a deterministic unique order')
@@ -403,6 +403,12 @@ for marker in ('referenceKind', 'referenceId'):
 # stored in IQD; USD is display metadata and must never be multiplied twice.
 helpers_source = (LIB / 'utils/helpers.dart').read_text(encoding='utf-8')
 dashboard_source = (LIB / 'screens/customer/customer_dashboard.dart').read_text(encoding='utf-8')
+print_body = dashboard_source.split('Future<void> _printStatement() async {', 1)[-1].split('@override', 1)[0]
+if 'Navigator.pop' in print_body:
+    fail('Statement failures must not pop the customer dashboard route')
+for marker in ('if (_printingStatement || !mounted) return;', 'finally {', '_printingStatement = false'):
+    if marker not in print_body:
+        fail(f'Statement single-flight/retry marker missing: {marker}')
 for marker in (
     'debtValueInIqd',
     'storageAmountToDisplay',
