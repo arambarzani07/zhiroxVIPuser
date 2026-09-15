@@ -1003,24 +1003,92 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
   }
 
   static Future<List<RecordModel>> getPayments({
-    String? debtId,
-    String? createdBy,
-    String? customerId,
-  }) async {
-    final filters = <String>[];
-    if (debtId != null) filters.add('debt = "${_sanitize(debtId)}"');
-    if (createdBy != null) filters.add('created_by = "${_sanitize(createdBy)}"');
-    if (customerId != null) {
-      filters.add('debt.customer = "${_sanitize(customerId)}"');
+  String? debtId,
+  String? createdBy,
+  String? customerId,
+}) async {
+  if (debtId != null && customerId == null) {
+    await ensureInitialized();
+    const pageSize = 500;
+    var offset = 0;
+    final payments = <RecordModel>[];
+    while (true) {
+      dynamic query = client.from('payments').select('''
+        *,
+        debt_expand:debts!payments_debt_id_fkey(
+          *,
+          customer_expand:profiles!debts_customer_id_fkey(*),
+          debt_creator_expand:profiles!debts_created_by_fkey(*)
+        ),
+        creator_expand:profiles!payments_created_by_fkey(*)
+      ''').eq('debt_id', debtId);
+      if (createdBy != null) {
+        query = query.eq('created_by', createdBy);
+      }
+      final raw = await query
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .range(offset, offset + pageSize - 1);
+
+      for (final item in raw) {
+        final row = Map<String, dynamic>.from(item);
+        final debtRaw = row.remove('debt_expand');
+        final paymentCreatorRaw = row.remove('creator_expand');
+        final paymentJson = _paymentRecordFromRaw(row).toJson();
+        final paymentExpand = <String, dynamic>{};
+
+        if (debtRaw is Map) {
+          final debtRow = Map<String, dynamic>.from(debtRaw);
+          final customerRaw = debtRow.remove('customer_expand');
+          final debtCreatorRaw = debtRow.remove('debt_creator_expand');
+          final debtJson = _debtRecordFromRaw(debtRow).toJson();
+          final debtExpand = <String, dynamic>{};
+          if (customerRaw is Map) {
+            debtExpand['customer'] = _profileRecord(
+              Map<String, dynamic>.from(customerRaw),
+            ).toJson();
+          }
+          if (debtCreatorRaw is Map) {
+            debtExpand['created_by'] = _profileRecord(
+              Map<String, dynamic>.from(debtCreatorRaw),
+            ).toJson();
+          }
+          if (debtExpand.isNotEmpty) debtJson['expand'] = debtExpand;
+          paymentExpand['debt'] = debtJson;
+        }
+        if (paymentCreatorRaw is Map) {
+          paymentExpand['created_by'] = _profileRecord(
+            Map<String, dynamic>.from(paymentCreatorRaw),
+          ).toJson();
+        }
+        if (paymentExpand.isNotEmpty) {
+          paymentJson['expand'] = paymentExpand;
+        }
+        payments.add(RecordModel.fromJson(paymentJson));
+      }
+
+      if (raw.length < pageSize) break;
+      offset += pageSize;
     }
-    final result = await pb.collection('payments').getList(
-      filter: filters.join(' && '),
-      sort: '-created',
-      expand: 'debt,created_by,debt.customer',
-      perPage: 500,
-    );
-    return result.items;
+    return payments;
   }
+
+  final filters = <String>[];
+  if (debtId != null) filters.add('debt = "${_sanitize(debtId)}"');
+  if (createdBy != null) {
+    filters.add('created_by = "${_sanitize(createdBy)}"');
+  }
+  if (customerId != null) {
+    filters.add('debt.customer = "${_sanitize(customerId)}"');
+  }
+  final result = await pb.collection('payments').getList(
+    filter: filters.join(' && '),
+    sort: '-created',
+    expand: 'debt,created_by,debt.customer',
+    perPage: 500,
+  );
+  return result.items;
+}
 
   static Future<Map<String, double>> getEmployeeStats(String employeeId) async {
     await ensureInitialized();
