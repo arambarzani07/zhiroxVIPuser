@@ -1,0 +1,89 @@
+name: One-time admin report pagination patch
+
+on:
+  push:
+    branches:
+      - user-source
+    paths:
+      - .github/workflows/one-time-admin-report-pagination.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch both source branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for branch in user-source owner-source; do
+            git fetch origin "$branch"
+            git checkout -B "$branch" "origin/$branch"
+            python3 - "$branch" <<'PY'
+          from pathlib import Path
+          import sys
+
+          branch = sys.argv[1]
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text(encoding='utf-8')
+
+          old = """    final profileData = await client
+              .from('profiles')
+              .select()
+              .eq('admin_id', adminId);
+          final profiles = <String, Map<String, dynamic>>{
+            for (final raw in (profileData as List).whereType<Map>())
+              '${raw['id']}': Map<String, dynamic>.from(raw),
+          };
+          """
+
+          new = """    final profiles = <String, Map<String, dynamic>>{};
+          var profileOffset = 0;
+          while (true) {
+            final profileData = await client
+                .from('profiles')
+                .select()
+                .eq('admin_id', adminId)
+                .order('id')
+                .range(profileOffset, profileOffset + pageSize - 1);
+            if (profileData is! List) {
+              throw const FormatException('invalid admin profiles page');
+            }
+            final profilePage = profileData
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .toList(growable: false);
+            for (final row in profilePage) {
+              final id = row['id']?.toString() ?? '';
+              if (id.isNotEmpty) profiles[id] = row;
+            }
+            if (profilePage.length < pageSize) break;
+            profileOffset += pageSize;
+          }
+          """
+
+          if old in text:
+            path.write_text(text.replace(old, new, 1), encoding='utf-8')
+            print(f'{branch}: patched admin profile pagination')
+          elif "var profileOffset = 0;" in text and "invalid admin profiles page" in text:
+            print(f'{branch}: already patched')
+          else:
+            raise SystemExit(f'{branch}: expected getAllAdminDebts profile block not found')
+          PY
+
+            if ! git diff --quiet -- lib/services/pb_service.dart; then
+              git diff --check -- lib/services/pb_service.dart
+              git add lib/services/pb_service.dart
+              git commit -m "fix admin report profile pagination [skip ci]"
+              git push origin "HEAD:$branch"
+            fi
+          done
