@@ -67,6 +67,8 @@ elif 'catch' in ctx_match.group(1):
 
 
 pb = (LIB / 'services/pb_service.dart').read_text(encoding='utf-8')
+if "query.order('id').range(offset, offset + pageSize - 1)" not in pb:
+    fail('Employee totals must page in a deterministic unique order')
 match = re.search(
     r'static\s+Future<double>\s+getCustomerBalance\([^)]*\)\s+async\s*\{(.*?)(?=\n\s*static\s+)',
     pb,
