@@ -407,6 +407,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       accent = Colors.red;
     } else if (message.contains('قەرز') ||
         message.contains('وەصڵ') ||
+        message.contains('وەسڵ') ||
         message.contains('پارە')) {
       iconData = Icons.receipt_long_outlined;
       accent = Colors.orange;
