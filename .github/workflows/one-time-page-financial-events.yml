@@ -1,0 +1,66 @@
+name: One-time page financial events
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/one-time-page-financial-events.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Page financial event history
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import textwrap
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text()
+          start = text.index('  static Future<List<RecordModel>> getFinancialEvents(String customerId) async {')
+          end = text.index('  static double _financeDouble', start)
+          replacement = textwrap.indent(textwrap.dedent(r'''\
+          static Future<List<RecordModel>> getFinancialEvents(String customerId) async {
+            await ensureInitialized();
+            const pageSize = 500;
+            var offset = 0;
+            final events = <RecordModel>[];
+            while (true) {
+              final data = await client
+                  .from('financial_events')
+                  .select()
+                  .eq('customer_id', customerId)
+                  .order('created_at', ascending: false)
+                  .order('id', ascending: false)
+                  .range(offset, offset + pageSize - 1);
+              for (final row in data) {
+                events.add(
+                  _financialEventRecord(Map<String, dynamic>.from(row)),
+                );
+              }
+              if (data.length < pageSize) break;
+              offset += pageSize;
+            }
+            return events.reversed.toList(growable: false);
+          }
+
+          '''), '  ')
+          text = text[:start] + replacement + text[end:]
+          assert '.limit(500)' not in text[start:start + len(replacement) + 50]
+          assert '.range(offset, offset + pageSize - 1)' in text[start:start + len(replacement) + 50]
+          path.write_text(text)
+          PY
+      - name: Commit and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-page-financial-events.yml
+          git add lib/services/pb_service.dart
+          git commit -m 'fix: page complete financial event history'
+          git push origin owner-source
