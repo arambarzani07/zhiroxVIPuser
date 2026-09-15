@@ -36,48 +36,52 @@ jobs:
           path = Path('lib/services/pb_service.dart')
           text = path.read_text(encoding='utf-8')
 
-          old = """    final profileData = await client
-              .from('profiles')
-              .select()
-              .eq('admin_id', adminId);
-          final profiles = <String, Map<String, dynamic>>{
-            for (final raw in (profileData as List).whereType<Map>())
-              '${raw['id']}': Map<String, dynamic>.from(raw),
-          };
-          """
+          if "var profileOffset = 0;" in text and "invalid admin profiles page" in text:
+              print(f'{branch}: already patched')
+              raise SystemExit(0)
 
-          new = """    final profiles = <String, Map<String, dynamic>>{};
-          var profileOffset = 0;
-          while (true) {
-            final profileData = await client
-                .from('profiles')
-                .select()
-                .eq('admin_id', adminId)
-                .order('id')
-                .range(profileOffset, profileOffset + pageSize - 1);
-            if (profileData is! List) {
-              throw const FormatException('invalid admin profiles page');
-            }
-            final profilePage = profileData
-                .whereType<Map>()
-                .map((row) => Map<String, dynamic>.from(row))
-                .toList(growable: false);
-            for (final row in profilePage) {
-              final id = row['id']?.toString() ?? '';
-              if (id.isNotEmpty) profiles[id] = row;
-            }
-            if (profilePage.length < pageSize) break;
-            profileOffset += pageSize;
-          }
-          """
+          function_anchor = 'static Future<List<RecordModel>> getAllAdminDebts({'
+          function_start = text.find(function_anchor)
+          if function_start < 0:
+              raise SystemExit(f'{branch}: getAllAdminDebts not found')
 
-          if old in text:
-            path.write_text(text.replace(old, new, 1), encoding='utf-8')
-            print(f'{branch}: patched admin profile pagination')
-          elif "var profileOffset = 0;" in text and "invalid admin profiles page" in text:
-            print(f'{branch}: already patched')
-          else:
-            raise SystemExit(f'{branch}: expected getAllAdminDebts profile block not found')
+          start = text.find('    final profileData = await client', function_start)
+          end = text.find('\n\n    while (true) {', start)
+          if start < 0 or end < 0:
+              raise SystemExit(f'{branch}: admin profile loading block not found')
+
+          old_block = text[start:end]
+          required = (".from('profiles')", ".eq('admin_id', adminId)",
+                      'final profiles = <String, Map<String, dynamic>>')
+          if not all(marker in old_block for marker in required):
+              raise SystemExit(f'{branch}: unexpected admin profile loading block')
+
+          new_block = """    final profiles = <String, Map<String, dynamic>>{};
+              var profileOffset = 0;
+              while (true) {
+                final profileData = await client
+                    .from('profiles')
+                    .select()
+                    .eq('admin_id', adminId)
+                    .order('id')
+                    .range(profileOffset, profileOffset + pageSize - 1);
+                if (profileData is! List) {
+                  throw const FormatException('invalid admin profiles page');
+                }
+                final profilePage = profileData
+                    .whereType<Map>()
+                    .map((row) => Map<String, dynamic>.from(row))
+                    .toList(growable: false);
+                for (final row in profilePage) {
+                  final id = row['id']?.toString() ?? '';
+                  if (id.isNotEmpty) profiles[id] = row;
+                }
+                if (profilePage.length < pageSize) break;
+                profileOffset += pageSize;
+              }"""
+
+          path.write_text(text[:start] + new_block + text[end:], encoding='utf-8')
+          print(f'{branch}: patched admin profile pagination')
           PY
 
             if ! git diff --quiet -- lib/services/pb_service.dart; then
