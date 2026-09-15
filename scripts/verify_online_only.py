@@ -6,6 +6,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 LIB = ROOT / 'lib'
 violations: list[str] = []
+# This verifier also gates the Owner IPA release workflow.
 
 
 def fail(message: str) -> None:
