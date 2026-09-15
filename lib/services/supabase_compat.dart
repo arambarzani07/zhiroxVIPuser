@@ -150,12 +150,35 @@ class SupabasePBCompat {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchRaw(String logicalName) async {
+  Future<List<Map<String, dynamic>>> _fetchAllRows(String table) async {
     await ensureInitialized();
-    final data = await _client.from(_tableFor(logicalName)).select();
-    return (data as List)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+    const pageSize = 500;
+    var offset = 0;
+    final rows = <Map<String, dynamic>>[];
+
+    while (true) {
+      final data = await _client
+          .from(table)
+          .select()
+          .order('id')
+          .range(offset, offset + pageSize - 1);
+      if (data is! List) {
+        throw FormatException('invalid $table page');
+      }
+      final page = data
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
+      rows.addAll(page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    return rows;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchRaw(String logicalName) async {
+    return _fetchAllRows(_tableFor(logicalName));
   }
 
   Future<_RelationContext> _contextFor(String logicalName) async {
@@ -164,17 +187,11 @@ class SupabasePBCompat {
     // Relation data is part of the live record contract. Never downgrade a
     // failed profiles/debts request to an empty relation context, because that
     // makes a network/database failure look like legitimately missing data.
-    final profileData = await _client.from('profiles').select();
-    final profiles = (profileData as List)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+    final profiles = await _fetchAllRows('profiles');
 
     List<Map<String, dynamic>> debts = const [];
     if (logicalName == 'payments') {
-      final debtData = await _client.from('debts').select();
-      debts = (debtData as List)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
+      debts = await _fetchAllRows('debts');
     }
 
     return _RelationContext(
