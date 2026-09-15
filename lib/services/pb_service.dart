@@ -1440,10 +1440,7 @@ class PBService {
             .order('due_date')
             .order('id')
             .range(offset, offset + pageSize - 1);
-        if (raw is! List) throw const FormatException('invalid overdue debts');
-
         for (final item in raw) {
-          if (item is! Map) continue;
           final debt = Map<String, dynamic>.from(item);
           final customerId = debt['customer_id']?.toString() ?? '';
           final debtId = debt['id']?.toString() ?? '';
@@ -1456,7 +1453,7 @@ class PBService {
               .ilike('message', '%[#$debtId]%')
               .gte('created_at', '${today}T00:00:00Z')
               .limit(1);
-          if (existing is List && existing.isNotEmpty) continue;
+          if (existing.isNotEmpty) continue;
 
           final remaining = _financeDouble(debt['remaining']);
           final dueDate = debt['due_date']?.toString() ?? '';
