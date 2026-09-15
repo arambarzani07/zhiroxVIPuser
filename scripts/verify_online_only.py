@@ -82,6 +82,13 @@ else:
 
 if 'PBService.getCustomerBalance' not in add_debt:
     fail('lib/screens/shared/add_debt_screen.dart: debt-limit flow must verify live customer balance')
+if 'PBService.getAllApprovedCustomers()' not in add_debt:
+    fail('Customer picker must use complete customer reads')
+if "query.order('id').range(offset, offset + pageSize - 1)" not in pb:
+    fail('Employee totals must page in a deterministic unique order')
+employee_home = (LIB / 'screens/employee/employee_home_screen.dart').read_text(encoding='utf-8')
+if "label: const Text('زیادکردنی کڕیاری نوێ')" in employee_home:
+    fail('Duplicate employee customer-list action must not return')
 
 
 # User-facing screens must not expose raw backend exception text, and debt detail
@@ -236,7 +243,7 @@ for marker_name in (
     '_buildPaymentDebtReference',
     '_buildReceiptPreview',
     'Image.network(',
-    'کەشف / هاوبەشکردن',
+    'کەشفی مامەڵەکان',
 ):
     if marker_name not in profile:
         fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat Phase 4 marker missing: {marker_name}')
