@@ -1270,7 +1270,7 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
       if (excludeDeletedDebts) {
         query = query.isFilter('deleted_at', null);
       }
-      final raw = await query.range(offset, offset + pageSize - 1);
+      final raw = await query.order('id').range(offset, offset + pageSize - 1);
       if (raw is! List) throw FormatException('invalid $table statistics');
       for (final item in raw) {
         if (item is Map) total += _financeDouble(item['amount']);
@@ -1693,7 +1693,8 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
               .eq('customer_id', customerId)
               .eq('type', 'debt_overdue')
               .ilike('message', '%[#$debtId]%')
-              .gte('created_at', '${today}T00:00:00Z')
+              .gte('created_at', DateTime(now.year, now.month, now.day)
+                  .toUtc().toIso8601String())
               .limit(1);
           if (existing.isNotEmpty) continue;
 
