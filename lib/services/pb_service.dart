@@ -431,111 +431,51 @@ class PBService {
     }
   }
 
+
   static Future<List<RecordModel>> getUsers({
     String? role,
     String? search,
     String? adminId,
     bool? approved,
   }) async {
-    final filters = <String>[];
-    if (role != null) filters.add('role = "${_sanitize(role)}"');
-    if (adminId != null) filters.add('admin_id = "${_sanitize(adminId)}"');
-    if (approved != null) filters.add('approved = $approved');
     if (search != null && search.isNotEmpty) {
+      final filters = <String>[];
+      if (role != null) filters.add('role = \"${_sanitize(role)}\"');
+      if (adminId != null) {
+        filters.add('admin_id = \"${_sanitize(adminId)}\"');
+      }
+      if (approved != null) filters.add('approved = $approved');
       final q = _sanitize(search);
-      filters.add('(name ~ "$q" || father_name ~ "$q" || phone ~ "$q")');
+      filters.add('(name ~ \"$q\" || father_name ~ \"$q\" || phone ~ \"$q\")');
+      final result = await pb.collection('users').getList(
+        filter: filters.join(' && '),
+        sort: '-created',
+        perPage: 500,
+      );
+      return result.items;
     }
-    final result = await pb.collection('users').getList(
-      filter: filters.join(' && '),
-      sort: '-created',
-      perPage: 500,
-    );
-    return result.items;
-  }
 
-  static Future<Map<String, dynamic>> getCustomerDirectoryPage({
-    String search = '',
-    int limit = 60,
-    Map<String, dynamic>? cursor,
-  }) async {
     await ensureInitialized();
-    final params = <String, dynamic>{
-      'p_search': search.trim(),
-      'p_limit': limit.clamp(1, 100),
-    };
-    final cursorCreatedAt = cursor?['created_at']?.toString() ?? '';
-    final cursorId = cursor?['id']?.toString() ?? '';
-    if (cursorCreatedAt.isNotEmpty && cursorId.isNotEmpty) {
-      params['p_cursor_created_at'] = cursorCreatedAt;
-      params['p_cursor_id'] = cursorId;
-    }
-
-    final raw = await client.rpc(
-      'get_customer_directory_page',
-      params: params,
-    );
-    if (raw is! Map) throw Exception('invalid customer directory page');
-    final data = Map<String, dynamic>.from(raw);
+    const pageSize = 500;
+    var offset = 0;
     final users = <RecordModel>[];
-    final inbox = <String, Map<String, dynamic>>{};
-    final items = data['items'];
-    if (items is List) {
-      for (final item in items) {
-        if (item is! Map) continue;
-        final row = Map<String, dynamic>.from(item);
-        final user = _profileRecord(row);
-        users.add(user);
-        inbox[user.id] = {
-          'customer_id': user.id,
-          'remaining': row['remaining'],
-          'open_debt_count': row['open_debt_count'],
-          'last_activity_at': row['last_activity_at'],
-          'last_kind': row['last_kind'],
-          'last_amount': row['last_amount'],
-          'last_preview': row['last_preview'],
-          'last_event_type': row['last_event_type'],
-          'unread': row['unread'] == true,
-        };
-      }
-    }
-    return {
-      'items': users,
-      'inbox': inbox,
-      'totalItems': int.tryParse('${data['total_count'] ?? 0}') ?? 0,
-      'hasMore': data['has_more'] == true,
-      'nextCursor': data['next_cursor'] is Map
-          ? Map<String, dynamic>.from(data['next_cursor'] as Map)
-          : null,
-    };
-  }
-
-  /// Loads every approved customer through the server-paginated directory.
-  /// This is used by selectors that must not silently hide customers after
-  /// the first 500 records.
-  static Future<List<RecordModel>> getAllApprovedCustomers() async {
-    final customers = <RecordModel>[];
-    Map<String, dynamic>? cursor;
-
     while (true) {
-      final page = await getCustomerDirectoryPage(
-        limit: 100,
-        cursor: cursor,
-      );
-      final items = List<RecordModel>.from(
-        page['items'] as List? ?? const [],
-      );
-      customers.addAll(
-        items.where((customer) => customer.getBoolValue('approved')),
-      );
-      if (page['hasMore'] != true) break;
-      final next = page['nextCursor'];
-      if (next is! Map || next.isEmpty) {
-        throw const FormatException('invalid customer directory cursor');
-      }
-      cursor = Map<String, dynamic>.from(next);
+      dynamic query = client.from('profiles').select();
+      if (role != null) query = query.eq('role', role);
+      if (adminId != null) query = query.eq('admin_id', adminId);
+      if (approved != null) query = query.eq('approved', approved);
+      final raw = await query
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .range(offset, offset + pageSize - 1);
+      final page = (raw as List)
+          .map((row) => _profileRecord(Map<String, dynamic>.from(row as Map)))
+          .toList(growable: false);
+      users.addAll(page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
     }
-
-    return customers;
+    return users;
   }
 
   static Future<RecordModel> getUser(String id) async {
