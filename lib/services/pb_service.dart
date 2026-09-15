@@ -537,13 +537,13 @@ class PBService {
   }) async {
     if (search != null && search.isNotEmpty) {
       final filters = <String>[];
-      if (role != null) filters.add('role = \"${_sanitize(role)}\"');
+      if (role != null) filters.add('role = "${_sanitize(role)}"');
       if (adminId != null) {
-        filters.add('admin_id = \"${_sanitize(adminId)}\"');
+        filters.add('admin_id = "${_sanitize(adminId)}"');
       }
       if (approved != null) filters.add('approved = $approved');
       final q = _sanitize(search);
-      filters.add('(name ~ \"$q\" || father_name ~ \"$q\" || phone ~ \"$q\")');
+      filters.add('(name ~ "$q" || father_name ~ "$q" || phone ~ "$q")');
       final result = await pb.collection('users').getList(
         filter: filters.join(' && '),
         sort: '-created',
