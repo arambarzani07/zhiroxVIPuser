@@ -109,7 +109,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
           '';
       final customers = lockedCustomerId.isNotEmpty
           ? <RecordModel>[await PBService.getUser(lockedCustomerId)]
-          : await PBService.getAllApprovedCustomers();
+          : await PBService.getAllApprovedCustomers(adminId: auth.adminId);
       if (!mounted) return;
 
       setState(() {
