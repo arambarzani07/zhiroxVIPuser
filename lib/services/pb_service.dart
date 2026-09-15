@@ -902,6 +902,39 @@ class PBService {
     int perPage = 20,
     String? filter,
   }) async {
+    if (customerId != null &&
+        createdBy == null &&
+        adminId == null &&
+        (filter == null || filter.isEmpty)) {
+      await ensureInitialized();
+      final raw = await client.rpc(
+        'get_customer_debts_page',
+        params: {
+          'p_customer_id': customerId,
+          'p_status': status,
+          'p_page': page,
+          'p_limit': perPage,
+        },
+      );
+      if (raw is! Map) throw Exception('invalid customer debt page');
+      final data = Map<String, dynamic>.from(raw);
+      final items = <RecordModel>[];
+      final rawItems = data['items'];
+      if (rawItems is List) {
+        for (final item in rawItems) {
+          if (item is Map) {
+            items.add(_debtRecordFromRaw(Map<String, dynamic>.from(item)));
+          }
+        }
+      }
+      final totalItems = int.tryParse('${data['total_count'] ?? 0}') ?? 0;
+      return {
+        'items': items,
+        'totalItems': totalItems,
+        'totalPages': totalItems == 0 ? 0 : (totalItems / perPage).ceil(),
+      };
+    }
+
     final filters = <String>[];
     if (customerId != null) filters.add('customer = "${_sanitize(customerId)}"');
     if (status != null) filters.add('status = "${_sanitize(status)}"');
