@@ -25,7 +25,7 @@ jobs:
           start = text.index('  static Future<List<RecordModel>> getPayments({')
           end = text.index('  static Future<Map<String, double>> getEmployeeStats(', start)
           old = text[start:end]
-          replacement = r'''  static Future<List<RecordModel>> getPayments({
+          replacement = r"""  static Future<List<RecordModel>> getPayments({
             String? debtId,
             String? createdBy,
             String? customerId,
@@ -113,7 +113,7 @@ jobs:
             return result.items;
           }
 
-          '''
+          """
           if "debt_expand:debts!payments_debt_id_fkey" in old:
               raise SystemExit('debt payment paging already present')
           path.write_text(text[:start] + replacement + text[end:])
