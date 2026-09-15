@@ -1115,6 +1115,103 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     return payments;
   }
 
+  if (customerId != null && debtId == null) {
+    await ensureInitialized();
+    const pageSize = 500;
+    const debtChunkSize = 50;
+    final debtIds = <String>[];
+    var debtOffset = 0;
+    while (true) {
+      final debtRows = await client.from('debts').select('id')
+          .eq('customer_id', customerId)
+          .order('id')
+          .range(debtOffset, debtOffset + pageSize - 1);
+      for (final row in debtRows) {
+        final id = row['id']?.toString() ?? '';
+        if (id.isNotEmpty) debtIds.add(id);
+      }
+      if (debtRows.length < pageSize) break;
+      debtOffset += pageSize;
+    }
+    if (debtIds.isEmpty) return <RecordModel>[];
+
+    final payments = <RecordModel>[];
+    for (var chunkStart = 0;
+        chunkStart < debtIds.length;
+        chunkStart += debtChunkSize) {
+      final proposedEnd = chunkStart + debtChunkSize;
+      final chunkEnd = proposedEnd < debtIds.length
+          ? proposedEnd
+          : debtIds.length;
+      final chunk = debtIds.sublist(chunkStart, chunkEnd);
+      var paymentOffset = 0;
+      while (true) {
+        dynamic query = client.from('payments').select('''
+          *,
+          debt_expand:debts!payments_debt_id_fkey(
+            *,
+            customer_expand:profiles!debts_customer_id_fkey(*),
+            debt_creator_expand:profiles!debts_created_by_fkey(*)
+          ),
+          creator_expand:profiles!payments_created_by_fkey(*)
+        ''').inFilter('debt_id', chunk);
+        if (createdBy != null) {
+          query = query.eq('created_by', createdBy);
+        }
+        final raw = await query
+            .order('created_at', ascending: false)
+            .order('id', ascending: false)
+            .range(paymentOffset, paymentOffset + pageSize - 1);
+
+        for (final item in raw) {
+          final row = Map<String, dynamic>.from(item);
+          final debtRaw = row.remove('debt_expand');
+          final paymentCreatorRaw = row.remove('creator_expand');
+          final paymentJson = _paymentRecordFromRaw(row).toJson();
+          final paymentExpand = <String, dynamic>{};
+          if (debtRaw is Map) {
+            final debtRow = Map<String, dynamic>.from(debtRaw);
+            final customerRaw = debtRow.remove('customer_expand');
+            final debtCreatorRaw = debtRow.remove('debt_creator_expand');
+            final debtJson = _debtRecordFromRaw(debtRow).toJson();
+            final debtExpand = <String, dynamic>{};
+            if (customerRaw is Map) {
+              debtExpand['customer'] = _profileRecord(
+                Map<String, dynamic>.from(customerRaw),
+              ).toJson();
+            }
+            if (debtCreatorRaw is Map) {
+              debtExpand['created_by'] = _profileRecord(
+                Map<String, dynamic>.from(debtCreatorRaw),
+              ).toJson();
+            }
+            if (debtExpand.isNotEmpty) debtJson['expand'] = debtExpand;
+            paymentExpand['debt'] = debtJson;
+          }
+          if (paymentCreatorRaw is Map) {
+            paymentExpand['created_by'] = _profileRecord(
+              Map<String, dynamic>.from(paymentCreatorRaw),
+            ).toJson();
+          }
+          if (paymentExpand.isNotEmpty) {
+            paymentJson['expand'] = paymentExpand;
+          }
+          payments.add(RecordModel.fromJson(paymentJson));
+        }
+
+        if (raw.length < pageSize) break;
+        paymentOffset += pageSize;
+      }
+    }
+    payments.sort((a, b) {
+      final byCreated = b.getStringValue('created').compareTo(
+        a.getStringValue('created'),
+      );
+      if (byCreated != 0) return byCreated;
+      return b.id.compareTo(a.id);
+    });
+    return payments;
+  }
   final filters = <String>[];
   if (debtId != null) filters.add('debt = "${_sanitize(debtId)}"');
   if (createdBy != null) {
