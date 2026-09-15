@@ -162,9 +162,6 @@ class SupabasePBCompat {
           .select()
           .order('id')
           .range(offset, offset + pageSize - 1);
-      if (data is! List) {
-        throw FormatException('invalid $table page');
-      }
       final page = data
           .whereType<Map>()
           .map((row) => Map<String, dynamic>.from(row))
