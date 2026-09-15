@@ -1176,23 +1176,17 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
   }
 
   static Future<Map<String, int>> getDebtCounts({required String adminId}) async {
-    final safeAdminId = _sanitize(adminId);
-    final pending = await pb.collection('debts').getList(
-      filter: 'customer.admin_id = "$safeAdminId" && status = "pending"',
-      perPage: 1,
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_admin_debt_counts',
+      params: {'p_admin_id': adminId},
     );
-    final partial = await pb.collection('debts').getList(
-      filter: 'customer.admin_id = "$safeAdminId" && status = "partial"',
-      perPage: 1,
-    );
-    final paid = await pb.collection('debts').getList(
-      filter: 'customer.admin_id = "$safeAdminId" && status = "paid"',
-      perPage: 1,
-    );
+    if (raw is! Map) throw const FormatException('invalid debt counts');
+    final data = Map<String, dynamic>.from(raw);
     return {
-      'pending': pending.totalItems,
-      'partial': partial.totalItems,
-      'paid': paid.totalItems,
+      'pending': int.tryParse('${data['pending'] ?? 0}') ?? 0,
+      'partial': int.tryParse('${data['partial'] ?? 0}') ?? 0,
+      'paid': int.tryParse('${data['paid'] ?? 0}') ?? 0,
     };
   }
 
