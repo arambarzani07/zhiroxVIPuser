@@ -209,7 +209,7 @@ class FinancialDocumentActions {
           appBar: AppBar(
             backgroundColor: Colors.black,
             foregroundColor: Colors.white,
-            title: const Text('وێنەی وەصڵ'),
+            title: const Text('وێنەی وەسڵ'),
           ),
           body: SafeArea(
             child: Center(
@@ -222,7 +222,7 @@ class FinancialDocumentActions {
                   errorBuilder: (_, _, _) => const Padding(
                     padding: EdgeInsets.all(24),
                     child: Text(
-                      'نەتوانرا وێنەی وەصڵ بار بکرێت.',
+                      'نەتوانرا وێنەی وەسڵ بار بکرێت.',
                       style: TextStyle(color: Colors.white70),
                       textAlign: TextAlign.center,
                     ),
