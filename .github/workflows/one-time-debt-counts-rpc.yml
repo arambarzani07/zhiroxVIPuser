@@ -1,0 +1,53 @@
+name: One-time debt counts RPC
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/one-time-debt-counts-rpc.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Route debt counts through RPC
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text()
+          start = text.index('  static Future<Map<String, int>> getDebtCounts({required String adminId}) async {')
+          end = text.index('  static RecordModel _financialEventRecord(', start)
+          replacement = """  static Future<Map<String, int>> getDebtCounts({required String adminId}) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_admin_debt_counts',
+      params: {'p_admin_id': adminId},
+    );
+    if (raw is! Map) throw const FormatException('invalid debt counts');
+    final data = Map<String, dynamic>.from(raw);
+    return {
+      'pending': int.tryParse('${data['pending'] ?? 0}') ?? 0,
+      'partial': int.tryParse('${data['partial'] ?? 0}') ?? 0,
+      'paid': int.tryParse('${data['paid'] ?? 0}') ?? 0,
+    };
+  }
+
+"""
+          path.write_text(text[:start] + replacement + text[end:])
+          PY
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-debt-counts-rpc.yml
+          git add lib/services/pb_service.dart
+          git diff --cached --check
+          git commit -m 'perf(owner): fetch debt counts via RPC'
+          git push origin owner-source
