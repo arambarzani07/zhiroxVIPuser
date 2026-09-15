@@ -262,7 +262,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                                   children: [
                                     Icon(Icons.print_outlined, size: 19),
                                     SizedBox(width: 10),
-                                    Text('چاپ / وەصڵ'),
+                                    Text('چاپ / وەسڵ'),
                                   ],
                                 ),
                               ),
@@ -923,7 +923,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'وێنەی وەصڵ',
+                          'وێنەی وەسڵ',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
