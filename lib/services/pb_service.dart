@@ -716,6 +716,31 @@ class PBService {
     return result.items;
   }
 
+  /// Loads the complete debt history for an admin instead of silently
+  /// truncating account statements at Supabase/PocketBase's page boundary.
+  static Future<List<RecordModel>> getAllAdminDebts({
+    required String adminId,
+    String? filter,
+  }) async {
+    const pageSize = 500;
+    var page = 1;
+    final records = <RecordModel>[];
+
+    while (true) {
+      final batch = await getDebts(
+        adminId: adminId,
+        filter: filter,
+        page: page,
+        perPage: pageSize,
+      );
+      records.addAll(batch);
+      if (batch.length < pageSize) break;
+      page += 1;
+    }
+
+    return records;
+  }
+
   static Future<Map<String, dynamic>> getDebtsPaginated({
     String? customerId,
     String? status,
