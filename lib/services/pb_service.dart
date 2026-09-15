@@ -1038,19 +1038,28 @@ class PBService {
     });
   }
 
+  \
   static Future<List<RecordModel>> getFinancialEvents(String customerId) async {
     await ensureInitialized();
-    final data = await client
-        .from('financial_events')
-        .select()
-        .eq('customer_id', customerId)
-        .order('created_at', ascending: false)
-        .limit(500);
-    final events = (data as List)
-        .map((row) => _financialEventRecord(
-              Map<String, dynamic>.from(row as Map),
-            ))
-        .toList();
+    const pageSize = 500;
+    var offset = 0;
+    final events = <RecordModel>[];
+    while (true) {
+      final data = await client
+          .from('financial_events')
+          .select()
+          .eq('customer_id', customerId)
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .range(offset, offset + pageSize - 1);
+      for (final row in data) {
+        events.add(
+          _financialEventRecord(Map<String, dynamic>.from(row)),
+        );
+      }
+      if (data.length < pageSize) break;
+      offset += pageSize;
+    }
     return events.reversed.toList(growable: false);
   }
 
