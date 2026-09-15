@@ -104,11 +104,12 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
 
     try {
       final auth = context.read<AuthProvider>();
-      final customers = await PBService.getUsers(
-        role: 'customer',
-        adminId: auth.adminId,
-        approved: true,
-      );
+      final lockedCustomerId = widget.debt?.getStringValue('customer') ??
+          widget.customerId ??
+          '';
+      final customers = lockedCustomerId.isNotEmpty
+          ? <RecordModel>[await PBService.getUser(lockedCustomerId)]
+          : await PBService.getAllApprovedCustomers();
       if (!mounted) return;
 
       setState(() {
@@ -2386,7 +2387,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
               ),
               const SizedBox(width: 12),
               Text(
-                'وێنەی وەصڵ',
+                'وێنەی وەسڵ',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -2509,7 +2510,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                     ),
                     const SizedBox(height: 7),
                     Text(
-                      'وێنەی وەصڵ زیاد بکە',
+                      'وێنەی وەسڵ زیاد بکە',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
