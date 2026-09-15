@@ -1,0 +1,57 @@
+name: One-time customer scrollbar
+
+on:
+  push:
+    branches:
+      - user-source
+    paths:
+      - .github/workflows/one-time-customer-scroll.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add visible customer scrollbar
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/screens/shared/user_list_screen.dart')
+          text = path.read_text(encoding='utf-8')
+
+          old_body = """      body: CustomScrollView(\n        controller: _scrollController,\n        slivers: [\n"""
+          new_body = """      body: Scrollbar(\n        controller: _scrollController,\n        thumbVisibility: widget.role == 'customer',\n        interactive: true,\n        thickness: 4,\n        radius: const Radius.circular(8),\n        child: CustomScrollView(\n          controller: _scrollController,\n          slivers: [\n"""
+          old_tail = """          const SliverPadding(padding: EdgeInsets.only(bottom: 50)),\n        ],\n      ),\n    );\n"""
+          new_tail = """          const SliverPadding(padding: EdgeInsets.only(bottom: 50)),\n          ],\n        ),\n      ),\n    );\n"""
+
+          if old_body not in text:
+              if "thumbVisibility: widget.role == 'customer'" in text:
+                  print('customer scrollbar already present')
+              else:
+                  raise SystemExit('user body pattern not found')
+          else:
+              if old_tail not in text:
+                  raise SystemExit('user tail pattern not found')
+              text = text.replace(old_body, new_body, 1)
+              text = text.replace(old_tail, new_tail, 1)
+              path.write_text(text, encoding='utf-8')
+              print('patched visible customer scrollbar')
+          PY
+
+          rm -f .github/workflows/one-time-customer-scroll.yml
+          git add lib/screens/shared/user_list_screen.dart .github/workflows/one-time-customer-scroll.yml
+          git diff --cached --check
+          git commit -m "feat: add visible scrollbar to customer list"
+          git push origin HEAD:user-source
