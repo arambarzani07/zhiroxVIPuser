@@ -517,9 +517,15 @@ class _UserListScreenState extends State<UserListScreen> {
       backgroundColor: isDark
           ? AppDarkColors.background
           : const Color(0xFFF5F7FA),
-      body: CustomScrollView(
+      body: Scrollbar(
         controller: _scrollController,
-        slivers: [
+        thumbVisibility: widget.role == 'customer',
+        interactive: true,
+        thickness: 4,
+        radius: const Radius.circular(8),
+        child: CustomScrollView(
+          controller: _scrollController,
+          slivers: [
           // ───── Gradient Header ─────
           SliverToBoxAdapter(
             child: Container(
@@ -795,7 +801,8 @@ class _UserListScreenState extends State<UserListScreen> {
             ),
 
           const SliverPadding(padding: EdgeInsets.only(bottom: 50)),
-        ],
+          ],
+        ),
       ),
     );
   }
