@@ -760,14 +760,29 @@ class PBService {
     // Customer ownership must be resolved independently from the debts query.
     // PostgREST applies its own server row limit, so the compatibility layer's
     // in-memory pagination cannot be used for a complete account statement.
-    final profileData = await client
-        .from('profiles')
-        .select()
-        .eq('admin_id', adminId);
-    final profiles = <String, Map<String, dynamic>>{
-      for (final raw in (profileData as List).whereType<Map>())
-        '${raw['id']}': Map<String, dynamic>.from(raw),
-    };
+    final profiles = <String, Map<String, dynamic>>{};
+    var profileOffset = 0;
+    while (true) {
+      final profileData = await client
+          .from('profiles')
+          .select()
+          .eq('admin_id', adminId)
+          .order('id')
+          .range(profileOffset, profileOffset + pageSize - 1);
+      if (profileData is! List) {
+        throw const FormatException('invalid admin profiles page');
+      }
+      final profilePage = profileData
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
+      for (final row in profilePage) {
+        final id = row['id']?.toString() ?? '';
+        if (id.isNotEmpty) profiles[id] = row;
+      }
+      if (profilePage.length < pageSize) break;
+      profileOffset += pageSize;
+    }
 
     while (true) {
       final data = await client
