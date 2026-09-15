@@ -58,7 +58,6 @@ void callbackDispatcher() {
           for (final debt in overdueDebts.items) {
             final remaining = debt.getDoubleValue('remaining');
             final dueDate = debt.getStringValue('due_date');
-            final customerId = debt.getStringValue('customer');
             final formattedAmount =
                 '${remaining.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} د.ع';
 
@@ -68,19 +67,12 @@ void callbackDispatcher() {
                   'قەرزی $formattedAmount بەرواری دانەوەی ($dueDate) تێپەڕیوە. تکایە قەرزەکە بدەوە.',
               id: notifId++,
             );
-
-            try {
-              await PBService.createNotification(
-                customerId: customerId,
-                message:
-                    '⚠️ قەرزی $formattedAmount دواکەوتووە!\n'
-                    'بەرواری دانەوە: ${dueDate.replaceAll('-', '/')} بووە.\n'
-                    'تکایە هەرچی زووتر بیگەڕێنەوە.',
-                senderId: customerId,
-                type: 'debt_overdue',
-              );
-            } catch (_) {}
           }
+
+          // Persist at most one customer reminder per debt per day. The
+          // service owns de-duplication; doing this inside the loop used to
+          // create the same remote notification every 12 hours.
+          await PBService.checkAndNotifyOverdueDebts();
         }
       }
     } catch (_) {}
