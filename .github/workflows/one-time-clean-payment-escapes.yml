@@ -1,0 +1,41 @@
+name: One-time clean payment escapes
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - '.github/workflows/one-time-clean-payment-escapes.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: user-source
+          fetch-depth: 0
+      - name: Clean payment fallback analyzer escapes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text()
+          start = text.index('  static Future<List<RecordModel>> getPayments({')
+          end = text.index('  static Future<Map<String, double>> getEmployeeStats(', start)
+          block = text[start:end]
+          cleaned = block.replace('\\"', '"')
+          if cleaned == block:
+              raise SystemExit('no payment escapes found')
+          path.write_text(text[:start] + cleaned + text[end:])
+          PY
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-clean-payment-escapes.yml
+          git add lib/services/pb_service.dart
+          git diff --cached --check
+          git commit -m 'fix(user): clean payment paging analyzer escapes'
+          git push origin user-source
