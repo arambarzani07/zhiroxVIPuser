@@ -792,7 +792,6 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
   }) async {
     await ensureInitialized();
     const pageSize = 500;
-    var offset = 0;
     final records = <RecordModel>[];
 
     // Customer ownership must be resolved independently from the debts query.
@@ -819,37 +818,67 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
       profileOffset += pageSize;
     }
 
-    while (true) {
-      final data = await client
-          .from('debts')
-          .select()
-          .isFilter('deleted_at', null)
-          .order('created_at', ascending: false)
-          .range(offset, offset + pageSize - 1);
-      final rows = (data as List)
-          .whereType<Map>()
-          .map((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false);
+    final customerIds = profiles.keys.toList(growable: false);
+    const customerChunkSize = 50;
+    for (var chunkStart = 0;
+        chunkStart < customerIds.length;
+        chunkStart += customerChunkSize) {
+      final proposedEnd = chunkStart + customerChunkSize;
+      final chunkEnd = proposedEnd < customerIds.length
+          ? proposedEnd
+          : customerIds.length;
+      final chunk = customerIds.sublist(chunkStart, chunkEnd);
+      var debtOffset = 0;
+      while (true) {
+        dynamic query = client
+            .from('debts')
+            .select()
+            .inFilter('customer_id', chunk)
+            .isFilter('deleted_at', null);
+        if (fromDate != null) {
+          query = query.gte(
+            'created_at',
+            fromDate.toUtc().toIso8601String(),
+          );
+        }
+        if (toDate != null) {
+          query = query.lt(
+            'created_at',
+            toDate.toUtc().toIso8601String(),
+          );
+        }
+        final data = await query
+            .order('created_at', ascending: false)
+            .order('id', ascending: false)
+            .range(debtOffset, debtOffset + pageSize - 1);
+        final rows = (data as List)
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
 
-      for (final row in rows) {
-        final profile = profiles['${row['customer_id']}'];
-        if (profile == null) continue;
-        final created = DateTime.tryParse('${row['created_at']}');
-        if (created == null) continue;
-        if (fromDate != null && created.isBefore(fromDate)) continue;
-        if (toDate != null && !created.isBefore(toDate)) continue;
+        for (final row in rows) {
+          final profile = profiles['${row['customer_id']}'];
+          if (profile == null) continue;
+          final json = _debtRecordFromRaw(row).toJson();
+          json['expand'] = <String, dynamic>{
+            'customer': _profileRecord(profile).toJson(),
+          };
+          records.add(RecordModel.fromJson(json));
+        }
 
-        final json = _debtRecordFromRaw(row).toJson();
-        json['expand'] = <String, dynamic>{
-          'customer': _profileRecord(profile).toJson(),
-        };
-        records.add(RecordModel.fromJson(json));
+        if (rows.length < pageSize) break;
+        debtOffset += pageSize;
       }
-
-      if (rows.length < pageSize) break;
-      offset += pageSize;
     }
 
+    records.sort((a, b) {
+      final aCreated = DateTime.tryParse(a.getStringValue('created'));
+      final bCreated = DateTime.tryParse(b.getStringValue('created'));
+      if (aCreated == null && bCreated == null) return 0;
+      if (aCreated == null) return 1;
+      if (bCreated == null) return -1;
+      return bCreated.compareTo(aCreated);
+    });
     return records;
   }
 
