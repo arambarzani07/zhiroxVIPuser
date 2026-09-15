@@ -808,11 +808,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
         'yyyy-MM-dd',
       ).format(toDate.add(const Duration(days: 1)));
       dateFilter =
-          'created >= "$fromStr 00:00:00" && created <= "$toStr 00:00:00"';
+          'created >= "$fromStr 00:00:00" && created < "$toStr 00:00:00"';
     }
 
     try {
-      final allDebts = await PBService.getDebts(
+      final allDebts = await PBService.getAllAdminDebts(
         adminId: auth.userId,
         filter: dateFilter,
       );
