@@ -1,0 +1,110 @@
+name: One-time scope admin debts
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - '.github/workflows/one-time-scope-admin-debts.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: user-source
+          fetch-depth: 0
+      - name: Scope admin debt reports server-side
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text()
+          fn_start = text.index('  static Future<List<RecordModel>> getAllAdminDebts({')
+          fn_end = text.index('  static Future<Map<String, dynamic>> getDebtsPaginated({', fn_start)
+          block = text[fn_start:fn_end]
+          if ".inFilter('customer_id', chunk)" in block:
+              raise SystemExit('admin debt scope already optimized')
+          block = block.replace('    var offset = 0;\n', '', 1)
+          first_loop = block.index('    while (true) {')
+          second_loop = block.index('    while (true) {', first_loop + 1)
+          return_pos = block.index('    return records;', second_loop)
+          lines = [
+              "    final customerIds = profiles.keys.toList(growable: false);",
+              "    const customerChunkSize = 50;",
+              "    for (var chunkStart = 0;",
+              "        chunkStart < customerIds.length;",
+              "        chunkStart += customerChunkSize) {",
+              "      final proposedEnd = chunkStart + customerChunkSize;",
+              "      final chunkEnd = proposedEnd < customerIds.length",
+              "          ? proposedEnd",
+              "          : customerIds.length;",
+              "      final chunk = customerIds.sublist(chunkStart, chunkEnd);",
+              "      var debtOffset = 0;",
+              "      while (true) {",
+              "        dynamic query = client",
+              "            .from('debts')",
+              "            .select()",
+              "            .inFilter('customer_id', chunk)",
+              "            .isFilter('deleted_at', null);",
+              "        if (fromDate != null) {",
+              "          query = query.gte(",
+              "            'created_at',",
+              "            fromDate.toUtc().toIso8601String(),",
+              "          );",
+              "        }",
+              "        if (toDate != null) {",
+              "          query = query.lt(",
+              "            'created_at',",
+              "            toDate.toUtc().toIso8601String(),",
+              "          );",
+              "        }",
+              "        final data = await query",
+              "            .order('created_at', ascending: false)",
+              "            .order('id', ascending: false)",
+              "            .range(debtOffset, debtOffset + pageSize - 1);",
+              "        final rows = (data as List)",
+              "            .whereType<Map>()",
+              "            .map((row) => Map<String, dynamic>.from(row))",
+              "            .toList(growable: false);",
+              "",
+              "        for (final row in rows) {",
+              "          final profile = profiles['${row['customer_id']}'];",
+              "          if (profile == null) continue;",
+              "          final json = _debtRecordFromRaw(row).toJson();",
+              "          json['expand'] = <String, dynamic>{",
+              "            'customer': _profileRecord(profile).toJson(),",
+              "          };",
+              "          records.add(RecordModel.fromJson(json));",
+              "        }",
+              "",
+              "        if (rows.length < pageSize) break;",
+              "        debtOffset += pageSize;",
+              "      }",
+              "    }",
+              "",
+              "    records.sort((a, b) {",
+              "      final aCreated = DateTime.tryParse(a.getStringValue('created'));",
+              "      final bCreated = DateTime.tryParse(b.getStringValue('created'));",
+              "      if (aCreated == null && bCreated == null) return 0;",
+              "      if (aCreated == null) return 1;",
+              "      if (bCreated == null) return -1;",
+              "      return bCreated.compareTo(aCreated);",
+              "    });",
+              "",
+          ]
+          replacement = '\n'.join(lines)
+          block = block[:second_loop] + replacement + block[return_pos:]
+          path.write_text(text[:fn_start] + block + text[fn_end:])
+          PY
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-scope-admin-debts.yml
+          git add lib/services/pb_service.dart
+          git diff --cached --check
+          git commit -m 'perf(user): scope admin debt reports server-side'
+          git push origin user-source
