@@ -783,9 +783,6 @@ class PBService {
           .eq('admin_id', adminId)
           .order('id')
           .range(profileOffset, profileOffset + pageSize - 1);
-      if (profileData is! List) {
-        throw const FormatException('invalid admin profiles page');
-      }
       final profilePage = profileData
           .whereType<Map>()
           .map((row) => Map<String, dynamic>.from(row))
