@@ -1,0 +1,54 @@
+name: One-time owner sync formatting
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/one-time-owner-format-sync.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Normalize inserted Dart blocks
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text()
+
+          def indent_body(block: str) -> str:
+              lines = block.splitlines(keepends=True)
+              return lines[0] + ''.join(
+                  ('  ' + line) if line.strip() else line
+                  for line in lines[1:]
+              )
+
+          s = text.index('  static Future<Map<String, double>> getEmployeeStats(')
+          e = text.index('  static Future<Map<String, int>> getDebtCounts', s)
+          text = text[:s] + indent_body(text[s:e]) + text[e:]
+
+          s = text.index('  static Future<void> checkAndNotifyOverdueDebts() async {')
+          e = text.rfind('\n}')
+          text = text[:s] + indent_body(text[s:e]) + text[e:]
+
+          assert '\n    await ensureInitialized();\n' in text
+          assert '\n  static Future<double> _sumPagedAmounts({' in text
+          assert 'senderId: customerId' not in text
+          path.write_text(text)
+          PY
+      - name: Commit formatting and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-owner-format-sync.yml
+          git add lib/services/pb_service.dart
+          git commit -m 'fix(owner): normalize scalable data sync formatting'
+          git push origin owner-source
