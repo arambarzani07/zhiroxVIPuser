@@ -583,8 +583,8 @@ class PBService {
     return users;
   }
 
-  static Future<List<RecordModel>> getAllApprovedCustomers() {
-    return getUsers(role: 'customer', approved: true);
+  static Future<List<RecordModel>> getAllApprovedCustomers({required String adminId}) {
+    return getUsers(role: 'customer', approved: true, adminId: adminId);
   }
 
   static Future<RecordModel> getUser(String id) async {
