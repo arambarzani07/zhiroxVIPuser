@@ -1,0 +1,42 @@
+name: One-time scope admin debts
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - '.github/workflows/one-time-scope-admin-debts.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+      - name: Scope admin debt reports server-side
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import base64
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text()
+          start = text.index('  static Future<List<RecordModel>> getAllAdminDebts({')
+          end = text.index('  static Future<Map<String, dynamic>> getDebtsPaginated({', start)
+          replacement = base64.b64decode('ICBzdGF0aWMgRnV0dXJlPExpc3Q8UmVjb3JkTW9kZWw+PiBnZXRBbGxBZG1pbkRlYnRzKHsKICAgIHJlcXVpcmVkIFN0cmluZyBhZG1pbklkLAogICAgRGF0ZVRpbWU/IGZyb21EYXRlLAogICAgRGF0ZVRpbWU/IHRvRGF0ZSwKICB9KSBhc3luYyB7CiAgICBhd2FpdCBlbnN1cmVJbml0aWFsaXplZCgpOwogICAgY29uc3QgcGFnZVNpemUgPSA1MDA7CiAgICBmaW5hbCByZWNvcmRzID0gPFJlY29yZE1vZGVsPltdOwoKICAgIC8vIFJlc29sdmUgb25seSB0aGlzIGFkbWluJ3MgY3VzdG9tZXJzLCB0aGVuIHF1ZXJ5IGRlYnRzIGZvciB0aG9zZSBjdXN0b21lcgogICAgLy8gaWRzIGluIGJvdW5kZWQgY2h1bmtzIHNvIHJlcG9ydHMgbmV2ZXIgc2NhbiBvciBkb3dubG9hZCBvdGhlciB0ZW5hbnRzLgogICAgZmluYWwgcHJvZmlsZXMgPSA8U3RyaW5nLCBNYXA8U3RyaW5nLCBkeW5hbWljPj57fTsKICAgIHZhciBwcm9maWxlT2Zmc2V0ID0gMDsKICAgIHdoaWxlICh0cnVlKSB7CiAgICAgIGZpbmFsIHByb2ZpbGVEYXRhID0gYXdhaXQgY2xpZW50CiAgICAgICAgICAuZnJvbSgncHJvZmlsZXMnKQogICAgICAgICAgLnNlbGVjdCgpCiAgICAgICAgICAuZXEoJ2FkbWluX2lkJywgYWRtaW5JZCkKICAgICAgICAgIC5vcmRlcignaWQnKQogICAgICAgICAgLnJhbmdlKHByb2ZpbGVPZmZzZXQsIHByb2ZpbGVPZmZzZXQgKyBwYWdlU2l6ZSAtIDEpOwogICAgICBmaW5hbCBwcm9maWxlUGFnZSA9IHByb2ZpbGVEYXRhCiAgICAgICAgICAud2hlcmVUeXBlPE1hcD4oKQogICAgICAgICAgLm1hcCgocm93KSA9PiBNYXA8U3RyaW5nLCBkeW5hbWljPi5mcm9tKHJvdykpCiAgICAgICAgICAudG9MaXN0KGdyb3dhYmxlOiBmYWxzZSk7CiAgICAgIGZvciAoZmluYWwgcm93IGluIHByb2ZpbGVQYWdlKSB7CiAgICAgICAgZmluYWwgaWQgPSByb3dbJ2lkJ10/LnRvU3RyaW5nKCkgPz8gJyc7CiAgICAgICAgaWYgKGlkLmlzTm90RW1wdHkpIHByb2ZpbGVzW2lkXSA9IHJvdzsKICAgICAgfQogICAgICBpZiAocHJvZmlsZVBhZ2UubGVuZ3RoIDwgcGFnZVNpemUpIGJyZWFrOwogICAgICBwcm9maWxlT2Zmc2V0ICs9IHBhZ2VTaXplOwogICAgfQoKICAgIGZpbmFsIGN1c3RvbWVySWRzID0gcHJvZmlsZXMua2V5cy50b0xpc3QoZ3Jvd2FibGU6IGZhbHNlKTsKICAgIGNvbnN0IGN1c3RvbWVyQ2h1bmtTaXplID0gNTA7CiAgICBmb3IgKHZhciBjaHVua1N0YXJ0ID0gMDsKICAgICAgICBjaHVua1N0YXJ0IDwgY3VzdG9tZXJJZHMubGVuZ3RoOwogICAgICAgIGNodW5rU3RhcnQgKz0gY3VzdG9tZXJDaHVua1NpemUpIHsKICAgICAgZmluYWwgcHJvcG9zZWRFbmQgPSBjaHVua1N0YXJ0ICsgY3VzdG9tZXJDaHVua1NpemU7CiAgICAgIGZpbmFsIGNodW5rRW5kID0gcHJvcG9zZWRFbmQgPCBjdXN0b21lcklkcy5sZW5ndGgKICAgICAgICAgID8gcHJvcG9zZWRFbmQKICAgICAgICAgIDogY3VzdG9tZXJJZHMubGVuZ3RoOwogICAgICBmaW5hbCBjaHVuayA9IGN1c3RvbWVySWRzLnN1Ymxpc3QoY2h1bmtTdGFydCwgY2h1bmtFbmQpOwogICAgICB2YXIgZGVidE9mZnNldCA9IDA7CiAgICAgIHdoaWxlICh0cnVlKSB7CiAgICAgICAgZHluYW1pYyBxdWVyeSA9IGNsaWVudAogICAgICAgICAgICAuZnJvbSgnZGVidHMnKQogICAgICAgICAgICAuc2VsZWN0KCkKICAgICAgICAgICAgLmluRmlsdGVyKCdjdXN0b21lcl9pZCcsIGNodW5rKQogICAgICAgICAgICAuaXNGaWx0ZXIoJ2RlbGV0ZWRfYXQnLCBudWxsKTsKICAgICAgICBpZiAoZnJvbURhdGUgIT0gbnVsbCkgewogICAgICAgICAgcXVlcnkgPSBxdWVyeS5ndGUoCiAgICAgICAgICAgICdjcmVhdGVkX2F0JywKICAgICAgICAgICAgZnJvbURhdGUudG9VdGMoKS50b0lzbzg2MDFTdHJpbmcoKSwKICAgICAgICAgICk7CiAgICAgICAgfQogICAgICAgIGlmICh0b0RhdGUgIT0gbnVsbCkgewogICAgICAgICAgcXVlcnkgPSBxdWVyeS5sdCgKICAgICAgICAgICAgJ2NyZWF0ZWRfYXQnLAogICAgICAgICAgICB0b0RhdGUudG9VdGMoKS50b0lzbzg2MDFTdHJpbmcoKSwKICAgICAgICAgICk7CiAgICAgICAgfQogICAgICAgIGZpbmFsIGRhdGEgPSBhd2FpdCBxdWVyeQogICAgICAgICAgICAub3JkZXIoJ2NyZWF0ZWRfYXQnLCBhc2NlbmRpbmc6IGZhbHNlKQogICAgICAgICAgICAub3JkZXIoJ2lkJywgYXNjZW5kaW5nOiBmYWxzZSkKICAgICAgICAgICAgLnJhbmdlKGRlYnRPZmZzZXQsIGRlYnRPZmZzZXQgKyBwYWdlU2l6ZSAtIDEpOwogICAgICAgIGZpbmFsIHJvd3MgPSAoZGF0YSBhcyBMaXN0KQogICAgICAgICAgICAud2hlcmVUeXBlPE1hcD4oKQogICAgICAgICAgICAubWFwKChyb3cpID0+IE1hcDxTdHJpbmcsIGR5bmFtaWM+LmZyb20ocm93KSkKICAgICAgICAgICAgLnRvTGlzdChncm93YWJsZTogZmFsc2UpOwogICAgICAgIGZvciAoZmluYWwgcm93IGluIHJvd3MpIHsKICAgICAgICAgIGZpbmFsIHByb2ZpbGUgPSBwcm9maWxlc1snJHtyb3dbJ2N1c3RvbWVyX2lkJ119J107CiAgICAgICAgICBpZiAocHJvZmlsZSA9PSBudWxsKSBjb250aW51ZTsKICAgICAgICAgIGZpbmFsIGpzb24gPSBfZGVidFJlY29yZEZyb21SYXcocm93KS50b0pzb24oKTsKICAgICAgICAgIGpzb25bJ2V4cGFuZCddID0gPFN0cmluZywgZHluYW1pYz57CiAgICAgICAgICAgICdjdXN0b21lcic6IF9wcm9maWxlUmVjb3JkKHByb2ZpbGUpLnRvSnNvbigpLAogICAgICAgICAgfTsKICAgICAgICAgIHJlY29yZHMuYWRkKFJlY29yZE1vZGVsLmZyb21Kc29uKGpzb24pKTsKICAgICAgICB9CiAgICAgICAgaWYgKHJvd3MubGVuZ3RoIDwgcGFnZVNpemUpIGJyZWFrOwogICAgICAgIGRlYnRPZmZzZXQgKz0gcGFnZVNpemU7CiAgICAgIH0KICAgIH0KCiAgICByZWNvcmRzLnNvcnQoKGEsIGIpIHsKICAgICAgZmluYWwgYUNyZWF0ZWQgPSBEYXRlVGltZS50cnlQYXJzZShhLmdldFN0cmluZ1ZhbHVlKCdjcmVhdGVkJykpOwogICAgICBmaW5hbCBiQ3JlYXRlZCA9IERhdGVUaW1lLnRyeVBhcnNlKGIuZ2V0U3RyaW5nVmFsdWUoJ2NyZWF0ZWQnKSk7CiAgICAgIGlmIChhQ3JlYXRlZCA9PSBudWxsICYmIGJDcmVhdGVkID09IG51bGwpIHJldHVybiAwOwogICAgICBpZiAoYUNyZWF0ZWQgPT0gbnVsbCkgcmV0dXJuIDE7CiAgICAgIGlmIChiQ3JlYXRlZCA9PSBudWxsKSByZXR1cm4gLTE7CiAgICAgIHJldHVybiBiQ3JlYXRlZC5jb21wYXJlVG8oYUNyZWF0ZWQpOwogICAgfSk7CiAgICByZXR1cm4gcmVjb3JkczsKICB9Cgo=').decode()
+          block = text[start:end]
+          if ".inFilter('customer_id', chunk)" in block:
+              raise SystemExit('admin debt report already tenant-scoped')
+          path.write_text(text[:start] + replacement + text[end:])
+          PY
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-scope-admin-debts.yml
+          git add lib/services/pb_service.dart
+          git diff --cached --check
+          git commit -m 'perf(owner): scope admin debt reports server-side'
+          git push origin owner-source
