@@ -1038,7 +1038,6 @@ class PBService {
     });
   }
 
-  \
   static Future<List<RecordModel>> getFinancialEvents(String customerId) async {
     await ensureInitialized();
     const pageSize = 500;
