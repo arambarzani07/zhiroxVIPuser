@@ -27,6 +27,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   List<RecordModel> _historyDebts = [];
   bool _isLoading = true;
   bool _loadInFlight = false;
+  bool _printingStatement = false;
   String? _loadError;
   int _selectedTab = 0; // 0: Active, 1: History
   int _unreadCount = 0;
@@ -240,6 +241,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Future<void> _printStatement() async {
+    if (_printingStatement || !mounted) return;
     if (!_totalsComplete) {
       AppHelpers.showSnackBar(
         context,
@@ -257,8 +259,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       return;
     }
 
+    setState(() => _printingStatement = true);
     try {
-      AppHelpers.showLoadingDialog(context);
       final auth = context.read<AuthProvider>();
 
       // Fetch Admin Info
@@ -275,7 +277,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         adminName = 'Admin';
       }
 
-      if (mounted) Navigator.pop(context); // Close loading
+      if (!mounted) return;
 
       await PdfService.generateCustomerStatement(
         activeDebts: _activeDebts,
@@ -288,7 +290,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         totalPaid: _totalDebt - _totalRemaining,
       );
     } catch (e) {
-      if (mounted) Navigator.pop(context); // Close loading
       if (mounted) {
         AppHelpers.showSnackBar(
           context,
@@ -296,6 +297,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           isError: true,
         );
       }
+    } finally {
+      if (mounted) setState(() => _printingStatement = false);
     }
   }
 
@@ -517,7 +520,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: _activeDebts.isEmpty ? null : _printStatement,
+                        onPressed: _activeDebts.isEmpty || _printingStatement
+                            ? null
+                            : _printStatement,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.primary,
                           minimumSize: const Size.fromHeight(44),
@@ -527,9 +532,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                           ),
                         ),
                         icon: const Icon(Icons.description_outlined, size: 18),
-                        label: const Text(
-                          'کەشفی حیساب',
-                          style: TextStyle(fontWeight: FontWeight.w700),
+                        label: Text(
+                          _printingStatement ? 'ئامادەکردنی کەشف…' : 'کەشفی حیساب',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ),
