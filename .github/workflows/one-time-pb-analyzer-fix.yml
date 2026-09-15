@@ -1,0 +1,60 @@
+name: One-time PB analyzer fix
+
+on:
+  push:
+    branches:
+      - user-source
+    paths:
+      - .github/workflows/one-time-pb-analyzer-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove redundant typed profile-page check
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for branch in user-source owner-source; do
+            git fetch origin "$branch"
+            git checkout -B "$branch" "origin/$branch"
+            python3 - "$branch" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          branch = sys.argv[1]
+          path = Path('lib/services/pb_service.dart')
+          text = path.read_text(encoding='utf-8')
+          pattern = re.compile(
+              r"(?m)^[ \t]*if \(profileData is! List\) \{\n"
+              r"[ \t]*throw const FormatException\('invalid admin profiles page'\);\n"
+              r"[ \t]*\}\n"
+          )
+          updated, count = pattern.subn('', text, count=1)
+          if count == 1:
+              path.write_text(updated, encoding='utf-8')
+              print(f'{branch}: removed redundant profile-page type check')
+          elif "invalid admin profiles page" not in text:
+              print(f'{branch}: already fixed')
+          else:
+              raise SystemExit(f'{branch}: unexpected profile-page analyzer block')
+          PY
+
+            if ! git diff --quiet -- lib/services/pb_service.dart; then
+              git diff --check -- lib/services/pb_service.dart
+              git add lib/services/pb_service.dart
+              git commit -m "fix report pagination analyzer warning"
+              git push origin "HEAD:$branch"
+            fi
+          done
