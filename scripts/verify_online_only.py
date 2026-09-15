@@ -82,6 +82,12 @@ else:
 
 if 'PBService.getCustomerBalance' not in add_debt:
     fail('lib/screens/shared/add_debt_screen.dart: debt-limit flow must verify live customer balance')
+if 'PBService.getAllApprovedCustomers()' not in add_debt:
+    fail('lib/screens/shared/add_debt_screen.dart: customer picker must load every paginated customer page')
+
+employee_home = (LIB / 'screens/employee/employee_home_screen.dart').read_text(encoding='utf-8')
+if "label: const Text('زیادکردنی کڕیاری نوێ')" in employee_home:
+    fail('lib/screens/employee/employee_home_screen.dart: duplicate customer-list action must not return')
 
 
 # User-facing screens must not expose raw backend exception text, and debt detail
@@ -99,6 +105,17 @@ for marker in ('String? _loadError', 'AppHelpers.backendErrorMessage', 'دووب
         fail(f'lib/screens/shared/debt_detail_screen.dart: lifecycle/error marker missing: {marker}')
 
 dashboard_service = (LIB / 'services/pb_service.dart').read_text(encoding='utf-8')
+for marker in (
+    'getAllApprovedCustomers()',
+    '_sumPagedAmounts(',
+    "client.auth.currentUser?.id",
+    ".from('notifications')",
+    "senderId: senderId",
+):
+    if marker not in dashboard_service:
+        fail(f'lib/services/pb_service.dart: complete-data or overdue de-duplication marker missing: {marker}')
+if "senderId: customerId" in dashboard_service:
+    fail('lib/services/pb_service.dart: overdue notification sender must be the authenticated staff user')
 if "client.rpc('get_admin_dashboard_snapshot')" not in dashboard_service:
     fail('lib/services/pb_service.dart: dashboard must use the bounded snapshot RPC')
 if "pb.collection('payments').getList(filter: paymentFilter" in dashboard_service:
@@ -247,7 +264,7 @@ for marker_name in (
     '_buildPaymentDebtReference',
     '_buildReceiptPreview',
     'Image.network(',
-    'کەشف / هاوبەشکردن',
+    'کەشفی مامەڵەکان',
 ):
     if marker_name not in profile:
         fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat Phase 4 marker missing: {marker_name}')
