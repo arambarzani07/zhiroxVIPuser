@@ -76,6 +76,9 @@ jobs:
       - name: Verify Auto Update Center
         run: python3 scripts/verify_auto_update.py
 
+      - name: Verify customer cumulative payment totals
+        run: python3 scripts/verify_customer_payment_totals.py
+
       - name: Prepare independent iOS identity
         run: |
           sed -i '' "s/com.karoxghafoor.zhirox/${BUNDLE_ID}/g" ios/Runner.xcodeproj/project.pbxproj
