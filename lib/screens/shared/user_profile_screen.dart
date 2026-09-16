@@ -11,6 +11,7 @@ import 'package:zhirox/screens/shared/financial_payment_flow.dart';
 import 'package:zhirox/screens/shared/financial_document_actions.dart';
 
 import 'package:zhirox/services/pb_service.dart';
+import 'package:zhirox/services/financial_date_range_summary.dart';
 import 'package:zhirox/services/pdf_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -1238,15 +1239,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         return false;
       }
 
-      if (range != null) {
-        final day = DateTime(item.date.year, item.date.month, item.date.day);
-        final start = DateTime(
-          range.start.year,
-          range.start.month,
-          range.start.day,
-        );
-        final end = DateTime(range.end.year, range.end.month, range.end.day);
-        if (day.isBefore(start) || day.isAfter(end)) return false;
+      if (range != null &&
+          !isWithinFinancialDateRange(
+            item.date,
+            start: range.start,
+            end: range.end,
+          )) {
+        return false;
       }
 
       if (query.isEmpty) return true;
@@ -1377,7 +1376,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       saveText: 'هەڵبژاردن',
     );
     if (!mounted || picked == null) return;
-    setState(() => _financialDateRange = picked);
+    setState(() {
+      _financialDateRange = picked;
+      // A date range means "show the customer's financial activity in this
+      // period". Reset a previous single-kind chip so debt and payment rows
+      // are both visible immediately.
+      _financialTypeFilter = 'all';
+    });
     unawaited(_hydrateFinancialHistoryForFilters());
   }
 
@@ -1655,6 +1660,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final allTimelineItems = _buildTimelineItems();
     final timelineItems = _filterFinancialTimeline(allTimelineItems);
+    final selectedRange = _financialDateRange;
+    final rangeSummary = selectedRange == null
+        ? null
+        : summarizeFinancialDateRange(
+            entries: allTimelineItems.map(
+              (item) => FinancialRangeEntry(
+                kind: item.kind,
+                amount: item.isSystem
+                    ? 0
+                    : item.record.getDoubleValue('amount'),
+                date: item.date,
+              ),
+            ),
+            start: selectedRange.start,
+            end: selectedRange.end,
+          );
     // A partial newest-page window has no trustworthy opening ledger balance.
     // Hide per-row running balances until the complete history is hydrated.
     final runningBalances = _financialTimelineHasMore
@@ -1780,6 +1801,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     totalRemaining: totalRemaining,
                     totalPaid: totalPaid,
                   ),
+                  if (rangeSummary != null &&
+                      !waitingForFullFilterHistory) ...[
+                    const SizedBox(height: 10),
+                    _buildFinancialRangeSummary(rangeSummary, isDark),
+                  ],
                 ],
               ),
             ),
@@ -1855,6 +1881,96 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         },
         childCount: renderEntries.length + 2,
         addAutomaticKeepAlives: false,
+      ),
+    );
+  }
+
+  Widget _buildFinancialRangeSummary(
+    FinancialRangeSummary summary,
+    bool isDark,
+  ) {
+    final netColor = summary.net > 0 ? Colors.red : Colors.green;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: isDark ? 0.08 : 0.045),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.16),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.date_range_rounded,
+                size: 16,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'پوختەی مەودای هەڵبژێردراو',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              Text(
+                '${summary.transactionCount} مامەڵە',
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  color: isDark
+                      ? AppDarkColors.textSecondary
+                      : const Color(0xFF667085),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildChatSummaryValue(
+                label: 'قەرز',
+                value: summary.debtTotal,
+                color: Colors.orange,
+                isDark: isDark,
+              ),
+              const SizedBox(width: 6),
+              _buildChatSummaryValue(
+                label: 'پارەدانەوە',
+                value: summary.paymentTotal,
+                color: Colors.green,
+                isDark: isDark,
+              ),
+              const SizedBox(width: 6),
+              _buildChatSummaryValue(
+                label: 'جیاوازی',
+                value: summary.net,
+                color: netColor,
+                isDark: isDark,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${summary.debtCount} قەرز • ${summary.paymentCount} پارەدانەوە',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w600,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF98A2B3),
+            ),
+          ),
+        ],
       ),
     );
   }
