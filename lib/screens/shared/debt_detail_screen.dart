@@ -23,6 +23,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     with SingleTickerProviderStateMixin {
   RecordModel? _debt;
   List<RecordModel> _payments = [];
+  double? _customerTotalPaidIqd;
+  double? _customerTotalRemainingIqd;
   bool _isLoading = true;
   String? _loadError;
   final Set<String> _deletingPaymentIds = <String>{};
@@ -53,12 +55,27 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
 
     try {
       final debt = await PBService.getDebt(widget.debtId);
-      final payments = await PBService.getPayments(debtId: widget.debtId);
+      final paymentsFuture = PBService.getPayments(debtId: widget.debtId);
+      final customerId = debt.getStringValue('customer').trim();
+      Map<String, dynamic>? customerSnapshot;
+      if (customerId.isNotEmpty) {
+        try {
+          customerSnapshot = await PBService.getCustomerFinanceSnapshot(customerId);
+        } catch (_) {
+          // Debt details remain usable if the aggregate summary is temporarily
+          // unavailable; never replace it with a misleading debt-only total.
+        }
+      }
+      final payments = await paymentsFuture;
       if (!mounted) return;
 
       setState(() {
         _debt = debt;
         _payments = payments;
+        _customerTotalPaidIqd =
+            (customerSnapshot?['totalPaidIqd'] as num?)?.toDouble();
+        _customerTotalRemainingIqd =
+            (customerSnapshot?['totalRemainingIqd'] as num?)?.toDouble();
         _isLoading = false;
         _loadError = null;
       });
@@ -68,6 +85,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
       setState(() {
         _debt = null;
         _payments = [];
+        _customerTotalPaidIqd = null;
+        _customerTotalRemainingIqd = null;
         _isLoading = false;
         _loadError = AppHelpers.backendErrorMessage(
           e,
@@ -141,7 +160,6 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
       );
     }
 
-
     if (_loadError != null) {
       return Scaffold(
         backgroundColor: isDark
@@ -198,7 +216,6 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     final paidPercent = amount > 0 ? paid / amount : 0.0;
     final statusColor = AppHelpers.statusColor(status);
 
-    // Customer name
     final customer = AppHelpers.expandedRecord(_debt!, 'customer');
     final customerName = customer?.getStringValue('name') ?? '';
 
@@ -208,7 +225,6 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
           : const Color(0xFFF5F7FA),
       body: CustomScrollView(
         slivers: [
-          // ───── Compact Debt Header ─────
           SliverToBoxAdapter(
             child: Container(
               color: isDark ? AppDarkColors.background : const Color(0xFFF5F7FA),
@@ -422,7 +438,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                             Row(
                               children: [
                                 Text(
-                                  '${(paidPercent.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}% دراوە',
+                                  '${(paidPercent.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}% دراوەی ئەم قەرزە',
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.76),
                                     fontSize: 10.5,
@@ -431,7 +447,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'دراوە: ${AppHelpers.formatCurrency(paid)}',
+                                  'دراوەی ئەم قەرزە: ${AppHelpers.formatCurrency(paid)}',
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.76),
                                     fontSize: 10.5,
@@ -440,6 +456,59 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                                 ),
                               ],
                             ),
+                            if (_customerTotalPaidIqd != null) ...[
+                              const SizedBox(height: 5),
+                              Row(
+                                children: [
+                                  Text(
+                                    'کۆی هەموو پارەدانەوەکان',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.90),
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    AppHelpers.formatCurrency(
+                                      _customerTotalPaidIqd!,
+                                    ),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                    textDirection: TextDirection.ltr,
+                                  ),
+                                ],
+                              ),
+                            ],
+                            if (_customerTotalRemainingIqd != null) ...[
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  Text(
+                                    'کۆی قەرزی ماوەی کڕیار',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.78),
+                                      fontSize: 10.5,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    AppHelpers.formatCurrency(
+                                      _customerTotalRemainingIqd!,
+                                    ),
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.90),
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    textDirection: TextDirection.ltr,
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -450,7 +519,6 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
             ),
           ),
 
-          // ───── Compact Metadata ─────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
@@ -523,10 +591,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
             ),
           ),
 
-          // ───── Items List (if any) ─────
           ..._buildItemsSliver(),
 
-          // ───── Compact Payments Header ─────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
@@ -598,10 +664,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
             ),
           ),
 
-          // ───── Compact Receipt ─────
           ..._buildReceiptSliver(isDark),
 
-          // ───── Payment List ─────
           if (_payments.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -639,10 +703,6 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
       ),
     );
   }
-
-  // ═══════════════════════════════════════════
-  // ── Widgets ──
-  // ═══════════════════════════════════════════
 
   Widget _buildMetaCell(
     IconData icon,
@@ -1079,8 +1139,6 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     );
   }
 
-  // ───── Actions ─────
-
   Future<void> _confirmDeletePayment(RecordModel payment) async {
     final confirm = await AppHelpers.showConfirmDialog(
       context,
@@ -1153,5 +1211,4 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
       await _loadData();
     }
   }
-
 }
