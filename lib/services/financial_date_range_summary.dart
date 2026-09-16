@@ -1,3 +1,4 @@
+/// One debt or repayment entry used by the selected financial date range.
 class FinancialRangeEntry {
   final String kind;
   final double amount;
@@ -30,6 +31,7 @@ class FinancialRangeSummary {
 DateTime _dayOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 
+/// Compares calendar days only; both the start and end days are included.
 bool isWithinFinancialDateRange(
   DateTime value, {
   required DateTime start,
