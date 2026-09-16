@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:zhirox/services/dashboard_recent_activity.dart';
 import 'package:zhirox/services/supabase_compat.dart';
 import 'package:zhirox/utils/constants.dart';
 
@@ -1556,14 +1557,17 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     final raw = await client.rpc('get_admin_dashboard_snapshot');
     if (raw is! Map) throw const FormatException('invalid dashboard snapshot');
     final data = Map<String, dynamic>.from(raw);
-    final recent = <RecordModel>[];
+    final recentRows = <Map<String, dynamic>>[];
     if (data['recent_activity'] is List) {
       for (final item in data['recent_activity'] as List) {
         if (item is Map) {
-          recent.add(_dashboardDebtRecord(Map<String, dynamic>.from(item)));
+          recentRows.add(Map<String, dynamic>.from(item));
         }
       }
     }
+    final recent = filterAndSortRecentDashboardActivity(recentRows)
+        .map(_dashboardDebtRecord)
+        .toList(growable: false);
 
     double number(dynamic value) =>
         value is num ? value.toDouble() : double.tryParse('$value') ?? 0;

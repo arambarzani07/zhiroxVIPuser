@@ -405,13 +405,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final totalRemainingUsd = (_stats['totalRemainingUsd'] ?? 0).toDouble();
     final totalPaymentsUsd = (_stats['totalPaymentsUsd'] ?? 0).toDouble();
 
-    return RefreshIndicator(
-      onRefresh: _loadStats,
-      child: CustomScrollView(
-        slivers: [
-          // ───── Gradient Header with Stats ─────
-          SliverToBoxAdapter(
-            child: Container(
+    return Column(
+      children: [
+        // ───── Gradient Header with Stats (fixed) ─────
+        Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -633,93 +630,109 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
             ),
-          ),
 
 
-          // ───── Recent Activity Header ─────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.history,
-                    size: 18,
+        // ───── Recent Activity Header (fixed) ─────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+          child: Row(
+            children: [
+              Icon(
+                Icons.history,
+                size: 18,
+                color: isDark
+                    ? AppDarkColors.textSecondary
+                    : Colors.black54,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'چالاکییە تازەکان',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: isDark
+                      ? AppDarkColors.textPrimary
+                      : Colors.black87,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppDarkColors.cardBorder
+                      : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${recentActivity.length}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                     color: isDark
                         ? AppDarkColors.textSecondary
-                        : Colors.black54,
+                        : Colors.grey[600],
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'چالاکییە تازەکان',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: isDark
-                          ? AppDarkColors.textPrimary
-                          : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? AppDarkColors.cardBorder
-                          : Colors.grey[200],
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '${recentActivity.length}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: isDark
-                            ? AppDarkColors.textSecondary
-                            : Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+              const Spacer(),
+              Text(
+                '٢٤ کاتژمێر',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? AppDarkColors.textSecondary
+                      : const Color(0xFF98A2B3),
+                ),
+              ),
+            ],
           ),
+        ),
 
-          // ───── Recent Activity List ─────
-          if (recentActivity.isEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 30),
-                child: Column(
-                  children: [
-                    Icon(Icons.history_rounded, size: 32, color: Colors.grey[300]),
-                    const SizedBox(height: 12),
-                    Text(
-                      'هیچ چالاکیەک نییە',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) =>
-                      _buildActivityCard(recentActivity[index], index),
-                  childCount: recentActivity.length,
-                ),
-              ),
-            ),
-
-          const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
-        ],
-      ),
+        // Only this list scrolls; the dashboard header and section title stay fixed.
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _loadStats,
+            child: recentActivity.isEmpty
+                ? ListView(
+                    key: const PageStorageKey('dashboard-recent-activity-empty'),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(vertical: 30),
+                    children: [
+                      Icon(
+                        Icons.history_rounded,
+                        size: 32,
+                        color: Colors.grey[300],
+                      ),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Text(
+                          'لە ٢٤ کاتژمێری ڕابردوودا هیچ چالاکیەک نییە',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : ListView.builder(
+                    key: const PageStorageKey('dashboard-recent-activity-list'),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    itemCount: recentActivity.length,
+                    itemBuilder: (context, index) =>
+                        _buildActivityCard(recentActivity[index], index),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 
@@ -1330,18 +1343,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildActivityCard(RecordModel debt, int index) {
-    final customer = AppHelpers.expandedRecord(debt, 'customer');
-    final createdBy = AppHelpers.expandedRecord(debt, 'created_by');
+  Widget _buildActivityCard(RecordModel activity, int index) {
+    final customer = AppHelpers.expandedRecord(activity, 'customer');
+    final createdBy = AppHelpers.expandedRecord(activity, 'created_by');
 
-    final amount = debt.getDoubleValue('amount');
-    final date = debt.getStringValue('created');
+    final amount = activity.getDoubleValue('amount');
+    final date = activity.getStringValue('created');
+    final currency = activity.getStringValue('currency').isEmpty
+        ? 'IQD'
+        : activity.getStringValue('currency');
+    final eventType = activity.getStringValue('event_type');
+    final isPayment = eventType == 'payment';
     final isByEmployee = createdBy?.getStringValue('role') == 'employee';
     final creatorName = createdBy?.getStringValue('name') ?? '';
     final customerName =
         customer?.getStringValue('name') ?? 'کڕیار سڕدراوەتەوە';
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = isByEmployee ? Colors.orange : AppColors.primary;
+    final accent = isPayment ? Colors.green.shade600 : AppColors.primary;
+    final activityLabel = isPayment ? 'پارەدانەوە' : 'قەرز';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1362,11 +1381,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
             height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.08),
+              color: accent.withValues(alpha: 0.09),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
-              isByEmployee ? Icons.badge_outlined : Icons.receipt_long_outlined,
+              isPayment
+                  ? Icons.payments_outlined
+                  : Icons.receipt_long_outlined,
               color: accent,
               size: 18,
             ),
@@ -1376,17 +1397,42 @@ class _AdminDashboardState extends State<AdminDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  customerName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: isDark
-                        ? AppDarkColors.textPrimary
-                        : const Color(0xFF344054),
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        customerName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? AppDarkColors.textPrimary
+                              : const Color(0xFF344054),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.09),
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: Text(
+                        activityLabel,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -1408,13 +1454,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           const SizedBox(width: 10),
           Text(
-            AppHelpers.formatCurrency(amount),
+            AppHelpers.formatCurrencyWithType(
+              amount,
+              currency,
+              showConversion: false,
+            ),
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
-              color: isDark
-                  ? AppDarkColors.textPrimary
-                  : const Color(0xFF101828),
+              color: isPayment
+                  ? accent
+                  : (isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF101828)),
             ),
             textDirection: TextDirection.ltr,
           ),
@@ -1422,4 +1474,5 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     );
   }
+
 }
