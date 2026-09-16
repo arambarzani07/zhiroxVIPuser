@@ -266,7 +266,9 @@ for marker_name in (
     '_buildPaymentDebtReference',
     '_buildReceiptPreview',
     'Image.network(',
-    'کەشفی مامەڵەکان',
+    'گەڕان و فلتەر',
+    'countActiveFinancialFilters',
+    'shouldExpandFinancialFilters',
 ):
     if marker_name not in profile:
         fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat Phase 4 marker missing: {marker_name}')
@@ -461,7 +463,9 @@ for marker in ('PBService.getCustomerFinanceSnapshot(auth.userId)', '_totalsComp
 for marker_name in (
     'ماوەی پێش پارەدان',
     'ماوەی دوای پارەدان',
-    'پشتڕاستە — تۆمار بکە',
+    'پێداچوونەوەی کۆتایی',
+    '_buildPaymentProgress',
+    '_buildInlineReview',
     'PBService.createPayment(',
 ):
     if marker_name not in payment_flow:
