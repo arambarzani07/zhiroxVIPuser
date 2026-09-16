@@ -1928,45 +1928,85 @@ class PdfService {
             pw.SizedBox(height: 16),
 
             // ══════════════════════════════════════════════
-            // SUMMARY - Total Debt Only
+            // CUSTOMER-WIDE SUMMARY
             // ══════════════════════════════════════════════
-            pw.Container(
-              width: double.infinity,
-              padding: const pw.EdgeInsets.symmetric(
-                vertical: 14,
-                horizontal: 16,
-              ),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(
-                  color: PdfColor.fromHex('#c62828'),
-                  width: 1.5,
+            pw.Row(
+              children: [
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColors.blue400),
+                      borderRadius: pw.BorderRadius.circular(4),
+                      color: PdfColor.fromHex('#e8eaf6'),
+                    ),
+                    child: pw.Column(
+                      children: [
+                        pw.Text(
+                          _reshape('کۆی هەموو قەرزەکان'),
+                          style: pw.TextStyle(font: ttf, fontSize: 9, color: PdfColors.blue800),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          _reshape('د.ع ${formatter.format(totalDebt)}'),
+                          style: pw.TextStyle(font: ttfBold, fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800),
+                          textDirection: pw.TextDirection.ltr,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                borderRadius: pw.BorderRadius.circular(4),
-                color: PdfColor.fromHex('#ffebee'),
-              ),
-              child: pw.Column(
-                children: [
-                  pw.Text(
-                    _reshape('کۆی گشتی قەرز'),
-                    style: pw.TextStyle(
-                      font: ttf,
-                      fontSize: 11,
-                      color: PdfColor.fromHex('#c62828'),
+                pw.SizedBox(width: 8),
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColors.green400),
+                      borderRadius: pw.BorderRadius.circular(4),
+                      color: PdfColor.fromHex('#e8f5e9'),
+                    ),
+                    child: pw.Column(
+                      children: [
+                        pw.Text(
+                          _reshape('کۆی هەموو پارەدانەوەکان'),
+                          style: pw.TextStyle(font: ttf, fontSize: 9, color: PdfColors.green800),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          _reshape('د.ع ${formatter.format(totalPaid)}'),
+                          style: pw.TextStyle(font: ttfBold, fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColors.green800),
+                          textDirection: pw.TextDirection.ltr,
+                        ),
+                      ],
                     ),
                   ),
-                  pw.SizedBox(height: 6),
-                  pw.Text(
-                    _reshape('د.ع ${formatter.format(totalRemaining)}'),
-                    style: pw.TextStyle(
-                      font: ttfBold,
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex('#c62828'),
+                ),
+                pw.SizedBox(width: 8),
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColor.fromHex('#c62828'), width: 1.5),
+                      borderRadius: pw.BorderRadius.circular(4),
+                      color: PdfColor.fromHex('#ffebee'),
                     ),
-                    textDirection: pw.TextDirection.ltr,
+                    child: pw.Column(
+                      children: [
+                        pw.Text(
+                          _reshape('کۆی قەرزی ماوە'),
+                          style: pw.TextStyle(font: ttf, fontSize: 9, color: PdfColor.fromHex('#c62828')),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          _reshape('د.ع ${formatter.format(totalRemaining)}'),
+                          style: pw.TextStyle(font: ttfBold, fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#c62828')),
+                          textDirection: pw.TextDirection.ltr,
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
 
             pw.SizedBox(height: 32),

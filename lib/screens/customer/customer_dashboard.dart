@@ -46,6 +46,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   // Stats (calculated from ALL debts, not just loaded ones)
   double _totalDebtAmount = 0;
   double _totalRemainingAmount = 0;
+  double _totalPaidAmount = 0;
   bool _totalsComplete = true;
   String _marketName = '';
 
@@ -59,6 +60,8 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   double get _totalRemaining => _totalRemainingAmount;
 
   double get _totalDebt => _totalDebtAmount;
+
+  double get _totalPaid => _totalPaidAmount;
 
   @override
   void initState() {
@@ -182,6 +185,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       setState(() {
         _totalDebtAmount = snapshot['totalDebtIqd'] as double;
         _totalRemainingAmount = snapshot['totalRemainingIqd'] as double;
+        _totalPaidAmount = snapshot['totalPaidIqd'] as double;
         _totalsComplete = snapshot['complete'] == true;
         _activeDebts = snapshot['openDebts'] as List<RecordModel>;
         _historyDebts = historyResult['items'] as List<RecordModel>;
@@ -284,7 +288,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         adminPhone: adminPhone,
         totalDebt: _totalDebt,
         totalRemaining: _totalRemaining,
-        totalPaid: _totalDebt - _totalRemaining,
+        totalPaid: _totalPaid,
       );
     } catch (e) {
       if (mounted) {
@@ -302,7 +306,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
-    final totalPaid = _totalDebt - _totalRemaining;
+    final totalPaid = _totalPaid;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? AppDarkColors.card : Colors.white;
     final border = isDark ? AppDarkColors.cardBorder : const Color(0xFFEAECF0);
