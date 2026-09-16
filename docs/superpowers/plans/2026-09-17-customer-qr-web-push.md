@@ -2,149 +2,226 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add secure customer-specific QR linking and Web Push notifications for newly created debts and newly recorded payments without Viber, Telegram, SMS, email, KYC, or a third-party messaging provider.
+**Goal:** Add secure customer-specific QR linking and Web Push notifications for newly created debts and newly recorded payments without Viber, SMS, email, KYC, or a third-party messaging provider.
 
-**Architecture:** Supabase remains the trusted backend. Staff generate short-lived one-time customer QR links through an authenticated Edge Function; a public token-gated PWA endpoint registers browser Push API subscriptions; financial create paths enqueue immutable events into a database outbox; a scheduled Edge Function fans those events out to linked devices with VAPID Web Push, idempotency, retry, and audit logging. Flutter only manages status/QR/revoke UI and never receives server secrets.
+**Architecture:** Supabase stays authoritative. Staff create 15-minute one-time QR links through an authenticated Edge Function; customers open a token-gated PWA that registers a Push API subscription; successful live debt/payment paths enqueue immutable outbox events; a scheduled Deno Edge Function delivers them with VAPID, retry, idempotency, and audit logging. Flutter only manages QR/status/revoke UI and never receives backend secrets.
 
-**Tech Stack:** Flutter/Dart 3.10+, `supabase_flutter`, PostgreSQL/RLS/PLpgSQL, Supabase Edge Functions on Deno, `npm:web-push@3.6.7`, `qr_flutter`, Web Push API, Service Worker API, GitHub Actions.
+**Tech Stack:** Flutter/Dart 3.10+, `supabase_flutter`, PostgreSQL/PLpgSQL/RLS, Supabase Edge Functions (Deno), `npm:web-push@3.6.7`, `qr_flutter`, Push API, Service Worker API, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-09-17-customer-qr-web-push-design.md`
 
 ## Global Constraints
 
-- Work only on branch `user-source`.
-- QR link lifetime is exactly 15 minutes.
-- QR links are one-time use and the database stores only a SHA-256 hash of the raw token.
-- New-debt and new-payment are the only Web Push event types in the first release.
-- Debt/payment edits, deletions, due reminders, imports, restores, legacy sync, marketing, Viber, SMS, email, and new Telegram behavior must not produce Web Push events.
-- Existing in-app/local notifications and existing Telegram behavior must remain unchanged.
-- A successful financial transaction must never be rolled back or surfaced as failed because Web Push enqueue or delivery failed.
-- One customer may link multiple devices; one browser push endpoint may have only one active customer association.
-- `market_id` in the new push tables means the tenant admin profile UUID used by the existing `admin_id` tenancy model.
-- Employees may manage customer push links only when `can_send_notifications = true`; active approved admins may always manage them.
-- VAPID private key, worker secret, rate-limit salt, subscription `p256dh`, subscription `auth`, and device-secret hashes stay server-side.
-- iPhone/iPad onboarding must support the Home Screen web-app requirement before requesting notification permission.
-- Retry schedule per device is fixed to immediate, +1 minute, +5 minutes, +30 minutes, +2 hours, then terminal failure.
-- Notification click opens the generic ZHIROX Notifications PWA landing page; it must not place a raw `customer_id` in the URL.
-- CI must preserve the existing online-only, FIB payment, auto-update, payment-total, Flutter analyze/test, and iOS unsigned IPA checks.
+- Work only on `user-source`.
+- QR lifetime is exactly 15 minutes; raw token is 32 random bytes encoded as 64 lowercase hex characters.
+- Store only SHA-256 token hashes in PostgreSQL.
+- Only `debt_created` and `payment_created` generate Web Push.
+- Debt/payment edit/delete, due reminders, imports, restore flows, legacy sync, broadcasts, and marketing never generate Web Push.
+- Existing in-app/local notifications and existing Telegram behavior stay unchanged.
+- Push enqueue or delivery failure never turns a successful financial transaction into a failure.
+- One customer may link multiple devices; one active push endpoint belongs to only one customer at a time.
+- `market_id` in push tables is the existing tenant admin profile UUID.
+- Active approved admins may manage customer push; employees need `can_send_notifications = true`.
+- VAPID private key, worker secret, rate-limit salt, subscription key material, and device unlink secret hashes remain server-side.
+- iPhone/iPad onboarding must support Add to Home Screen before permission is requested.
+- Retry sequence per device: initial send immediately; after failed attempts 1,2,3,4 wait 60s, 300s, 1800s, 7200s; after failed attempt 5 mark terminal failure.
+- Notification click opens the generic ZHIROX Notifications PWA route and never exposes `customer_id`.
+- CI must preserve all existing policy checks, Flutter analyze/tests, and the unsigned iOS IPA release pipeline.
 
 ---
 
-## File Structure Map
+## File Structure
 
-### New backend files
-- `supabase/migrations/20260917013000_customer_qr_web_push.sql` — tables, indexes, RLS, grants, push management RPCs, outbox claim/retry helpers, rate limiting.
-- `supabase/tests/customer_qr_web_push_regression.sql` — database security, tenancy, token, outbox, and delivery invariants.
-- `supabase/functions/_shared/customer_push/crypto.ts` — token/hash helpers.
-- `supabase/functions/_shared/customer_push/payload.ts` — notification copy and pure retry/status classification.
-- `supabase/functions/_shared/customer_push/payload_test.ts` — Deno unit tests for pure delivery logic.
-- `supabase/functions/customer-push-admin/index.ts` — authenticated create-link/status/revoke-all API.
-- `supabase/functions/customer-push/index.ts` — public onboarding HTML/PWA manifest/service worker plus token validation/subscribe/unsubscribe API.
-- `supabase/functions/customer-push-worker/index.ts` — privileged outbox worker and live-debt reconciliation.
-- `supabase/functions/customer-push-events/index.ts` — authenticated live debt enqueue endpoint.
+### Create
+- `supabase/migrations/20260917013000_customer_qr_web_push.sql`
+- `supabase/tests/customer_qr_web_push_regression.sql`
+- `supabase/functions/_shared/customer_push/crypto.ts`
+- `supabase/functions/_shared/customer_push/payload.ts`
+- `supabase/functions/_shared/customer_push/payload_test.ts`
+- `supabase/functions/customer-push-admin/index.ts`
+- `supabase/functions/customer-push-admin/index_test.ts`
+- `supabase/functions/customer-push/index.ts`
+- `supabase/functions/customer-push/index_test.ts`
+- `supabase/functions/customer-push-worker/index.ts`
+- `supabase/functions/customer-push-worker/index_test.ts`
+- `supabase/functions/customer-push-events/index.ts`
+- `supabase/functions/customer-push-events/index_test.ts`
+- `supabase/functions/record-payment/index_test.ts`
+- `lib/services/customer_push_service.dart`
+- `lib/widgets/customer_push_card.dart`
+- `test/customer_push_service_test.dart`
+- `test/customer_push_card_test.dart`
+- `scripts/verify_customer_push.py`
 
-### New Flutter files
-- `lib/services/customer_push_service.dart` — typed gateway for admin push APIs.
-- `lib/widgets/customer_push_card.dart` — customer profile status, QR, and revoke UI.
-- `test/customer_push_service_test.dart` — response parsing/domain tests.
-- `test/customer_push_card_test.dart` — widget behavior with fake gateway.
-
-### Existing files modified
-- `supabase/functions/record-payment/index.ts` — enqueue one logical `payment_created` event after successful payment commit.
-- `supabase/config.toml` — mark public onboarding and worker functions as `verify_jwt = false` while preserving application-level guards.
-- `lib/services/pb_service.dart` — enqueue a live debt event after a successful debt insert without making the financial save depend on push.
-- `lib/screens/shared/user_profile_screen.dart` — mount `CustomerPushCard` for authorized staff viewing a customer.
-- `pubspec.yaml` / `pubspec.lock` — add `qr_flutter`.
-- `scripts/verify_customer_push.py` — static safety checks for secrets, function config, and event scope.
-- `.github/workflows/ios-unsigned-ipa.yml` — run customer-push verification and Deno unit tests before Flutter analyze/build.
+### Modify
+- `supabase/functions/record-payment/index.ts`
+- `supabase/config.toml`
+- `lib/services/pb_service.dart`
+- `lib/screens/shared/user_profile_screen.dart`
+- `pubspec.yaml`
+- `pubspec.lock`
+- `.github/workflows/ios-unsigned-ipa.yml`
 
 ---
 
-### Task 1: Database schema, tenancy, token redemption, and outbox primitives
+### Task 1: Database model, RPC boundary, and regression tests
 
 **Files:**
 - Create: `supabase/migrations/20260917013000_customer_qr_web_push.sql`
 - Create: `supabase/tests/customer_qr_web_push_regression.sql`
 
-**Interfaces:**
-- Consumes: existing `public.profiles`, `public.debts`, `public.payments`, `public.legacy_import_links`, `public.daftar_sync_seen`.
-- Produces:
-  - `public.customer_push_link_tokens`
-  - `public.customer_push_subscriptions`
-  - `public.notification_outbox`
-  - `public.notification_deliveries`
-  - `public.customer_push_rate_limits`
-  - `public.manage_customer_push_link(p_actor uuid, p_customer uuid, p_token_hash text, p_expires_at timestamptz) returns jsonb`
-  - `public.customer_push_status_service(p_actor uuid, p_customer uuid) returns jsonb`
-  - `public.revoke_customer_push_subscriptions_service(p_actor uuid, p_customer uuid) returns integer`
-  - `public.redeem_customer_push_subscription_service(p_token_hash text, p_endpoint text, p_p256dh text, p_auth text, p_device_secret_hash text, p_user_agent text, p_platform text) returns jsonb`
-  - `public.unsubscribe_customer_push_subscription_service(p_endpoint text, p_device_secret_hash text) returns boolean`
-  - `public.consume_customer_push_rate_limit(p_key_hash text, p_limit integer, p_window_seconds integer) returns boolean`
-  - `public.enqueue_customer_push_event_service(p_market_id uuid, p_customer_id uuid, p_event_type text, p_event_record_id uuid, p_idempotency_key text, p_payload jsonb) returns uuid`
-  - `public.claim_customer_push_outbox(p_limit integer) returns setof public.notification_outbox`
+**Interfaces produced:**
 
-- [ ] **Step 1: Write the failing SQL regression test**
+```text
+public.manage_customer_push_link(uuid, uuid, text, timestamptz) -> jsonb
+public.customer_push_status_service(uuid, uuid) -> jsonb
+public.revoke_customer_push_subscriptions_service(uuid, uuid) -> integer
+public.inspect_customer_push_link_service(text) -> jsonb
+public.redeem_customer_push_subscription_service(text,text,text,text,text,text,text) -> jsonb
+public.unsubscribe_customer_push_subscription_service(text,text) -> boolean
+public.consume_customer_push_rate_limit(text,integer,integer) -> boolean
+public.enqueue_customer_push_event_service(uuid,uuid,text,uuid,text,jsonb) -> uuid
+public.claim_customer_push_outbox(integer) -> setof notification_outbox
+```
 
-Create `supabase/tests/customer_qr_web_push_regression.sql` with explicit assertions for the new objects before the migration exists:
+- [ ] **Step 1: Write the failing database regression test**
+
+Use the existing repository style: a transaction plus a `do` block that raises on invariant failure.
 
 ```sql
 begin;
 
-select plan(14);
+do $test$
+declare
+  v_admin_a uuid := '00000000-0000-0000-0000-000000000101';
+  v_admin_b uuid := '00000000-0000-0000-0000-000000000201';
+  v_employee_ok uuid := '00000000-0000-0000-0000-000000000111';
+  v_employee_no uuid := '00000000-0000-0000-0000-000000000112';
+  v_customer_a uuid := '00000000-0000-0000-0000-000000000121';
+  v_customer_b uuid := '00000000-0000-0000-0000-000000000221';
+  v_outbox_a uuid;
+  v_outbox_b uuid;
+  v_sub uuid;
+begin
+  if to_regclass('public.customer_push_link_tokens') is null
+     or to_regclass('public.customer_push_subscriptions') is null
+     or to_regclass('public.notification_outbox') is null
+     or to_regclass('public.notification_deliveries') is null
+     or to_regclass('public.customer_push_rate_limits') is null then
+    raise exception 'customer push schema missing';
+  end if;
 
-select has_table('public', 'customer_push_link_tokens', 'push link token table exists');
-select has_table('public', 'customer_push_subscriptions', 'push subscriptions table exists');
-select has_table('public', 'notification_outbox', 'notification outbox exists');
-select has_table('public', 'notification_deliveries', 'notification deliveries exists');
-select has_table('public', 'customer_push_rate_limits', 'public rate limit table exists');
+  insert into public.profiles(id,name,phone,role,market_name,admin_id,created_by,approved,active,can_send_notifications)
+  values
+    (v_admin_a,'Admin A','push-admin-a','admin','Market A',null,v_admin_a,true,true,true),
+    (v_admin_b,'Admin B','push-admin-b','admin','Market B',null,v_admin_b,true,true,true),
+    (v_employee_ok,'Employee OK','push-emp-ok','employee','',v_admin_a,v_admin_a,true,true,true),
+    (v_employee_no,'Employee NO','push-emp-no','employee','',v_admin_a,v_admin_a,true,true,false),
+    (v_customer_a,'Customer A','push-cust-a','customer','',v_admin_a,v_admin_a,true,true,false),
+    (v_customer_b,'Customer B','push-cust-b','customer','',v_admin_b,v_admin_b,true,true,false);
 
-select has_function(
-  'public',
-  'manage_customer_push_link',
-  array['uuid','uuid','text','timestamp with time zone'],
-  'push link management RPC exists'
-);
-select has_function(
-  'public',
-  'redeem_customer_push_subscription_service',
-  array['text','text','text','text','text','text','text'],
-  'subscription redemption RPC exists'
-);
-select has_function(
-  'public',
-  'enqueue_customer_push_event_service',
-  array['uuid','uuid','text','uuid','text','jsonb'],
-  'outbox enqueue RPC exists'
-);
+  perform public.manage_customer_push_link(v_admin_a, v_customer_a, repeat('a',64), now()+interval '15 minutes');
+  perform public.manage_customer_push_link(v_employee_ok, v_customer_a, repeat('b',64), now()+interval '15 minutes');
 
-select col_is_pk('public', 'customer_push_link_tokens', 'id', 'token row has primary key');
-select col_not_null('public', 'customer_push_link_tokens', 'token_hash', 'token hash is required');
-select col_not_null('public', 'customer_push_subscriptions', 'device_secret_hash', 'device unlink secret hash is required');
-select col_not_null('public', 'notification_outbox', 'idempotency_key', 'outbox key is required');
-select col_not_null('public', 'notification_deliveries', 'subscription_id', 'delivery subscription is required');
-select table_privs_are(
-  'public', 'customer_push_subscriptions', 'authenticated', array[]::text[],
-  'ordinary authenticated clients have no direct subscription-table privileges'
-);
+  begin
+    perform public.manage_customer_push_link(v_employee_no, v_customer_a, repeat('c',64), now()+interval '15 minutes');
+    raise exception 'employee without notification permission was allowed';
+  exception when insufficient_privilege then null;
+  end;
 
-select * from finish();
+  begin
+    perform public.manage_customer_push_link(v_admin_a, v_customer_b, repeat('d',64), now()+interval '15 minutes');
+    raise exception 'cross-tenant push link was allowed';
+  exception when insufficient_privilege then null;
+  end;
+
+  perform public.manage_customer_push_link(v_admin_a, v_customer_a, repeat('e',64), now()+interval '15 minutes');
+  perform public.redeem_customer_push_subscription_service(
+    repeat('e',64),'https://push.example/device-a','p256-a','auth-a',repeat('1',64),'ua','ios'
+  );
+
+  begin
+    perform public.redeem_customer_push_subscription_service(
+      repeat('e',64),'https://push.example/device-b','p256-b','auth-b',repeat('2',64),'ua','ios'
+    );
+    raise exception 'used token was accepted twice';
+  exception when no_data_found then null;
+  end;
+
+  perform public.manage_customer_push_link(v_admin_a, v_customer_a, repeat('f',64), now()-interval '1 minute');
+  begin
+    perform public.redeem_customer_push_subscription_service(
+      repeat('f',64),'https://push.example/device-c','p256-c','auth-c',repeat('3',64),'ua','android'
+    );
+    raise exception 'expired token was accepted';
+  exception when no_data_found then null;
+  end;
+
+  select id into v_sub
+  from public.customer_push_subscriptions
+  where endpoint='https://push.example/device-a' and active=true;
+
+  v_outbox_a := public.enqueue_customer_push_event_service(
+    v_admin_a,v_customer_a,'debt_created','00000000-0000-0000-0000-000000000301',
+    'debt_created:00000000-0000-0000-0000-000000000301',
+    '{"amount":1000,"currency":"IQD","remaining_iqd":1000,"market_name":"Market A","occurred_at":"2026-09-17T00:00:00Z"}'::jsonb
+  );
+  v_outbox_b := public.enqueue_customer_push_event_service(
+    v_admin_a,v_customer_a,'debt_created','00000000-0000-0000-0000-000000000301',
+    'debt_created:00000000-0000-0000-0000-000000000301',
+    '{"amount":9999,"currency":"IQD","remaining_iqd":9999,"market_name":"changed","occurred_at":"2026-09-17T00:00:00Z"}'::jsonb
+  );
+
+  if v_outbox_a <> v_outbox_b then
+    raise exception 'idempotent enqueue returned different event ids';
+  end if;
+  if (select payload->>'amount' from public.notification_outbox where id=v_outbox_a) <> '1000' then
+    raise exception 'duplicate enqueue mutated immutable payload';
+  end if;
+
+  begin
+    perform public.enqueue_customer_push_event_service(
+      v_admin_a,v_customer_a,'debt_updated','00000000-0000-0000-0000-000000000302',
+      'debt_updated:00000000-0000-0000-0000-000000000302','{}'::jsonb
+    );
+    raise exception 'unsupported event type accepted';
+  exception when check_violation then null;
+  end;
+
+  insert into public.notification_deliveries(outbox_id,subscription_id) values(v_outbox_a,v_sub);
+  begin
+    insert into public.notification_deliveries(outbox_id,subscription_id) values(v_outbox_a,v_sub);
+    raise exception 'duplicate delivery pair accepted';
+  exception when unique_violation then null;
+  end;
+
+  if has_table_privilege('authenticated','public.customer_push_subscriptions','SELECT')
+     or has_table_privilege('authenticated','public.customer_push_subscriptions','INSERT')
+     or has_table_privilege('anon','public.customer_push_subscriptions','SELECT') then
+    raise exception 'client retained direct subscription table privilege';
+  end if;
+end
+$test$;
+
 rollback;
+select 'customer QR web push regression passed' as result;
 ```
 
-- [ ] **Step 2: Run the SQL test and verify RED**
-
-Run against a disposable/local Supabase database:
+- [ ] **Step 2: Run the regression test and verify RED**
 
 ```bash
+supabase start
 supabase db reset
-psql "$LOCAL_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/customer_qr_web_push_regression.sql
+psql postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+  -v ON_ERROR_STOP=1 \
+  -f supabase/tests/customer_qr_web_push_regression.sql
 ```
 
-Expected: FAIL because the five tables and RPCs do not exist.
+Expected: non-zero exit because the new push tables/RPCs do not exist.
 
-- [ ] **Step 3: Implement the schema and hard security boundary**
+- [ ] **Step 3: Implement the migration**
 
-Create the migration with these concrete table rules:
+Create these tables with RLS enabled and no direct `anon`/`authenticated` privileges:
 
 ```sql
 create table public.customer_push_link_tokens (
@@ -176,10 +253,8 @@ create table public.customer_push_subscriptions (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create unique index customer_push_active_endpoint_uq
-  on public.customer_push_subscriptions(endpoint)
-  where active = true;
+  on public.customer_push_subscriptions(endpoint) where active=true;
 
 create table public.notification_outbox (
   id uuid primary key default gen_random_uuid(),
@@ -189,10 +264,10 @@ create table public.notification_outbox (
   event_record_id uuid not null,
   idempotency_key text not null unique,
   payload jsonb not null,
-  status text not null default 'pending'
-    check (status in ('pending','processing','completed','failed')),
+  status text not null default 'pending' check (status in ('pending','processing','completed','failed')),
   attempt_count integer not null default 0 check (attempt_count >= 0),
   next_attempt_at timestamptz not null default now(),
+  fanout_at timestamptz,
   last_error text,
   created_at timestamptz not null default now(),
   completed_at timestamptz
@@ -202,8 +277,7 @@ create table public.notification_deliveries (
   id uuid primary key default gen_random_uuid(),
   outbox_id uuid not null references public.notification_outbox(id) on delete cascade,
   subscription_id uuid not null references public.customer_push_subscriptions(id) on delete cascade,
-  status text not null default 'pending'
-    check (status in ('pending','sent','failed','expired')),
+  status text not null default 'pending' check (status in ('pending','sent','failed','expired')),
   attempt_count integer not null default 0 check (attempt_count >= 0),
   provider_status integer,
   last_error text,
@@ -211,7 +285,7 @@ create table public.notification_deliveries (
   sent_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (outbox_id, subscription_id)
+  unique(outbox_id,subscription_id)
 );
 
 create table public.customer_push_rate_limits (
@@ -222,52 +296,70 @@ create table public.customer_push_rate_limits (
 );
 ```
 
-Enable RLS on all five tables, revoke all table privileges from `public`, `anon`, and `authenticated`, and grant only `service_role` the table privileges the Edge Functions need. Keep all service RPCs `security definer set search_path = ''`, revoke execution from `public/anon/authenticated`, and grant execution only to `service_role`.
+Every service RPC must be `security definer set search_path=''`, revoked from `public, anon, authenticated`, and granted to `service_role` only.
 
-Use one shared actor-scope rule in each staff RPC: active approved admin is allowed for its own tenant; active approved employee is allowed only when `admin_id = market_id` and `can_send_notifications = true`.
-
-`manage_customer_push_link` must revoke previous unused/unexpired links for the same `market_id/customer_id`, then insert exactly the provided hash and expiry. It returns only `{customer_id, market_id, expires_at}`.
-
-`redeem_customer_push_subscription_service` must lock the token row with `for update`, reject `used_at`, `revoked_at`, or `expires_at <= now()`, verify the token customer is still active/approved, and then either update an existing active endpoint for the same customer or insert a new subscription. If the endpoint is actively linked to another customer, raise `endpoint_already_linked`. Mark `used_at = now()` only after the subscription write succeeds.
-
-`unsubscribe_customer_push_subscription_service` must match both endpoint and SHA-256 device-secret hash before setting `active=false`.
-
-`enqueue_customer_push_event_service` must reject all event types except the two allowed values and insert with `on conflict (idempotency_key) do update set idempotency_key = excluded.idempotency_key returning id`; this makes repeated enqueue calls return the original event id without changing the immutable payload.
-
-`claim_customer_push_outbox` must use `for update skip locked`, select at most `p_limit` rows whose `status in ('pending','processing')` and `next_attempt_at <= now()`, set them to `processing`, and return the claimed rows.
-
-`consume_customer_push_rate_limit` must atomically reset the window after `p_window_seconds`, increment within an active window, reject after `p_limit`, and opportunistically delete rows with `expires_at < now() - interval '1 day'`.
-
-- [ ] **Step 4: Extend the SQL test with behavioral assertions**
-
-Add fixtures for one admin, one employee with `can_send_notifications=true`, one employee with the permission disabled, and two customers in different tenants. Assert:
+Use this actor rule in staff management RPCs:
 
 ```sql
--- Pseudocode only for fixture IDs; use fixed UUID literals in the actual test.
--- 1. permitted actor can create link for same-tenant customer
--- 2. actor without can_send_notifications is rejected
--- 3. cross-tenant customer is rejected
--- 4. token cannot be redeemed twice
--- 5. expired token is rejected
--- 6. second active endpoint for same customer is allowed
--- 7. same active endpoint cannot link to another customer
--- 8. duplicate idempotency key returns one outbox row
--- 9. event_type='debt_updated' is rejected
--- 10. duplicate outbox/subscription delivery pair is rejected
+select case
+  when actor.role='admin' and actor.id=customer.admin_id then customer.admin_id
+  when actor.role='employee'
+       and actor.admin_id=customer.admin_id
+       and actor.can_send_notifications=true then customer.admin_id
+end
+into v_market_id
+from public.profiles actor
+join public.profiles customer on customer.id=p_customer
+where actor.id=p_actor
+  and actor.active=true and actor.approved=true
+  and customer.role='customer' and customer.active=true and customer.approved=true;
+
+if v_market_id is null then
+  raise exception 'push_forbidden' using errcode='42501';
+end if;
 ```
 
-Implement those as executable SQL assertions using `lives_ok`, `throws_ok`, and row-count checks rather than comments in the committed test.
+`manage_customer_push_link` revokes every previous unused token for the same customer/market before inserting the new hash.
 
-- [ ] **Step 5: Run database regression tests and verify GREEN**
+`inspect_customer_push_link_service` returns only `customer_name`, `market_name`, and `expires_at` for an unused/unrevoked/unexpired token; otherwise raise `no_data_found`.
+
+`redeem_customer_push_subscription_service` locks the token row `for update`, validates it again, rejects an endpoint actively owned by another customer, updates the same-customer endpoint or inserts a new row, and only then sets `used_at=now()`.
+
+`revoke_customer_push_subscriptions_service` sets all active subscriptions false **and** revokes unused QR tokens for that customer.
+
+Implement immutable idempotent enqueue without a no-op update:
+
+```sql
+with inserted as (
+  insert into public.notification_outbox(
+    market_id,customer_id,event_type,event_record_id,idempotency_key,payload
+  ) values (
+    p_market_id,p_customer_id,p_event_type,p_event_record_id,p_idempotency_key,p_payload
+  )
+  on conflict (idempotency_key) do nothing
+  returning id
+)
+select id into v_id from inserted
+union all
+select id from public.notification_outbox where idempotency_key=p_idempotency_key
+limit 1;
+return v_id;
+```
+
+`claim_customer_push_outbox` must use `for update skip locked`; when claimed, set `status='processing'` and `next_attempt_at=now()+interval '2 minutes'` as a crash-recovery lease. A crashed worker can therefore be reclaimed after two minutes without duplicate fan-out because `fanout_at` and delivery uniqueness freeze the device set.
+
+- [ ] **Step 4: Run database regression and verify GREEN**
 
 ```bash
 supabase db reset
-psql "$LOCAL_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/customer_qr_web_push_regression.sql
+psql postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+  -v ON_ERROR_STOP=1 \
+  -f supabase/tests/customer_qr_web_push_regression.sql
 ```
 
-Expected: all assertions PASS.
+Expected: prints `customer QR web push regression passed` and exits 0.
 
-- [ ] **Step 6: Commit Task 1**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add supabase/migrations/20260917013000_customer_qr_web_push.sql \
@@ -277,50 +369,56 @@ git commit -m "feat(user): add customer push data model"
 
 ---
 
-### Task 2: Pure crypto/payload helpers and authenticated staff API
+### Task 2: Shared crypto/payload helpers and staff QR API
 
 **Files:**
 - Create: `supabase/functions/_shared/customer_push/crypto.ts`
 - Create: `supabase/functions/_shared/customer_push/payload.ts`
 - Create: `supabase/functions/_shared/customer_push/payload_test.ts`
 - Create: `supabase/functions/customer-push-admin/index.ts`
+- Create: `supabase/functions/customer-push-admin/index_test.ts`
 
-**Interfaces:**
-- Consumes: Task 1 service-role RPCs.
-- Produces:
-  - `randomHexToken(byteLength = 32): string`
-  - `sha256Hex(value: string): Promise<string>`
-  - `formatPushBody(eventType: 'debt_created'|'payment_created', payload: PushPayload): {title:string, body:string}`
-  - authenticated `customer-push-admin` actions `create_link`, `status`, `revoke_all`.
+**Interfaces produced:**
 
-- [ ] **Step 1: Write failing Deno tests for pure helpers**
+```ts
+randomHexToken(byteLength?: number): string
+sha256Hex(value: string): Promise<string>
+retryDelayAfterFailure(attemptCount: number): number | null
+classifyPushFailure(status: number): "expired" | "retry" | "failed"
+formatPushBody(eventType: "debt_created"|"payment_created", payload: PushPayload): {title:string; body:string}
+```
+
+- [ ] **Step 1: Write failing pure tests**
 
 ```ts
 import { assertEquals, assertMatch } from "jsr:@std/assert@1";
-import { retryDelaySeconds, formatPushBody } from "./payload.ts";
 import { randomHexToken, sha256Hex } from "./crypto.ts";
+import { formatPushBody, retryDelayAfterFailure } from "./payload.ts";
 
-Deno.test("token is 32 random bytes encoded as 64 hex chars", () => {
+Deno.test("token is 32 bytes as 64 hex chars", () => {
   assertMatch(randomHexToken(), /^[a-f0-9]{64}$/);
 });
 
-Deno.test("sha256 helper is stable", async () => {
+Deno.test("sha256 is stable", async () => {
   assertEquals(
     await sha256Hex("zhirox"),
-    "ae300c4d34a7d750bdb9f63ce0c342d99393690b115f3e5278eb54e497242a49",
+    "2e324e6d0fcf6fd0f7759accb3979ec739e4dc9830b509e7fe03778b2a8b9067",
   );
 });
 
-Deno.test("retry schedule is bounded", () => {
-  assertEquals([1,2,3,4,5,6].map(retryDelaySeconds), [0,60,300,1800,7200,null]);
+Deno.test("retry schedule stops after failed attempt five", () => {
+  assertEquals(
+    [1,2,3,4,5].map(retryDelayAfterFailure),
+    [60,300,1800,7200,null],
+  );
 });
 
-Deno.test("payment copy contains total payment and remaining balance", () => {
+Deno.test("payment copy uses IQD remaining balance", () => {
   assertEquals(
     formatPushBody("payment_created", {
       amount: 25000,
       currency: "IQD",
-      remaining: 100000,
+      remaining_iqd: 100000,
       market_name: "ZHIROX Market",
       occurred_at: "2026-09-17T00:00:00Z",
     }),
@@ -332,17 +430,17 @@ Deno.test("payment copy contains total payment and remaining balance", () => {
 });
 ```
 
-- [ ] **Step 2: Run helper tests and verify RED**
+- [ ] **Step 2: Run RED**
 
 ```bash
 deno test supabase/functions/_shared/customer_push/payload_test.ts
 ```
 
-Expected: FAIL because helper modules do not exist.
+Expected: module-not-found failure.
 
-- [ ] **Step 3: Implement minimal helper modules**
+- [ ] **Step 3: Implement the helpers**
 
-`crypto.ts` must use Web Crypto only:
+`crypto.ts`:
 
 ```ts
 export function randomHexToken(byteLength = 32): string {
@@ -359,9 +457,9 @@ export async function sha256Hex(value: string): Promise<string> {
 }
 ```
 
-`payload.ts` must define the fixed retry schedule and Sorani copy. Currency formatting accepts IQD and USD, uses thousands separators, and never includes customer IDs or internal notes.
+`payload.ts` uses the fixed retry table above, formats IQD with zero decimals and USD with two decimals, always formats `remaining_iqd` as IQD, and exposes no IDs or notes in title/body.
 
-- [ ] **Step 4: Run helper tests and verify GREEN**
+- [ ] **Step 4: Run GREEN**
 
 ```bash
 deno test supabase/functions/_shared/customer_push/payload_test.ts
@@ -369,57 +467,52 @@ deno test supabase/functions/_shared/customer_push/payload_test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Implement `customer-push-admin` with exact action contracts**
+- [ ] **Step 5: Write failing staff API tests**
 
-Use the existing Edge Function auth pattern (`SUPABASE_SECRET_KEYS` fallback to `SUPABASE_SERVICE_ROLE_KEY`, `admin.auth.getUser(bearer)`), then call Task 1 RPCs.
-
-Request/response contracts:
+Export `handleAdminAction(body, actorId, deps)`. Use a fake `manageLink/status/revokeAll` dependency and assert:
 
 ```ts
-// create_link request
-{ action: "create_link", customer_id: "uuid" }
-
-// create_link response
-{
-  url: "https://<project>.supabase.co/functions/v1/customer-push?token=<raw-64-hex>",
-  expires_at: "ISO-8601"
-}
-
-// status request
-{ action: "status", customer_id: "uuid" }
-
-// status response
-{
-  active: true,
-  device_count: 2,
-  latest_status: "sent",
-  latest_at: "ISO-8601-or-null"
-}
-
-// revoke_all request
-{ action: "revoke_all", customer_id: "uuid" }
-
-// revoke_all response
-{ revoked: 2 }
+Deno.test("create_link passes only the hash to storage", async () => {
+  let storedHash = "";
+  const response = await handleAdminAction(
+    {action:"create_link", customer_id:"00000000-0000-0000-0000-000000000121"},
+    "00000000-0000-0000-0000-000000000101",
+    {
+      now: () => new Date("2026-09-17T00:00:00Z"),
+      randomToken: () => "a".repeat(64),
+      manageLink: async ({tokenHash}) => { storedHash = tokenHash; },
+      status: async () => ({active:false,device_count:0,latest_status:null,latest_at:null}),
+      revokeAll: async () => 0,
+      publicBaseUrl: "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push",
+    },
+  );
+  assertEquals(storedHash, await sha256Hex("a".repeat(64)));
+  assertEquals(response.expires_at, "2026-09-17T00:15:00.000Z");
+  assertEquals(response.url.endsWith("token=" + "a".repeat(64)), true);
+});
 ```
 
-For `create_link`, generate `rawToken = randomHexToken()`, hash it with `sha256Hex`, set `expiresAt = new Date(Date.now() + 15 * 60 * 1000)`, call `manage_customer_push_link`, and return the raw token only inside the HTTPS URL. Do not log it.
+- [ ] **Step 6: Implement `customer-push-admin`**
 
-Use generic `forbidden` for tenancy/permission failures. Do not return subscription endpoints or key material from `status`.
+Authenticate the bearer with service-role `auth.getUser`. Supported bodies are exactly:
 
-- [ ] **Step 6: Add request-shape tests as pure exported handler tests**
+```json
+{"action":"create_link","customer_id":"uuid"}
+{"action":"status","customer_id":"uuid"}
+{"action":"revoke_all","customer_id":"uuid"}
+```
 
-Refactor the function body so `handleAdminAction(body, actorId, deps)` is injectable. Test invalid action, invalid UUID, 15-minute expiry construction, and that returned URL contains the raw token while the RPC receives only its hash.
+`create_link` generates a raw token, hashes it, uses `expires_at = now + 15 minutes`, calls `manage_customer_push_link`, and returns only the public onboarding URL plus expiry. `status` returns active/device count/latest delivery state/time. `revoke_all` returns the integer revoked count. Never log raw token, endpoint, `p256dh`, `auth`, or device secret.
 
-Run:
+- [ ] **Step 7: Run API tests**
 
 ```bash
-deno test supabase/functions/customer-push-admin
+deno test supabase/functions/customer-push-admin/index_test.ts
 ```
 
-Expected: PASS without network access by using fake dependencies.
+Expected: PASS.
 
-- [ ] **Step 7: Commit Task 2**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add supabase/functions/_shared/customer_push \
@@ -429,166 +522,140 @@ git commit -m "feat(user): add customer push admin API"
 
 ---
 
-### Task 3: Public onboarding PWA, service worker, subscribe and unsubscribe
+### Task 3: Public onboarding PWA and subscription lifecycle
 
 **Files:**
 - Create: `supabase/functions/customer-push/index.ts`
+- Create: `supabase/functions/customer-push/index_test.ts`
 - Modify: `supabase/config.toml`
-- Test: `supabase/functions/customer-push/index_test.ts`
 
-**Interfaces:**
-- Consumes: `sha256Hex`, `randomHexToken`, Task 1 `redeem_customer_push_subscription_service`, `unsubscribe_customer_push_subscription_service`, `consume_customer_push_rate_limit`.
-- Produces public routes under `/functions/v1/customer-push`:
-  - `GET ?token=<raw>` onboarding HTML
-  - `GET /manifest.webmanifest?token=<raw>` dynamic PWA manifest
-  - `GET /sw.js` service worker
-  - `POST {action:"validate", token}`
-  - `POST {action:"subscribe", token, subscription, platform}`
-  - `POST {action:"unsubscribe", endpoint, device_secret}`
+**Interfaces consumed:** Task 1 inspect/redeem/unsubscribe/rate-limit RPCs, Task 2 crypto helper.
 
 - [ ] **Step 1: Write failing route tests**
 
-Create exported `routeCustomerPush(req, deps)` and test:
+Export `routeCustomerPush(req, deps)` and cover generic landing, token page, invalid subscription body, and unsubscribe auth:
 
 ```ts
-Deno.test("onboarding never embeds a customer id", async () => {
-  const response = await routeCustomerPush(
+Deno.test("token page never embeds raw customer id", async () => {
+  const res = await routeCustomerPush(
     new Request("https://x/functions/v1/customer-push?token=" + "a".repeat(64)),
     fakeDeps,
   );
-  const html = await response.text();
-  assertEquals(response.status, 200);
+  const html = await res.text();
+  assertEquals(res.status, 200);
   assertEquals(html.includes("customer_id"), false);
   assertEquals(html.includes("چالاککردنی ئاگادارکردنەوە"), true);
 });
 
-Deno.test("subscribe requires endpoint p256dh and auth", async () => {
-  const response = await routeCustomerPush(
+Deno.test("subscribe rejects missing PushSubscription keys", async () => {
+  const res = await routeCustomerPush(
     new Request("https://x/functions/v1/customer-push", {
-      method: "POST",
-      headers: {"content-type":"application/json"},
-      body: JSON.stringify({action:"subscribe", token:"a".repeat(64), subscription:{}}),
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({action:"subscribe",token:"a".repeat(64),subscription:{}}),
     }),
     fakeDeps,
   );
-  assertEquals(response.status, 400);
+  assertEquals(res.status, 400);
 });
 ```
 
-- [ ] **Step 2: Run route tests and verify RED**
+- [ ] **Step 2: Run RED**
 
 ```bash
 deno test supabase/functions/customer-push/index_test.ts
 ```
 
-Expected: FAIL because the route module does not exist.
+Expected: module-not-found failure.
 
-- [ ] **Step 3: Implement token-gated validation and rate limiting**
+- [ ] **Step 3: Implement public rate limiting and token inspection**
 
-Resolve client IP from `cf-connecting-ip` then first `x-forwarded-for` value. Compute:
+For `validate` and `subscribe`, derive client IP from `cf-connecting-ip`, then first `x-forwarded-for`, then `unknown`; hash `CUSTOMER_PUSH_RATE_LIMIT_SALT + ':' + ip`; call `consume_customer_push_rate_limit(hash,30,60)`. Return 429 on rejection.
 
-```ts
-const rateKey = await sha256Hex(`${Deno.env.get("CUSTOMER_PUSH_RATE_LIMIT_SALT")}:${clientIp}`);
+All invalid/expired/used/revoked token states return the same response:
+
+```json
+{"error":"link_unavailable"}
 ```
 
-Call `consume_customer_push_rate_limit(rateKey, 30, 60)` for `validate` and `subscribe`; return `429` with `{error:"rate_limited"}` when rejected. Invalid, expired, used, and revoked tokens must all return the same `{error:"link_unavailable"}` response.
+`validate` returns only:
 
-`validate` may return only:
-
-```ts
-{
-  market_name: string,
-  customer_name: string,
-  expires_at: string,
-  vapid_public_key: string
-}
+```json
+{"customer_name":"...","market_name":"...","expires_at":"ISO","vapid_public_key":"..."}
 ```
 
-- [ ] **Step 4: Implement safe subscription registration**
+- [ ] **Step 4: Implement subscribe/unsubscribe**
 
-Accept the browser PushSubscription JSON:
-
-```ts
-{
-  endpoint: string,
-  keys: { p256dh: string, auth: string }
-}
-```
-
-Generate a new 32-byte raw `deviceSecret`, hash it, call `redeem_customer_push_subscription_service`, and return:
-
-```ts
-{ linked: true, device_secret: deviceSecret }
-```
-
-The PWA stores `device_secret` in `localStorage` only after the server confirms linking. Never place the secret in notification payloads or URLs.
-
-For `unsubscribe`, require endpoint plus raw device secret, hash it, and call `unsubscribe_customer_push_subscription_service`.
-
-- [ ] **Step 5: Implement onboarding HTML and dynamic manifest**
-
-The HTML must:
-- show ZHIROX branding and server-confirmed customer/market names only after `validate` succeeds;
-- detect iOS with user agent plus standalone mode;
-- when iOS is not standalone, show Add-to-Home-Screen instructions and do not call `Notification.requestPermission()`;
-- when standalone or non-iOS, enable the explicit **چالاککردنی ئاگادارکردنەوە** button;
-- register `/functions/v1/customer-push/sw.js` with scope `/functions/v1/customer-push/`;
-- call `registration.pushManager.subscribe({userVisibleOnly:true, applicationServerKey: ...})` only after explicit button tap;
-- POST the subscription to `action=subscribe`;
-- show deterministic states for denied permission, expired link, temporary network error, and success.
-
-Serve manifest JSON with the current raw token encoded only in the `start_url`:
+`subscribe` requires:
 
 ```json
 {
-  "name": "ZHIROX Notifications",
-  "short_name": "ZHIROX",
-  "display": "standalone",
-  "start_url": "/functions/v1/customer-push?token=<url-encoded-token>",
-  "scope": "/functions/v1/customer-push/",
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff"
+  "action":"subscribe",
+  "token":"64-hex",
+  "subscription":{
+    "endpoint":"https://...",
+    "keys":{"p256dh":"...","auth":"..."}
+  },
+  "platform":"ios|android|desktop"
 }
 ```
 
-Do not add a separate hosting provider.
+Generate a new 32-byte `deviceSecret`, store only `sha256Hex(deviceSecret)` through `redeem_customer_push_subscription_service`, and return:
 
-- [ ] **Step 6: Implement the service worker**
+```json
+{"linked":true,"device_secret":"raw-secret-returned-once"}
+```
 
-`GET /sw.js` returns JavaScript with `Content-Type: application/javascript`, `Cache-Control: no-store`, and `Service-Worker-Allowed: /functions/v1/customer-push/`.
+`unsubscribe` requires endpoint plus raw device secret; hash it before calling `unsubscribe_customer_push_subscription_service`.
 
-The script must:
+- [ ] **Step 5: Implement onboarding HTML/manifest/service worker**
+
+Serve everything from the same function origin. Add `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, and a CSP that permits only same-origin connections/workers plus inline script/style used by this page.
+
+The manifest route is `/functions/v1/customer-push/manifest.webmanifest?token=<raw>` and sets:
+
+```json
+{
+  "name":"ZHIROX Notifications",
+  "short_name":"ZHIROX",
+  "display":"standalone",
+  "start_url":"/functions/v1/customer-push?token=<url-encoded-token>",
+  "scope":"/functions/v1/customer-push/",
+  "theme_color":"#ffffff",
+  "background_color":"#ffffff"
+}
+```
+
+The page must not call `Notification.requestPermission()` until the user taps **چالاککردنی ئاگادارکردنەوە**. On iOS outside standalone mode, show Add-to-Home-Screen instructions and keep the token in the dynamic `start_url`.
+
+Service worker response must include `Service-Worker-Allowed: /functions/v1/customer-push/` and run:
 
 ```js
 self.addEventListener('push', event => {
   const data = event.data ? event.data.json() : {};
   event.waitUntil(self.registration.showNotification(data.title || 'ZHIROX', {
     body: data.body || '',
-    icon: data.icon || '/favicon.ico',
-    data: { url: data.url || '/functions/v1/customer-push' }
+    data: {url: data.url || '/functions/v1/customer-push'}
   }));
 });
-
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   event.waitUntil(clients.openWindow(event.notification.data.url));
 });
 ```
 
-Notification URL must be the generic PWA landing path without customer ID.
+A `GET` without token renders a generic “notifications enabled / scan a fresh QR to relink” landing page and exposes no customer data.
 
-- [ ] **Step 7: Configure only this public function as no-JWT**
+- [ ] **Step 6: Configure public function**
 
-Append to `supabase/config.toml`:
+Append only:
 
 ```toml
 [functions.customer-push]
 verify_jwt = false
 ```
 
-Do not change JWT behavior of existing functions.
-
-- [ ] **Step 8: Run route tests and verify GREEN**
+- [ ] **Step 7: Run GREEN**
 
 ```bash
 deno test supabase/functions/customer-push/index_test.ts
@@ -596,7 +663,7 @@ deno test supabase/functions/customer-push/index_test.ts
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 3**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add supabase/functions/customer-push supabase/config.toml
@@ -605,68 +672,73 @@ git commit -m "feat(user): add customer push onboarding PWA"
 
 ---
 
-### Task 4: Delivery worker, VAPID delivery, retry, and scheduled invocation
+### Task 4: VAPID worker, frozen fan-out, retry, and cron
 
 **Files:**
 - Create: `supabase/functions/customer-push-worker/index.ts`
+- Create: `supabase/functions/customer-push-worker/index_test.ts`
 - Modify: `supabase/functions/_shared/customer_push/payload.ts`
 - Modify: `supabase/functions/_shared/customer_push/payload_test.ts`
 - Modify: `supabase/config.toml`
-- Modify: `supabase/migrations/20260917013000_customer_qr_web_push.sql` only if implementation occurs before the migration is applied; if already applied, create `supabase/migrations/20260917023000_customer_push_worker_schedule.sql` instead.
 
-**Interfaces:**
-- Consumes: `claim_customer_push_outbox`, subscriptions/outbox/delivery tables, `formatPushBody`, `retryDelaySeconds`.
-- Produces: `customer-push-worker` POST endpoint protected by `x-zhirox-push-worker`, plus once-per-minute schedule.
+**Interfaces consumed:** outbox/subscription/delivery tables, `claim_customer_push_outbox`, Task 2 payload helpers.
 
-- [ ] **Step 1: Add failing pure tests for response classification**
+- [ ] **Step 1: Add failing classification tests**
 
 ```ts
-Deno.test("410 retires a subscription", () => {
+Deno.test("push status classification", () => {
   assertEquals(classifyPushFailure(410), "expired");
-});
-
-Deno.test("429 and 5xx are retryable", () => {
+  assertEquals(classifyPushFailure(404), "expired");
   assertEquals(classifyPushFailure(429), "retry");
   assertEquals(classifyPushFailure(503), "retry");
-});
-
-Deno.test("terminal retry schedule ends after five attempts", () => {
-  assertEquals(retryDelaySeconds(5), 7200);
-  assertEquals(retryDelaySeconds(6), null);
+  assertEquals(classifyPushFailure(400), "failed");
 });
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
-
-```bash
-deno test supabase/functions/_shared/customer_push/payload_test.ts
-```
-
-Expected: FAIL on missing `classifyPushFailure` behavior.
-
-- [ ] **Step 3: Implement failure classification and re-run GREEN**
-
-Use exactly:
+- [ ] **Step 2: Implement and run GREEN**
 
 ```ts
-export type PushFailureClass = "expired" | "retry" | "failed";
-
-export function classifyPushFailure(status: number): PushFailureClass {
+export function classifyPushFailure(status: number): "expired"|"retry"|"failed" {
   if (status === 404 || status === 410) return "expired";
   if (status === 408 || status === 425 || status === 429 || status >= 500) return "retry";
   return "failed";
 }
 ```
 
-Run the test and require PASS.
+```bash
+deno test supabase/functions/_shared/customer_push/payload_test.ts
+```
 
-- [ ] **Step 4: Implement the worker authentication and VAPID setup**
+Expected: PASS.
 
-Use:
+- [ ] **Step 3: Write failing worker tests with injected sender/repository**
+
+Use `processOutboxEvent(event,deps)` with fake `listActiveSubscriptions`, `insertDeliveryIfMissing`, `listDueDeliveries`, `sendPush`, `updateDelivery`, `updateSubscription`, `updateOutbox`.
+
+```ts
+Deno.test("fanout is frozen after first processing", async () => {
+  const repo = fakeRepo({fanoutAt:null, activeSubscriptions:[subA, subB]});
+  await processOutboxEvent(event, repo.deps);
+  repo.event.fanout_at = "2026-09-17T00:00:00Z";
+  repo.activeSubscriptions.push(subC);
+  await processOutboxEvent(repo.event, repo.deps);
+  assertEquals(repo.deliverySubscriptionIds.sort(), [subA.id, subB.id].sort());
+});
+
+Deno.test("410 expires subscription without retry", async () => {
+  const repo = fakeRepo({sendError:{statusCode:410}});
+  await processOutboxEvent(event, repo.deps);
+  assertEquals(repo.delivery.status, "expired");
+  assertEquals(repo.subscription.active, false);
+});
+```
+
+- [ ] **Step 4: Implement worker**
+
+Initialize:
 
 ```ts
 import webpush from "npm:web-push@3.6.7";
-
 webpush.setVapidDetails(
   Deno.env.get("VAPID_SUBJECT")!,
   Deno.env.get("VAPID_PUBLIC_KEY")!,
@@ -674,37 +746,28 @@ webpush.setVapidDetails(
 );
 ```
 
-Reject every request whose `x-zhirox-push-worker` header does not exactly equal `CUSTOMER_PUSH_WORKER_SECRET`. Return generic `401` without exposing expected values.
+Require exact `x-zhirox-push-worker == CUSTOMER_PUSH_WORKER_SECRET`; otherwise 401.
 
-- [ ] **Step 5: Implement one idempotent worker pass**
+For each claimed event:
+1. If `fanout_at is null`, snapshot currently active subscriptions into `notification_deliveries` with `on conflict do nothing`, then set `fanout_at=now()`. Never add devices on later retries.
+2. If zero deliveries exist after first fan-out, set outbox `completed` immediately.
+3. Send each due `pending` delivery with `webpush.sendNotification` and JSON `{title,body,url:'/functions/v1/customer-push'}`.
+4. Success -> `sent`, increment attempt count, set `sent_at`, reset subscription failure count, set `last_success_at`.
+5. 404/410 -> `expired`, deactivate subscription.
+6. Retryable -> increment attempt count; if `retryDelayAfterFailure(count)` returns seconds, keep `pending` and set `next_attempt_at`; otherwise `failed`.
+7. Non-retryable 4xx -> `failed` immediately.
+8. Set outbox `next_attempt_at` to the earliest pending delivery retry. If none remain pending, set `completed`.
+9. Only worker/infrastructure exceptions increment outbox `attempt_count`; after five such processing failures set outbox `failed`.
 
-For each claimed outbox event:
-
-1. Insert delivery rows from all currently active subscriptions using `upsert(..., {onConflict:'outbox_id,subscription_id', ignoreDuplicates:true})`.
-2. If there are zero active subscriptions, set outbox `completed`, `completed_at=now()`, and do not replay it when a device links later.
-3. Load delivery rows with `status='pending'` and `next_attempt_at <= now()`.
-4. For each row, call `webpush.sendNotification({endpoint, keys:{p256dh,auth}}, JSON.stringify({title,body,url:'/functions/v1/customer-push'}), {TTL:300, urgency:'high'})`.
-5. On success: set delivery `sent`, increment attempt count, set `sent_at`, reset subscription failure count, set `last_success_at`.
-6. On 404/410: set delivery `expired`, deactivate subscription, set `last_failure_at`.
-7. On retryable response: increment attempt count; if the next retry delay exists, leave status `pending` and set delivery/outbox `next_attempt_at`; otherwise set delivery `failed`.
-8. On non-retryable 4xx: set delivery `failed` immediately.
-9. When no delivery remains retryable, set outbox `completed`; reserve outbox `failed` for repeated worker/infrastructure processing failures, not terminal per-device outcomes.
-
-Never return endpoint/key data in the HTTP response. Return only `{processed:number}`.
-
-- [ ] **Step 6: Add worker integration tests with a fake sender**
-
-Export `processOutboxEvent(event, deps)` and test fan-out, zero-subscription completion, 410 deactivation, transient retry time, duplicate delivery upsert, and five-attempt terminal failure. Use an injected `sendPush` function so tests do not access the network.
-
-Run:
+- [ ] **Step 5: Run worker tests**
 
 ```bash
-deno test supabase/functions/customer-push-worker
+deno test supabase/functions/customer-push-worker/index_test.ts
 ```
 
-Expected: PASS.
+Expected: PASS for multi-device fan-out, frozen fan-out, zero-device completion, retry timing, 410 expiry, idempotent second pass, and terminal fifth failure.
 
-- [ ] **Step 7: Configure worker no-JWT plus custom secret guard**
+- [ ] **Step 6: Configure worker function**
 
 Append:
 
@@ -713,18 +776,17 @@ Append:
 verify_jwt = false
 ```
 
-No other public action is accepted by this function; the custom worker secret remains mandatory.
+The custom worker header remains mandatory inside the function.
 
-- [ ] **Step 8: Configure one-minute invocation without committing secrets**
-
-Generate deployment secrets during execution:
+- [ ] **Step 7: Generate deployment secrets without committing them**
 
 ```bash
 WORKER_SECRET="$(openssl rand -hex 32)"
 RATE_LIMIT_SALT="$(openssl rand -hex 32)"
+deno eval 'import webpush from "npm:web-push@3.6.7"; console.log(JSON.stringify(webpush.generateVAPIDKeys()))'
 ```
 
-Generate a VAPID key pair with a one-off Node command using `web-push.generateVAPIDKeys()`. Store only these values in Supabase Edge Function secrets:
+Store these runtime keys in Supabase Edge Function secrets:
 
 ```text
 CUSTOMER_PUSH_WORKER_SECRET
@@ -734,99 +796,127 @@ VAPID_PUBLIC_KEY
 VAPID_PRIVATE_KEY
 ```
 
-Store the same `CUSTOMER_PUSH_WORKER_SECRET` in Supabase Vault under `customer_push_worker_secret`. Create a `pg_cron` job named `customer-push-worker-every-minute` with `* * * * *` that calls the deployed function URL using `pg_net`, setting header `x-zhirox-push-worker` from the Vault decrypted secret. The secret value must never appear in a migration file, Git commit, Flutter build, or CI log.
+- [ ] **Step 8: Configure the one-minute cron at deployment time**
 
-- [ ] **Step 9: Commit Task 4**
+Store `WORKER_SECRET` in Vault under `customer_push_worker_secret`, then execute this SQL against the project database after substituting the runtime secret through the SQL client parameter, not inside a committed file:
+
+```sql
+create extension if not exists pg_cron with schema extensions;
+create extension if not exists pg_net with schema extensions;
+
+select cron.unschedule(jobid)
+from cron.job
+where jobname='customer-push-worker-every-minute';
+
+select cron.schedule(
+  'customer-push-worker-every-minute',
+  '* * * * *',
+  $job$
+  select net.http_post(
+    url := 'https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push-worker',
+    headers := jsonb_build_object(
+      'content-type','application/json',
+      'x-zhirox-push-worker',
+      (select decrypted_secret from vault.decrypted_secrets where name='customer_push_worker_secret' limit 1)
+    ),
+    body := '{}'::jsonb
+  );
+  $job$
+);
+```
+
+The secret value itself must never appear in the repository, migration history, Flutter bundle, or CI log.
+
+- [ ] **Step 9: Commit**
 
 ```bash
 git add supabase/functions/customer-push-worker \
         supabase/functions/_shared/customer_push \
-        supabase/config.toml \
-        supabase/migrations
-git commit -m "feat(user): add reliable web push delivery worker"
+        supabase/config.toml
+git commit -m "feat(user): add reliable web push worker"
 ```
 
 ---
 
-### Task 5: Enqueue exactly one payment notification per successful payment action
+### Task 5: Payment event enqueue from the trusted payment gateway
 
 **Files:**
 - Modify: `supabase/functions/record-payment/index.ts`
 - Create: `supabase/functions/record-payment/index_test.ts`
 
-**Interfaces:**
-- Consumes: existing `record_payment_service`, `record_customer_payment_service`, Task 1 `enqueue_customer_push_event_service`.
-- Produces: one `payment_created` outbox event per API payment action.
+**Interface produced:** exactly one logical `payment_created` outbox event per successful `record-payment` API call.
 
-**Important mapping:** a customer-wide payment may create multiple allocation rows in `payments`. It still represents one user payment action and therefore produces one Web Push event. Use the first returned persisted payment row ID as the canonical `event_record_id` and idempotency key anchor, while the payload amount is the total payment action amount.
+**Payment allocation rule:** customer-wide payment can create multiple rows in `payments`; use the first persisted payment row as the canonical event record/idempotency anchor, but payload amount is the total user payment action.
 
-- [ ] **Step 1: Write failing tests around extracted enqueue selection logic**
-
-Export a pure helper:
+- [ ] **Step 1: Write failing canonical-ID tests**
 
 ```ts
-export function canonicalPaymentId(data: unknown): string | null;
-```
-
-Tests:
-
-```ts
-Deno.test("debt-specific payment uses returned row id", () => {
-  assertEquals(canonicalPaymentId({id:"11111111-1111-1111-1111-111111111111"}),
-    "11111111-1111-1111-1111-111111111111");
-});
-
-Deno.test("customer-wide payment uses first allocation id", () => {
-  assertEquals(canonicalPaymentId({payments:[
-    {id:"22222222-2222-2222-2222-222222222222"},
-    {id:"33333333-3333-3333-3333-333333333333"},
-  ]}), "22222222-2222-2222-2222-222222222222");
+Deno.test("canonical payment id handles single and allocated results", () => {
+  assertEquals(
+    canonicalPaymentId({id:"00000000-0000-0000-0000-000000000401"}),
+    "00000000-0000-0000-0000-000000000401",
+  );
+  assertEquals(
+    canonicalPaymentId({payments:[
+      {id:"00000000-0000-0000-0000-000000000402"},
+      {id:"00000000-0000-0000-0000-000000000403"},
+    ]}),
+    "00000000-0000-0000-0000-000000000402",
+  );
 });
 ```
 
-- [ ] **Step 2: Run test and verify RED**
+- [ ] **Step 2: Run RED**
 
 ```bash
 deno test supabase/functions/record-payment/index_test.ts
 ```
 
-Expected: FAIL because helper does not exist.
+Expected: missing helper/test target failure.
 
-- [ ] **Step 3: Implement canonical payment selection and backend enqueue**
+- [ ] **Step 3: Implement payment enqueue**
 
-After either payment RPC succeeds:
-
-1. Determine customer ID: direct `customer_id` input for customer-wide flow; for debt-specific flow query the debt by `debt_id` and read `customer_id`.
-2. Resolve tenant `market_id` from the customer profile's `admin_id`.
-3. Determine canonical payment ID with `canonicalPaymentId`.
-4. Compute the customer's total remaining balance after the payment from active non-deleted debts.
-5. Read market display name from the tenant admin profile.
-6. Call `enqueue_customer_push_event_service` with:
+After the existing RPC returns success:
+- resolve customer ID directly for customer-wide payment or through the debt row for debt-specific payment;
+- read tenant admin ID/market name;
+- compute total current non-deleted customer `remaining` in IQD;
+- derive canonical payment ID;
+- for debt-specific USD debt, convert stored payment amount to display USD using `dollar_rate`; customer-wide remains IQD;
+- enqueue:
 
 ```ts
-{
+await admin.rpc("enqueue_customer_push_event_service", {
   p_market_id: marketId,
   p_customer_id: resolvedCustomerId,
   p_event_type: "payment_created",
   p_event_record_id: canonicalId,
   p_idempotency_key: `payment_created:${canonicalId}`,
   p_payload: {
-    amount,
-    currency: "IQD",
-    remaining: totalRemaining,
+    amount: displayAmount,
+    currency: displayCurrency,
+    remaining_iqd: totalRemainingIqd,
     market_name: marketName,
     occurred_at: new Date().toISOString(),
-  }
-}
+  },
+});
 ```
 
-If enqueue fails, log only a sanitized message and still return the successful payment response with HTTP 200. Do not include push failure in the client response.
+Wrap only the enqueue portion in `try/catch`; sanitize logging and still return the successful payment response if enqueue fails.
 
-- [ ] **Step 4: Test non-blocking enqueue failure**
+- [ ] **Step 4: Test non-blocking failure**
 
-Inject a fake enqueue dependency that throws after the fake payment RPC succeeds. Assert the handler still returns the payment data and status 200.
+```ts
+Deno.test("push enqueue failure does not fail payment response", async () => {
+  const result = await handleRecordPayment(validRequest, {
+    recordPayment: async () => ({id:"00000000-0000-0000-0000-000000000401",amount:1000}),
+    enqueuePush: async () => { throw new Error("push unavailable"); },
+    loadContext: async () => paymentContext,
+  });
+  assertEquals(result.status, 200);
+});
+```
 
-- [ ] **Step 5: Run tests and verify GREEN**
+- [ ] **Step 5: Run GREEN**
 
 ```bash
 deno test supabase/functions/record-payment/index_test.ts
@@ -834,7 +924,7 @@ deno test supabase/functions/record-payment/index_test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 5**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add supabase/functions/record-payment
@@ -843,64 +933,52 @@ git commit -m "feat(user): enqueue payment push events"
 
 ---
 
-### Task 6: Live debt enqueue plus reconciliation without import/sync notifications
+### Task 6: Live debt enqueue and missed-event reconciliation
 
 **Files:**
 - Create: `supabase/functions/customer-push-events/index.ts`
 - Create: `supabase/functions/customer-push-events/index_test.ts`
 - Modify: `lib/services/pb_service.dart`
 - Modify: `supabase/functions/customer-push-worker/index.ts`
+- Modify: `supabase/functions/customer-push-worker/index_test.ts`
 
-**Interfaces:**
-- Consumes: existing debt insert path in `PBService.createDebt`, Task 1 outbox RPC, existing import/sync provenance tables.
-- Produces: authenticated `POST customer-push-events {action:'enqueue_debt', debt_id}` and worker reconciliation for missed live debt enqueue calls.
-
-- [ ] **Step 1: Write failing Deno tests for debt eligibility**
-
-Export:
+- [ ] **Step 1: Write failing debt eligibility tests**
 
 ```ts
-export function isLiveDebtEligible(input: {
-  deleted: boolean;
-  legacyLinked: boolean;
-  syncLinked: boolean;
-  createdAt: string;
-  now: Date;
-}): boolean;
+Deno.test("reconciliation includes only live debt candidates", () => {
+  const now = new Date("2026-09-17T01:00:00Z");
+  assertEquals(isLiveDebtEligible({deleted:false,legacyLinked:false,syncLinked:false,createdAt:"2026-09-17T00:30:00Z",now}), true);
+  assertEquals(isLiveDebtEligible({deleted:true,legacyLinked:false,syncLinked:false,createdAt:"2026-09-17T00:30:00Z",now}), false);
+  assertEquals(isLiveDebtEligible({deleted:false,legacyLinked:true,syncLinked:false,createdAt:"2026-09-17T00:30:00Z",now}), false);
+  assertEquals(isLiveDebtEligible({deleted:false,legacyLinked:false,syncLinked:true,createdAt:"2026-09-17T00:30:00Z",now}), false);
+  assertEquals(isLiveDebtEligible({deleted:false,legacyLinked:false,syncLinked:false,createdAt:"2026-09-17T00:59:30Z",now}), false);
+  assertEquals(isLiveDebtEligible({deleted:false,legacyLinked:false,syncLinked:false,createdAt:"2026-09-15T00:00:00Z",now}), false);
+});
 ```
 
-Tests must assert:
-- active live debt = true;
-- deleted debt = false;
-- legacy-linked debt = false;
-- sync-linked debt = false;
-- debt older than 24 hours is false for reconciliation;
-- debt younger than 2 minutes is false for reconciliation, preventing races with import/link creation.
+- [ ] **Step 2: Implement `customer-push-events`**
 
-- [ ] **Step 2: Run test and verify RED**
+Authenticate bearer token. Accept only:
+
+```json
+{"action":"enqueue_debt","debt_id":"uuid"}
+```
+
+Re-read debt/customer/tenant. Require actor active+approved, actor role admin/employee, same tenant, and `debt.created_by == actor.id`. Reject soft-deleted debt. If the debt ID appears as `target_id` for `entity_kind='debt'` in `legacy_import_links` or `daftar_sync_seen`, return `{enqueued:false,reason:'non_live_source'}`.
+
+Build amount from `amount_usd` for USD debts when valid; otherwise IQD `amount`. Compute customer remaining in IQD. Enqueue `debt_created:<debt_id>` idempotently.
+
+- [ ] **Step 3: Run event API tests**
 
 ```bash
 deno test supabase/functions/customer-push-events/index_test.ts
 ```
 
-Expected: FAIL because the module does not exist.
+Expected: PASS for live debt, cross-tenant denial, wrong creator denial, import exclusion, sync exclusion, and duplicate enqueue.
 
-- [ ] **Step 3: Implement authenticated live debt enqueue endpoint**
+- [ ] **Step 4: Add the non-blocking call to `PBService.createDebt`**
 
-The endpoint must:
-1. authenticate the bearer token;
-2. accept only `{action:'enqueue_debt', debt_id:'uuid'}`;
-3. read debt plus customer profile and tenant admin;
-4. verify actor is the tenant admin or an active/approved same-tenant employee allowed to add debts;
-5. reject soft-deleted debt;
-6. check `legacy_import_links(entity_kind='debt', target_id=debt_id)` and `daftar_sync_seen(entity_kind='debt', target_id=debt_id)`; if either exists, return `{enqueued:false, reason:'non_live_source'}`;
-7. compute customer total remaining;
-8. enqueue `debt_created:<debt_id>` with immutable amount/currency/remaining/market/time payload;
-9. return `{enqueued:true}`.
-
-- [ ] **Step 4: Add the non-blocking client call after a successful debt insert**
-
-In `PBService.createDebt`, immediately after `created = await pb.collection('debts').create(...)` and before returning, add a fire-and-wait-but-swallow enqueue call:
+Immediately after the existing debt insert succeeds:
 
 ```dart
 try {
@@ -913,39 +991,39 @@ try {
 }
 ```
 
-Keep the existing `createNotification(...)` logic and `NotificationService.showDebtCreated(...)` behavior unchanged. Do not turn the push enqueue error into a thrown save error.
+Keep all existing `createNotification(...)` and local `NotificationService.showDebtCreated(...)` behavior unchanged.
 
-- [ ] **Step 5: Implement worker reconciliation**
+- [ ] **Step 5: Add worker reconciliation**
 
-At the beginning of each worker pass, query at most 100 debts with:
-- `created_at >= now() - 24 hours`
-- `created_at <= now() - 2 minutes`
-- not soft-deleted
-- no `debt_created:<id>` row in `notification_outbox`
-- no matching debt target in `legacy_import_links`
-- no matching debt target in `daftar_sync_seen`
+Before normal claims, reconcile at most 100 debts created between 24 hours ago and 2 minutes ago that:
+- are not deleted;
+- have no `debt_created:<id>` outbox row;
+- have no matching `legacy_import_links` debt target;
+- have no matching `daftar_sync_seen` debt target.
 
-For each eligible row, compute the same payload and call the same idempotent enqueue RPC. A second reconciliation pass must create zero additional outbox rows.
+For each, build the same payload and call the idempotent enqueue RPC. The two-minute lower bound avoids racing an import/sync write before its provenance link is committed.
 
-- [ ] **Step 6: Test interruption recovery and exclusion**
+- [ ] **Step 6: Extend worker tests**
 
-Use fake repositories to prove:
-- missing live debt becomes exactly one event;
-- second pass is idempotent;
-- imported debt is skipped;
-- sync debt is skipped;
-- deleted debt is skipped.
+```ts
+Deno.test("reconciliation is idempotent and excludes imported rows", async () => {
+  const repo = fakeReconcileRepo({live:[liveDebt], legacy:[importedDebt], sync:[syncedDebt]});
+  await reconcileRecentDebts(repo.deps);
+  await reconcileRecentDebts(repo.deps);
+  assertEquals(repo.enqueuedKeys, [`debt_created:${liveDebt.id}`]);
+});
+```
 
 Run:
 
 ```bash
 deno test supabase/functions/customer-push-events/index_test.ts \
-          supabase/functions/customer-push-worker
+          supabase/functions/customer-push-worker/index_test.ts
 ```
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Task 6**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add supabase/functions/customer-push-events \
@@ -956,7 +1034,7 @@ git commit -m "feat(user): enqueue debt push events safely"
 
 ---
 
-### Task 7: Flutter push gateway, QR card, and profile integration
+### Task 7: Flutter gateway, QR card, and customer profile integration
 
 **Files:**
 - Create: `lib/services/customer_push_service.dart`
@@ -967,9 +1045,7 @@ git commit -m "feat(user): enqueue debt push events safely"
 - Modify: `pubspec.yaml`
 - Modify: `pubspec.lock`
 
-**Interfaces:**
-- Consumes: `customer-push-admin` actions from Task 2.
-- Produces:
+**Interfaces produced:**
 
 ```dart
 class CustomerPushStatus {
@@ -989,22 +1065,20 @@ abstract interface class CustomerPushGateway {
   Future<CustomerPushLink> createLink(String customerId);
   Future<int> revokeAll(String customerId);
 }
-
-class CustomerPushService implements CustomerPushGateway { ... }
 ```
 
-- [ ] **Step 1: Add `qr_flutter` and write failing model/gateway tests**
+- [ ] **Step 1: Add dependency and failing service test**
 
-Add to `pubspec.yaml`:
+Add:
 
 ```yaml
 qr_flutter: ^4.1.0
 ```
 
-Create tests for strict parsing:
+Test strict JSON parsing:
 
 ```dart
-test('status parses device count and nullable latest delivery', () {
+test('push status parses server response', () {
   final status = CustomerPushStatus.fromJson({
     'active': true,
     'device_count': 2,
@@ -1013,25 +1087,23 @@ test('status parses device count and nullable latest delivery', () {
   });
   expect(status.active, isTrue);
   expect(status.deviceCount, 2);
-  expect(status.latestStatus, 'sent');
+  expect(status.latestAt, DateTime.parse('2026-09-17T00:00:00Z'));
 });
 ```
 
-- [ ] **Step 2: Run Flutter test and verify RED**
+- [ ] **Step 2: Run RED**
 
 ```bash
 flutter test test/customer_push_service_test.dart
 ```
 
-Expected: FAIL because `customer_push_service.dart` does not exist.
+Expected: missing service class failure.
 
-- [ ] **Step 3: Implement typed gateway**
+- [ ] **Step 3: Implement `CustomerPushService`**
 
-`CustomerPushService` calls `PBService.ensureInitialized()` then `PBService.client.functions.invoke('customer-push-admin', body: ...)`.
+Use `PBService.ensureInitialized()` and `PBService.client.functions.invoke('customer-push-admin', body: ...)`. Throw `FormatException` on malformed success payloads. Never model or expose subscription endpoints/key material.
 
-Map server errors through a local `_requireMap` helper; malformed responses throw `FormatException` instead of silently displaying false status. No raw subscription endpoint/key data exists in these models.
-
-- [ ] **Step 4: Run service tests and verify GREEN**
+- [ ] **Step 4: Run service GREEN**
 
 ```bash
 flutter test test/customer_push_service_test.dart
@@ -1039,27 +1111,30 @@ flutter test test/customer_push_service_test.dart
 
 Expected: PASS.
 
-- [ ] **Step 5: Write failing widget tests for the customer push card**
+- [ ] **Step 5: Write failing widget tests**
 
-Use a fake `CustomerPushGateway` and test:
-- inactive state shows `Push: ناچالاک` and `0 device`;
-- active state shows device count;
-- tapping **QR ـی ئاگادارکردنەوە** calls `createLink` and opens a dialog containing a `QrImageView` for exactly the returned URL;
-- tapping **بڕینی هەموو device ـەکان** asks confirmation before `revokeAll`;
-- successful revoke refreshes status;
-- service error shows a retry action without affecting the rest of the profile.
+Inject a fake gateway and verify:
 
-- [ ] **Step 6: Run widget test and verify RED**
-
-```bash
-flutter test test/customer_push_card_test.dart
+```dart
+testWidgets('QR button renders exact onboarding URL', (tester) async {
+  final gateway = FakePushGateway(
+    status: const CustomerPushStatus(active: false, deviceCount: 0),
+    link: CustomerPushLink(
+      url: Uri.parse('https://example.test/functions/v1/customer-push?token=${'a' * 64}'),
+      expiresAt: DateTime.parse('2026-09-17T00:15:00Z'),
+    ),
+  );
+  await tester.pumpWidget(MaterialApp(home: Scaffold(body: CustomerPushCard(customerId:'c1', gateway:gateway))));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('QR ـی ئاگادارکردنەوە'));
+  await tester.pumpAndSettle();
+  expect(find.byType(QrImageView), findsOneWidget);
+});
 ```
 
-Expected: FAIL because the widget does not exist.
+Also test active device count, revoke confirmation, refresh after revoke, and retry UI after a gateway error.
 
-- [ ] **Step 7: Implement `CustomerPushCard` as a self-contained widget**
-
-Constructor:
+- [ ] **Step 6: Implement `CustomerPushCard`**
 
 ```dart
 class CustomerPushCard extends StatefulWidget {
@@ -1069,14 +1144,12 @@ class CustomerPushCard extends StatefulWidget {
   const CustomerPushCard({
     super.key,
     required this.customerId,
-    CustomerPushGateway? gateway,
-  }) : gateway = gateway ?? const CustomerPushService();
+    this.gateway = const CustomerPushService(),
+  });
 }
 ```
 
-The widget owns only push-status loading, QR dialog state, revoke confirmation, and refresh. It does not own customer financial state.
-
-QR dialog renders:
+The widget owns only push status loading, QR dialog, revoke confirmation, and refresh. QR dialog uses:
 
 ```dart
 QrImageView(
@@ -1086,32 +1159,36 @@ QrImageView(
 )
 ```
 
-Show the expiry time and Sorani instruction that the QR works once and for 15 minutes.
+Display Sorani text that the QR is one-time and expires in 15 minutes.
 
-- [ ] **Step 8: Integrate the card into `UserProfileScreen` without enlarging the large screen's responsibilities**
+- [ ] **Step 7: Integrate into customer overview**
 
-Import `customer_push_card.dart`. In the customer profile overview section, mount:
+In `UserProfileScreen._buildCustomerBody()`, add the card to the `overview` slivers after `_buildDebtLimitCard()` and only for authorized staff:
 
 ```dart
-if (_isCustomer && auth.canSendNotifications) ...[
-  const SizedBox(height: 12),
-  CustomerPushCard(customerId: widget.userId),
-]
+if (auth.canSendNotifications)
+  SliverToBoxAdapter(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+      child: CustomerPushCard(customerId: widget.userId),
+    ),
+  ),
 ```
 
-Do not add push networking methods to `UserProfileScreen`. Do not show the management card to customer-role sessions or employees without notification permission.
+Do not add networking/state methods to `UserProfileScreen` itself.
 
-- [ ] **Step 9: Run focused and full Flutter tests**
+- [ ] **Step 8: Run focused and full Flutter verification**
 
 ```bash
+flutter pub get
 flutter test test/customer_push_service_test.dart test/customer_push_card_test.dart
 flutter test
 flutter analyze
 ```
 
-Expected: all PASS, analyze exits 0.
+Expected: all exit 0.
 
-- [ ] **Step 10: Commit Task 7**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add pubspec.yaml pubspec.lock \
@@ -1125,66 +1202,61 @@ git commit -m "feat(user): add customer push QR controls"
 
 ---
 
-### Task 8: Static policy verification, CI wiring, deployment verification, and release evidence
+### Task 8: Policy gate, CI, deployment, smoke test, and release evidence
 
 **Files:**
 - Create: `scripts/verify_customer_push.py`
 - Modify: `.github/workflows/ios-unsigned-ipa.yml`
-- Verify: all files from Tasks 1-7.
 
-**Interfaces:**
-- Consumes: complete feature.
-- Produces: CI gates and release evidence; no new product behavior.
-
-- [ ] **Step 1: Write the failing policy verifier**
-
-Create a Python verifier that exits non-zero unless all of these are true:
+- [ ] **Step 1: Write the static verifier**
 
 ```python
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-
 required = [
-    ROOT / "supabase/functions/customer-push/index.ts",
-    ROOT / "supabase/functions/customer-push-admin/index.ts",
-    ROOT / "supabase/functions/customer-push-worker/index.ts",
-    ROOT / "supabase/functions/customer-push-events/index.ts",
-    ROOT / "lib/services/customer_push_service.dart",
-    ROOT / "lib/widgets/customer_push_card.dart",
+    ROOT / 'supabase/functions/customer-push/index.ts',
+    ROOT / 'supabase/functions/customer-push-admin/index.ts',
+    ROOT / 'supabase/functions/customer-push-worker/index.ts',
+    ROOT / 'supabase/functions/customer-push-events/index.ts',
+    ROOT / 'lib/services/customer_push_service.dart',
+    ROOT / 'lib/widgets/customer_push_card.dart',
 ]
 for path in required:
-    assert path.exists(), f"missing {path.relative_to(ROOT)}"
+    assert path.exists(), f'missing {path.relative_to(ROOT)}'
 
-config = (ROOT / "supabase/config.toml").read_text()
-assert "[functions.customer-push]\nverify_jwt = false" in config
-assert "[functions.customer-push-worker]\nverify_jwt = false" in config
+config = (ROOT / 'supabase/config.toml').read_text()
+assert '[functions.customer-push]\nverify_jwt = false' in config
+assert '[functions.customer-push-worker]\nverify_jwt = false' in config
 
-flutter_text = "\n".join(
-    p.read_text(errors="ignore") for p in (ROOT / "lib").rglob("*.dart")
-)
-for forbidden in ["VAPID_PRIVATE_KEY", "CUSTOMER_PUSH_WORKER_SECRET", "CUSTOMER_PUSH_RATE_LIMIT_SALT"]:
-    assert forbidden not in flutter_text, f"server secret name leaked into Flutter: {forbidden}"
+flutter_text = '\n'.join(p.read_text(errors='ignore') for p in (ROOT / 'lib').rglob('*.dart'))
+for name in ['VAPID_PRIVATE_KEY','CUSTOMER_PUSH_WORKER_SECRET','CUSTOMER_PUSH_RATE_LIMIT_SALT']:
+    assert name not in flutter_text, f'server secret leaked to Flutter: {name}'
 
-migration_text = "\n".join(p.read_text() for p in (ROOT / "supabase/migrations").glob("*.sql"))
-assert "debt_created" in migration_text
-assert "payment_created" in migration_text
-assert "debt_updated" not in migration_text
+events_text = (ROOT / 'supabase/functions/customer-push-events/index.ts').read_text()
+assert 'legacy_import_links' in events_text
+assert 'daftar_sync_seen' in events_text
+
+payment_text = (ROOT / 'supabase/functions/record-payment/index.ts').read_text()
+assert 'payment_created' in payment_text
+assert 'enqueue_customer_push_event_service' in payment_text
+
+migration_text = '\n'.join(p.read_text() for p in (ROOT / 'supabase/migrations').glob('*.sql'))
+assert "event_type in ('debt_created','payment_created')" in migration_text
+print('customer push policy verified')
 ```
 
-Also assert the event Edge Function checks both import/sync provenance sources and that `record-payment` catches push enqueue failure rather than converting it into payment failure.
-
-- [ ] **Step 2: Run verifier before CI wiring**
+- [ ] **Step 2: Run verifier**
 
 ```bash
 python3 scripts/verify_customer_push.py
 ```
 
-Expected: PASS once Tasks 1-7 are complete; if any invariant is absent, fix that task before modifying CI.
+Expected: prints `customer push policy verified`.
 
-- [ ] **Step 3: Add Deno and policy gates to the existing iOS workflow**
+- [ ] **Step 3: Wire Deno/policy tests into existing iOS workflow**
 
-Insert after existing Python verification steps and before CocoaPods/build:
+Add before CocoaPods/analyze:
 
 ```yaml
       - name: Verify customer QR web push policy
@@ -1205,9 +1277,9 @@ Insert after existing Python verification steps and before CocoaPods/build:
                     supabase/functions/record-payment
 ```
 
-Do not remove or weaken any existing verification step.
+Do not remove any existing verification step.
 
-- [ ] **Step 4: Run complete local/static verification**
+- [ ] **Step 4: Run full pre-release verification**
 
 ```bash
 python3 scripts/verify_online_only.py
@@ -1227,42 +1299,42 @@ flutter test
 
 Expected: every command exits 0.
 
-- [ ] **Step 5: Apply backend and secrets in safe order**
+- [ ] **Step 5: Deploy backend in dependency order**
 
-Deployment order:
-1. Apply Task 1 migration(s).
-2. Deploy `customer-push-admin`, `customer-push`, `customer-push-worker`, `customer-push-events`, and updated `record-payment`.
-3. Generate/store VAPID keys, worker secret, and rate-limit salt in Supabase secrets.
-4. Store the same worker secret in Supabase Vault.
-5. Create the once-per-minute `pg_cron` invocation.
-6. Invoke `customer-push-worker` once with the correct secret and verify `{processed:0}` or a non-negative count.
-7. Query `cron.job` and verify exactly one active `customer-push-worker-every-minute` job.
+1. Apply the push migration.
+2. Deploy `customer-push-admin`, `customer-push`, `customer-push-worker`, `customer-push-events`, and the updated `record-payment`.
+3. Generate/set `CUSTOMER_PUSH_WORKER_SECRET`, `CUSTOMER_PUSH_RATE_LIMIT_SALT`, `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`.
+4. Store the same worker secret in Vault as `customer_push_worker_secret`.
+5. Install the one-minute cron SQL from Task 4.
+6. Invoke the worker once with the correct header and require HTTP 200 with a non-negative processed count.
+7. Query `cron.job` and require exactly one active job named `customer-push-worker-every-minute`.
 
-- [ ] **Step 6: Execute live smoke tests with a test customer**
+- [ ] **Step 6: Live smoke test with a dedicated test customer**
 
-Use a non-production test customer in one market:
-1. Generate QR and verify expiry is 15 minutes.
-2. Validate the same token through public onboarding.
-3. Link first browser/device and confirm token becomes unusable afterward.
-4. Generate a second QR and link a second device.
-5. Create one debt: exactly one `debt_created` outbox row and one delivery row per active device.
-6. Record one customer-wide payment spanning multiple debts: exactly one `payment_created` outbox row, not one per allocation.
+Execute in this order and capture row counts after each action:
+1. Create QR; confirm expiry = 15 minutes.
+2. Validate link; confirm only customer/market display names are returned.
+3. Link device A; confirm same token cannot link again.
+4. Create a new QR and link device B.
+5. Create one live debt; require one `debt_created` outbox row and exactly two delivery rows.
+6. Record one customer-wide payment spanning multiple debts; require one `payment_created` outbox row, not one per allocation, and two delivery rows.
 7. Confirm both devices receive both notifications.
-8. Revoke all and confirm subsequent eligible event completes with zero delivery rows.
-9. Force an invalid subscription endpoint in the test tenant and verify it becomes inactive/`expired` without changing the financial transaction result.
+8. Revoke all; confirm both subscriptions inactive and unused QR tokens revoked.
+9. Create another eligible event; require outbox completion with zero delivery rows.
+10. Force a test subscription to return 410; confirm delivery `expired`, subscription inactive, financial transaction still successful.
 
 - [ ] **Step 7: Trigger GitHub Actions and collect fresh release evidence**
 
-Push the final commit to `user-source`, wait for the `iOS Unsigned IPA` workflow, and require:
-- customer push policy PASS;
-- Deno tests PASS;
-- Flutter analyze PASS;
-- Flutter tests PASS;
-- iOS build/package/release PASS.
+Require the `iOS Unsigned IPA` run on `user-source` to show PASS for policy, Deno tests, Flutter analyze, Flutter tests, build, package, and release upload. Record:
 
-Record the workflow run ID, final commit SHA, permanent `user-latest` IPA URL, and SHA-256 checksum in the completion report.
+```text
+final commit SHA
+workflow run ID
+permanent user-latest IPA URL
+IPA SHA-256
+```
 
-- [ ] **Step 8: Commit Task 8**
+- [ ] **Step 8: Commit CI gate**
 
 ```bash
 git add scripts/verify_customer_push.py .github/workflows/ios-unsigned-ipa.yml
@@ -1271,10 +1343,12 @@ git commit -m "ci(user): verify customer QR web push"
 
 ---
 
-## Plan Self-Review Results
+## Self-Review Results
 
-- Spec coverage: QR creation, 15-minute single-use token, multi-device subscriptions, iOS Home Screen onboarding, server-only secrets, tenant security, rate limiting, debt/payment-only event scope, immutable outbox, idempotency, delivery audit, bounded retry, invalid subscription retirement, revoke-all, push status UI, import/sync exclusion, push failure isolation, and CI/iOS verification are each assigned to a concrete task.
-- Type consistency: Flutter gateway types and Edge Function action names are defined once and reused consistently; event types are exactly `debt_created` and `payment_created`; worker terminal states match the design spec.
-- Existing behavior protection: current in-app/local and Telegram notification paths are explicitly preserved; financial success remains authoritative.
-- Customer-wide payment ambiguity is resolved explicitly: one payment action produces one push event using the first persisted allocation payment row as the canonical event record, while the message amount is the total payment action amount.
-- No implementation step depends on a secret committed to Git; all sensitive values are generated and stored only at deployment time.
+- Every accepted spec section maps to a task: QR/token security, multi-device linking, iOS onboarding, server-only secrets, tenant permissions, rate limiting, outbox/idempotency, frozen fan-out, bounded retry, audit states, revoke-all, debt/payment-only event scope, import/sync exclusion, Flutter status/QR UI, CI, and iOS release verification.
+- Customer-wide payment ambiguity is resolved: one payment action creates one push event using the first persisted allocation payment row only as the canonical event identifier; message amount is the full payment action.
+- `fanout_at` prevents a newly linked device from receiving an old event during a retry pass.
+- Claiming an outbox row sets a two-minute lease so a crashed worker can be reclaimed without concurrent immediate reprocessing.
+- Existing in-app/local and Telegram paths are preserved.
+- No runtime secret is committed to Git.
+- No unresolved placeholder or unspecified interface remains in this plan.
