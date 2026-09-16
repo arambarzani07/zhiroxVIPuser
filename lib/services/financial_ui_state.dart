@@ -1,4 +1,4 @@
-/// Presentation state for the single-sheet customer payment flow.
+/// Presentation state for the compact, single-sheet customer payment flow.
 enum FinancialPaymentStep { target, amount, review }
 
 /// Counts the independent filter dimensions currently narrowing Financial Chat.
