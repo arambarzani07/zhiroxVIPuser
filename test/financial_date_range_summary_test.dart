@@ -139,6 +139,11 @@ void main() {
     expect(last7.start, DateTime(2026, 9, 10));
     expect(last7.end, DateTime(2026, 9, 16));
 
+    final last30 =
+        resolveFinancialQuickRange(FinancialQuickRange.last30Days, now);
+    expect(last30.start, DateTime(2026, 8, 18));
+    expect(last30.end, DateTime(2026, 9, 16));
+
     final month =
         resolveFinancialQuickRange(FinancialQuickRange.thisMonth, now);
     expect(month.start, DateTime(2026, 9, 1));
