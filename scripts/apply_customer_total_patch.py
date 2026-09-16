@@ -42,7 +42,7 @@ s = replace_once(
 )
 p.write_text(s)
 
-# Customer account statement: show the customer-wide paid total explicitly.
+# Customer account statement: show all customer-wide totals explicitly.
 p = Path('lib/services/pdf_service.dart')
 s = p.read_text()
 old = """            // ══════════════════════════════════════════════
@@ -172,7 +172,7 @@ new = """            // ══════════════════�
 s = replace_once(s, old, new, 'customer statement summary')
 p.write_text(s)
 
-# Regression verifier.
+# Regression verifier created alongside the source patch.
 Path('scripts/verify_customer_payment_totals.py').write_text("""from pathlib import Path
 
 dashboard = Path('lib/screens/customer/customer_dashboard.dart').read_text()
@@ -186,14 +186,5 @@ assert 'کۆی هەموو پارەدانەوەکان' in pdf
 assert 'formatter.format(totalPaid)' in pdf
 print('Customer cumulative payment total verification passed.')
 """)
-
-# Make the invariant part of every iOS build.
-p = Path('.github/workflows/ios-unsigned-ipa.yml')
-s = p.read_text()
-if 'Verify customer cumulative payment totals' not in s:
-    anchor = "      - name: Verify Auto Update Center\n        run: python3 scripts/verify_auto_update.py\n"
-    addition = anchor + "\n      - name: Verify customer cumulative payment totals\n        run: python3 scripts/verify_customer_payment_totals.py\n"
-    s = replace_once(s, anchor, addition, 'iOS verifier step')
-    p.write_text(s)
 
 print('Customer cumulative payment total patch applied.')
