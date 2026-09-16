@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/receipt_document_service.dart';
 import 'package:zhirox/services/receipt_settings_service.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -46,8 +47,18 @@ class PaymentReceiptService {
       'customer_phone': ['مۆبایل', 'الهاتف', 'Phone'],
       'manager': ['بەڕێوەبەر', 'المدير', 'Manager'],
       'debt': ['بابەتی قەرز', 'بيان الدين', 'Debt'],
-      'paid': ['بڕی پارەدان', 'المبلغ المدفوع', 'Amount paid'],
-      'remaining': ['ماوەی قەرز', 'المتبقي', 'Remaining'],
+      'paid': ['بڕی ئەم پارەدانەوەیە', 'مبلغ هذه الدفعة', 'This payment'],
+      'total_paid': [
+        'کۆی هەموو پارەدانەوەکان',
+        'إجمالي جميع الدفعات',
+        'Total payments',
+      ],
+      'remaining': ['ماوەی ئەم قەرزە', 'المتبقي من هذا الدين', 'This debt remaining'],
+      'total_remaining': [
+        'کۆی قەرزی ماوەی کڕیار',
+        'إجمالي الدين المتبقي للزبون',
+        'Customer total remaining',
+      ],
       'method': ['جۆری پارەدان', 'طريقة الدفع', 'Payment method'],
       'note': ['تێبینی', 'ملاحظة', 'Note'],
       'stamp': ['مۆر / واژۆی مارکێت', 'ختم / توقيع السوق', 'Market stamp / signature'],
@@ -151,6 +162,45 @@ class PaymentReceiptService {
     );
   }
 
+  static ({
+    double currentPayment,
+    double customerTotalPaidIqd,
+    double currentDebtRemaining,
+    double customerTotalRemainingIqd,
+  }) resolveFinancialSummary({
+    required double paymentAmount,
+    required double debtRemaining,
+    required double customerTotalPaidIqd,
+    required double customerTotalRemainingIqd,
+  }) {
+    return (
+      currentPayment: paymentAmount,
+      customerTotalPaidIqd: customerTotalPaidIqd,
+      currentDebtRemaining: debtRemaining,
+      customerTotalRemainingIqd: customerTotalRemainingIqd,
+    );
+  }
+
+  static Future<({double paid, double remaining})?> _customerTotals(
+    RecordModel debt,
+  ) async {
+    final customerId = debt.getStringValue('customer').trim();
+    if (customerId.isEmpty) return null;
+
+    try {
+      final snapshot = await PBService.getCustomerFinanceSnapshot(customerId);
+      return (
+        paid: (snapshot['totalPaidIqd'] as num?)?.toDouble() ?? 0,
+        remaining: (snapshot['totalRemainingIqd'] as num?)?.toDouble() ?? 0,
+      );
+    } catch (_) {
+      // A receipt for the current payment can still be generated if the
+      // aggregate snapshot is temporarily unavailable. In that case we omit
+      // customer-wide rows rather than displaying a misleading debt-only total.
+      return null;
+    }
+  }
+
   static Future<Uint8List> buildPaymentReceiptBytes({
     required RecordModel payment,
     required RecordModel debt,
@@ -177,6 +227,15 @@ class PaymentReceiptService {
     final paymentNote = payment.getStringValue('note').trim();
     final paymentAmount = payment.getDoubleValue('amount');
     final remaining = debt.getDoubleValue('remaining');
+    final customerTotals = await _customerTotals(debt);
+    final financialSummary = customerTotals == null
+        ? null
+        : resolveFinancialSummary(
+            paymentAmount: paymentAmount,
+            debtRemaining: remaining,
+            customerTotalPaidIqd: customerTotals.paid,
+            customerTotalRemainingIqd: customerTotals.remaining,
+          );
     final createdRaw = payment.getStringValue('created').trim();
     final created = createdRaw.isEmpty
         ? DateTime.now().toLocal().toString().substring(0, 16)
@@ -362,10 +421,25 @@ class PaymentReceiptService {
                   _money(debt, paymentAmount),
                   strong: true,
                 ),
+                if (financialSummary != null)
+                  infoLine(
+                    _label('total_paid', language),
+                    AppHelpers.formatCurrency(
+                      financialSummary.customerTotalPaidIqd,
+                    ),
+                    strong: true,
+                  ),
                 infoLine(
                   _label('remaining', language),
                   _money(debt, remaining),
                 ),
+                if (financialSummary != null)
+                  infoLine(
+                    _label('total_remaining', language),
+                    AppHelpers.formatCurrency(
+                      financialSummary.customerTotalRemainingIqd,
+                    ),
+                  ),
               ],
             ),
           ),
