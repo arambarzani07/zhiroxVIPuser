@@ -1,0 +1,33 @@
+name: Apply customer sticky header once
+
+on:
+  push:
+    branches:
+      - user-source
+    paths:
+      - scripts/patch_customer_sticky_header.py
+      - .github/workflows/apply-customer-sticky-header-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: user-source
+      - name: Apply sticky header patch
+        run: python3 scripts/patch_customer_sticky_header.py
+      - name: Remove one-time patch files
+        run: |
+          rm scripts/patch_customer_sticky_header.py
+          rm .github/workflows/apply-customer-sticky-header-once.yml
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/shared/user_list_screen.dart scripts/patch_customer_sticky_header.py .github/workflows/apply-customer-sticky-header-once.yml
+          git commit -m "fix(user): keep customer directory controls pinned"
+          git push origin HEAD:user-source
