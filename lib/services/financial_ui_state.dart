@@ -1,5 +1,7 @@
+/// Presentation state for the single-sheet customer payment flow.
 enum FinancialPaymentStep { target, amount, review }
 
+/// Counts the independent filter dimensions currently narrowing Financial Chat.
 int countActiveFinancialFilters({
   required String query,
   required bool hasDateRange,
@@ -13,12 +15,14 @@ int countActiveFinancialFilters({
   return count;
 }
 
+/// Active filters keep the compact filter panel visible until they are cleared.
 bool shouldExpandFinancialFilters({
   required bool requestedExpanded,
   required int activeFilterCount,
 }) =>
     requestedExpanded || activeFilterCount > 0;
 
+/// Resolves which payment step should be emphasized without changing data.
 FinancialPaymentStep resolveFinancialPaymentStep({
   required bool targetSelected,
   required double amount,
