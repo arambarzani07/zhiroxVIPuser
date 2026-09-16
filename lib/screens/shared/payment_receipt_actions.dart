@@ -21,6 +21,16 @@ class _PaymentReceiptIdentity {
   });
 }
 
+class _CustomerPaymentTotals {
+  final double paid;
+  final double remaining;
+
+  const _CustomerPaymentTotals({
+    required this.paid,
+    required this.remaining,
+  });
+}
+
 class PaymentReceiptActions {
   PaymentReceiptActions._();
 
@@ -57,12 +67,33 @@ class PaymentReceiptActions {
     );
   }
 
+  static Future<_CustomerPaymentTotals?> _customerTotals(RecordModel debt) async {
+    final customerId = debt.getStringValue('customer').trim();
+    if (customerId.isEmpty) return null;
+
+    try {
+      final snapshot = await PBService.getCustomerFinanceSnapshot(customerId);
+      return _CustomerPaymentTotals(
+        paid: (snapshot['totalPaidIqd'] as num?)?.toDouble() ?? 0,
+        remaining: (snapshot['totalRemainingIqd'] as num?)?.toDouble() ?? 0,
+      );
+    } catch (_) {
+      // Receipt actions must remain usable even if the aggregate snapshot
+      // cannot be loaded temporarily.
+      return null;
+    }
+  }
+
   static Future<void> show(
     BuildContext context, {
     required RecordModel payment,
     required RecordModel debt,
   }) async {
     if (!context.mounted) return;
+
+    final totals = await _customerTotals(debt);
+    if (!context.mounted) return;
+
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -72,13 +103,35 @@ class PaymentReceiptActions {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const ListTile(
-                leading: Icon(Icons.payments_outlined),
-                title: Text(
+              ListTile(
+                leading: const Icon(Icons.payments_outlined),
+                title: const Text(
                   'پسوولەی پارەدانەوە',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
-                subtitle: Text('Payment Template • چاپ یان Share بە PDF / Image'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Payment Template • چاپ یان Share بە PDF / Image'),
+                    if (totals != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'کۆی هەموو پارەدانەوەکان: ${AppHelpers.formatCurrency(totals.paid)}',
+                        textDirection: TextDirection.rtl,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.green,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'کۆی ماوەی کڕیار: ${AppHelpers.formatCurrency(totals.remaining)}',
+                        textDirection: TextDirection.rtl,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               ListTile(
                 leading: const Icon(Icons.print_outlined),
