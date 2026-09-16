@@ -47,6 +47,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const debtId = String(body.debt_id ?? "").trim();
+    const customerId = String(body.customer_id ?? "").trim();
     const amount = Number(body.amount);
     const note = String(body.note ?? "");
     const referenceKind = body.reference_kind == null
@@ -55,8 +56,26 @@ Deno.serve(async (req) => {
     const referenceId = body.reference_id == null
       ? null
       : String(body.reference_id);
-    if (!debtId || !Number.isFinite(amount) || amount <= 0) {
+
+    if ((!debtId && !customerId) || (debtId && customerId) ||
+        !Number.isFinite(amount) || amount <= 0) {
       return json({ error: "invalid_input" }, 400);
+    }
+
+    if (customerId) {
+      const { data, error } = await admin.rpc("record_customer_payment_service", {
+        p_actor_id: userData.user.id,
+        p_customer_id: customerId,
+        p_amount: amount,
+        p_note: note,
+        p_reference_kind: referenceKind,
+        p_reference_id: referenceId,
+      });
+      if (error) {
+        const status = error.code === "42501" ? 403 : 400;
+        return json({ error: error.message, code: error.code }, status);
+      }
+      return json(data);
     }
 
     const { data, error } = await admin.rpc("record_payment_service", {
