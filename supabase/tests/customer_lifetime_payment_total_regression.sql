@@ -10,20 +10,27 @@ declare
   v_before numeric;
   v_after numeric;
 begin
-  select d.customer_id, d.id, coalesce(sum(p.amount), 0)
+  select d.customer_id,
+         d.id,
+         greatest(coalesce(d.amount, 0) - coalesce(d.remaining, 0), 0)
     into v_customer, v_debt, v_paid
   from public.debts d
-  join public.payments p on p.debt_id = d.id
   where d.is_deleted = false
-  group by d.customer_id, d.id
-  having coalesce(sum(p.amount), 0) > 0
+    and greatest(coalesce(d.amount, 0) - coalesce(d.remaining, 0), 0) > 0
+  order by d.created_at desc, d.id desc
   limit 1;
 
   if v_customer is null or v_debt is null or v_paid <= 0 then
     raise exception 'paid debt fixture required';
   end if;
 
-  v_before := coalesce((public.get_customer_finance_snapshot(v_customer)->>'total_paid_iqd')::numeric, 0);
+  perform set_config('request.jwt.claim.sub', v_customer::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+
+  v_before := coalesce(
+    (public.get_customer_finance_snapshot(v_customer)->>'total_paid_iqd')::numeric,
+    0
+  );
 
   update public.debts
   set is_deleted = true,
@@ -31,7 +38,10 @@ begin
       deleted_by = null
   where id = v_debt;
 
-  v_after := coalesce((public.get_customer_finance_snapshot(v_customer)->>'total_paid_iqd')::numeric, 0);
+  v_after := coalesce(
+    (public.get_customer_finance_snapshot(v_customer)->>'total_paid_iqd')::numeric,
+    0
+  );
 
   if v_after <> v_before then
     raise exception 'lifetime payment total changed after debt archival: before %, after %, archived debt paid %',
