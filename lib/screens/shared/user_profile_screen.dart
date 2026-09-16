@@ -12,6 +12,7 @@ import 'package:zhirox/screens/shared/financial_document_actions.dart';
 
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/financial_date_range_summary.dart';
+import 'package:zhirox/services/financial_ui_state.dart';
 import 'package:zhirox/services/pdf_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -98,6 +99,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   final _financialSearchController = TextEditingController();
   DateTimeRange? _financialDateRange;
   String _financialTypeFilter = 'all';
+  bool _financialFiltersExpanded = false;
   _ProfileTimelineItem? _financialReplyTarget;
 
   final _nameController = TextEditingController();
@@ -1041,7 +1043,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ? _generateCurrentFinancialStatement
                   : _showIncompleteCurrencySummaryMessage,
               icon: const Icon(Icons.receipt_long_rounded, size: 19),
-              label: const Text('پوختەی قەرز'),
+              label: const Text('کەشفی گشتی'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
                 foregroundColor: _accentColor,
@@ -1409,6 +1411,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     setState(() {
       _financialDateRange = null;
       _financialTypeFilter = 'all';
+      _financialFiltersExpanded = false;
     });
   }
 
@@ -1418,7 +1421,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     required double totalPaid,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasFilters = _hasFinancialFilters;
+    final activeFilterCount = countActiveFinancialFilters(
+      query: _financialSearchController.text,
+      hasDateRange: _financialDateRange != null,
+      typeFilter: _financialTypeFilter,
+    );
+    final expanded = shouldExpandFinancialFilters(
+      requestedExpanded: _financialFiltersExpanded,
+      activeFilterCount: activeFilterCount,
+    );
     final dateLabel = _financialDateRange == null
         ? 'بەروار'
         : '${DateFormat('yyyy/MM/dd').format(_financialDateRange!.start)} — '
@@ -1496,129 +1507,255 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _financialSearchController,
-          onChanged: (_) {
-            setState(() {});
-            _scheduleFinancialSearchHydration();
-          },
-          textInputAction: TextInputAction.search,
-          decoration: InputDecoration(
-            hintText: 'گەڕان لە قەرز، پارە وەرگرتنەوە، بڕ یان تێبینی...',
-            prefixIcon: const Icon(Icons.search_rounded, size: 19),
-            suffixIcon: _financialSearchController.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: 'سڕینەوەی گەڕان',
-                    onPressed: () {
-                      _financialSearchDebounce?.cancel();
-                      _financialSearchController.clear();
-                      setState(() {});
-                    },
-                    icon: const Icon(Icons.close_rounded, size: 18),
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.025)
+            : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFE4E7EC),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(13),
+                  onTap: () => setState(
+                    () => _financialFiltersExpanded = !expanded,
                   ),
-            isDense: true,
-            filled: true,
-            fillColor: isDark
-                ? Colors.white.withValues(alpha: 0.04)
-                : const Color(0xFFF8FAFC),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(13),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(13),
-              borderSide: BorderSide(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.tune_rounded,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 7),
+                        const Text(
+                          'گەڕان و فلتەر',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (activeFilterCount > 0) ...[
+                          const SizedBox(width: 7),
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 22),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '$activeFilterCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const Spacer(),
+                        Icon(
+                          expanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          size: 19,
+                          color: isDark
+                              ? AppDarkColors.textSecondary
+                              : const Color(0xFF667085),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 28,
                 color: isDark
                     ? Colors.white.withValues(alpha: 0.07)
                     : const Color(0xFFE4E7EC),
               ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 9),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              typeChip('all', 'هەموو', Icons.all_inclusive_rounded),
-              typeChip('debt', 'قەرز', Icons.north_east_rounded),
-              typeChip('payment', 'پارە وەرگرتنەوە', Icons.south_west_rounded),
-              typeChip('system', 'مێژووی گۆڕانکاری', Icons.history_rounded),
-            ],
-          ),
-        ),
-        const SizedBox(height: 7),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              quickChip(FinancialQuickRange.today, 'ئەمڕۆ'),
-              quickChip(FinancialQuickRange.yesterday, 'دوێنێ'),
-              quickChip(FinancialQuickRange.last7Days, '7 ڕۆژ'),
-              quickChip(FinancialQuickRange.last30Days, '30 ڕۆژ'),
-              quickChip(FinancialQuickRange.thisMonth, 'ئەم مانگە'),
-              quickChip(FinancialQuickRange.lastMonth, 'مانگی ڕابردوو'),
-              quickChip(FinancialQuickRange.thisYear, 'ئەم ساڵە'),
-            ],
-          ),
-        ),
-        const SizedBox(height: 9),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _pickFinancialDateRange,
-                icon: const Icon(Icons.date_range_outlined, size: 17),
-                label: Text(
-                  dateLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(42),
-                  textStyle: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 7),
-            Expanded(
-              child: OutlinedButton.icon(
+              TextButton.icon(
                 onPressed: _generateFilteredFinancialChatStatement,
-                icon: const Icon(Icons.ios_share_rounded, size: 17),
-                label: const Text('کەشفی مامەڵەکان'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(42),
+                icon: const Icon(Icons.ios_share_rounded, size: 16),
+                label: const Text('کەشف'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
                   textStyle: const TextStyle(
                     fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-            ),
-            if (hasFilters) ...[
-              const SizedBox(width: 5),
-              IconButton(
-                tooltip: 'پاککردنەوەی فلتەرەکان',
-                onPressed: _clearFinancialFilters,
-                icon: const Icon(Icons.filter_alt_off_outlined, size: 19),
-              ),
+              const SizedBox(width: 4),
             ],
-          ],
-        ),
-      ],
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 2, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Divider(
+                    height: 1,
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : const Color(0xFFE4E7EC),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _financialSearchController,
+                    onChanged: (_) {
+                      setState(() {});
+                      _scheduleFinancialSearchHydration();
+                    },
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'گەڕان لە مامەڵە، بڕ یان تێبینی...',
+                      prefixIcon: const Icon(Icons.search_rounded, size: 19),
+                      suffixIcon: _financialSearchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'سڕینەوەی گەڕان',
+                              onPressed: () {
+                                _financialSearchDebounce?.cancel();
+                                _financialSearchController.clear();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                            ),
+                      isDense: true,
+                      filled: true,
+                      fillColor: isDark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.07)
+                              : const Color(0xFFE4E7EC),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        typeChip('all', 'هەموو', Icons.all_inclusive_rounded),
+                        typeChip('debt', 'قەرز', Icons.north_east_rounded),
+                        typeChip(
+                          'payment',
+                          'پارەدانەوە',
+                          Icons.south_west_rounded,
+                        ),
+                        typeChip('system', 'گۆڕانکاری', Icons.history_rounded),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        quickChip(FinancialQuickRange.today, 'ئەمڕۆ'),
+                        quickChip(FinancialQuickRange.yesterday, 'دوێنێ'),
+                        quickChip(FinancialQuickRange.last7Days, '7 ڕۆژ'),
+                        quickChip(FinancialQuickRange.last30Days, '30 ڕۆژ'),
+                        quickChip(FinancialQuickRange.thisMonth, 'ئەم مانگە'),
+                        quickChip(
+                          FinancialQuickRange.lastMonth,
+                          'مانگی ڕابردوو',
+                        ),
+                        quickChip(FinancialQuickRange.thisYear, 'ئەم ساڵە'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pickFinancialDateRange,
+                          icon: const Icon(Icons.date_range_outlined, size: 17),
+                          label: Text(
+                            dateLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(40),
+                            textStyle: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (activeFilterCount > 0) ...[
+                        const SizedBox(width: 7),
+                        OutlinedButton.icon(
+                          onPressed: _clearFinancialFilters,
+                          icon: const Icon(
+                            Icons.filter_alt_off_outlined,
+                            size: 17,
+                          ),
+                          label: const Text('پاککردنەوە'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 40),
+                            textStyle: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            crossFadeState: expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 180),
+            sizeCurve: Curves.easeOutCubic,
+          ),
+        ],
+      ),
     );
   }
 
@@ -1830,31 +1967,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _buildChatSummaryValue(
-                        label: 'قەرز',
-                        value: totalsComplete ? totalDebt : double.nan,
-                        color: Colors.orange,
-                        isDark: isDark,
-                      ),
-                      const SizedBox(width: 7),
-                      _buildChatSummaryValue(
-                        label: 'دراوە',
-                        value: totalsComplete ? totalPaid : double.nan,
-                        color: Colors.green,
-                        isDark: isDark,
-                      ),
-                      const SizedBox(width: 7),
-                      _buildChatSummaryValue(
-                        label: 'ماوە',
-                        value: totalsComplete ? totalRemaining : double.nan,
-                        color: totalsComplete && totalRemaining > 0
-                            ? Colors.red
-                            : Colors.green,
-                        isDark: isDark,
-                      ),
-                    ],
+                  _buildCompactFinancialOverview(
+                    totalDebt: totalDebt,
+                    totalPaid: totalPaid,
+                    totalRemaining: totalRemaining,
+                    totalsComplete: totalsComplete,
+                    healthLabel: health.$1,
+                    healthColor: health.$2,
+                    isDark: isDark,
                   ),
                   const SizedBox(height: 12),
                   _buildFinancialChatTools(
@@ -1871,15 +1991,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ),
             const SizedBox(height: 9),
-            if (totalsComplete)
-              _buildDebtHealthStrip(
-                label: health.$1,
-                color: health.$2,
-                totalRemaining: totalRemaining,
-                totalPaid: totalPaid,
-              )
-            else
-              _buildCurrencySummaryWarning(compact: true),
+            if (!totalsComplete) _buildCurrencySummaryWarning(compact: true),
             const SizedBox(height: 12),
             if (!hasFilters && _financialTimelineHasMore) ...[
               OutlinedButton.icon(
@@ -1943,6 +2055,185 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         childCount: renderEntries.length + 2,
         addAutomaticKeepAlives: false,
       ),
+    );
+  }
+
+  Widget _buildCompactFinancialOverview({
+    required double totalDebt,
+    required double totalPaid,
+    required double totalRemaining,
+    required bool totalsComplete,
+    required String healthLabel,
+    required Color healthColor,
+    required bool isDark,
+  }) {
+    final remainingColor = totalsComplete && totalRemaining <= 0
+        ? Colors.green.shade700
+        : Colors.red.shade700;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.035)
+            : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFE4E7EC),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ماوەی هەژمار',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? AppDarkColors.textSecondary
+                            : const Color(0xFF667085),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      totalsComplete
+                          ? AppHelpers.formatCurrency(totalRemaining)
+                          : '—',
+                      textDirection: TextDirection.ltr,
+                      style: TextStyle(
+                        fontSize: 18,
+                        height: 1.15,
+                        fontWeight: FontWeight.w900,
+                        color: remainingColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (totalsComplete)
+                Container(
+                  constraints: const BoxConstraints(maxWidth: 170),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: healthColor.withValues(alpha: isDark ? 0.12 : 0.08),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.shield_outlined,
+                        size: 13,
+                        color: healthColor,
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          healthLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            color: healthColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Divider(
+            height: 1,
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : const Color(0xFFE4E7EC),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildCompactMetric(
+                  label: 'کۆی قەرز',
+                  value: totalsComplete
+                      ? AppHelpers.formatCurrency(totalDebt)
+                      : '—',
+                  color: Colors.orange.shade800,
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildCompactMetric(
+                  label: 'پارەدانەوە',
+                  value: totalsComplete
+                      ? AppHelpers.formatCurrency(totalPaid)
+                      : '—',
+                  color: Colors.green.shade700,
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactMetric({
+    required String label,
+    required String value,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w600,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF667085),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textDirection: TextDirection.ltr,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -2433,52 +2724,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (ratio >= 0.75) return ('ئاگاداری — پارە وەرگرتنەوە کەمە', Colors.orange);
     if (ratio >= 0.35) return ('مامناوەند — پێویستی بە چاودێرییە', Colors.blue);
     return ('باش — پارە وەرگرتنەوە ڕێکوپێکە', Colors.green);
-  }
-
-  Widget _buildDebtHealthStrip({
-    required String label,
-    required Color color,
-    required double totalRemaining,
-    required double totalPaid,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: isDark ? 0.08 : 0.06),
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: color.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.shield_outlined, color: color, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'ماوە ${AppHelpers.formatCurrency(totalRemaining)}',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: isDark
-                  ? AppDarkColors.textSecondary
-                  : const Color(0xFF667085),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildEmptyTimelineState(bool isDark) {
@@ -3218,11 +3463,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   title: const Text('چاپکردنی وەسڵ'),
                   onTap: () => Navigator.pop(sheetContext, 'invoice'),
                 ),
-              ListTile(
-                leading: const Icon(Icons.receipt_long_outlined),
-                title: const Text('پوختەی قەرز'),
-                onTap: () => Navigator.pop(sheetContext, 'statement'),
-              ),
             ],
           ),
         );
@@ -3262,9 +3502,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         if (debt != null) {
           await FinancialDocumentActions.generateDebtInvoice(context, debt);
         }
-        break;
-      case 'statement':
-        await _generateCurrentFinancialStatement();
         break;
     }
   }

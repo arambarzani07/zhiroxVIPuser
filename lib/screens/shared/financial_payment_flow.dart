@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:zhirox/screens/shared/payment_receipt_actions.dart';
 import 'package:zhirox/services/customer_payment_allocator.dart';
+import 'package:zhirox/services/financial_ui_state.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -90,199 +91,174 @@ class FinancialPaymentFlow {
     );
   }
 
-  static Future<bool> _confirmSingle({
-    required BuildContext context,
-    required RecordModel debt,
-    required double storageAmount,
-  }) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final remaining = debt.getDoubleValue('remaining');
-    final after = (remaining - storageAmount).clamp(0.0, remaining).toDouble();
-    final description = debt.getStringValue('description').trim();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.verified_outlined, color: Colors.green),
-            SizedBox(width: 8),
-            Expanded(child: Text('پشتڕاستکردنەوەی پارەدان')),
-          ],
-        ),
-        content: Column(
+  static Widget _buildPaymentProgress(
+    FinancialPaymentStep step,
+    bool isDark,
+  ) {
+    const steps = [
+      (FinancialPaymentStep.target, 'قەرز'),
+      (FinancialPaymentStep.amount, 'بڕ'),
+      (FinancialPaymentStep.review, 'پشتڕاستکردنەوە'),
+    ];
+    final currentIndex = steps.indexWhere((entry) => entry.$1 == step);
+    return Row(
+      children: List.generate(steps.length * 2 - 1, (index) {
+        if (index.isOdd) {
+          final connectorIndex = index ~/ 2;
+          final completed = connectorIndex < currentIndex;
+          return Expanded(
+            child: Container(
+              height: 2,
+              margin: const EdgeInsets.symmetric(horizontal: 5),
+              color: completed
+                  ? AppColors.primary
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.10)
+                      : const Color(0xFFE4E7EC)),
+            ),
+          );
+        }
+        final stepIndex = index ~/ 2;
+        final active = stepIndex == currentIndex;
+        final completed = stepIndex < currentIndex;
+        final color = active || completed
+            ? AppColors.primary
+            : (isDark
+                ? AppDarkColors.textSecondary
+                : const Color(0xFF98A2B3));
+        return Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (description.isNotEmpty) ...[
-              Text(
-                description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+            Container(
+              width: 25,
+              height: 25,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: active || completed
+                    ? AppColors.primary.withValues(alpha: active ? 0.16 : 0.10)
+                    : (isDark
+                        ? Colors.white.withValues(alpha: 0.04)
+                        : const Color(0xFFF2F4F7)),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: active || completed
+                      ? AppColors.primary.withValues(alpha: 0.45)
+                      : Colors.transparent,
+                ),
               ),
-              const SizedBox(height: 12),
-            ],
-            _confirmationRow(
-              'ماوەی پێش پارەدان',
-              _formatDisplay(debt, remaining),
-              isDark,
+              child: completed
+                  ? Icon(Icons.check_rounded, size: 14, color: color)
+                  : Text(
+                      '${stepIndex + 1}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: color,
+                      ),
+                    ),
             ),
-            const SizedBox(height: 8),
-            _confirmationRow(
-              'بڕی پارەدان',
-              _formatDisplay(debt, storageAmount),
-              isDark,
-              valueColor: Colors.green.shade700,
+            const SizedBox(height: 3),
+            Text(
+              steps[stepIndex].$2,
+              style: TextStyle(
+                fontSize: 8.5,
+                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                color: color,
+              ),
             ),
-            const Divider(height: 20),
-            _confirmationRow(
-              'ماوەی دوای پارەدان',
-              _formatDisplay(debt, after),
-              isDark,
-              valueColor: after > 0 ? Colors.orange.shade800 : Colors.green.shade700,
-              emphasized: true,
-            ),
-            if (after <= 0) ...[
-              const SizedBox(height: 10),
-              _successHint('ئەم پارەدانە قەرزەکە بە تەواوی دادەخات.'),
-            ],
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('پاشگەزبوونەوە'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            icon: const Icon(Icons.check_rounded, size: 18),
-            label: const Text('پشتڕاستە — تۆمار بکە'),
-            style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700),
-          ),
-        ],
-      ),
+        );
+      }),
     );
-    return result == true;
   }
 
-  static Future<bool> _confirmCustomer({
-    required BuildContext context,
-    required double currentBalance,
+  static Widget _buildInlineReview({
+    required bool isAll,
+    required RecordModel? debt,
+    required double before,
     required double amount,
+    required double after,
     required int allocationCount,
-  }) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final after = (currentBalance - amount).clamp(0.0, currentBalance).toDouble();
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.verified_outlined, color: Colors.green),
-            SizedBox(width: 8),
-            Expanded(child: Text('پشتڕاستکردنەوەی پارەدانی کڕیار')),
-          ],
+    required bool isDark,
+  }) {
+    final amountText = isAll
+        ? AppHelpers.formatCurrency(amount)
+        : _formatDisplay(debt!, amount);
+    final beforeText = isAll
+        ? AppHelpers.formatCurrency(before)
+        : _formatDisplay(debt!, before);
+    final afterText = isAll
+        ? AppHelpers.formatCurrency(after)
+        : _formatDisplay(debt!, after);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: isDark ? 0.09 : 0.055),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.18),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _confirmationRow(
-              'کۆی ماوەی کڕیار',
-              AppHelpers.formatCurrency(currentBalance),
-              isDark,
-            ),
-            const SizedBox(height: 8),
-            _confirmationRow(
-              'بڕی پارەدان',
-              AppHelpers.formatCurrency(amount),
-              isDark,
-              valueColor: Colors.green.shade700,
-            ),
-            const SizedBox(height: 8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.fact_check_outlined,
+                size: 18,
+                color: AppColors.primary,
+              ),
+              SizedBox(width: 7),
+              Text(
+                'پێداچوونەوەی کۆتایی',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _confirmationRow('ماوەی پێش پارەدان', beforeText, isDark),
+          const SizedBox(height: 7),
+          _confirmationRow(
+            'بڕی پارەدان',
+            amountText,
+            isDark,
+            valueColor: Colors.green.shade700,
+          ),
+          if (isAll) ...[
+            const SizedBox(height: 7),
             _confirmationRow(
               'ژمارەی قەرزی کاریگەر',
               '$allocationCount',
               isDark,
             ),
-            const Divider(height: 20),
-            _confirmationRow(
-              'کۆی ماوە دوای پارەدان',
-              AppHelpers.formatCurrency(after),
-              isDark,
-              valueColor: after > 0 ? Colors.orange.shade800 : Colors.green.shade700,
-              emphasized: true,
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.account_tree_outlined, color: AppColors.primary, size: 18),
-                  SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      'بڕەکە بە خۆکار لە قەرزە کۆنترەکانەوە بەرەو نوێترەکان دابەش دەکرێت.',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (after <= 0) ...[
-              const SizedBox(height: 10),
-              _successHint('ئەم پارەدانە هەموو قەرزە ماوەکان دادەخات.'),
-            ],
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('پاشگەزبوونەوە'),
+          const Divider(height: 18),
+          _confirmationRow(
+            'ماوەی دوای پارەدان',
+            afterText,
+            isDark,
+            valueColor: after <= 0 ? Colors.green : Colors.orange,
+            emphasized: true,
           ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            icon: const Icon(Icons.check_rounded, size: 18),
-            label: const Text('پشتڕاستە — تۆمار بکە'),
-            style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700),
-          ),
-        ],
-      ),
-    );
-    return result == true;
-  }
-
-  static Widget _successHint(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.done_all_rounded, color: Colors.green, size: 18),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                color: Colors.green,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
+          if (isAll) ...[
+            const SizedBox(height: 8),
+            Text(
+              'بڕەکە لە قەرزە کۆنترەکانەوە بەرەو نوێترەکان دابەش دەکرێت.',
+              style: TextStyle(
+                fontSize: 10.5,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+                color: isDark
+                    ? AppDarkColors.textSecondary
+                    : const Color(0xFF667085),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -484,6 +460,7 @@ class FinancialPaymentFlow {
 
     var saving = false;
     var showNote = false;
+    var reviewMode = false;
     String? localError;
     var saved = false;
     var customerWideSaved = false;
@@ -518,6 +495,21 @@ class FinancialPaymentFlow {
             final remainingAfter = (remainingStorage - typedStorageAmount)
                 .clamp(0.0, remainingStorage)
                 .toDouble();
+            final paymentStep = resolveFinancialPaymentStep(
+              targetSelected: selectedDebtId.isNotEmpty,
+              amount: typedStorageAmount,
+              maximum: remainingStorage,
+              reviewRequested: reviewMode,
+            );
+            var previewAllocationCount = 1;
+            if (isAll &&
+                typedStorageAmount > 0 &&
+                typedStorageAmount <= remainingStorage + 0.0001) {
+              try {
+                previewAllocationCount =
+                    _customerAllocations(openDebts, typedStorageAmount).length;
+              } catch (_) {}
+            }
 
             void applyQuickAmount(double storageValue) {
               final safeStorage = storageValue
@@ -529,7 +521,10 @@ class FinancialPaymentFlow {
               amountController.selection = TextSelection.collapsed(
                 offset: amountController.text.length,
               );
-              setSheetState(() => localError = null);
+              setSheetState(() {
+                localError = null;
+                reviewMode = false;
+              });
             }
 
             return Container(
@@ -577,6 +572,8 @@ class FinancialPaymentFlow {
                             : const Color(0xFF667085),
                       ),
                     ),
+                    const SizedBox(height: 14),
+                    _buildPaymentProgress(paymentStep, isDark),
                     const SizedBox(height: 16),
                     if (openDebts.length > 1) ...[
                       DropdownButtonFormField<String>(
@@ -619,6 +616,7 @@ class FinancialPaymentFlow {
                                 setSheetState(() {
                                   selectedDebtId = value;
                                   localError = null;
+                                  reviewMode = false;
                                 });
                               },
                       ),
@@ -669,7 +667,10 @@ class FinancialPaymentFlow {
                         FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                       ],
                       textDirection: TextDirection.ltr,
-                      onChanged: (_) => setSheetState(() => localError = null),
+                      onChanged: (_) => setSheetState(() {
+                        localError = null;
+                        reviewMode = false;
+                      }),
                       decoration: InputDecoration(
                         labelText: 'بڕی پارەدانەوە',
                         suffixText: currency == 'USD' ? '\$' : 'د.ع',
@@ -767,6 +768,20 @@ class FinancialPaymentFlow {
                         ),
                       ),
                     ],
+                    if (reviewMode &&
+                        typedStorageAmount > 0 &&
+                        typedStorageAmount <= remainingStorage + 0.0001) ...[
+                      const SizedBox(height: 10),
+                      _buildInlineReview(
+                        isAll: isAll,
+                        debt: debt,
+                        before: remainingStorage,
+                        amount: typedStorageAmount,
+                        after: remainingAfter,
+                        allocationCount: previewAllocationCount,
+                        isDark: isDark,
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     if (showNote)
                       TextField(
@@ -838,7 +853,6 @@ class FinancialPaymentFlow {
                               }
 
                               var allocationCount = 1;
-                              bool confirmed;
                               if (isAll) {
                                 try {
                                   allocationCount = _customerAllocations(
@@ -850,20 +864,16 @@ class FinancialPaymentFlow {
                                       'بڕی پارەدانەوە لە کۆی ماوەی کڕیار زیاترە.');
                                   return;
                                 }
-                                confirmed = await _confirmCustomer(
-                                  context: sheetContext,
-                                  currentBalance: customerBalance,
-                                  amount: storageAmount,
-                                  allocationCount: allocationCount,
-                                );
-                              } else {
-                                confirmed = await _confirmSingle(
-                                  context: sheetContext,
-                                  debt: debt!,
-                                  storageAmount: storageAmount,
-                                );
                               }
-                              if (!confirmed || !sheetContext.mounted) return;
+
+                              if (!reviewMode) {
+                                FocusScope.of(sheetContext).unfocus();
+                                setSheetState(() {
+                                  reviewMode = true;
+                                  localError = null;
+                                });
+                                return;
+                              }
 
                               setSheetState(() {
                                 saving = true;
@@ -966,9 +976,17 @@ class FinancialPaymentFlow {
                                 color: Colors.white,
                               ),
                             )
-                          : const Icon(Icons.check_rounded),
+                          : Icon(
+                              reviewMode
+                                  ? Icons.check_rounded
+                                  : Icons.navigate_next_rounded,
+                            ),
                       label: Text(
-                        saving ? 'تۆمار دەکرێت...' : 'پێداچوونەوە و تۆمارکردن',
+                        saving
+                            ? 'تۆمار دەکرێت...'
+                            : reviewMode
+                                ? 'تۆمارکردنی پارەدانەوە'
+                                : 'پێداچوونەوە',
                       ),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
