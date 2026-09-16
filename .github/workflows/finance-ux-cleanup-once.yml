@@ -9,7 +9,6 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'chore(user): apply finance UX cleanup'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -215,81 +214,39 @@ FinancialPaymentStep resolveFinancialPaymentStep({
                     () => _financialFiltersExpanded = !expanded,
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 11,
-                      vertical: 10,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
                     child: Row(
                       children: [
-                        const Icon(
-                          Icons.tune_rounded,
-                          size: 18,
-                          color: AppColors.primary,
-                        ),
+                        const Icon(Icons.tune_rounded, size: 18, color: AppColors.primary),
                         const SizedBox(width: 7),
-                        const Text(
-                          'گەڕان و فلتەر',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                        const Text('گەڕان و فلتەر', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
                         if (activeFilterCount > 0) ...[
                           const SizedBox(width: 7),
                           Container(
                             constraints: const BoxConstraints(minWidth: 22),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
                             alignment: Alignment.center,
-                            child: Text(
-                              '$activeFilterCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
+                            child: Text('$activeFilterCount', style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w800)),
                           ),
                         ],
                         const Spacer(),
                         Icon(
-                          expanded
-                              ? Icons.keyboard_arrow_up_rounded
-                              : Icons.keyboard_arrow_down_rounded,
+                          expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
                           size: 19,
-                          color: isDark
-                              ? AppDarkColors.textSecondary
-                              : const Color(0xFF667085),
+                          color: isDark ? AppDarkColors.textSecondary : const Color(0xFF667085),
                         ),
                       ],
                     ),
                   ),
                 ),
               ),
-              Container(
-                width: 1,
-                height: 28,
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.07)
-                    : const Color(0xFFE4E7EC),
-              ),
+              Container(width: 1, height: 28, color: isDark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFE4E7EC)),
               TextButton.icon(
                 onPressed: _generateFilteredFinancialChatStatement,
                 icon: const Icon(Icons.ios_share_rounded, size: 16),
                 label: const Text('کەشف'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  textStyle: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                style: TextButton.styleFrom(foregroundColor: AppColors.primary, textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800)),
               ),
               const SizedBox(width: 4),
             ],
@@ -301,12 +258,7 @@ FinancialPaymentStep resolveFinancialPaymentStep({
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Divider(
-                    height: 1,
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.06)
-                        : const Color(0xFFE4E7EC),
-                  ),
+                  Divider(height: 1, color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE4E7EC)),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _financialSearchController,
@@ -331,20 +283,11 @@ FinancialPaymentStep resolveFinancialPaymentStep({
                             ),
                       isDense: true,
                       filled: true,
-                      fillColor: isDark
-                          ? Colors.white.withValues(alpha: 0.04)
-                          : Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
+                      fillColor: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.07)
-                              : const Color(0xFFE4E7EC),
-                        ),
+                        borderSide: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFE4E7EC)),
                       ),
                     ),
                   ),
@@ -355,11 +298,7 @@ FinancialPaymentStep resolveFinancialPaymentStep({
                       children: [
                         typeChip('all', 'هەموو', Icons.all_inclusive_rounded),
                         typeChip('debt', 'قەرز', Icons.north_east_rounded),
-                        typeChip(
-                          'payment',
-                          'پارەدانەوە',
-                          Icons.south_west_rounded,
-                        ),
+                        typeChip('payment', 'پارەدانەوە', Icons.south_west_rounded),
                         typeChip('system', 'گۆڕانکاری', Icons.history_rounded),
                       ],
                     ),
@@ -374,10 +313,7 @@ FinancialPaymentStep resolveFinancialPaymentStep({
                         quickChip(FinancialQuickRange.last7Days, '7 ڕۆژ'),
                         quickChip(FinancialQuickRange.last30Days, '30 ڕۆژ'),
                         quickChip(FinancialQuickRange.thisMonth, 'ئەم مانگە'),
-                        quickChip(
-                          FinancialQuickRange.lastMonth,
-                          'مانگی ڕابردوو',
-                        ),
+                        quickChip(FinancialQuickRange.lastMonth, 'مانگی ڕابردوو'),
                         quickChip(FinancialQuickRange.thisYear, 'ئەم ساڵە'),
                       ],
                     ),
@@ -389,20 +325,11 @@ FinancialPaymentStep resolveFinancialPaymentStep({
                         child: OutlinedButton.icon(
                           onPressed: _pickFinancialDateRange,
                           icon: const Icon(Icons.date_range_outlined, size: 17),
-                          label: Text(
-                            dateLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          label: Text(dateLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size.fromHeight(40),
-                            textStyle: const TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(11),
-                            ),
+                            textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
                           ),
                         ),
                       ),
@@ -410,20 +337,12 @@ FinancialPaymentStep resolveFinancialPaymentStep({
                         const SizedBox(width: 7),
                         OutlinedButton.icon(
                           onPressed: _clearFinancialFilters,
-                          icon: const Icon(
-                            Icons.filter_alt_off_outlined,
-                            size: 17,
-                          ),
+                          icon: const Icon(Icons.filter_alt_off_outlined, size: 17),
                           label: const Text('پاککردنەوە'),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(0, 40),
-                            textStyle: const TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(11),
-                            ),
+                            textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
                           ),
                         ),
                       ],
@@ -432,9 +351,7 @@ FinancialPaymentStep resolveFinancialPaymentStep({
                 ],
               ),
             ),
-            crossFadeState: expanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
+            crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             duration: const Duration(milliseconds: 180),
             sizeCurve: Curves.easeOutCubic,
           ),
@@ -502,15 +419,9 @@ FinancialPaymentStep resolveFinancialPaymentStep({
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.035)
-            : const Color(0xFFF8FAFC),
+        color: isDark ? Colors.white.withValues(alpha: 0.035) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : const Color(0xFFE4E7EC),
-        ),
+        border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE4E7EC)),
       ),
       child: Column(
         children: [
@@ -520,28 +431,12 @@ FinancialPaymentStep resolveFinancialPaymentStep({
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'ماوەی هەژمار',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? AppDarkColors.textSecondary
-                            : const Color(0xFF667085),
-                      ),
-                    ),
+                    Text('ماوەی هەژمار', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? AppDarkColors.textSecondary : const Color(0xFF667085))),
                     const SizedBox(height: 2),
                     Text(
-                      totalsComplete
-                          ? AppHelpers.formatCurrency(totalRemaining)
-                          : '—',
+                      totalsComplete ? AppHelpers.formatCurrency(totalRemaining) : '—',
                       textDirection: TextDirection.ltr,
-                      style: TextStyle(
-                        fontSize: 18,
-                        height: 1.15,
-                        fontWeight: FontWeight.w900,
-                        color: remainingColor,
-                      ),
+                      style: TextStyle(fontSize: 18, height: 1.15, fontWeight: FontWeight.w900, color: remainingColor),
                     ),
                   ],
                 ),
@@ -549,71 +444,27 @@ FinancialPaymentStep resolveFinancialPaymentStep({
               if (totalsComplete)
                 Container(
                   constraints: const BoxConstraints(maxWidth: 170),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: healthColor.withValues(alpha: isDark ? 0.12 : 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(color: healthColor.withValues(alpha: isDark ? 0.12 : 0.08), borderRadius: BorderRadius.circular(20)),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.shield_outlined,
-                        size: 13,
-                        color: healthColor,
-                      ),
+                      Icon(Icons.shield_outlined, size: 13, color: healthColor),
                       const SizedBox(width: 5),
-                      Flexible(
-                        child: Text(
-                          healthLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w700,
-                            color: healthColor,
-                          ),
-                        ),
-                      ),
+                      Flexible(child: Text(healthLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: healthColor))),
                     ],
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 9),
-          Divider(
-            height: 1,
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : const Color(0xFFE4E7EC),
-          ),
+          Divider(height: 1, color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE4E7EC)),
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(
-                child: _buildCompactMetric(
-                  label: 'کۆی قەرز',
-                  value: totalsComplete
-                      ? AppHelpers.formatCurrency(totalDebt)
-                      : '—',
-                  color: Colors.orange.shade800,
-                  isDark: isDark,
-                ),
-              ),
+              Expanded(child: _buildCompactMetric(label: 'کۆی قەرز', value: totalsComplete ? AppHelpers.formatCurrency(totalDebt) : '—', color: Colors.orange.shade800, isDark: isDark)),
               const SizedBox(width: 8),
-              Expanded(
-                child: _buildCompactMetric(
-                  label: 'پارەدانەوە',
-                  value: totalsComplete
-                      ? AppHelpers.formatCurrency(totalPaid)
-                      : '—',
-                  color: Colors.green.shade700,
-                  isDark: isDark,
-                ),
-              ),
+              Expanded(child: _buildCompactMetric(label: 'پارەدانەوە', value: totalsComplete ? AppHelpers.formatCurrency(totalPaid) : '—', color: Colors.green.shade700, isDark: isDark)),
             ],
           ),
         ],
@@ -629,38 +480,11 @@ FinancialPaymentStep resolveFinancialPaymentStep({
   }) {
     return Row(
       children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
+        Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 9.5,
-              fontWeight: FontWeight.w600,
-              color: isDark
-                  ? AppDarkColors.textSecondary
-                  : const Color(0xFF667085),
-            ),
-          ),
-        ),
+        Expanded(child: Text(label, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600, color: isDark ? AppDarkColors.textSecondary : const Color(0xFF667085)))),
         const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textDirection: TextDirection.ltr,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-        ),
+        Flexible(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, textDirection: TextDirection.ltr, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: color))),
       ],
     );
   }
@@ -681,14 +505,12 @@ FinancialPaymentStep resolveFinancialPaymentStep({
 '''
           if duplicate_tile in s:
               s = s.replace(duplicate_tile, '', 1)
-
           duplicate_case = r'''      case 'statement':
         await _generateCurrentFinancialStatement();
         break;
 '''
           if duplicate_case in s:
               s = s.replace(duplicate_case, '', 1)
-
           p.write_text(s)
 
           p = Path('lib/screens/shared/financial_payment_flow.dart')
@@ -701,10 +523,7 @@ FinancialPaymentStep resolveFinancialPaymentStep({
 
           confirm_start = s.index('  static Future<bool> _confirmSingle({')
           confirm_end = s.index('  static Widget _successHint(', confirm_start)
-          progress_methods = r'''  static Widget _buildPaymentProgress(
-    FinancialPaymentStep step,
-    bool isDark,
-  ) {
+          progress_methods = r'''  static Widget _buildPaymentProgress(FinancialPaymentStep step, bool isDark) {
     const steps = [
       (FinancialPaymentStep.target, 'قەرز'),
       (FinancialPaymentStep.amount, 'بڕ'),
@@ -716,26 +535,12 @@ FinancialPaymentStep resolveFinancialPaymentStep({
         if (index.isOdd) {
           final connectorIndex = index ~/ 2;
           final completed = connectorIndex < currentIndex;
-          return Expanded(
-            child: Container(
-              height: 2,
-              margin: const EdgeInsets.symmetric(horizontal: 5),
-              color: completed
-                  ? AppColors.primary
-                  : (isDark
-                      ? Colors.white.withValues(alpha: 0.10)
-                      : const Color(0xFFE4E7EC)),
-            ),
-          );
+          return Expanded(child: Container(height: 2, margin: const EdgeInsets.symmetric(horizontal: 5), color: completed ? AppColors.primary : (isDark ? Colors.white.withValues(alpha: 0.10) : const Color(0xFFE4E7EC))));
         }
         final stepIndex = index ~/ 2;
         final active = stepIndex == currentIndex;
         final completed = stepIndex < currentIndex;
-        final color = active || completed
-            ? AppColors.primary
-            : (isDark
-                ? AppDarkColors.textSecondary
-                : const Color(0xFF98A2B3));
+        final color = active || completed ? AppColors.primary : (isDark ? AppDarkColors.textSecondary : const Color(0xFF98A2B3));
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -744,38 +549,14 @@ FinancialPaymentStep resolveFinancialPaymentStep({
               height: 25,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: active || completed
-                    ? AppColors.primary.withValues(alpha: active ? 0.16 : 0.10)
-                    : (isDark
-                        ? Colors.white.withValues(alpha: 0.04)
-                        : const Color(0xFFF2F4F7)),
+                color: active || completed ? AppColors.primary.withValues(alpha: active ? 0.16 : 0.10) : (isDark ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF2F4F7)),
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: active || completed
-                      ? AppColors.primary.withValues(alpha: 0.45)
-                      : Colors.transparent,
-                ),
+                border: Border.all(color: active || completed ? AppColors.primary.withValues(alpha: 0.45) : Colors.transparent),
               ),
-              child: completed
-                  ? Icon(Icons.check_rounded, size: 14, color: color)
-                  : Text(
-                      '${stepIndex + 1}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: color,
-                      ),
-                    ),
+              child: completed ? Icon(Icons.check_rounded, size: 14, color: color) : Text('${stepIndex + 1}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: color)),
             ),
             const SizedBox(height: 3),
-            Text(
-              steps[stepIndex].$2,
-              style: TextStyle(
-                fontSize: 8.5,
-                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                color: color,
-              ),
-            ),
+            Text(steps[stepIndex].$2, style: TextStyle(fontSize: 8.5, fontWeight: active ? FontWeight.w800 : FontWeight.w600, color: color)),
           ],
         );
       }),
@@ -791,79 +572,29 @@ FinancialPaymentStep resolveFinancialPaymentStep({
     required int allocationCount,
     required bool isDark,
   }) {
-    final amountText = isAll
-        ? AppHelpers.formatCurrency(amount)
-        : _formatDisplay(debt!, amount);
-    final beforeText = isAll
-        ? AppHelpers.formatCurrency(before)
-        : _formatDisplay(debt!, before);
-    final afterText = isAll
-        ? AppHelpers.formatCurrency(after)
-        : _formatDisplay(debt!, after);
+    final amountText = isAll ? AppHelpers.formatCurrency(amount) : _formatDisplay(debt!, amount);
+    final beforeText = isAll ? AppHelpers.formatCurrency(before) : _formatDisplay(debt!, before);
+    final afterText = isAll ? AppHelpers.formatCurrency(after) : _formatDisplay(debt!, after);
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
-      decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: isDark ? 0.09 : 0.055),
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.18),
-        ),
-      ),
+      decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: isDark ? 0.09 : 0.055), borderRadius: BorderRadius.circular(13), border: Border.all(color: AppColors.primary.withValues(alpha: 0.18))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.fact_check_outlined, size: 18, color: AppColors.primary),
-              SizedBox(width: 7),
-              Text(
-                'پێداچوونەوەی کۆتایی',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
+          const Row(children: [Icon(Icons.fact_check_outlined, size: 18, color: AppColors.primary), SizedBox(width: 7), Text('پێداچوونەوەی کۆتایی', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary))]),
           const SizedBox(height: 10),
           _confirmationRow('ماوەی پێش پارەدان', beforeText, isDark),
           const SizedBox(height: 7),
-          _confirmationRow(
-            'بڕی پارەدان',
-            amountText,
-            isDark,
-            valueColor: Colors.green.shade700,
-          ),
+          _confirmationRow('بڕی پارەدان', amountText, isDark, valueColor: Colors.green.shade700),
           if (isAll) ...[
             const SizedBox(height: 7),
-            _confirmationRow(
-              'ژمارەی قەرزی کاریگەر',
-              '$allocationCount',
-              isDark,
-            ),
+            _confirmationRow('ژمارەی قەرزی کاریگەر', '$allocationCount', isDark),
           ],
           const Divider(height: 18),
-          _confirmationRow(
-            'ماوەی دوای پارەدان',
-            afterText,
-            isDark,
-            valueColor: after <= 0 ? Colors.green : Colors.orange,
-            emphasized: true,
-          ),
+          _confirmationRow('ماوەی دوای پارەدان', afterText, isDark, valueColor: after <= 0 ? Colors.green : Colors.orange, emphasized: true),
           if (isAll) ...[
             const SizedBox(height: 8),
-            Text(
-              'بڕەکە لە قەرزە کۆنترەکانەوە بەرەو نوێترەکان دابەش دەکرێت.',
-              style: TextStyle(
-                fontSize: 10.5,
-                height: 1.4,
-                fontWeight: FontWeight.w600,
-                color: isDark
-                    ? AppDarkColors.textSecondary
-                    : const Color(0xFF667085),
-              ),
-            ),
+            Text('بڕەکە لە قەرزە کۆنترەکانەوە بەرەو نوێترەکان دابەش دەکرێت.', style: TextStyle(fontSize: 10.5, height: 1.4, fontWeight: FontWeight.w600, color: isDark ? AppDarkColors.textSecondary : const Color(0xFF667085))),
           ],
         ],
       ),
@@ -872,111 +603,34 @@ FinancialPaymentStep resolveFinancialPaymentStep({
 
 '''
           s = s[:confirm_start] + progress_methods + s[confirm_end:]
-
-          old = """    var saving = false;
-    var showNote = false;
-    String? localError;"""
-          new = """    var saving = false;
-    var showNote = false;
-    var reviewMode = false;
-    String? localError;"""
+          old = "    var saving = false;\n    var showNote = false;\n    String? localError;"
+          new = "    var saving = false;\n    var showNote = false;\n    var reviewMode = false;\n    String? localError;"
           assert old in s
           s = s.replace(old, new, 1)
-
-          old = """              setSheetState(() => localError = null);
-            }
-
-            return Container("""
-          new = """              setSheetState(() {
-                localError = null;
-                reviewMode = false;
-              });
-            }
-
-            return Container("""
+          old = "              setSheetState(() => localError = null);\n            }\n\n            return Container("
+          new = "              setSheetState(() {\n                localError = null;\n                reviewMode = false;\n              });\n            }\n\n            return Container("
           assert old in s
           s = s.replace(old, new, 1)
-
-          subtitle_marker = """                    const SizedBox(height: 16),
-                    if (openDebts.length > 1) ...["""
-          progress_insert = """                    const SizedBox(height: 14),
-                    _buildPaymentProgress(paymentStep, isDark),
-                    const SizedBox(height: 16),
-                    if (openDebts.length > 1) ...["""
-          assert subtitle_marker in s
-          s = s.replace(subtitle_marker, progress_insert, 1)
-
-          old = """                                setSheetState(() {
-                                  selectedDebtId = value;
-                                  localError = null;
-                                });"""
-          new = """                                setSheetState(() {
-                                  selectedDebtId = value;
-                                  localError = null;
-                                  reviewMode = false;
-                                });"""
-          assert old in s
-          s = s.replace(old, new, 1)
-
-          old = "onChanged: (_) => setSheetState(() => localError = null),"
-          new = """onChanged: (_) => setSheetState(() {
-                        localError = null;
-                        reviewMode = false;
-                      }),"""
-          assert old in s
-          s = s.replace(old, new, 1)
-
-          compute_marker = """            final remainingAfter = (remainingStorage - typedStorageAmount)
-                .clamp(0.0, remainingStorage)
-                .toDouble();
-
-            void applyQuickAmount"""
-          compute_new = """            final remainingAfter = (remainingStorage - typedStorageAmount)
-                .clamp(0.0, remainingStorage)
-                .toDouble();
-            final paymentStep = resolveFinancialPaymentStep(
-              targetSelected: selectedDebtId.isNotEmpty,
-              amount: typedStorageAmount,
-              maximum: remainingStorage,
-              reviewRequested: reviewMode,
-            );
-            var previewAllocationCount = 1;
-            if (isAll &&
-                typedStorageAmount > 0 &&
-                typedStorageAmount <= remainingStorage + 0.0001) {
-              try {
-                previewAllocationCount =
-                    _customerAllocations(openDebts, typedStorageAmount).length;
-              } catch (_) {}
-            }
-
-            void applyQuickAmount"""
+          compute_marker = "            final remainingAfter = (remainingStorage - typedStorageAmount)\n                .clamp(0.0, remainingStorage)\n                .toDouble();\n\n            void applyQuickAmount"
+          compute_new = "            final remainingAfter = (remainingStorage - typedStorageAmount)\n                .clamp(0.0, remainingStorage)\n                .toDouble();\n            final paymentStep = resolveFinancialPaymentStep(\n              targetSelected: selectedDebtId.isNotEmpty,\n              amount: typedStorageAmount,\n              maximum: remainingStorage,\n              reviewRequested: reviewMode,\n            );\n            var previewAllocationCount = 1;\n            if (isAll && typedStorageAmount > 0 && typedStorageAmount <= remainingStorage + 0.0001) {\n              try { previewAllocationCount = _customerAllocations(openDebts, typedStorageAmount).length; } catch (_) {}\n            }\n\n            void applyQuickAmount"
           assert compute_marker in s
           s = s.replace(compute_marker, compute_new, 1)
-
-          note_marker = """                    const SizedBox(height: 10),
-                    if (showNote)
-                      TextField("""
-          review_insert = """                    if (reviewMode &&
-                        typedStorageAmount > 0 &&
-                        typedStorageAmount <= remainingStorage + 0.0001) ...[
-                      const SizedBox(height: 10),
-                      _buildInlineReview(
-                        isAll: isAll,
-                        debt: debt,
-                        before: remainingStorage,
-                        amount: typedStorageAmount,
-                        after: remainingAfter,
-                        allocationCount: previewAllocationCount,
-                        isDark: isDark,
-                      ),
-                    ],
-                    const SizedBox(height: 10),
-                    if (showNote)
-                      TextField("""
-          assert note_marker in s
-          s = s.replace(note_marker, review_insert, 1)
-
+          marker = "                    const SizedBox(height: 16),\n                    if (openDebts.length > 1) ...["
+          insert = "                    const SizedBox(height: 14),\n                    _buildPaymentProgress(paymentStep, isDark),\n                    const SizedBox(height: 16),\n                    if (openDebts.length > 1) ...["
+          assert marker in s
+          s = s.replace(marker, insert, 1)
+          old = "                                setSheetState(() {\n                                  selectedDebtId = value;\n                                  localError = null;\n                                });"
+          new = "                                setSheetState(() {\n                                  selectedDebtId = value;\n                                  localError = null;\n                                  reviewMode = false;\n                                });"
+          assert old in s
+          s = s.replace(old, new, 1)
+          old = "onChanged: (_) => setSheetState(() => localError = null),"
+          new = "onChanged: (_) => setSheetState(() {\n                        localError = null;\n                        reviewMode = false;\n                      }),"
+          assert old in s
+          s = s.replace(old, new, 1)
+          marker = "                    const SizedBox(height: 10),\n                    if (showNote)\n                      TextField("
+          insert = "                    if (reviewMode && typedStorageAmount > 0 && typedStorageAmount <= remainingStorage + 0.0001) ...[\n                      const SizedBox(height: 10),\n                      _buildInlineReview(isAll: isAll, debt: debt, before: remainingStorage, amount: typedStorageAmount, after: remainingAfter, allocationCount: previewAllocationCount, isDark: isDark),\n                    ],\n                    const SizedBox(height: 10),\n                    if (showNote)\n                      TextField("
+          assert marker in s
+          s = s.replace(marker, insert, 1)
           old_confirm = r'''                              var allocationCount = 1;
                               bool confirmed;
                               if (isAll) {
@@ -1023,7 +677,6 @@ FinancialPaymentStep resolveFinancialPaymentStep({
                                   return;
                                 }
                               }
-
                               if (!reviewMode) {
                                 FocusScope.of(sheetContext).unfocus();
                                 setSheetState(() {
@@ -1032,7 +685,6 @@ FinancialPaymentStep resolveFinancialPaymentStep({
                                 });
                                 return;
                               }
-
                               setSheetState(() {
                                 saving = true;
                                 localError = null;
@@ -1040,20 +692,10 @@ FinancialPaymentStep resolveFinancialPaymentStep({
 '''
           assert old_confirm in s
           s = s.replace(old_confirm, new_confirm, 1)
-
-          old_label = """                      label: Text(
-                        saving ? 'تۆمار دەکرێت...' : 'پێداچوونەوە و تۆمارکردن',
-                      ),"""
-          new_label = """                      label: Text(
-                        saving
-                            ? 'تۆمار دەکرێت...'
-                            : reviewMode
-                                ? 'تۆمارکردنی پارەدانەوە'
-                                : 'پێداچوونەوە',
-                      ),"""
+          old_label = "                      label: Text(\n                        saving ? 'تۆمار دەکرێت...' : 'پێداچوونەوە و تۆمارکردن',\n                      ),"
+          new_label = "                      label: Text(\n                        saving\n                            ? 'تۆمار دەکرێت...'\n                            : reviewMode\n                                ? 'تۆمارکردنی پارەدانەوە'\n                                : 'پێداچوونەوە',\n                      ),"
           assert old_label in s
           s = s.replace(old_label, new_label, 1)
-
           p.write_text(s)
 
           Path('.github/workflows/finance-ux-cleanup-once.yml').unlink()
