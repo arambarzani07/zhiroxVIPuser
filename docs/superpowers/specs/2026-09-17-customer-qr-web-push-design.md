@@ -6,9 +6,9 @@ Project: `arambarzani07/zhiroxVIPuser`
 
 ## 1. Goal
 
-Add a secure opt-in notification channel for customers without Viber, Telegram, SMS, or KYC requirements.
+Add a secure opt-in Web Push notification channel for customers without Viber, Telegram, SMS, email, KYC, or a third-party messaging provider.
 
-Each customer can receive automatic Web Push notifications after linking a browser/device to their customer record through a customer-specific QR flow. The first release sends notifications only for:
+Each customer can link one or more browser/devices to their customer record through a customer-specific QR flow. The first release sends notifications only for:
 
 1. a newly created debt (`debt_created`), and
 2. a newly recorded payment (`payment_created`).
@@ -23,22 +23,22 @@ Debt/payment edits, deletions, reminders, marketing messages, and other activity
 2. Tap **QR ـی ئاگادارکردنەوە**.
 3. The backend creates a short-lived, one-time link token.
 4. The app renders a QR containing only an HTTPS onboarding URL with the opaque token.
-5. The admin can see current push status, linked device count, latest delivery status, regenerate a QR, or revoke all linked devices.
+5. Staff can see push status, linked-device count, latest delivery status, generate a fresh QR, or revoke all linked devices.
 
 ### Customer
 
-1. Scan the QR once.
+1. Scan the QR.
 2. Open the ZHIROX Notifications onboarding page.
-3. Confirm the market/customer association shown by the server.
+3. Confirm the server-provided market/customer display information.
 4. Enable browser notifications.
 5. The browser/device push subscription is attached to that customer.
 6. Future new-debt and new-payment events automatically generate notifications for every active linked device.
 
-For iPhone/iPad Web Push, onboarding must explain that the customer needs to add the web app to the Home Screen and then enable notifications from the installed web app. The token remains redeemable during this onboarding sequence until the first subscription registration succeeds or the token expires.
+For iPhone/iPad Web Push, onboarding explains that the customer must add the web app to the Home Screen and then enable notifications from the installed web app. The token remains redeemable during this onboarding sequence until the first successful subscription registration or token expiry.
 
 ## 3. Architectural boundaries
 
-The feature is split into small units with clear responsibilities.
+The feature is split into focused units with clear responsibilities.
 
 ### 3.1 Link-token service
 
@@ -62,8 +62,8 @@ Responsibilities:
 - validate a redeemable QR token;
 - register the browser endpoint plus its Web Push public keys;
 - allow multiple active devices per customer;
-- prevent duplicate active subscriptions for the same browser endpoint;
-- mark the token used only after successful subscription registration;
+- prevent duplicate active subscriptions for the same endpoint;
+- mark the QR token used only after successful subscription registration;
 - allow a subscription to deactivate itself;
 - allow authorized market staff to revoke all subscriptions for one customer.
 
@@ -74,8 +74,8 @@ Purpose: decouple financial transactions from delivery.
 Responsibilities:
 - create exactly one logical notification event for each eligible debt/payment transaction;
 - assign a unique idempotency key derived from event type plus financial record ID;
-- store the customer, market, event type, event record ID, immutable payload snapshot, status, and timestamps;
-- never block or roll back the financial transaction because push delivery fails.
+- store customer, market, event type, event record ID, immutable payload snapshot, status, and timestamps;
+- never block or roll back a financial transaction because push delivery fails.
 
 ### 3.4 Delivery worker
 
@@ -89,6 +89,8 @@ Responsibilities:
 - deactivate permanently invalid/expired browser subscriptions;
 - make repeated processing safe through idempotency and delivery uniqueness constraints.
 
+The worker runs as a Supabase Edge Function on a once-per-minute scheduled invocation. It uses service-role access and is never callable as a privileged operation from an ordinary client.
+
 ### 3.5 Flutter customer-profile integration
 
 Purpose: give staff a small management surface inside the existing customer profile.
@@ -100,11 +102,13 @@ It shows:
 - **QR ـی ئاگادارکردنەوە** action;
 - **بڕینی هەموو device ـەکان** action.
 
-This UI must not contain VAPID private keys or any server credential.
+This UI contains no VAPID private key or other server credential.
 
 ### 3.6 Web onboarding/PWA surface
 
 Purpose: complete customer linking and request Web Push permission.
+
+The first release is hosted from a dedicated public Supabase Edge Function route under the existing project HTTPS origin. The same function serves the onboarding HTML, web manifest, service-worker script, and required icon/static responses, so no separate hosting provider is required.
 
 It contains:
 - ZHIROX/market branding;
@@ -113,6 +117,8 @@ It contains:
 - iOS-specific Add-to-Home-Screen guidance when required;
 - success/failure/retry states;
 - no exposed internal customer ID.
+
+The public route is token-based and performs its own validation. Privileged admin actions remain authenticated and separate from public onboarding routes.
 
 ## 4. Database design
 
@@ -133,7 +139,7 @@ Rules:
 - default lifetime: 15 minutes;
 - one successful subscription registration consumes the token;
 - raw token is never persisted;
-- staff may invalidate an unused token by creating a replacement or explicitly revoking it.
+- generating a replacement QR revokes any still-unused active QR tokens for that same customer/market.
 
 ### 4.2 `customer_push_subscriptions`
 
@@ -154,9 +160,9 @@ Fields:
 - `updated_at timestamptz not null default now()`
 
 Constraints:
-- unique active identity for an endpoint;
+- an endpoint may have only one active subscription row;
 - one customer may have multiple active devices;
-- subscription secrets are readable only by trusted backend/service-role paths, not ordinary clients.
+- endpoint/key material is readable only by trusted backend/service-role paths, not ordinary clients.
 
 ### 4.3 `notification_outbox`
 
@@ -168,14 +174,16 @@ Fields:
 - `event_record_id uuid not null`
 - `idempotency_key text not null unique`
 - `payload jsonb not null`
-- `status text not null check (status in ('pending','processing','sent','failed'))`
+- `status text not null check (status in ('pending','processing','completed','failed'))`
 - `attempt_count integer not null default 0`
 - `next_attempt_at timestamptz not null default now()`
 - `last_error text null`
 - `created_at timestamptz not null default now()`
-- `processed_at timestamptz null`
+- `completed_at timestamptz null`
 
-The payload is an immutable delivery snapshot so later debt/payment edits cannot silently rewrite the notification that was originally generated.
+The payload is an immutable delivery snapshot so later debt/payment edits cannot rewrite the message originally generated.
+
+`completed` means fan-out has finished and no retryable device delivery remains. An event with zero active subscriptions is also completed with zero delivery rows; it is not held for devices linked in the future.
 
 ### 4.4 `notification_deliveries`
 
@@ -187,6 +195,7 @@ Fields:
 - `attempt_count integer not null default 0`
 - `provider_status integer null`
 - `last_error text null`
+- `next_attempt_at timestamptz null`
 - `sent_at timestamptz null`
 - `created_at timestamptz not null default now()`
 - `updated_at timestamptz not null default now()`
@@ -196,48 +205,63 @@ Constraint:
 
 ## 5. Event production
 
-Push events must be created only from the canonical successful financial transaction paths, never from UI-only callbacks.
+Push events are created only from the normal live debt/payment creation paths, never from UI-only notification callbacks.
 
 ### Debt created
 
-After a new debt is successfully committed by the production debt-creation path, enqueue one `debt_created` outbox event with idempotency key:
+The existing live application debt-creation path remains the source of the debt itself. After a successful live debt insert, the application invokes a trusted idempotent enqueue endpoint using the authenticated user session and created debt ID. The backend re-reads the debt, verifies that the actor is authorized for that market/customer, verifies that the record is a newly created live debt, and inserts:
 
 `debt_created:<debt_id>`
 
-Payload snapshot contains only notification-safe data required to render the message, including amount/currency, resulting customer balance when available, market display name, and event timestamp.
+into the outbox only if it does not already exist.
+
+This enqueue failure is recorded/retryable but does not roll back the already-successful debt transaction. To close the small client-interruption gap between debt creation and enqueue, the delivery subsystem includes a reconciliation query for recent live debts created through the normal application path that have no matching outbox event. Historical/import/sync records are explicitly excluded by their existing import/sync provenance and timestamps.
 
 ### Payment created
 
-After `record-payment` successfully commits the payment transaction, enqueue one `payment_created` outbox event with idempotency key:
+`record-payment` is already a trusted backend path. After the payment transaction is committed, that backend path performs an idempotent enqueue for:
 
 `payment_created:<payment_id>`
 
-This enqueue step belongs inside the trusted backend transaction boundary or immediately after a committed transaction through an idempotent backend operation. Client-side notification code is not the source of truth.
+The payment remains successful even if later delivery fails.
 
-### Import/sync safety
+### Import/sync/restore safety
 
-Historical imports, legacy synchronization, restore flows, debt edits, and payment edits/deletions must not enqueue push events unless they explicitly use the real-time production create path. This prevents historical data from generating unexpected customer notifications.
+Historical imports, legacy synchronization, restore flows, debt edits, and payment edits/deletions do not enqueue customer push events. Reconciliation must use the existing import/sync provenance tables/links to exclude records created by those subsystems rather than relying only on a recent timestamp.
+
+### Payload snapshot
+
+Both event types snapshot only notification-safe fields required for rendering:
+- amount and currency;
+- resulting customer balance when available;
+- market display name;
+- event timestamp;
+- event type and internal event reference.
+
+Internal notes, passwords, auth tokens, and unrelated customer PII are never copied into the push payload.
 
 ## 6. Delivery semantics
 
 1. A successful financial transaction is authoritative even if push delivery fails.
 2. The outbox worker processes events independently.
-3. Each event fans out to all currently active subscriptions for that customer.
-4. A successful delivery updates subscription `last_success_at` and the delivery row.
-5. HTTP responses that indicate a permanently invalid subscription deactivate that subscription and mark the delivery `expired`.
-6. Transient failures are retried with bounded exponential backoff.
-7. Retry is capped; after the cap the delivery/outbox becomes `failed` and remains auditable.
-8. Re-running the worker cannot create duplicate deliveries because both event and event-device pairs are unique.
+3. Each event fans out to all active subscriptions that exist when the event is processed.
+4. A successful device delivery updates subscription `last_success_at` and its delivery row.
+5. A permanently invalid browser subscription is deactivated and that delivery becomes `expired`.
+6. Transient failures retry with bounded exponential backoff.
+7. Retry is capped; after the cap that device delivery becomes `failed`.
+8. Once no retryable device delivery remains, the outbox event becomes `completed`.
+9. If worker infrastructure itself repeatedly cannot process an event, the outbox event becomes `failed` and remains auditable.
+10. Re-running the worker cannot create duplicate deliveries because both event and event-device pairs are unique.
 
-Initial retry policy:
+Initial retry policy per device:
 - attempt 1: immediate;
 - attempt 2: +1 minute;
 - attempt 3: +5 minutes;
 - attempt 4: +30 minutes;
 - attempt 5: +2 hours;
-- then permanent `failed` until a future explicit admin retry feature is designed.
+- then permanent `failed`.
 
-An admin retry UI is out of scope for the first release.
+An admin manual retry UI is out of scope for the first release.
 
 ## 7. Security model
 
@@ -246,12 +270,13 @@ An admin retry UI is out of scope for the first release.
 - Database stores only token hashes.
 - Link tokens are scoped to one market and one customer.
 - Link tokens expire after 15 minutes and are single-use.
-- VAPID private key exists only in backend secret storage.
-- Ordinary Flutter/web clients cannot read subscription secrets, outbox internals, or VAPID credentials.
+- VAPID private key exists only in Supabase secret storage.
+- Ordinary Flutter/web clients cannot read subscription key material, outbox internals, or VAPID credentials.
 - RLS/privilege rules deny cross-market reads and writes.
-- Token redemption endpoints use rate limiting and generic failure responses so they do not become a customer-enumeration oracle.
+- Public token-validation/subscription endpoints apply rate limiting and generic invalid-link responses so they cannot be used as a customer-enumeration oracle.
+- Admin QR generation/status/revoke actions require an authenticated active admin/authorized staff actor belonging to the same market as the customer.
 - Revoke-all immediately deactivates every subscription belonging to the selected customer and market.
-- Financial payloads are minimized: no password, authentication token, hidden internal note, or unnecessary PII is sent in a push body.
+- Financial push payloads contain no password, auth token, hidden internal note, or unnecessary PII.
 
 ## 8. Notification copy
 
@@ -271,20 +296,18 @@ Title:
 Body example:
 `بڕی دراو: 25,000 د.ع • ماوە: 100,000 د.ع • مارکێت: [ناوی مارکێت]`
 
-Tapping a notification opens a protected customer-facing route using a server-issued scoped reference. It must not expose a raw `customer_id` in the URL.
+Tapping a notification opens the ZHIROX Notifications PWA landing page for the already-linked device. The first release does not expose a detailed financial portal from the notification click, and no raw `customer_id` is placed in the URL.
 
 ## 9. iPhone/iPad behavior
 
-The onboarding page must detect the iOS Web Push prerequisites and guide the customer through them.
-
 Required behavior:
 - QR opens the onboarding URL in Safari.
-- If the page is not running as a Home Screen web app, show concise Add-to-Home-Screen instructions and preserve the still-valid association token.
+- If the page is not running as a Home Screen web app, show concise Add-to-Home-Screen instructions and preserve the still-valid association token in the installed app start URL.
 - When opened from the Home Screen, the customer taps **چالاککردنی ئاگادارکردنەوە**.
 - Only that explicit user action requests notification permission.
 - On successful browser subscription, the backend consumes the one-time link token.
 
-If the token expires before registration completes, the page shows a safe expired-link state and the admin generates a fresh QR.
+If the token expires before registration completes, the page shows a safe expired-link state and staff generate a fresh QR.
 
 ## 10. Error handling and UX states
 
@@ -314,11 +337,12 @@ No push error is surfaced as a financial transaction failure.
 
 Cover:
 - valid token creation and redemption;
+- replacement QR revokes prior unused token;
 - token reuse rejection;
 - expired token rejection;
 - revoked token rejection;
 - wrong-market access rejection;
-- subscription secrets inaccessible to ordinary users;
+- subscription key material inaccessible to ordinary users;
 - multi-device registration;
 - duplicate endpoint handling;
 - revoke-all scoping;
@@ -328,17 +352,19 @@ Cover:
 ### Event tests
 
 Cover:
-- new debt produces exactly one `debt_created` event;
+- new live debt produces exactly one `debt_created` event;
+- reconciliation creates a missing live-debt event exactly once;
+- legacy import/sync/restore debt produces no push event;
 - new payment produces exactly one `payment_created` event;
 - debt edit produces no push event;
 - payment edit/delete produces no new push event;
-- historical import/restore produces no push event;
-- push failure does not roll back a debt/payment transaction.
+- push enqueue/delivery failure does not roll back a debt/payment transaction.
 
 ### Delivery worker tests
 
 Cover:
 - fan-out to multiple devices;
+- zero-subscription event completes without later replay;
 - success updates audit fields;
 - transient failure schedules retry;
 - permanent invalid subscription deactivates device;
@@ -354,7 +380,8 @@ Cover:
 - onboarding valid/invalid/expired states;
 - iOS Home Screen guidance;
 - notification permission denial;
-- successful subscription linking.
+- successful subscription linking;
+- notification click opens the PWA landing page without exposing a customer ID.
 
 ### CI verification
 
@@ -363,22 +390,23 @@ Before release:
 - backend/Edge Function tests;
 - Flutter analyze;
 - Flutter tests;
-- existing online-only/payment security checks;
-- iOS unsigned IPA build must remain green.
+- existing online-only/payment-security checks;
+- iOS unsigned IPA build remains green.
 
-## 12. Files/components expected to change
+## 12. Expected implementation areas
 
 Implementation is expected to touch focused areas only:
-- new Supabase migration(s) for push link/subscription/outbox/delivery tables and RLS;
-- new Edge Function(s) for link creation/redemption/subscription management and push delivery;
-- canonical debt/payment backend paths for idempotent enqueue;
-- a small Flutter service/model layer for QR/status actions;
+- new Supabase migration(s) for push link/subscription/outbox/delivery tables, indexes, RLS, and helper RPCs;
+- a public `customer-push` Edge Function for onboarding/static PWA assets/token redemption/subscription registration;
+- a privileged scheduled delivery Edge Function;
+- an authenticated admin action for QR creation/status/revoke-all;
+- the existing live debt creation flow for idempotent enqueue plus recent-live-debt reconciliation;
+- the existing `record-payment` backend flow for idempotent payment enqueue;
+- a small Flutter service/model layer for QR/status/revoke actions;
 - customer profile UI for QR/status/revoke controls;
-- a web/PWA onboarding surface plus service worker and manifest changes as needed;
-- regression/security tests;
-- CI policy checks only where required by the new files/flows.
+- regression/security tests and required CI policy updates.
 
-Unrelated financial, dashboard, customer-list, import, receipt, and synchronization behavior must remain unchanged.
+Unrelated financial, dashboard, customer-list, receipt, import, synchronization, and restore behavior remains unchanged except where those subsystems are explicitly checked to suppress customer push events.
 
 ## 13. Explicit non-goals
 
@@ -392,21 +420,25 @@ The first release does not include:
 - debt/payment edit or delete notifications;
 - admin manual resend/retry UI;
 - native APNs/FCM push as a replacement for Web Push;
+- a detailed customer financial portal opened from notification taps;
 - KYC/business-provider onboarding.
 
 ## 14. Acceptance criteria
 
 The feature is complete only when all of the following are true:
 
-1. Staff can generate a short-lived customer-specific QR from the customer profile.
-2. QR does not expose a raw customer ID and cannot be reused after successful linking.
-3. A customer can link at least one supported browser/device through the onboarding flow.
-4. A customer can link multiple devices using separate QR sessions.
-5. iPhone/iPad onboarding correctly handles the Home Screen Web Push requirement.
-6. New debt and new payment events create one idempotent outbox event each.
-7. No other financial event type creates a push event.
-8. All active devices receive the eligible notification independently.
-9. Invalid subscriptions are retired automatically; transient failures retry without affecting finance transactions.
-10. Staff can see linked-device count/latest delivery status and revoke all customer devices.
-11. Cross-market access is blocked and server secrets remain server-side.
-12. Regression, security, Flutter, backend, and CI/iOS build checks pass before release.
+1. Staff can generate a 15-minute customer-specific QR from the customer profile.
+2. Generating a replacement QR invalidates previous unused QR tokens for that customer.
+3. QR does not expose a raw customer ID and cannot be reused after successful linking.
+4. A customer can link at least one supported browser/device through onboarding.
+5. A customer can link multiple devices using separate QR sessions.
+6. iPhone/iPad onboarding correctly handles the Home Screen Web Push requirement.
+7. A new live debt creates exactly one idempotent `debt_created` event, including reconciliation if the immediate enqueue was interrupted.
+8. A new payment creates exactly one idempotent `payment_created` event.
+9. Import/sync/restore and edit/delete flows create no customer push event.
+10. All active devices receive an eligible event independently.
+11. An event with no active device is completed and is not replayed to a device linked later.
+12. Invalid subscriptions are retired automatically; transient failures retry without affecting financial transactions.
+13. Staff can see linked-device count/latest delivery status and revoke all customer devices.
+14. Cross-market access is blocked and server secrets remain server-side.
+15. Regression, security, Flutter, backend, and CI/iOS build checks pass before release.
