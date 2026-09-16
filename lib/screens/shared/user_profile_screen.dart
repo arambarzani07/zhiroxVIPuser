@@ -1386,6 +1386,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     unawaited(_hydrateFinancialHistoryForFilters());
   }
 
+  void _applyFinancialQuickRange(FinancialQuickRange preset) {
+    final resolved = resolveFinancialQuickRange(preset, DateTime.now());
+    setState(() {
+      _financialDateRange = DateTimeRange(
+        start: resolved.start,
+        end: resolved.end,
+      );
+      _financialTypeFilter = 'all';
+    });
+    unawaited(_hydrateFinancialHistoryForFilters());
+  }
+
   void _clearFinancialFilters() {
     if (_financialSearchController.text.isEmpty &&
         _financialDateRange == null &&
@@ -1450,6 +1462,40 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
     }
 
+    Widget quickChip(FinancialQuickRange preset, String label) {
+      final resolved = resolveFinancialQuickRange(preset, DateTime.now());
+      final active = _financialDateRange;
+      final selected = active != null &&
+          active.start.year == resolved.start.year &&
+          active.start.month == resolved.start.month &&
+          active.start.day == resolved.start.day &&
+          active.end.year == resolved.end.year &&
+          active.end.month == resolved.end.month &&
+          active.end.day == resolved.end.day;
+      return Padding(
+        padding: const EdgeInsetsDirectional.only(end: 7),
+        child: ChoiceChip(
+          selected: selected,
+          onSelected: (_) => _applyFinancialQuickRange(preset),
+          label: Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.25,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            ),
+          ),
+          visualDensity: VisualDensity.compact,
+          side: BorderSide(
+            color: selected
+                ? AppColors.primary.withValues(alpha: 0.30)
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : const Color(0xFFE4E7EC)),
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1502,6 +1548,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               typeChip('debt', 'قەرز', Icons.north_east_rounded),
               typeChip('payment', 'پارە وەرگرتنەوە', Icons.south_west_rounded),
               typeChip('system', 'مێژووی گۆڕانکاری', Icons.history_rounded),
+            ],
+          ),
+        ),
+        const SizedBox(height: 7),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              quickChip(FinancialQuickRange.today, 'ئەمڕۆ'),
+              quickChip(FinancialQuickRange.yesterday, 'دوێنێ'),
+              quickChip(FinancialQuickRange.last7Days, '7 ڕۆژ'),
+              quickChip(FinancialQuickRange.last30Days, '30 ڕۆژ'),
+              quickChip(FinancialQuickRange.thisMonth, 'ئەم مانگە'),
+              quickChip(FinancialQuickRange.lastMonth, 'مانگی ڕابردوو'),
+              quickChip(FinancialQuickRange.thisYear, 'ئەم ساڵە'),
             ],
           ),
         ),
@@ -1890,6 +1951,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     bool isDark,
   ) {
     final netColor = summary.net > 0 ? Colors.red : Colors.green;
+    final closingColor =
+        summary.closingBalance > 0 ? Colors.red : Colors.green;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
@@ -1937,7 +2000,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           Row(
             children: [
               _buildChatSummaryValue(
-                label: 'قەرز',
+                label: 'باڵانسی سەرەتا',
+                value: summary.openingBalance,
+                color: AppColors.primary,
+                isDark: isDark,
+              ),
+              const SizedBox(width: 6),
+              _buildChatSummaryValue(
+                label: 'باڵانسی کۆتایی',
+                value: summary.closingBalance,
+                color: closingColor,
+                isDark: isDark,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              _buildChatSummaryValue(
+                label: 'قەرزی نوێ',
                 value: summary.debtTotal,
                 color: Colors.orange,
                 isDark: isDark,
@@ -1951,7 +2032,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
               const SizedBox(width: 6),
               _buildChatSummaryValue(
-                label: 'جیاوازی',
+                label: 'گۆڕانی خالص',
                 value: summary.net,
                 color: netColor,
                 isDark: isDark,
