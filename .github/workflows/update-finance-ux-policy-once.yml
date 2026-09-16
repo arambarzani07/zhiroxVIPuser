@@ -1,0 +1,46 @@
+name: Align finance UX policy markers once
+
+on:
+  push:
+    branches: [user-source]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: user-source
+          fetch-depth: 0
+      - name: Update policy markers
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/verify_online_only.py')
+          s = p.read_text()
+          old = "    'کەشفی مامەڵەکان',\n"
+          new = "    'گەڕان و فلتەر',\n    'countActiveFinancialFilters',\n    'shouldExpandFinancialFilters',\n"
+          if old not in s:
+              raise SystemExit('legacy Financial Chat statement marker not found')
+          s = s.replace(old, new, 1)
+          old = "    'پشتڕاستە — تۆمار بکە',\n"
+          new = "    'پێداچوونەوەی کۆتایی',\n    '_buildPaymentProgress',\n    '_buildInlineReview',\n"
+          if old not in s:
+              raise SystemExit('legacy payment confirmation marker not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          Path('.github/workflows/update-finance-ux-policy-once.yml').unlink()
+          PY
+      - name: Commit policy alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "test(user): align policy with compact finance UX"
+          git push origin HEAD:user-source
