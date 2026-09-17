@@ -123,11 +123,12 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
 
   Future<void> _sendManual() async {
     if (_busy) return;
-    final controller = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    var draft = '';
     final message = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        scrollable: true,
         title: const Text('ئاگاداری بۆ ئەم کڕیارە'),
         content: Form(
           key: formKey,
@@ -141,11 +142,11 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
               const SizedBox(height: 12),
               TextFormField(
                 key: const ValueKey('customer-manual-push-message'),
-                controller: controller,
                 autofocus: true,
                 minLines: 3,
                 maxLines: 5,
                 maxLength: CustomerPushService.manualMessageMaxLength,
+                onChanged: (value) => draft = value,
                 decoration: const InputDecoration(
                   labelText: 'پەیامی ئاگادارکردنەوە',
                   border: OutlineInputBorder(),
@@ -171,7 +172,7 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
           FilledButton.icon(
             onPressed: () {
               if (formKey.currentState?.validate() != true) return;
-              Navigator.of(dialogContext).pop(controller.text.trim());
+              Navigator.of(dialogContext).pop(draft.trim());
             },
             icon: const Icon(Icons.send_rounded),
             label: const Text('ناردن'),
@@ -179,7 +180,6 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
         ],
       ),
     );
-    controller.dispose();
     if (!mounted || message == null) return;
 
     setState(() => _busy = true);
