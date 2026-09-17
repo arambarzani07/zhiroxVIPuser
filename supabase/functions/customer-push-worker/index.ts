@@ -70,6 +70,44 @@ export type WorkerDeps = {
   updateOutbox: (outboxId: string, patch: Record<string, unknown>) => Promise<void>;
 };
 
+export type ReconcileDebt = {
+  id: string;
+  marketId: string;
+  customerId: string;
+  marketName: string;
+  amount: number;
+  amountUsd: number;
+  currency: string;
+  dollarRate: number;
+  remainingIqd: number;
+  occurredAt: string;
+  deleted: boolean;
+  legacyLinked: boolean;
+  syncLinked: boolean;
+  hasOutbox: boolean;
+};
+
+export type ReconcileEnqueue = {
+  marketId: string;
+  customerId: string;
+  eventType: "debt_created";
+  eventRecordId: string;
+  idempotencyKey: string;
+  payload: {
+    amount: number;
+    currency: "IQD" | "USD";
+    remaining_iqd: number;
+    market_name: string;
+    occurred_at: string;
+  };
+};
+
+export type ReconcileDeps = {
+  now: () => Date;
+  listCandidates: (fromIso: string, toIso: string, limit: number) => Promise<ReconcileDebt[]>;
+  enqueuePush: (event: ReconcileEnqueue) => Promise<void>;
+};
+
 function statusCode(error: unknown): number {
   if (error && typeof error === "object") {
     const map = error as Record<string, unknown>;
@@ -81,6 +119,48 @@ function statusCode(error: unknown): number {
 function errorText(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
   return text.slice(0, 500);
+}
+
+export async function reconcileRecentDebts(deps: ReconcileDeps): Promise<number> {
+  const now = deps.now();
+  const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const to = new Date(now.getTime() - 2 * 60 * 1000);
+  const candidates = await deps.listCandidates(from.toISOString(), to.toISOString(), 100);
+  let enqueued = 0;
+
+  for (const debt of candidates) {
+    if (debt.deleted || debt.legacyLinked || debt.syncLinked || debt.hasOutbox) continue;
+    const occurredMs = Date.parse(debt.occurredAt);
+    if (!Number.isFinite(occurredMs)) continue;
+    const ageMs = now.getTime() - occurredMs;
+    if (ageMs < 2 * 60 * 1000 || ageMs > 24 * 60 * 60 * 1000) continue;
+
+    const useUsd = debt.currency.trim().toUpperCase() === "USD" && debt.dollarRate > 0;
+    const currency: "IQD" | "USD" = useUsd ? "USD" : "IQD";
+    const displayAmount = useUsd
+      ? (debt.amountUsd > 0
+        ? debt.amountUsd
+        : Math.round((debt.amount / debt.dollarRate) * 100) / 100)
+      : debt.amount;
+
+    await deps.enqueuePush({
+      marketId: debt.marketId,
+      customerId: debt.customerId,
+      eventType: "debt_created",
+      eventRecordId: debt.id,
+      idempotencyKey: `debt_created:${debt.id}`,
+      payload: {
+        amount: displayAmount,
+        currency,
+        remaining_iqd: debt.remainingIqd,
+        market_name: debt.marketName,
+        occurred_at: debt.occurredAt,
+      },
+    });
+    enqueued++;
+  }
+
+  return enqueued;
 }
 
 export async function processOutboxEvent(
@@ -283,6 +363,135 @@ function repositoryDeps(admin: any): WorkerDeps {
   };
 }
 
+async function listReconcileCandidates(
+  admin: any,
+  fromIso: string,
+  toIso: string,
+  limit: number,
+): Promise<ReconcileDebt[]> {
+  const { data: debts, error: debtError } = await admin.from("debts")
+    .select("id,customer_id,amount,amount_usd,currency,dollar_rate,is_deleted,custom_date,created_at")
+    .eq("is_deleted", false)
+    .gte("created_at", fromIso)
+    .lte("created_at", toIso)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (debtError) throw debtError;
+  if (!debts?.length) return [];
+
+  const debtIds = debts.map((row: any) => String(row.id));
+  const customerIds = [...new Set(debts.map((row: any) => String(row.customer_id)).filter(Boolean))];
+  const [legacyResult, syncResult, outboxResult, customerResult] = await Promise.all([
+    admin.from("legacy_import_links")
+      .select("target_id")
+      .eq("entity_kind", "debt")
+      .in("target_id", debtIds),
+    admin.from("daftar_sync_seen")
+      .select("target_id")
+      .eq("entity_kind", "debt")
+      .in("target_id", debtIds),
+    admin.from("notification_outbox")
+      .select("event_record_id")
+      .eq("event_type", "debt_created")
+      .in("event_record_id", debtIds),
+    admin.from("profiles")
+      .select("id,admin_id,role")
+      .eq("role", "customer")
+      .in("id", customerIds),
+  ]);
+  for (const result of [legacyResult, syncResult, outboxResult, customerResult]) {
+    if (result.error) throw result.error;
+  }
+
+  const legacyIds = new Set((legacyResult.data ?? []).map((row: any) => String(row.target_id)));
+  const syncIds = new Set((syncResult.data ?? []).map((row: any) => String(row.target_id)));
+  const outboxIds = new Set((outboxResult.data ?? []).map((row: any) => String(row.event_record_id)));
+  const customerMarket = new Map<string, string>();
+  for (const row of customerResult.data ?? []) {
+    customerMarket.set(String(row.id), String(row.admin_id ?? ""));
+  }
+  const marketIds = [...new Set([...customerMarket.values()].filter(Boolean))];
+
+  const marketNames = new Map<string, string>();
+  if (marketIds.length > 0) {
+    const { data: markets, error: marketError } = await admin.from("profiles")
+      .select("id,market_name")
+      .eq("role", "admin")
+      .in("id", marketIds);
+    if (marketError) throw marketError;
+    for (const row of markets ?? []) {
+      marketNames.set(String(row.id), String(row.market_name ?? ""));
+    }
+  }
+
+  const balances = new Map<string, number>();
+  if (customerIds.length > 0) {
+    const pageSize = 1000;
+    let offset = 0;
+    while (true) {
+      const { data: rows, error } = await admin.from("debts")
+        .select("customer_id,remaining")
+        .in("customer_id", customerIds)
+        .eq("is_deleted", false)
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      for (const row of rows ?? []) {
+        const customerId = String(row.customer_id ?? "");
+        const remaining = Number(row.remaining ?? 0);
+        if (customerId && Number.isFinite(remaining) && remaining > 0) {
+          balances.set(customerId, (balances.get(customerId) ?? 0) + remaining);
+        }
+      }
+      if ((rows ?? []).length < pageSize) break;
+      offset += pageSize;
+    }
+  }
+
+  const result: ReconcileDebt[] = [];
+  for (const row of debts) {
+    const id = String(row.id);
+    const customerId = String(row.customer_id ?? "");
+    const marketId = customerMarket.get(customerId) ?? "";
+    if (!customerId || !marketId) continue;
+    result.push({
+      id,
+      marketId,
+      customerId,
+      marketName: marketNames.get(marketId) ?? "",
+      amount: Number(row.amount ?? 0),
+      amountUsd: Number(row.amount_usd ?? 0),
+      currency: String(row.currency ?? "IQD"),
+      dollarRate: Number(row.dollar_rate ?? 0),
+      remainingIqd: balances.get(customerId) ?? 0,
+      occurredAt: String(row.created_at ?? row.custom_date ?? ""),
+      deleted: row.is_deleted === true,
+      legacyLinked: legacyIds.has(id),
+      syncLinked: syncIds.has(id),
+      hasOutbox: outboxIds.has(id),
+    });
+  }
+  return result;
+}
+
+function reconcileRepositoryDeps(admin: any): ReconcileDeps {
+  return {
+    now: () => new Date(),
+    listCandidates: (fromIso, toIso, limit) =>
+      listReconcileCandidates(admin, fromIso, toIso, limit),
+    enqueuePush: async (event) => {
+      const { error } = await admin.rpc("enqueue_customer_push_event_service", {
+        p_market_id: event.marketId,
+        p_customer_id: event.customerId,
+        p_event_type: event.eventType,
+        p_event_record_id: event.eventRecordId,
+        p_idempotency_key: event.idempotencyKey,
+        p_payload: event.payload,
+      });
+      if (error) throw error;
+    },
+  };
+}
+
 async function serve(req: Request): Promise<Response> {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -307,6 +516,13 @@ async function serve(req: Request): Promise<Response> {
     runtime.vapidPublicKey,
     runtime.vapidPrivateKey,
   );
+
+  let reconciled = 0;
+  try {
+    reconciled = await reconcileRecentDebts(reconcileRepositoryDeps(admin));
+  } catch (error) {
+    console.error("customer-push debt reconciliation failed", errorText(error));
+  }
 
   const { data: claimed, error: claimError } = await admin.rpc(
     "claim_customer_push_outbox",
@@ -336,7 +552,7 @@ async function serve(req: Request): Promise<Response> {
     }
   }
 
-  return json({ ok: true, processed });
+  return json({ ok: true, reconciled, processed });
 }
 
 if (import.meta.main) Deno.serve(serve);
