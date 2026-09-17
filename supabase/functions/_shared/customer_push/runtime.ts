@@ -22,8 +22,12 @@ function parseRuntime(data: unknown): CustomerPushRuntime | null {
   return Object.values(runtime).every((value) => value.length > 0) ? runtime : null;
 }
 
+// The Edge Functions intentionally use an ungenerated Supabase schema. The
+// concrete rpc() return is an awaitable PostgREST builder rather than a plain
+// Promise, so keep this backend-only adapter untyped instead of narrowing valid
+// RPC calls to `never` during standalone Deno type-checking.
 export async function loadOrInitializePushRuntime(
-  admin: { rpc: (name: string, params?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> },
+  admin: any,
 ): Promise<CustomerPushRuntime> {
   const loaded = await admin.rpc("get_customer_push_runtime_config_service");
   if (!loaded.error) {
