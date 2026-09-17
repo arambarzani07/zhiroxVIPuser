@@ -1,6 +1,8 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   processOutboxEvent,
+  reconcileRecentDebts,
+  type ReconcileDebt,
   type WorkerDelivery,
   type WorkerDeps,
   type WorkerEvent,
@@ -119,4 +121,53 @@ Deno.test("zero-device event completes", async () => {
   await processOutboxEvent(event, repo.deps);
   assertEquals(repo.deliveries.length, 0);
   assertEquals(repo.outboxPatches.at(-1)?.status, "completed");
+});
+
+Deno.test("reconciliation enqueues only eligible missed live debts", async () => {
+  const now = new Date("2026-09-17T01:00:00Z");
+  const base: ReconcileDebt = {
+    id: "00000000-0000-0000-0000-000000000301",
+    marketId: "00000000-0000-0000-0000-000000000101",
+    customerId: "00000000-0000-0000-0000-000000000121",
+    marketName: "Market A",
+    amount: 1000,
+    amountUsd: 0,
+    currency: "IQD",
+    dollarRate: 0,
+    remainingIqd: 5000,
+    occurredAt: "2026-09-17T00:30:00Z",
+    deleted: false,
+    legacyLinked: false,
+    syncLinked: false,
+    hasOutbox: false,
+  };
+  const candidates: ReconcileDebt[] = [
+    base,
+    { ...base, id: "00000000-0000-0000-0000-000000000302", legacyLinked: true },
+    { ...base, id: "00000000-0000-0000-0000-000000000303", syncLinked: true },
+    { ...base, id: "00000000-0000-0000-0000-000000000304", hasOutbox: true },
+    { ...base, id: "00000000-0000-0000-0000-000000000305", occurredAt: "2026-09-17T00:59:30Z" },
+  ];
+  const enqueued = new Set<string>();
+  let observedWindow: { from: string; to: string; limit: number } | null = null;
+
+  const deps = {
+    now: () => now,
+    listCandidates: async (from: string, to: string, limit: number) => {
+      observedWindow = { from, to, limit };
+      return candidates;
+    },
+    enqueuePush: async (event: { idempotencyKey: string }) => {
+      enqueued.add(event.idempotencyKey);
+    },
+  };
+
+  assertEquals(await reconcileRecentDebts(deps), 1);
+  assertEquals(await reconcileRecentDebts(deps), 1);
+  assertEquals([...enqueued], [`debt_created:${base.id}`]);
+  assertEquals(observedWindow, {
+    from: "2026-09-16T01:00:00.000Z",
+    to: "2026-09-17T00:58:00.000Z",
+    limit: 100,
+  });
 });
