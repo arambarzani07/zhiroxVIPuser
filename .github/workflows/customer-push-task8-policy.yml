@@ -26,7 +26,7 @@ jobs:
           deno-version: v2.x
       - name: Test customer push Edge Functions
         run: |
-          deno test supabase/functions/_shared/customer_push \
+          deno test --allow-env supabase/functions/_shared/customer_push \
                     supabase/functions/customer-push-admin \
                     supabase/functions/customer-push \
                     supabase/functions/customer-push-worker \
