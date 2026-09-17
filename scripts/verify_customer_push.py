@@ -64,4 +64,35 @@ assert re.search(
 for forbidden in ('debt_updated', 'payment_updated', 'debt_deleted', 'payment_deleted'):
     assert forbidden not in outbox_schema, f'unsupported Web Push event type allowed: {forbidden}'
 
+web = ROOT / 'customer-push-web'
+for name in ('index.html', 'app.js', 'sw.js', 'manifest.webmanifest', '_headers'):
+    assert (web / name).exists(), f'missing customer push web asset: {name}'
+
+app_js = (web / 'app.js').read_text(errors='ignore')
+assert (
+    'https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push'
+    in app_js
+), 'customer push PWA must use the Supabase JSON API'
+for secret_name in (
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'VAPID_PRIVATE_KEY',
+    'CUSTOMER_PUSH_WORKER_SECRET',
+    'CUSTOMER_PUSH_RATE_LIMIT_SALT',
+):
+    assert secret_name not in app_js, f'server secret leaked to customer push PWA: {secret_name}'
+
+sw_js = (web / 'sw.js').read_text(errors='ignore')
+assert 'customer_id' not in sw_js, 'service worker must not expose customer_id'
+assert "clients.openWindow('/')" in sw_js, 'notification clicks must open the generic PWA root'
+
+manifest = (web / 'manifest.webmanifest').read_text(errors='ignore')
+assert re.search(r'"scope"\s*:\s*"/"', manifest), 'PWA scope must be /'
+assert re.search(r'"start_url"\s*:\s*"/"', manifest), 'PWA start_url must be /'
+
+headers = (web / '_headers').read_text(errors='ignore')
+assert 'Referrer-Policy: no-referrer' in headers
+assert 'Cache-Control: no-store' in headers
+assert 'https://hsoyfbtpvwfmjokudznx.supabase.co' in headers
+assert 'Service-Worker-Allowed: /' in headers
+
 print('customer push policy verified')
