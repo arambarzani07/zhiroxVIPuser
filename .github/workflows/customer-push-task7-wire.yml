@@ -32,19 +32,8 @@ jobs:
                   raise SystemExit('profile import anchor mismatch')
               text = text.replace(anchor, anchor + import_line, 1)
 
-          old = """      if (!totalsComplete) _buildCurrencySummaryWarning(),
-      _buildDebtLimitCard(),
-    ];"""
-          new = """      if (!totalsComplete) _buildCurrencySummaryWarning(),
-      _buildDebtLimitCard(),
-      if (auth.canSendNotifications)
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
-            child: CustomerPushCard(customerId: widget.userId),
-          ),
-        ),
-    ];"""
+          old = "      if (!totalsComplete) _buildCurrencySummaryWarning(),\n      _buildDebtLimitCard(),\n    ];"
+          new = "      if (!totalsComplete) _buildCurrencySummaryWarning(),\n      _buildDebtLimitCard(),\n      if (auth.canSendNotifications)\n        SliverToBoxAdapter(\n          child: Padding(\n            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),\n            child: CustomerPushCard(customerId: widget.userId),\n          ),\n        ),\n    ];"
           if new not in text:
               if text.count(old) != 1:
                   raise SystemExit('customer overview anchor mismatch')
