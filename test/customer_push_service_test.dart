@@ -2,16 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zhirox/services/customer_push_service.dart';
 
 void main() {
-  test('push status parses server response', () {
+  test('push status parses active link count', () {
     final status = CustomerPushStatus.fromJson({
       'active': true,
       'device_count': 2,
+      'active_link_count': 3,
       'latest_status': 'sent',
       'latest_at': '2026-09-17T00:00:00Z',
     });
 
     expect(status.active, isTrue);
     expect(status.deviceCount, 2);
+    expect(status.activeLinkCount, 3);
+    expect(status.hasActiveLink, isTrue);
     expect(status.latestStatus, 'sent');
     expect(status.latestAt, DateTime.parse('2026-09-17T00:00:00Z'));
   });
@@ -21,6 +24,7 @@ void main() {
       () => CustomerPushStatus.fromJson({
         'active': 'yes',
         'device_count': 2,
+        'active_link_count': 1,
         'latest_status': null,
         'latest_at': null,
       }),
@@ -29,7 +33,8 @@ void main() {
     expect(
       () => CustomerPushStatus.fromJson({
         'active': false,
-        'device_count': -1,
+        'device_count': 0,
+        'active_link_count': -1,
         'latest_status': null,
         'latest_at': null,
       }),
@@ -37,18 +42,18 @@ void main() {
     );
   });
 
-  test('push link parses an absolute onboarding URL and expiry', () {
+  test('push link accepts a permanent onboarding URL with null expiry', () {
     final link = CustomerPushLink.fromJson({
-      'url': 'https://example.test/functions/v1/customer-push?token=${'a' * 64}',
-      'expires_at': '2026-09-17T00:15:00Z',
+      'url': 'https://push.zhirox.com/?token=${'a' * 64}',
+      'expires_at': null,
     });
 
     expect(link.url.isAbsolute, isTrue);
     expect(link.url.queryParameters['token'], 'a' * 64);
-    expect(link.expiresAt, DateTime.parse('2026-09-17T00:15:00Z'));
+    expect(link.expiresAt, isNull);
   });
 
-  test('service sends exact admin actions and parses replies', () async {
+  test('service sends exact admin actions and parses permanent replies', () async {
     final calls = <Map<String, dynamic>>[];
     final service = CustomerPushService(
       invoker: (body) async {
@@ -58,13 +63,14 @@ void main() {
             return {
               'active': true,
               'device_count': 3,
+              'active_link_count': 2,
               'latest_status': 'sent',
               'latest_at': '2026-09-17T00:00:00Z',
             };
           case 'create_link':
             return {
-              'url': 'https://example.test/functions/v1/customer-push?token=${'b' * 64}',
-              'expires_at': '2026-09-17T00:15:00Z',
+              'url': 'https://push.zhirox.com/?token=${'b' * 64}',
+              'expires_at': null,
             };
           case 'revoke_all':
             return {'revoked_count': 3};
@@ -78,7 +84,9 @@ void main() {
     final revoked = await service.revokeAll('customer-1');
 
     expect(status.deviceCount, 3);
+    expect(status.activeLinkCount, 2);
     expect(link.url.queryParameters['token'], 'b' * 64);
+    expect(link.expiresAt, isNull);
     expect(revoked, 3);
     expect(calls, [
       {'action': 'status', 'customer_id': 'customer-1'},
