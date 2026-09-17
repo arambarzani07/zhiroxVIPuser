@@ -12,7 +12,7 @@ Deno.test("production QR links use the canonical push domain", () => {
   assertEquals(CUSTOMER_PUSH_PUBLIC_BASE_URL, "https://push.zhirox.com/");
 });
 
-Deno.test("create_link stores only token hash and expires in 15 minutes", async () => {
+Deno.test("create_link stores only token hash and expires in 90 days", async () => {
   let storedHash = "";
   const response = await handleAdminAction(
     { action: "create_link", customer_id: customerId },
@@ -36,7 +36,7 @@ Deno.test("create_link stores only token hash and expires in 15 minutes", async 
   );
 
   assertEquals(storedHash, await sha256Hex("a".repeat(64)));
-  assertEquals(response.expires_at, "2026-09-17T00:15:00.000Z");
+  assertEquals(response.expires_at, "2026-12-16T00:00:00.000Z");
   assertEquals(
     response.url,
     `https://push.zhirox.com/?token=${"a".repeat(64)}`,
