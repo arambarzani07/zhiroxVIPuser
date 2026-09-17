@@ -1,9 +1,16 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { sha256Hex } from "../_shared/customer_push/crypto.ts";
-import { handleAdminAction } from "./index.ts";
+import {
+  CUSTOMER_PUSH_PUBLIC_BASE_URL,
+  handleAdminAction,
+} from "./index.ts";
 
 const actorId = "00000000-0000-0000-0000-000000000101";
 const customerId = "00000000-0000-0000-0000-000000000121";
+
+Deno.test("production QR links use the canonical push domain", () => {
+  assertEquals(CUSTOMER_PUSH_PUBLIC_BASE_URL, "https://push.zhirox.com/");
+});
 
 Deno.test("create_link stores only token hash and expires in 15 minutes", async () => {
   let storedHash = "";
@@ -24,16 +31,15 @@ Deno.test("create_link stores only token hash and expires in 15 minutes", async 
         latest_at: null,
       }),
       revokeAll: async () => 0,
-      publicBaseUrl:
-        "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push",
+      publicBaseUrl: "https://push.zhirox.com/",
     },
   );
 
   assertEquals(storedHash, await sha256Hex("a".repeat(64)));
   assertEquals(response.expires_at, "2026-09-17T00:15:00.000Z");
   assertEquals(
-    String(response.url).endsWith("token=" + "a".repeat(64)),
-    true,
+    response.url,
+    `https://push.zhirox.com/?token=${"a".repeat(64)}`,
   );
 });
 
