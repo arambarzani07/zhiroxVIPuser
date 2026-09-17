@@ -206,11 +206,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$UPDATE_TAG" >/dev/null 2>&1; then
-            gh release upload "$UPDATE_TAG" "$IPA_FILE" "$UPDATE_MANIFEST" --clobber
-          else
-            gh release create "$UPDATE_TAG" "$IPA_FILE" "$UPDATE_MANIFEST" \
-              --title "$UPDATE_TITLE" \
-              --notes "Latest unsigned IPA and Auto Update Center manifest. Updated automatically by GitHub Actions." \
-              --target "$GITHUB_SHA"
-          fi
+
+          for attempt in 1 2 3 4; do
+            echo "Release publish attempt ${attempt}/4"
+
+            if gh release view "$UPDATE_TAG" >/dev/null 2>&1; then
+              if gh release upload "$UPDATE_TAG" "$IPA_FILE" "$UPDATE_MANIFEST" --clobber; then
+                echo "Release assets published successfully."
+                exit 0
+              fi
+            else
+              if gh release create "$UPDATE_TAG" "$IPA_FILE" "$UPDATE_MANIFEST" \
+                --title "$UPDATE_TITLE" \
+                --notes "Latest unsigned IPA and Auto Update Center manifest. Updated automatically by GitHub Actions." \
+                --target "$GITHUB_SHA"; then
+                echo "Release created and assets published successfully."
+                exit 0
+              fi
+            fi
+
+            if [ "$attempt" -lt 4 ]; then
+              delay=$((attempt * 15))
+              echo "GitHub release publish failed; retrying in ${delay}s..." >&2
+              sleep "$delay"
+            fi
+          done
+
+          echo "GitHub release publish failed after 4 attempts." >&2
+          exit 1
