@@ -3,75 +3,142 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#f4f6fa">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="ZHIROX">
+  <meta name="description" content="پۆرتالی ڕەسمی کڕیار بۆ بینینی قەرز، پارەدان و ئاگادارکردنەوەکان">
   <title>ZHIROX Customer Portal</title>
   <script src="/manifest-bootstrap.js"></script>
   <noscript><link rel="manifest" href="/manifest.webmanifest"></noscript>
-  <style>
-    :root { color-scheme: light; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: #f6f7fb; color: #171b2e; padding: max(20px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom)); }
-    .card { width: min(100%, 680px); margin: 0 auto; background: #fff; border-radius: 24px; padding: 28px; box-shadow: 0 18px 55px rgba(19, 31, 71, .10); }
-    h1 { margin: 0 0 12px; font-size: clamp(24px, 6vw, 34px); }
-    p { line-height: 1.8; }
-    .muted { color: #687086; }
-    .identity { margin: 18px 0; border: 1px solid #e6e8f0; border-radius: 16px; overflow: hidden; }
-    .row { padding: 12px 14px; }
-    .row + .row { border-top: 1px solid #e6e8f0; }
-    .notice { margin: 18px 0; padding: 14px; border-radius: 14px; background: #f1f4ff; }
-    .section-title { margin: 24px 0 12px; font-size: 18px; }
-    .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .total { padding: 13px 10px; border-radius: 14px; background: #f6f7fb; text-align: center; }
-    .total strong, .total span { display: block; }
-    .total span { margin-top: 5px; font-size: 13px; color: #687086; }
-    .currency { margin: 14px 0 8px; color: #3157e0; font-weight: 800; }
-    .ledger { display: grid; gap: 10px; }
-    .entry { padding: 14px; border: 1px solid #e6e8f0; border-radius: 14px; }
-    .entry-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-    .entry-meta { color: #687086; font-size: 13px; margin-top: 7px; }
-    .debt-label { color: #c8323e; }
-    .payment-label { color: #087a55; }
-    .empty { text-align: center; padding: 20px; color: #687086; }
-    button { width: 100%; border: 0; border-radius: 14px; padding: 14px 16px; font: inherit; font-weight: 700; background: #3157e0; color: #fff; cursor: pointer; }
-    button:disabled { opacity: .55; cursor: wait; }
-    .ok { color: #087a55; }
-    .err { color: #c8323e; }
-    [hidden] { display: none !important; }
-  </style>
+  <link rel="stylesheet" href="/styles.css">
   <script defer src="/app.js"></script>
 </head>
 <body>
-  <main class="card" aria-live="polite">
-    <h1>هەژماری کڕیاری ZHIROX</h1>
-    <p id="status" class="muted">پشکنینی لینک...</p>
+  <main id="portalShell" class="portal-shell">
+    <header class="portal-header">
+      <div class="brand-lockup">
+        <div class="brand-mark" aria-hidden="true">Z</div>
+        <div class="brand-copy">
+          <p class="eyebrow">پۆرتالی ڕەسمی کڕیار</p>
+          <h1 id="marketBrand">ZHIROX</h1>
+          <p id="customerGreeting" class="muted">بارکردنی زانیاریی هەژمار...</p>
+        </div>
+      </div>
+      <div id="accountBadge" class="status-badge" role="status">پشکنین...</div>
+    </header>
 
-    <section id="identity" class="identity" hidden>
-      <div class="row"><strong>کڕیار:</strong> <span id="customerName"></span></div>
-      <div class="row"><strong>مارکێت:</strong> <span id="marketName"></span></div>
+    <p id="status" class="sr-status" aria-live="polite">پشکنینی لینک...</p>
+
+    <section id="lockedState" class="state-card" hidden>
+      <div class="state-icon" aria-hidden="true">!</div>
+      <p class="eyebrow">پاراستنی هەژمار</p>
+      <h2>دەستگەیشتن بەردەست نییە</h2>
+      <p class="state-copy">ئەم لینکە بەردەست نییە یان ڕاگیراوە. تکایە QR ـێکی چالاک لە سوپەرمارکێتەکە وەربگرە.</p>
     </section>
 
-    <section id="portal" hidden>
-      <h2 class="section-title">پوختەی هەژمار</h2>
-      <div id="totals"></div>
-      <h2 class="section-title">قەرز و پارەدانەکان</h2>
-      <div id="ledger" class="ledger"></div>
-      <button id="loadMore" type="button" hidden>بینینی زیاتر</button>
-    </section>
+    <div id="portalApp" hidden>
+      <nav class="portal-nav" aria-label="بەشەکانی پۆرتال">
+        <button id="homeTab" type="button" class="nav-item is-active" data-portal-tab="home" aria-controls="homeView" aria-current="page">
+          <span class="nav-kicker">01</span><span>سەرەکی</span>
+        </button>
+        <button id="transactionsTab" type="button" class="nav-item" data-portal-tab="transactions" aria-controls="transactionsView">
+          <span class="nav-kicker">02</span><span>مامەڵەکان</span>
+        </button>
+        <button id="notificationsTab" type="button" class="nav-item" data-portal-tab="notifications" aria-controls="notificationsView">
+          <span class="nav-kicker">03</span><span>ئاگادارکردنەوە</span>
+        </button>
+      </nav>
 
-    <section id="iosHelp" class="notice" hidden>
-      <strong>بۆ iPhone / iPad</strong>
-      <p>لە Safari دوگمەی Share بکە، <strong>Add to Home Screen</strong> هەڵبژێرە، پاشان ZHIROX Notifications لە Home Screen بکەرەوە.</p>
-    </section>
+      <section id="homeView" class="portal-view" aria-labelledby="homeHeading">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">پوختەی هەژمار</p>
+            <h2 id="homeHeading">دۆخی دارایی</h2>
+          </div>
+          <span class="powered-by">Powered by ZHIROX</span>
+        </div>
 
-    <button id="enable" type="button" hidden>چالاککردنی ئاگادارکردنەوە</button>
-    <p id="result"></p>
-    <section id="missingLinkHelp" class="notice" hidden>
-      <strong>لینکی نوێ پێویستە</strong>
-      <p>ئەم پۆرتاڵە بەبێ ناسنامەی کڕیار کراوەتەوە. QR ـێکی نوێ لە سیستەم دروست بکە و دووبارە هەوڵ بدە.</p>
-    </section>
+        <article class="balance-card">
+          <div class="balance-topline">
+            <span>قەرزی ماوە</span>
+            <span class="balance-status">نوێکراوە</span>
+          </div>
+          <strong id="primaryRemaining">0 IQD</strong>
+          <span id="primaryCurrency" class="balance-caption">IQD</span>
+        </article>
+
+        <div id="summaryMetrics" class="summary-grid"></div>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">دوایین چالاکی</p>
+              <h2>مامەڵە نوێیەکان</h2>
+            </div>
+            <button id="openTransactions" class="text-action" type="button">هەمووی ببینە</button>
+          </div>
+          <div id="recentLedger" class="ledger compact-ledger"></div>
+        </section>
+      </section>
+
+      <section id="transactionsView" class="portal-view" aria-labelledby="transactionsHeading" hidden>
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">کەشفی حیساب</p>
+            <h2 id="transactionsHeading">قەرز و پارەدانەکان</h2>
+          </div>
+        </div>
+        <section class="panel statement-panel">
+          <div id="ledger" class="ledger"></div>
+          <button id="loadMore" class="secondary-action load-more" type="button" hidden>بینینی مامەڵەی زیاتر</button>
+        </section>
+      </section>
+
+      <section id="notificationsView" class="portal-view" aria-labelledby="notificationsHeading" hidden>
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">Web Push</p>
+            <h2 id="notificationsHeading">ئاگادارکردنەوەکان</h2>
+          </div>
+        </div>
+        <article class="notification-card">
+          <div class="notification-header">
+            <div class="notification-dot" aria-hidden="true"></div>
+            <div>
+              <p class="eyebrow">دۆخی ئاگادارکردنەوە</p>
+              <div id="notificationState" class="notification-state">پشکنین...</div>
+            </div>
+          </div>
+          <p class="notification-copy">ئاگادارکردنەوەکانی قەرز، پارەدان و پەیامی بەڕێوەبەر بە ناوی سوپەرمارکێتەکەت دەنێردرێن.</p>
+          <button id="enable" class="primary-action" type="button" hidden>چالاککردنی ئاگادارکردنەوە</button>
+          <button id="showIosHelp" class="secondary-action" type="button" hidden>ڕێنمایی iPhone / iPad</button>
+          <p id="result" class="action-result" aria-live="polite"></p>
+        </article>
+
+        <section class="panel privacy-panel">
+          <p class="eyebrow">پاراستن</p>
+          <h2>زانیاریی هەژمارەکەت پارێزراوە</h2>
+          <p>لینک و ناسنامەی ئامێر لە پۆرتالەکەدا پیشان نادرێن. بەڕێوەبەر دەتوانێت دەستگەیشتن ڕابگرێت.</p>
+        </section>
+      </section>
+    </div>
+
+    <dialog id="iosHelpDialog" class="help-dialog">
+      <form method="dialog">
+        <button class="dialog-close" value="cancel" aria-label="داخستن">×</button>
+        <p class="eyebrow">iPhone / iPad</p>
+        <h2>Add to Home Screen</h2>
+        <p class="dialog-copy">بۆ چالاککردنی ئاگادارکردنەوە لە iPhone، پۆرتالەکە دەبێت لە Home Screen بێت.</p>
+        <ol>
+          <li>پۆرتالەکە لە Safari بکەرەوە.</li>
+          <li>Share بکە و <strong>Add to Home Screen</strong> هەڵبژێرە.</li>
+          <li>لە Home Screen پۆرتالەکە بکەرەوە.</li>
+          <li>بچۆ بۆ «ئاگادارکردنەوە» و چالاکی بکە.</li>
+        </ol>
+        <button class="primary-action" value="default">تێگەیشتم</button>
+      </form>
+    </dialog>
   </main>
 </body>
 </html>

@@ -7,28 +7,66 @@ const ENDPOINT_KEY = 'zhirox_push_endpoint';
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 
 const statusEl = document.getElementById('status');
-const identityEl = document.getElementById('identity');
-const customerNameEl = document.getElementById('customerName');
-const marketNameEl = document.getElementById('marketName');
-const iosHelpEl = document.getElementById('iosHelp');
 const enableButton = document.getElementById('enable');
 const resultEl = document.getElementById('result');
 const manifestEl = document.getElementById('appManifest');
-const missingLinkHelpEl = document.getElementById('missingLinkHelp');
-const portalEl = document.getElementById('portal');
-const totalsEl = document.getElementById('totals');
+const portalAppEl = document.getElementById('portalApp');
+const lockedStateEl = document.getElementById('lockedState');
+const marketBrandEl = document.getElementById('marketBrand');
+const customerGreetingEl = document.getElementById('customerGreeting');
+const accountBadgeEl = document.getElementById('accountBadge');
+const primaryRemainingEl = document.getElementById('primaryRemaining');
+const primaryCurrencyEl = document.getElementById('primaryCurrency');
+const summaryMetricsEl = document.getElementById('summaryMetrics');
+const recentLedgerEl = document.getElementById('recentLedger');
 const ledgerEl = document.getElementById('ledger');
 const loadMoreButton = document.getElementById('loadMore');
+const notificationStateEl = document.getElementById('notificationState');
+const showIosHelpButton = document.getElementById('showIosHelp');
+const iosHelpDialog = document.getElementById('iosHelpDialog');
+const openTransactionsButton = document.getElementById('openTransactions');
+const homeTab = document.getElementById('homeTab');
+const transactionsTab = document.getElementById('transactionsTab');
+const notificationsTab = document.getElementById('notificationsTab');
+const tabButtons = [...document.querySelectorAll('[data-portal-tab]')];
+const views = {
+  home: document.getElementById('homeView'),
+  transactions: document.getElementById('transactionsView'),
+  notifications: document.getElementById('notificationsView'),
+};
 
 function setStatus(message, kind = 'muted') {
   statusEl.textContent = message;
-  statusEl.className = kind;
+  statusEl.className = `sr-status ${kind}`;
 }
 
 function setResult(message, kind = '') {
   resultEl.textContent = message;
-  resultEl.className = kind;
+  resultEl.className = `action-result ${kind}`.trim();
 }
+
+function setActiveView(name) {
+  if (!views[name]) return;
+  for (const [viewName, element] of Object.entries(views)) {
+    element.hidden = viewName !== name;
+  }
+  for (const button of tabButtons) {
+    const active = button.dataset.portalTab === name;
+    button.classList.toggle('is-active', active);
+    if (active) {
+      button.setAttribute('aria-current', 'page');
+    } else {
+      button.removeAttribute('aria-current');
+    }
+  }
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+}
+
+homeTab.addEventListener('click', () => setActiveView('home'));
+transactionsTab.addEventListener('click', () => setActiveView('transactions'));
+notificationsTab.addEventListener('click', () => setActiveView('notifications'));
+openTransactionsButton.addEventListener('click', () => setActiveView('transactions'));
 
 function isIos() {
   const ua = navigator.userAgent || '';
@@ -40,6 +78,10 @@ function isIos() {
 function isStandalone() {
   return window.navigator.standalone === true ||
     window.matchMedia('(display-mode: standalone)').matches;
+}
+
+function supportsPush() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
 function decodeVapidKey(value) {
@@ -111,98 +153,163 @@ function addText(parent, tag, text, className = '') {
   return node;
 }
 
-function renderTotals(totals) {
-  totalsEl.replaceChildren();
+function renderPrimaryBalance(totals) {
+  const first = Array.isArray(totals) && totals.length > 0 ? totals[0] : null;
+  const currency = typeof first?.currency === 'string' ? first.currency : 'IQD';
+  primaryRemainingEl.textContent = money(first?.remaining ?? 0, currency);
+  primaryCurrencyEl.textContent = currency;
+}
+
+function metric(label, value, currency) {
+  const card = document.createElement('article');
+  card.className = 'metric-card';
+  addText(card, 'span', label);
+  addText(card, 'strong', money(value, currency));
+  return card;
+}
+
+function renderSummaryMetrics(totals) {
+  summaryMetricsEl.replaceChildren();
   if (!Array.isArray(totals) || totals.length === 0) {
-    addText(totalsEl, 'p', 'هیچ قەرزێک تۆمار نەکراوە.', 'empty');
+    summaryMetricsEl.append(
+      metric('کۆی قەرز', 0, 'IQD'),
+      metric('کۆی پارەدان', 0, 'IQD'),
+    );
     return;
   }
+
   for (const item of totals) {
     const currency = typeof item.currency === 'string' ? item.currency : 'IQD';
-    addText(totalsEl, 'div', currency, 'currency');
-    const grid = document.createElement('div');
-    grid.className = 'totals';
-    for (const [label, value] of [
-      ['کۆی قەرز', item.total_debt],
-      ['پارەدراو', item.paid],
-      ['ماوە', item.remaining],
-    ]) {
-      const card = document.createElement('div');
-      card.className = 'total';
-      addText(card, 'strong', money(value, currency));
-      addText(card, 'span', label);
-      grid.appendChild(card);
+    summaryMetricsEl.append(
+      metric(`کۆی قەرز — ${currency}`, item.total_debt, currency),
+      metric(`کۆی پارەدان — ${currency}`, item.paid, currency),
+    );
+    if (totals.length > 1) {
+      summaryMetricsEl.append(metric(`قەرزی ماوە — ${currency}`, item.remaining, currency));
     }
-    totalsEl.appendChild(grid);
   }
+}
+
+function buildLedgerEntry(item) {
+  const isPayment = item.kind === 'payment';
+  const entry = document.createElement('article');
+  entry.className = 'entry';
+  const head = document.createElement('div');
+  head.className = 'entry-head';
+  addText(head, 'strong', isPayment ? 'پارەدان' : 'قەرز', isPayment ? 'payment-label' : 'debt-label');
+  addText(head, 'strong', money(item.amount, item.currency));
+  entry.appendChild(head);
+
+  const date = new Date(item.occurred_at);
+  const dateText = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('ku-IQ');
+  const detail = [dateText, typeof item.note === 'string' ? item.note : ''].filter(Boolean).join(' — ');
+  if (detail) addText(entry, 'div', detail, 'entry-meta');
+  if (!isPayment) addText(entry, 'div', `ماوە: ${money(item.remaining, item.currency)}`, 'entry-meta');
+  return entry;
 }
 
 function renderRows(rows, append = false) {
   if (!append) ledgerEl.replaceChildren();
   if (!Array.isArray(rows) || rows.length === 0) {
-    if (!append) addText(ledgerEl, 'p', 'هیچ مامەڵەیەک تۆمار نەکراوە.', 'empty');
+    if (!append) addText(ledgerEl, 'p', 'هێشتا هیچ مامەڵەیەک تۆمار نەکراوە.', 'empty');
     return;
   }
-  for (const item of rows) {
-    const isPayment = item.kind === 'payment';
-    const entry = document.createElement('article');
-    entry.className = 'entry';
-    const head = document.createElement('div');
-    head.className = 'entry-head';
-    addText(head, 'strong', isPayment ? 'پارەدان' : 'قەرز', isPayment ? 'payment-label' : 'debt-label');
-    addText(head, 'strong', money(item.amount, item.currency));
-    entry.appendChild(head);
-    const date = new Date(item.occurred_at);
-    const dateText = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('ku-IQ');
-    const detail = [dateText, typeof item.note === 'string' ? item.note : ''].filter(Boolean).join(' — ');
-    if (detail) addText(entry, 'div', detail, 'entry-meta');
-    if (!isPayment) addText(entry, 'div', `ماوە: ${money(item.remaining, item.currency)}`, 'entry-meta');
-    ledgerEl.appendChild(entry);
+  for (const item of rows) ledgerEl.appendChild(buildLedgerEntry(item));
+}
+
+function renderRecentRows(rows) {
+  recentLedgerEl.replaceChildren();
+  const recent = Array.isArray(rows) ? rows.slice(0, 4) : [];
+  if (recent.length === 0) {
+    addText(recentLedgerEl, 'p', 'هێشتا هیچ مامەڵەیەک تۆمار نەکراوە.', 'empty');
+    return;
   }
+  for (const item of recent) recentLedgerEl.appendChild(buildLedgerEntry(item));
+}
+
+function renderNotificationState(state, message) {
+  notificationStateEl.dataset.state = state;
+  notificationStateEl.textContent = message;
+}
+
+function showLockedPortal() {
+  portalAppEl.hidden = true;
+  lockedStateEl.hidden = false;
+  accountBadgeEl.textContent = 'ڕاگیراو / نادروست';
+  accountBadgeEl.classList.add('err');
+  setStatus('ئەم لینکە بەردەست نییە یان ڕاگیراوە.', 'err');
 }
 
 async function loadPortal(offset = 0, append = false) {
   const credentials = portalCredentials(offset);
   if (!credentials) throw new Error('link_unavailable');
   const data = await api(credentials);
-  customerNameEl.textContent = typeof data.customer_name === 'string' ? data.customer_name : '';
-  marketNameEl.textContent = typeof data.market_name === 'string' ? data.market_name : '';
+
+  const marketName = typeof data.market_name === 'string' ? data.market_name.trim() : '';
+  const customerName = typeof data.customer_name === 'string' ? data.customer_name.trim() : '';
+  marketBrandEl.textContent = marketName || 'ZHIROX';
+  customerGreetingEl.textContent = customerName ? `بەخێربێیت، ${customerName}` : 'هەژماری کڕیار';
+  accountBadgeEl.textContent = 'هەژماری چالاک';
+  accountBadgeEl.classList.remove('err');
   vapidPublicKey = typeof data.vapid_public_key === 'string' ? data.vapid_public_key : '';
-  identityEl.hidden = false;
-  portalEl.hidden = false;
-  renderTotals(data.totals);
+
+  lockedStateEl.hidden = true;
+  portalAppEl.hidden = false;
+  renderPrimaryBalance(data.totals);
+  renderSummaryMetrics(data.totals);
   renderRows(data.rows, append);
+  if (!append) renderRecentRows(data.rows);
+
   nextOffset = offset + (Array.isArray(data.rows) ? data.rows.length : 0);
   loadMoreButton.hidden = data.has_more !== true;
   return data;
 }
 
+function configureNotificationExperience(data) {
+  enableButton.hidden = true;
+  showIosHelpButton.hidden = true;
+  setResult('');
+
+  if (data.can_subscribe !== true) {
+    renderNotificationState('active', 'ئاگادارکردنەوە چالاکە');
+    return;
+  }
+
+  if (!supportsPush()) {
+    renderNotificationState('error', 'ئەم وێبگەڕە پشتگیری Web Push ناکات');
+    return;
+  }
+
+  if (Notification.permission === 'denied') {
+    renderNotificationState('error', 'مۆڵەتی ئاگادارکردنەوە ڕەتکراوەتەوە');
+    setResult('لە ڕێکخستنەکانی وێبگەڕ یان ئامێرەکەت مۆڵەتی ئاگادارکردنەوە چالاک بکە.', 'err');
+    return;
+  }
+
+  if (isIos() && !isStandalone()) {
+    showIosHelpButton.hidden = false;
+    renderNotificationState('install-required', 'بۆ iPhone سەرەتا پۆرتال زیاد بکە بۆ Home Screen');
+    return;
+  }
+
+  enableButton.hidden = false;
+  renderNotificationState('ready', 'ئاگادارکردنەوە هێشتا چالاک نەکراوە');
+}
+
 async function initialize() {
   activeToken = resolveLinkToken();
   if (!activeToken && !portalCredentials()) {
-    setStatus('ئەم لینکە بەردەست نییە یان ڕاگیراوە.', 'err');
-    missingLinkHelpEl.hidden = false;
+    showLockedPortal();
     return;
   }
 
   try {
     const data = await loadPortal();
-
-    if (data.can_subscribe === true && isIos() && !isStandalone()) {
-      iosHelpEl.hidden = false;
-      setStatus('هەژمارەکەت ئامادەیە؛ بۆ ئاگادارکردنەوە زیادیکە بۆ Home Screen.');
-      return;
-    }
-
-    if (data.can_subscribe === true) {
-      enableButton.hidden = false;
-      setStatus('قەرز و پارەدانەکانت لێرە دەبینیت؛ ئاگادارکردنەوەش چالاک بکە.');
-    } else {
-      setStatus('هەژماری کڕیار نوێکرایەوە.', 'ok');
-    }
+    setActiveView('home');
+    configureNotificationExperience(data);
+    setStatus('هەژمارەکەت ئامادەیە.', 'ok');
   } catch (_) {
-    setStatus('ئەم لینکە بەردەست نییە یان ڕاگیراوە.', 'err');
-    missingLinkHelpEl.hidden = false;
+    showLockedPortal();
   }
 }
 
@@ -211,9 +318,17 @@ loadMoreButton.addEventListener('click', async () => {
   try {
     await loadPortal(nextOffset, true);
   } catch (_) {
-    setResult('نەتوانرا مامەڵەی زیاتر بهێنرێت.', 'err');
+    setResult('نەتوانرا مامەڵەی زیاتر بهێنرێت. دووبارە هەوڵ بدە.', 'err');
   } finally {
     loadMoreButton.disabled = false;
+  }
+});
+
+showIosHelpButton.addEventListener('click', () => {
+  if (typeof iosHelpDialog.showModal === 'function') {
+    iosHelpDialog.showModal();
+  } else {
+    setResult('لە Safari: Share → Add to Home Screen، پاشان لە Home Screen پۆرتالەکە بکەرەوە.', 'err');
   }
 });
 
@@ -223,9 +338,7 @@ enableButton.addEventListener('click', async () => {
 
   try {
     if (!activeToken || !TOKEN_PATTERN.test(activeToken)) throw new Error('link_unavailable');
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-      throw new Error('push_unsupported');
-    }
+    if (!supportsPush()) throw new Error('push_unsupported');
     if (isIos() && !isStandalone()) throw new Error('ios_not_standalone');
 
     const permission = await Notification.requestPermission();
@@ -255,22 +368,34 @@ enableButton.addEventListener('click', async () => {
 
     localStorage.setItem(DEVICE_SECRET_KEY, data.device_secret);
     localStorage.setItem(ENDPOINT_KEY, subscription.endpoint);
+    localStorage.removeItem(LINK_TOKEN_KEY);
     activeToken = '';
+    if (window.location.search) window.history.replaceState(null, '', '/');
 
+    renderNotificationState('active', 'ئاگادارکردنەوە چالاک کرا');
     setStatus('پەیوەستکرا.', 'ok');
-    setResult('ئاگادارکردنەوە بە سەرکەوتوویی چالاک کرا.', 'ok');
+    setResult('ئاگادارکردنەوە بە سەرکەوتوویی چالاک کرا و بە ناوی سوپەرمارکێتەکەت دێت.', 'ok');
     enableButton.hidden = true;
+    showIosHelpButton.hidden = true;
     await loadPortal();
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'request_failed';
     if (reason === 'permission_denied') {
-      setResult('مۆڵەتی ئاگادارکردنەوە نەدرا. لە ڕێکخستنەکانی ئامێرەکەت مۆڵەت بدە و دووبارە هەوڵ بدە.', 'err');
+      renderNotificationState('error', 'مۆڵەتی ئاگادارکردنەوە ڕەتکرایەوە');
+      setResult('لە ڕێکخستنەکانی ئامێرەکەت مۆڵەت بدە و دووبارە هەوڵ بدە.', 'err');
     } else if (reason === 'ios_not_standalone') {
-      setResult('سەرەتا لە Safari زیادیکە بۆ Home Screen و لەوێوە بیکەرەوە.', 'err');
+      showIosHelpButton.hidden = false;
+      renderNotificationState('install-required', 'بۆ iPhone سەرەتا پۆرتال زیاد بکە بۆ Home Screen');
+      setResult('لە Safari زیادیکە بۆ Home Screen و لەوێوە بیکەرەوە.', 'err');
     } else if (reason === 'push_unsupported') {
-      setResult('ئەم وێبگەڕە پشتگیری ئاگادارکردنەوە ناکات.', 'err');
+      renderNotificationState('error', 'ئەم وێبگەڕە پشتگیری Web Push ناکات');
+      setResult('وێبگەڕێکی پشتگیریکراو بەکاربهێنە.', 'err');
+    } else if (reason === 'link_unavailable') {
+      renderNotificationState('error', 'لینکی پەیوەستکردن بەردەست نییە');
+      setResult('QR ـی چالاکی هەمان هەژمار بەکاربهێنە.', 'err');
     } else {
-      setResult('چالاککردن سەرکەوتوو نەبوو؛ دووبارە هەوڵ بدە.', 'err');
+      renderNotificationState('error', 'چالاککردن سەرکەوتوو نەبوو');
+      setResult('دووبارە هەوڵ بدە. زانیاریی دارایییەکانت هەر بەردەستن.', 'err');
     }
     enableButton.disabled = false;
   }
