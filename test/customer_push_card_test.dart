@@ -10,16 +10,25 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
     this.link,
     this.statusError,
     this.revokedCount = 0,
+    this.sendResult = const CustomerPushSendResult(
+      campaignId: '00000000-0000-0000-0000-000000000999',
+      queuedCustomers: 1,
+      targetDevices: 1,
+      marketName: 'کانی چنار',
+    ),
   });
 
   final List<CustomerPushStatus> statuses;
   final CustomerPushLink? link;
   final Object? statusError;
   final int revokedCount;
+  final CustomerPushSendResult sendResult;
 
   int loadCalls = 0;
   int createCalls = 0;
   int revokeCalls = 0;
+  int sendCalls = 0;
+  String? lastMessage;
   bool failFirstLoad = false;
 
   @override
@@ -48,6 +57,21 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
   Future<int> revokeAll(String customerId) async {
     revokeCalls++;
     return revokedCount;
+  }
+
+  @override
+  Future<CustomerPushSendResult> sendManual(
+    String customerId,
+    String message,
+  ) async {
+    sendCalls++;
+    lastMessage = message;
+    return sendResult;
+  }
+
+  @override
+  Future<CustomerPushSendResult> broadcastManual(String message) async {
+    throw UnimplementedError();
   }
 }
 
@@ -112,9 +136,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('هەموو لینک و ئامێرەکان ڕابگرە'), findsOneWidget);
+    expect(find.text('ناردنی ئاگاداری'), findsNothing);
   });
 
-  testWidgets('active state shows linked device count', (tester) async {
+  testWidgets('active state shows linked device count and manual send control', (tester) async {
     final gateway = FakeCustomerPushGateway(
       statuses: const [
         CustomerPushStatus(
@@ -130,7 +155,51 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('ئامێری چالاک: 3'), findsOneWidget);
+    expect(find.text('ناردنی ئاگاداری'), findsOneWidget);
     expect(find.text('هەموو لینک و ئامێرەکان ڕابگرە'), findsOneWidget);
+  });
+
+  testWidgets('manager can send manual notification to linked customer', (tester) async {
+    final gateway = FakeCustomerPushGateway(
+      statuses: const [
+        CustomerPushStatus(
+          active: true,
+          deviceCount: 2,
+          activeLinkCount: 1,
+        ),
+      ],
+      sendResult: const CustomerPushSendResult(
+        campaignId: '00000000-0000-0000-0000-000000000999',
+        queuedCustomers: 1,
+        targetDevices: 2,
+        marketName: 'کانی چنار',
+      ),
+    );
+
+    await tester.pumpWidget(_host(gateway));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ناردنی ئاگاداری'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ئاگاداری بۆ ئەم کڕیارە'), findsOneWidget);
+    expect(
+      find.text('ناوی ئاگادارکردنەوە خۆکارانە ناوی سوپەرمارکێتەکەیە.'),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('customer-manual-push-message')),
+      'کاڵای نوێ گەیشت.',
+    );
+    await tester.tap(find.text('ناردن'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.sendCalls, 1);
+    expect(gateway.lastMessage, 'کاڵای نوێ گەیشت.');
+    expect(
+      find.text('ئاگاداری بە ناوی کانی چنار بۆ 2 ئامێر ڕیزکرا'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('revoke confirms links and devices then refreshes status', (tester) async {
