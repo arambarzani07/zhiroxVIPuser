@@ -1,7 +1,7 @@
 'use strict';
 
-const PORTAL_SCOPE = '/storage/v1/object/public/customer-push-web/';
-const PORTAL_PATH = '/storage/v1/object/public/customer-push-web/index.html';
+const PORTAL_SCOPE = new URL('./', self.location.href).pathname;
+const PORTAL_PATH = new URL('index.html', self.location.href).pathname;
 
 self.addEventListener('install', () => {
   self.skipWaiting();

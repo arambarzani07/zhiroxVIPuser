@@ -113,7 +113,7 @@ function resolveLinkToken() {
     if (!TOKEN_PATTERN.test(queryToken)) return '';
     localStorage.setItem(LINK_TOKEN_KEY, queryToken);
     if (manifestEl) {
-      manifestEl.href = `/functions/v1/customer-push-manifest?token=${encodeURIComponent(queryToken)}`;
+      manifestEl.href = './manifest.webmanifest';
     }
     return queryToken;
   }
@@ -344,7 +344,7 @@ enableButton.addEventListener('click', async () => {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') throw new Error('permission_denied');
 
-    const registration = await navigator.serviceWorker.register('/storage/v1/object/public/customer-push-web/sw.js', { scope: '/storage/v1/object/public/customer-push-web/' });
+    const registration = await navigator.serviceWorker.register('./sw.js', { scope: './' });
     await navigator.serviceWorker.ready;
 
     let subscription = await registration.pushManager.getSubscription();

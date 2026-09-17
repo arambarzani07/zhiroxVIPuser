@@ -1,5 +1,5 @@
 export const CUSTOMER_PUSH_LINK_BASE_PATH = "/functions/v1/customer-push-link";
-export const CUSTOMER_PUSH_STATIC_URL = "https://hsoyfbtpvwfmjokudznx.supabase.co/storage/v1/object/public/customer-push-web/index.html";
+export const CUSTOMER_PUSH_STATIC_URL = "https://raw.githack.com/arambarzani07/zhiroxVIPuser/user-source/customer-push-web/index.html";
 const CUSTOMER_PUSH_RUNTIME_PATH = "/customer-push-link";
 const CUSTOMER_PUSH_API_URL = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push";
 

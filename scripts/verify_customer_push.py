@@ -199,10 +199,12 @@ assert 'self.clients.matchAll' in sw_js, 'notification clicks must reuse an open
 assert 'customerPortal.navigate(target)' in sw_js, 'notification clicks must refresh the customer portal'
 assert 'self.clients.openWindow(target)' in sw_js, 'notification clicks must open the portal when closed'
 assert 'portalUrl(data.url)' in sw_js, 'notification payload URL must be honored safely'
+assert "new URL('./', self.location.href).pathname" in sw_js, 'service worker scope must follow the static host path'
+assert "navigator.serviceWorker.register('./sw.js', { scope: './' })" in app_js, 'PWA must register the service worker relative to its static host'
 
 manifest = (web / 'manifest.webmanifest').read_text(errors='ignore')
-assert re.search(r'"scope"\s*:\s*"/"', manifest), 'PWA scope must be /'
-assert re.search(r'"start_url"\s*:\s*"/"', manifest), 'PWA start_url must be /'
+assert re.search(r'"scope"\s*:\s*"\./"', manifest), 'PWA scope must stay inside the static portal directory'
+assert re.search(r'"start_url"\s*:\s*"\./index\.html"', manifest), 'PWA start_url must stay inside the static portal directory'
 
 headers = (web / '_headers').read_text(errors='ignore')
 assert 'Referrer-Policy: no-referrer' in headers
