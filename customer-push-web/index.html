@@ -7,14 +7,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="ZHIROX">
-  <title>ZHIROX Notifications</title>
+  <title>ZHIROX Customer Portal</title>
   <script src="/manifest-bootstrap.js"></script>
   <noscript><link rel="manifest" href="/manifest.webmanifest"></noscript>
   <style>
     :root { color-scheme: light; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: #f6f7fb; color: #171b2e; display: grid; place-items: center; padding: 20px; }
-    .card { width: min(100%, 540px); background: #fff; border-radius: 24px; padding: 28px; box-shadow: 0 18px 55px rgba(19, 31, 71, .10); }
+    body { margin: 0; min-height: 100vh; background: #f6f7fb; color: #171b2e; padding: max(20px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom)); }
+    .card { width: min(100%, 680px); margin: 0 auto; background: #fff; border-radius: 24px; padding: 28px; box-shadow: 0 18px 55px rgba(19, 31, 71, .10); }
     h1 { margin: 0 0 12px; font-size: clamp(24px, 6vw, 34px); }
     p { line-height: 1.8; }
     .muted { color: #687086; }
@@ -22,6 +22,19 @@
     .row { padding: 12px 14px; }
     .row + .row { border-top: 1px solid #e6e8f0; }
     .notice { margin: 18px 0; padding: 14px; border-radius: 14px; background: #f1f4ff; }
+    .section-title { margin: 24px 0 12px; font-size: 18px; }
+    .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .total { padding: 13px 10px; border-radius: 14px; background: #f6f7fb; text-align: center; }
+    .total strong, .total span { display: block; }
+    .total span { margin-top: 5px; font-size: 13px; color: #687086; }
+    .currency { margin: 14px 0 8px; color: #3157e0; font-weight: 800; }
+    .ledger { display: grid; gap: 10px; }
+    .entry { padding: 14px; border: 1px solid #e6e8f0; border-radius: 14px; }
+    .entry-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .entry-meta { color: #687086; font-size: 13px; margin-top: 7px; }
+    .debt-label { color: #c8323e; }
+    .payment-label { color: #087a55; }
+    .empty { text-align: center; padding: 20px; color: #687086; }
     button { width: 100%; border: 0; border-radius: 14px; padding: 14px 16px; font: inherit; font-weight: 700; background: #3157e0; color: #fff; cursor: pointer; }
     button:disabled { opacity: .55; cursor: wait; }
     .ok { color: #087a55; }
@@ -32,12 +45,20 @@
 </head>
 <body>
   <main class="card" aria-live="polite">
-    <h1>ئاگادارکردنەوەی ZHIROX</h1>
+    <h1>هەژماری کڕیاری ZHIROX</h1>
     <p id="status" class="muted">پشکنینی لینک...</p>
 
     <section id="identity" class="identity" hidden>
       <div class="row"><strong>کڕیار:</strong> <span id="customerName"></span></div>
       <div class="row"><strong>مارکێت:</strong> <span id="marketName"></span></div>
+    </section>
+
+    <section id="portal" hidden>
+      <h2 class="section-title">پوختەی هەژمار</h2>
+      <div id="totals"></div>
+      <h2 class="section-title">قەرز و پارەدانەکان</h2>
+      <div id="ledger" class="ledger"></div>
+      <button id="loadMore" type="button" hidden>بینینی زیاتر</button>
     </section>
 
     <section id="iosHelp" class="notice" hidden>
@@ -49,7 +70,7 @@
     <p id="result"></p>
     <section id="missingLinkHelp" class="notice" hidden>
       <strong>لینکی نوێ پێویستە</strong>
-      <p>ئەم ئەپە بەبێ QR token کراوەتەوە. ئایکۆنەکە بسڕەوە، QR ـێکی نوێ لە سیستەم دروست بکە و دووبارە زیادیکە بۆ Home Screen.</p>
+      <p>ئەم پۆرتاڵە بەبێ ناسنامەی کڕیار کراوەتەوە. QR ـێکی نوێ لە سیستەم دروست بکە و دووبارە هەوڵ بدە.</p>
     </section>
   </main>
 </body>
