@@ -18,11 +18,12 @@ class _ManualPushBroadcastCardState extends State<ManualPushBroadcastCard> {
   bool _busy = false;
 
   Future<String?> _composeMessage() async {
-    final controller = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    final message = await showDialog<String>(
+    var draft = '';
+    return showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        scrollable: true,
         title: const Text('ئاگاداری گشتی'),
         content: Form(
           key: formKey,
@@ -41,11 +42,11 @@ class _ManualPushBroadcastCardState extends State<ManualPushBroadcastCard> {
               const SizedBox(height: 12),
               TextFormField(
                 key: const ValueKey('broadcast-manual-push-message'),
-                controller: controller,
                 autofocus: true,
                 minLines: 3,
                 maxLines: 6,
                 maxLength: CustomerPushService.manualMessageMaxLength,
+                onChanged: (value) => draft = value,
                 decoration: const InputDecoration(
                   labelText: 'پەیامی ئاگادارکردنەوە',
                   border: OutlineInputBorder(),
@@ -71,15 +72,13 @@ class _ManualPushBroadcastCardState extends State<ManualPushBroadcastCard> {
           FilledButton(
             onPressed: () {
               if (formKey.currentState?.validate() != true) return;
-              Navigator.of(dialogContext).pop(controller.text.trim());
+              Navigator.of(dialogContext).pop(draft.trim());
             },
             child: const Text('بەردەوام بە'),
           ),
         ],
       ),
     );
-    controller.dispose();
-    return message;
   }
 
   Future<bool> _confirmBroadcast() async {
