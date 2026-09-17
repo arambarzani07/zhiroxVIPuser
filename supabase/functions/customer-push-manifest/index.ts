@@ -7,13 +7,13 @@ export function manifestResponse(request: Request): Response {
     : "/";
 
   return new Response(JSON.stringify({
-    name: "ZHIROX Notifications",
+    name: "ZHIROX Customer Portal",
     short_name: "ZHIROX",
     start_url: startUrl,
     scope: "/",
     display: "standalone",
-    theme_color: "#ffffff",
-    background_color: "#ffffff",
+    theme_color: "#f4f6fa",
+    background_color: "#f4f6fa",
     lang: "ku",
     dir: "rtl",
   }), {
