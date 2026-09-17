@@ -177,6 +177,8 @@ assert "action: 'portal'" in app_js, 'customer push link must expose the read-on
 assert 'ماوەکەی تەواو بووە' not in app_js, 'permanent-link PWA must not describe links as expired'
 assert 'QR ـێکی نوێ دروست بکە و دووبارە هەوڵ بدە' not in app_js, 'retry errors must not imply permanent links need replacement'
 assert 'ئەم لینکە بەردەست نییە یان ڕاگیراوە.' in app_js, 'PWA must describe unavailable links as revoked/unavailable'
+assert 'URLSearchParams(' in app_js and "currentUrl.hash" in app_js, 'PWA must recover the QR bearer token from the URL fragment'
+assert "window.location.search || window.location.hash" in app_js, 'PWA must scrub query/fragment credentials after subscription'
 for marker in (
     "setActiveView('home')",
     "setActiveView('transactions')",
