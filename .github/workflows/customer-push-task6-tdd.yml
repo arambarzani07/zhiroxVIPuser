@@ -1,0 +1,31 @@
+name: Customer Push Task 6 TDD
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - 'supabase/functions/customer-push-events/**'
+      - 'supabase/functions/customer-push-worker/**'
+      - 'supabase/functions/_shared/customer_push/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debt-push-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run debt event and worker tests
+        run: |
+          deno test --allow-env supabase/functions/customer-push-events/index_test.ts \
+                                supabase/functions/customer-push-worker/index_test.ts
