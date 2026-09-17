@@ -65,19 +65,21 @@ Widget _host(CustomerPushGateway gateway) {
 }
 
 void main() {
-  testWidgets('QR button renders exact onboarding URL', (tester) async {
+  testWidgets('QR button renders permanent onboarding URL', (tester) async {
     final token = 'a' * 64;
-    final onboardingUrl = Uri.parse(
-      'https://example.test/functions/v1/customer-push?token=$token',
-    );
+    final onboardingUrl = Uri.parse('https://push.zhirox.com/?token=$token');
     final gateway = FakeCustomerPushGateway(
       statuses: const [
-        CustomerPushStatus(active: false, deviceCount: 0),
+        CustomerPushStatus(
+          active: false,
+          deviceCount: 0,
+          activeLinkCount: 1,
+        ),
       ],
-      link: CustomerPushLink(
-        url: onboardingUrl,
-        expiresAt: DateTime.parse('2026-09-17T00:15:00Z'),
-      ),
+      link: CustomerPushLink.fromJson({
+        'url': onboardingUrl.toString(),
+        'expires_at': null,
+      }),
     );
 
     await tester.pumpWidget(_host(gateway));
@@ -90,9 +92,26 @@ void main() {
     expect(qrFinder, findsOneWidget);
     expect(tester.widget(qrFinder), isA<QrImageView>());
     expect(
-      find.text('ئەم QR ـە تەنها یەکجار بەکاردێت و دوای ١٥ خولەک بەسەر دەچێت.'),
+      find.text('ئەم لینکە بەردەوام کار دەکات تا بەڕێوەبەر ڕایدەگرێت.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('active link without devices still shows revoke control', (tester) async {
+    final gateway = FakeCustomerPushGateway(
+      statuses: const [
+        CustomerPushStatus(
+          active: false,
+          deviceCount: 0,
+          activeLinkCount: 2,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_host(gateway));
+    await tester.pumpAndSettle();
+
+    expect(find.text('هەموو لینک و ئامێرەکان ڕابگرە'), findsOneWidget);
   });
 
   testWidgets('active state shows linked device count', (tester) async {
@@ -101,6 +120,7 @@ void main() {
         CustomerPushStatus(
           active: true,
           deviceCount: 3,
+          activeLinkCount: 1,
           latestStatus: 'sent',
         ),
       ],
@@ -110,14 +130,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('ئامێری چالاک: 3'), findsOneWidget);
-    expect(find.text('هەموو ئامێرەکان پچڕێنەوە'), findsOneWidget);
+    expect(find.text('هەموو لینک و ئامێرەکان ڕابگرە'), findsOneWidget);
   });
 
-  testWidgets('revoke confirms and refreshes status', (tester) async {
+  testWidgets('revoke confirms links and devices then refreshes status', (tester) async {
     final gateway = FakeCustomerPushGateway(
       statuses: const [
-        CustomerPushStatus(active: true, deviceCount: 2),
-        CustomerPushStatus(active: false, deviceCount: 0),
+        CustomerPushStatus(active: true, deviceCount: 2, activeLinkCount: 2),
+        CustomerPushStatus(active: false, deviceCount: 0, activeLinkCount: 0),
       ],
       revokedCount: 2,
     );
@@ -126,11 +146,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ئامێری چالاک: 2'), findsOneWidget);
 
-    await tester.tap(find.text('هەموو ئامێرەکان پچڕێنەوە'));
+    await tester.tap(find.text('هەموو لینک و ئامێرەکان ڕابگرە'));
     await tester.pumpAndSettle();
-    expect(find.text('دڵنیایت لە پچڕاندنەوەی هەموو ئامێرەکان؟'), findsOneWidget);
+    expect(
+      find.text('دڵنیایت لە ڕاگرتنی هەموو QR لینک و ئامێرە چالاکەکان؟'),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('بەڵێ، پچڕێنەوە'));
+    await tester.tap(find.text('بەڵێ، ڕایانبگرە'));
     await tester.pumpAndSettle();
 
     expect(gateway.revokeCalls, 1);
@@ -141,7 +164,7 @@ void main() {
   testWidgets('gateway error shows retry and retry reloads status', (tester) async {
     final gateway = FakeCustomerPushGateway(
       statuses: const [
-        CustomerPushStatus(active: false, deviceCount: 0),
+        CustomerPushStatus(active: false, deviceCount: 0, activeLinkCount: 0),
       ],
       statusError: StateError('network unavailable'),
     )..failFirstLoad = true;
