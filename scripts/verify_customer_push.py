@@ -179,6 +179,9 @@ assert 'QR ـێکی نوێ دروست بکە و دووبارە هەوڵ بدە' 
 assert 'ئەم لینکە بەردەست نییە یان ڕاگیراوە.' in app_js, 'PWA must describe unavailable links as revoked/unavailable'
 assert 'URLSearchParams(' in app_js and "currentUrl.hash" in app_js, 'PWA must recover the QR bearer token from the URL fragment'
 assert "window.location.search || window.location.hash" in app_js, 'PWA must scrub query/fragment credentials after subscription'
+manifest_bootstrap = (web / 'manifest-bootstrap.js').read_text(errors='ignore')
+assert 'window.location.hash' in manifest_bootstrap or 'location.hash' in manifest_bootstrap, 'install manifest bootstrap must recover the QR token from the URL fragment'
+assert 'customer-push-manifest?token=' in manifest_bootstrap, 'install manifest bootstrap must request a token-aware manifest before Add to Home Screen'
 for marker in (
     "setActiveView('home')",
     "setActiveView('transactions')",
