@@ -64,6 +64,33 @@ assert re.search(
 for forbidden in ('debt_updated', 'payment_updated', 'debt_deleted', 'payment_deleted'):
     assert forbidden not in outbox_schema, f'unsupported Web Push event type allowed: {forbidden}'
 
+permanent_migration = ROOT / 'supabase/migrations/20260917194000_permanent_customer_push_links.sql'
+assert permanent_migration.exists(), 'permanent customer push link migration missing'
+permanent_schema = permanent_migration.read_text(errors='ignore')
+assert re.search(
+    r'alter\s+table\s+public\.customer_push_link_tokens\s+alter\s+column\s+expires_at\s+drop\s+not\s+null',
+    permanent_schema,
+    re.IGNORECASE | re.DOTALL,
+), 'permanent links must allow NULL expiry'
+assert re.search(
+    r'update\s+public\.customer_push_link_tokens\s+set\s+expires_at\s*=\s*null',
+    permanent_schema,
+    re.IGNORECASE | re.DOTALL,
+), 'legacy active links must be migrated to no expiry'
+assert 'active_link_count' in permanent_schema, 'push status must expose active_link_count'
+assert 'expires_at > now()' not in permanent_schema, 'permanent link RPCs must not enforce expiry'
+assert 'v_link.expires_at <= now()' not in permanent_schema, 'redeem must not enforce expiry'
+assert 'and link.used_at is null' not in permanent_schema.lower(), 'inspect must not consume links once used'
+assert 'set used_at = now()' not in permanent_schema.lower(), 'redeem must not consume a permanent link'
+
+admin_text = (ROOT / 'supabase/functions/customer-push-admin/index.ts').read_text(errors='ignore')
+assert '90 * 24 * 60 * 60 * 1000' not in admin_text, 'customer push links must not auto-expire after 90 days'
+assert 'expires_at: null' in admin_text or 'expires_at: null,' in admin_text, 'admin API must return null expiry for permanent links'
+
+card_text = (ROOT / 'lib/widgets/customer_push_card.dart').read_text(errors='ignore')
+assert '١٥ خولەک' not in card_text, 'manager UI must not claim a permanent QR expires in 15 minutes'
+assert 'ئەم لینکە بەردەوام کار دەکات تا بەڕێوەبەر ڕایدەگرێت.' in card_text, 'manager UI must explain permanent-link behavior'
+
 web = ROOT / 'customer-push-web'
 for name in ('index.html', 'app.js', 'sw.js', 'manifest.webmanifest', '_headers'):
     assert (web / name).exists(), f'missing customer push web asset: {name}'
