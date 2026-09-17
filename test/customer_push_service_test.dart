@@ -53,6 +53,20 @@ void main() {
     expect(link.expiresAt, isNull);
   });
 
+  test('manual send result parses campaign and audience counts', () {
+    final result = CustomerPushSendResult.fromJson({
+      'campaign_id': '00000000-0000-0000-0000-000000000999',
+      'queued_customers': 18,
+      'target_devices': 23,
+      'market_name': 'کانی چنار',
+    });
+
+    expect(result.campaignId, '00000000-0000-0000-0000-000000000999');
+    expect(result.queuedCustomers, 18);
+    expect(result.targetDevices, 23);
+    expect(result.marketName, 'کانی چنار');
+  });
+
   test('service sends exact admin actions and parses permanent replies', () async {
     final calls = <Map<String, dynamic>>[];
     final service = CustomerPushService(
@@ -74,6 +88,14 @@ void main() {
             };
           case 'revoke_all':
             return {'revoked_count': 3};
+          case 'send_manual':
+          case 'broadcast_manual':
+            return {
+              'campaign_id': '00000000-0000-0000-0000-000000000999',
+              'queued_customers': body['action'] == 'send_manual' ? 1 : 18,
+              'target_devices': body['action'] == 'send_manual' ? 2 : 23,
+              'market_name': 'کانی چنار',
+            };
         }
         throw StateError('unexpected action');
       },
@@ -82,17 +104,58 @@ void main() {
     final status = await service.loadStatus('customer-1');
     final link = await service.createLink('customer-1');
     final revoked = await service.revokeAll('customer-1');
+    final single = await service.sendManual(
+      'customer-1',
+      '  کاڵای نوێ گەیشت.  ',
+    );
+    final broadcast = await service.broadcastManual(
+      '  ئەمڕۆ تا کاتژمێر 11 کراوەین.  ',
+    );
 
     expect(status.deviceCount, 3);
     expect(status.activeLinkCount, 2);
     expect(link.url.queryParameters['token'], 'b' * 64);
     expect(link.expiresAt, isNull);
     expect(revoked, 3);
+    expect(single.queuedCustomers, 1);
+    expect(single.targetDevices, 2);
+    expect(single.marketName, 'کانی چنار');
+    expect(broadcast.queuedCustomers, 18);
+    expect(broadcast.targetDevices, 23);
     expect(calls, [
       {'action': 'status', 'customer_id': 'customer-1'},
       {'action': 'create_link', 'customer_id': 'customer-1'},
       {'action': 'revoke_all', 'customer_id': 'customer-1'},
+      {
+        'action': 'send_manual',
+        'customer_id': 'customer-1',
+        'message': 'کاڵای نوێ گەیشت.',
+      },
+      {
+        'action': 'broadcast_manual',
+        'message': 'ئەمڕۆ تا کاتژمێر 11 کراوەین.',
+      },
     ]);
+  });
+
+  test('service validates manual messages before invoking backend', () async {
+    var calls = 0;
+    final service = CustomerPushService(
+      invoker: (_) async {
+        calls++;
+        return {};
+      },
+    );
+
+    await expectLater(
+      service.sendManual('customer-1', '   '),
+      throwsArgumentError,
+    );
+    await expectLater(
+      service.broadcastManual('x' * 241),
+      throwsArgumentError,
+    );
+    expect(calls, 0);
   });
 
   test('service rejects malformed admin success payloads', () async {
