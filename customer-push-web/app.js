@@ -180,7 +180,7 @@ async function loadPortal(offset = 0, append = false) {
 async function initialize() {
   activeToken = resolveLinkToken();
   if (!activeToken && !portalCredentials()) {
-    setStatus('ئەم لینکە بەردەست نییە یان ماوەکەی تەواو بووە.', 'err');
+    setStatus('ئەم لینکە بەردەست نییە یان ڕاگیراوە.', 'err');
     missingLinkHelpEl.hidden = false;
     return;
   }
@@ -201,7 +201,7 @@ async function initialize() {
       setStatus('هەژماری کڕیار نوێکرایەوە.', 'ok');
     }
   } catch (_) {
-    setStatus('ئەم لینکە بەردەست نییە یان ماوەکەی تەواو بووە.', 'err');
+    setStatus('ئەم لینکە بەردەست نییە یان ڕاگیراوە.', 'err');
     missingLinkHelpEl.hidden = false;
   }
 }
@@ -270,7 +270,7 @@ enableButton.addEventListener('click', async () => {
     } else if (reason === 'push_unsupported') {
       setResult('ئەم وێبگەڕە پشتگیری ئاگادارکردنەوە ناکات.', 'err');
     } else {
-      setResult('چالاککردن سەرکەوتوو نەبوو؛ QR ـێکی نوێ دروست بکە و دووبارە هەوڵ بدە.', 'err');
+      setResult('چالاککردن سەرکەوتوو نەبوو؛ دووبارە هەوڵ بدە.', 'err');
     }
     enableButton.disabled = false;
   }
