@@ -1,55 +1,34 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
-import { routeCustomerPushLink } from "../customer-push-link/index.ts";
+import { assertEquals } from "jsr:@std/assert@1";
+import {
+  CUSTOMER_PUSH_STATIC_URL,
+  routeCustomerPushLink,
+} from "../customer-push-link/index.ts";
 
 const token = "a".repeat(64);
 const publicBase = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push-link";
 const runtimeBase = "https://hsoyfbtpvwfmjokudznx.supabase.co/customer-push-link";
 
-async function expectPortal(url: string) {
+function expectRedirect(url: string, expected: string) {
   const response = routeCustomerPushLink(new Request(url));
-  assertEquals(response.status, 200);
-  assertEquals(response.headers.get("location"), null);
-  assertEquals(response.headers.get("content-type")?.includes("text/html"), true);
-  const html = await response.text();
-  assertStringIncludes(html, "ZHIROX Customer Portal");
-  assertStringIncludes(html, "/functions/v1/customer-push-link/styles.css");
-  assertStringIncludes(html, "/functions/v1/customer-push-link/app.js");
+  assertEquals(response.status, 307);
+  assertEquals(response.headers.get("location"), expected);
 }
 
-Deno.test("stable customer push gateway hosts the portal at public gateway path", async () => {
-  await expectPortal(`${publicBase}?token=${token}`);
-});
-
-Deno.test("stable customer push gateway accepts Supabase runtime slug path", async () => {
-  await expectPortal(`${runtimeBase}?token=${token}`);
-});
-
-Deno.test("stable customer push gateway serves PWA assets at public and runtime paths", async () => {
+Deno.test("stable customer push gateway redirects Safari to static HTML hosting", () => {
   for (const base of [publicBase, runtimeBase]) {
-    const serviceWorker = routeCustomerPushLink(new Request(`${base}/sw.js`));
-    assertEquals(serviceWorker.status, 200);
-    assertEquals(
-      serviceWorker.headers.get("content-type")?.includes("application/javascript"),
-      true,
-    );
-    assertStringIncludes(
-      serviceWorker.headers.get("service-worker-allowed") ?? "",
-      "/functions/v1/customer-push-link/",
-    );
-
-    const manifest = routeCustomerPushLink(
-      new Request(`${base}/manifest.webmanifest?token=${token}`),
-    );
-    assertEquals(manifest.status, 200);
-    assertEquals(
-      manifest.headers.get("content-type")?.includes("application/manifest+json"),
-      true,
-    );
-    const body = await manifest.json();
-    assertEquals(body.scope, "/functions/v1/customer-push-link/");
-    assertEquals(
-      body.start_url,
-      `/functions/v1/customer-push-link/?token=${token}`,
+    expectRedirect(
+      `${base}?token=${token}`,
+      `${CUSTOMER_PUSH_STATIC_URL}?token=${token}`,
     );
   }
+});
+
+Deno.test("stable customer push gateway preserves a token-free portal entry", () => {
+  expectRedirect(publicBase, CUSTOMER_PUSH_STATIC_URL);
+});
+
+Deno.test("gateway no longer serves HTML directly from Supabase Edge", async () => {
+  const response = routeCustomerPushLink(new Request(`${publicBase}?token=${token}`));
+  assertEquals(response.headers.get("content-type")?.includes("text/html") ?? false, false);
+  assertEquals(await response.text(), "");
 });
