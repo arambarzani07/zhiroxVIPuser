@@ -121,6 +121,87 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
     }
   }
 
+  Future<void> _sendManual() async {
+    if (_busy) return;
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final message = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('ئاگاداری بۆ ئەم کڕیارە'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'ناوی ئاگادارکردنەوە خۆکارانە ناوی سوپەرمارکێتەکەیە.',
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const ValueKey('customer-manual-push-message'),
+                controller: controller,
+                autofocus: true,
+                minLines: 3,
+                maxLines: 5,
+                maxLength: CustomerPushService.manualMessageMaxLength,
+                decoration: const InputDecoration(
+                  labelText: 'پەیامی ئاگادارکردنەوە',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  final normalized = value?.trim() ?? '';
+                  if (normalized.isEmpty) return 'پەیام بنووسە';
+                  if (normalized.length >
+                      CustomerPushService.manualMessageMaxLength) {
+                    return 'پەیام زۆر درێژە';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('پاشگەزبوونەوە'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              if (formKey.currentState?.validate() != true) return;
+              Navigator.of(dialogContext).pop(controller.text.trim());
+            },
+            icon: const Icon(Icons.send_rounded),
+            label: const Text('ناردن'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || message == null) return;
+
+    setState(() => _busy = true);
+    try {
+      final result = await widget.gateway.sendManual(widget.customerId, message);
+      if (!mounted) return;
+      final text = result.targetDevices > 0
+          ? 'ئاگاداری بە ناوی ${result.marketName} بۆ ${result.targetDevices} ئامێر ڕیزکرا'
+          : 'هیچ ئامێرێکی چالاک بۆ ئەم کڕیارە نەدۆزرایەوە';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(text)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ناردنی ئاگاداری سەرکەوتوو نەبوو')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _revokeAll() async {
     if (_busy) return;
     final confirmed = await showDialog<bool>(
@@ -261,6 +342,14 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
                 icon: const Icon(Icons.qr_code_2_rounded),
                 label: const Text('QR ـی ئاگادارکردنەوە'),
               ),
+              if (status?.active == true) ...[
+                const SizedBox(height: 8),
+                FilledButton.tonalIcon(
+                  onPressed: _busy ? null : _sendManual,
+                  icon: const Icon(Icons.send_rounded),
+                  label: const Text('ناردنی ئاگاداری'),
+                ),
+              ],
               if (canRevoke) ...[
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
