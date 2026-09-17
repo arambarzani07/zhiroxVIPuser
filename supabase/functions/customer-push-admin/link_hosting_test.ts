@@ -45,6 +45,6 @@ Deno.test("stable customer push gateway serves PWA assets itself", async () => {
   assertEquals(body.scope, "/functions/v1/customer-push-link/");
   assertEquals(
     body.start_url,
-    `/functions/v1/customer-push-link?token=${token}`,
+    `/functions/v1/customer-push-link/?token=${token}`,
   );
 });
