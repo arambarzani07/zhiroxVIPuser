@@ -186,7 +186,7 @@ export async function processOutboxEvent(
     try {
       await deps.sendPush(delivery.subscription, {
         ...message,
-        url: "/functions/v1/customer-push",
+        url: "https://push.zhirox.com/",
       });
       await deps.updateDelivery(delivery.id, {
         status: "sent",
