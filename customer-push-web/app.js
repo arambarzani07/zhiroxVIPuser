@@ -15,6 +15,10 @@ const enableButton = document.getElementById('enable');
 const resultEl = document.getElementById('result');
 const manifestEl = document.getElementById('appManifest');
 const missingLinkHelpEl = document.getElementById('missingLinkHelp');
+const portalEl = document.getElementById('portal');
+const totalsEl = document.getElementById('totals');
+const ledgerEl = document.getElementById('ledger');
+const loadMoreButton = document.getElementById('loadMore');
 
 function setStatus(message, kind = 'muted') {
   statusEl.textContent = message;
@@ -78,39 +82,140 @@ function resolveLinkToken() {
 
 let activeToken = '';
 let vapidPublicKey = '';
+let nextOffset = 0;
+
+function number(value) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function money(value, currency) {
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number(value))} ${currency || 'IQD'}`;
+}
+
+function portalCredentials(offset = 0) {
+  if (activeToken) return { action: 'portal', token: activeToken, offset };
+  const endpoint = localStorage.getItem(ENDPOINT_KEY) || '';
+  const deviceSecret = localStorage.getItem(DEVICE_SECRET_KEY) || '';
+  if (endpoint.startsWith('https://') && TOKEN_PATTERN.test(deviceSecret)) {
+    return { action: 'portal', endpoint, device_secret: deviceSecret, offset };
+  }
+  return null;
+}
+
+function addText(parent, tag, text, className = '') {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (className) node.className = className;
+  parent.appendChild(node);
+  return node;
+}
+
+function renderTotals(totals) {
+  totalsEl.replaceChildren();
+  if (!Array.isArray(totals) || totals.length === 0) {
+    addText(totalsEl, 'p', 'هیچ قەرزێک تۆمار نەکراوە.', 'empty');
+    return;
+  }
+  for (const item of totals) {
+    const currency = typeof item.currency === 'string' ? item.currency : 'IQD';
+    addText(totalsEl, 'div', currency, 'currency');
+    const grid = document.createElement('div');
+    grid.className = 'totals';
+    for (const [label, value] of [
+      ['کۆی قەرز', item.total_debt],
+      ['پارەدراو', item.paid],
+      ['ماوە', item.remaining],
+    ]) {
+      const card = document.createElement('div');
+      card.className = 'total';
+      addText(card, 'strong', money(value, currency));
+      addText(card, 'span', label);
+      grid.appendChild(card);
+    }
+    totalsEl.appendChild(grid);
+  }
+}
+
+function renderRows(rows, append = false) {
+  if (!append) ledgerEl.replaceChildren();
+  if (!Array.isArray(rows) || rows.length === 0) {
+    if (!append) addText(ledgerEl, 'p', 'هیچ مامەڵەیەک تۆمار نەکراوە.', 'empty');
+    return;
+  }
+  for (const item of rows) {
+    const isPayment = item.kind === 'payment';
+    const entry = document.createElement('article');
+    entry.className = 'entry';
+    const head = document.createElement('div');
+    head.className = 'entry-head';
+    addText(head, 'strong', isPayment ? 'پارەدان' : 'قەرز', isPayment ? 'payment-label' : 'debt-label');
+    addText(head, 'strong', money(item.amount, item.currency));
+    entry.appendChild(head);
+    const date = new Date(item.occurred_at);
+    const dateText = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('ku-IQ');
+    const detail = [dateText, typeof item.note === 'string' ? item.note : ''].filter(Boolean).join(' — ');
+    if (detail) addText(entry, 'div', detail, 'entry-meta');
+    if (!isPayment) addText(entry, 'div', `ماوە: ${money(item.remaining, item.currency)}`, 'entry-meta');
+    ledgerEl.appendChild(entry);
+  }
+}
+
+async function loadPortal(offset = 0, append = false) {
+  const credentials = portalCredentials(offset);
+  if (!credentials) throw new Error('link_unavailable');
+  const data = await api(credentials);
+  customerNameEl.textContent = typeof data.customer_name === 'string' ? data.customer_name : '';
+  marketNameEl.textContent = typeof data.market_name === 'string' ? data.market_name : '';
+  vapidPublicKey = typeof data.vapid_public_key === 'string' ? data.vapid_public_key : '';
+  identityEl.hidden = false;
+  portalEl.hidden = false;
+  renderTotals(data.totals);
+  renderRows(data.rows, append);
+  nextOffset = offset + (Array.isArray(data.rows) ? data.rows.length : 0);
+  loadMoreButton.hidden = data.has_more !== true;
+  return data;
+}
 
 async function initialize() {
   activeToken = resolveLinkToken();
-  if (!activeToken) {
+  if (!activeToken && !portalCredentials()) {
     setStatus('ئەم لینکە بەردەست نییە یان ماوەکەی تەواو بووە.', 'err');
     missingLinkHelpEl.hidden = false;
     return;
   }
 
   try {
-    const data = await api({ action: 'validate', token: activeToken });
-    const customerName = typeof data.customer_name === 'string' ? data.customer_name : '';
-    const marketName = typeof data.market_name === 'string' ? data.market_name : '';
-    vapidPublicKey = typeof data.vapid_public_key === 'string' ? data.vapid_public_key : '';
-    if (!vapidPublicKey) throw new Error('request_failed');
+    const data = await loadPortal();
 
-    customerNameEl.textContent = customerName;
-    marketNameEl.textContent = marketName;
-    identityEl.hidden = false;
-
-    if (isIos() && !isStandalone()) {
+    if (data.can_subscribe === true && isIos() && !isStandalone()) {
       iosHelpEl.hidden = false;
-      setStatus('سەرەتا ئەم پەڕەیە زیاد بکە بۆ Home Screen.');
+      setStatus('هەژمارەکەت ئامادەیە؛ بۆ ئاگادارکردنەوە زیادیکە بۆ Home Screen.');
       return;
     }
 
-    enableButton.hidden = false;
-    setStatus('لینکەکە دروستە. دەتوانیت ئاگادارکردنەوە چالاک بکەیت.');
+    if (data.can_subscribe === true) {
+      enableButton.hidden = false;
+      setStatus('قەرز و پارەدانەکانت لێرە دەبینیت؛ ئاگادارکردنەوەش چالاک بکە.');
+    } else {
+      setStatus('هەژماری کڕیار نوێکرایەوە.', 'ok');
+    }
   } catch (_) {
-    localStorage.removeItem(LINK_TOKEN_KEY);
     setStatus('ئەم لینکە بەردەست نییە یان ماوەکەی تەواو بووە.', 'err');
+    missingLinkHelpEl.hidden = false;
   }
 }
+
+loadMoreButton.addEventListener('click', async () => {
+  loadMoreButton.disabled = true;
+  try {
+    await loadPortal(nextOffset, true);
+  } catch (_) {
+    setResult('نەتوانرا مامەڵەی زیاتر بهێنرێت.', 'err');
+  } finally {
+    loadMoreButton.disabled = false;
+  }
+});
 
 enableButton.addEventListener('click', async () => {
   enableButton.disabled = true;
@@ -150,12 +255,12 @@ enableButton.addEventListener('click', async () => {
 
     localStorage.setItem(DEVICE_SECRET_KEY, data.device_secret);
     localStorage.setItem(ENDPOINT_KEY, subscription.endpoint);
-    localStorage.removeItem(LINK_TOKEN_KEY);
     activeToken = '';
 
     setStatus('پەیوەستکرا.', 'ok');
     setResult('ئاگادارکردنەوە بە سەرکەوتوویی چالاک کرا.', 'ok');
     enableButton.hidden = true;
+    await loadPortal();
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'request_failed';
     if (reason === 'permission_denied') {
