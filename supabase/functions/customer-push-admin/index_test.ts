@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { sha256Hex } from "../_shared/customer_push/crypto.ts";
+import { routeCustomerPushLink } from "../customer-push-link/index.ts";
 import {
   CUSTOMER_PUSH_PUBLIC_BASE_URL,
   handleAdminAction,
@@ -8,6 +9,7 @@ import {
 const actorId = "00000000-0000-0000-0000-000000000101";
 const customerId = "00000000-0000-0000-0000-000000000121";
 const requestId = "00000000-0000-0000-0000-000000000999";
+const publicLinkBase = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push-link";
 
 function deps(overrides: Record<string, unknown> = {}) {
   return {
@@ -30,13 +32,25 @@ function deps(overrides: Record<string, unknown> = {}) {
       target_devices: 0,
       market_name: "ZHIROX Market",
     }),
-    publicBaseUrl: "https://push.zhirox.com/",
+    publicBaseUrl: publicLinkBase,
     ...overrides,
   } as any;
 }
 
-Deno.test("production QR links use the canonical push domain", () => {
-  assertEquals(CUSTOMER_PUSH_PUBLIC_BASE_URL, "https://push.zhirox.com/");
+Deno.test("production QR links use the stable Supabase redirect gateway", () => {
+  assertEquals(CUSTOMER_PUSH_PUBLIC_BASE_URL, publicLinkBase);
+});
+
+Deno.test("stable QR gateway redirects to the live Netlify portal and preserves token", () => {
+  const token = "a".repeat(64);
+  const response = routeCustomerPushLink(
+    new Request(`${publicLinkBase}?token=${token}`),
+  );
+  assertEquals(response.status, 307);
+  assertEquals(
+    response.headers.get("location"),
+    `https://zhirox-push.netlify.app/?token=${token}`,
+  );
 });
 
 Deno.test("create_link stores only token hash and has no expiry", async () => {
@@ -58,7 +72,7 @@ Deno.test("create_link stores only token hash and has no expiry", async () => {
   assertEquals(response.expires_at, null);
   assertEquals(
     response.url,
-    `https://push.zhirox.com/?token=${"a".repeat(64)}`,
+    `${publicLinkBase}?token=${"a".repeat(64)}`,
   );
 });
 
