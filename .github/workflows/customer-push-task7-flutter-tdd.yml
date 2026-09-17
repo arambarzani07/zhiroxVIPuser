@@ -27,5 +27,5 @@ jobs:
           cache: true
       - name: Get dependencies
         run: flutter pub get
-      - name: Run customer push service tests
-        run: flutter test test/customer_push_service_test.dart
+      - name: Run customer push focused tests
+        run: flutter test test/customer_push_service_test.dart test/customer_push_card_test.dart
