@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 export const CUSTOMER_PUSH_PUBLIC_BASE_URL = "https://push.zhirox.com/";
+export const MANUAL_PUSH_MESSAGE_MAX_LENGTH = 240;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -29,6 +30,7 @@ function envJsonKey(name: string): string | null {
 export type AdminDeps = {
   now: () => Date;
   randomToken: () => string;
+  randomId: () => string;
   hash: (value: string) => Promise<string>;
   manageLink: (args: {
     actorId: string;
@@ -38,6 +40,12 @@ export type AdminDeps = {
   }) => Promise<unknown>;
   status: (args: { actorId: string; customerId: string }) => Promise<Record<string, unknown>>;
   revokeAll: (args: { actorId: string; customerId: string }) => Promise<number>;
+  sendManual: (args: {
+    actorId: string;
+    customerId: string | null;
+    message: string;
+    requestId: string;
+  }) => Promise<Record<string, unknown>>;
   publicBaseUrl: string;
 };
 
@@ -47,12 +55,31 @@ function requireCustomerId(value: unknown): string {
   return id;
 }
 
+function requireManualMessage(value: unknown): string {
+  const message = String(value ?? "").trim();
+  if (!message || message.length > MANUAL_PUSH_MESSAGE_MAX_LENGTH) {
+    throw new Error("invalid_message");
+  }
+  return message;
+}
+
 export async function handleAdminAction(
   body: Record<string, unknown>,
   actorId: string,
   deps: AdminDeps,
 ): Promise<Record<string, unknown>> {
   const action = String(body.action ?? "");
+
+  if (action === "broadcast_manual") {
+    const message = requireManualMessage(body.message);
+    return await deps.sendManual({
+      actorId,
+      customerId: null,
+      message,
+      requestId: deps.randomId(),
+    });
+  }
+
   const customerId = requireCustomerId(body.customer_id);
 
   if (action === "create_link") {
@@ -79,6 +106,16 @@ export async function handleAdminAction(
     return {
       revoked_count: await deps.revokeAll({ actorId, customerId }),
     };
+  }
+
+  if (action === "send_manual") {
+    const message = requireManualMessage(body.message);
+    return await deps.sendManual({
+      actorId,
+      customerId,
+      message,
+      requestId: deps.randomId(),
+    });
   }
 
   throw new Error("unsupported_action");
@@ -114,6 +151,7 @@ async function handle(req: Request): Promise<Response> {
     const result = await handleAdminAction(body, userData.user.id, {
       now: () => new Date(),
       randomToken: () => randomHexToken(32),
+      randomId: () => crypto.randomUUID(),
       hash: sha256Hex,
       publicBaseUrl: CUSTOMER_PUSH_PUBLIC_BASE_URL,
       manageLink: async ({ actorId, customerId, tokenHash, expiresAt }) => {
@@ -141,13 +179,33 @@ async function handle(req: Request): Promise<Response> {
         if (error) throw error;
         return Number(data ?? 0);
       },
+      sendManual: async ({ actorId, customerId, message, requestId }) => {
+        const { data, error } = await admin.rpc(
+          "enqueue_manual_customer_push_service",
+          {
+            p_actor: actorId,
+            p_customer: customerId,
+            p_message: message,
+            p_request_id: requestId,
+          },
+        );
+        if (error) throw error;
+        return (data ?? {}) as Record<string, unknown>;
+      },
     });
     return json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("push_forbidden")) return json({ error: "forbidden" }, 403);
-    if (message.includes("invalid_customer_id") || message.includes("unsupported_action")) {
-      return json({ error: message }, 400);
+    if (message.includes("push_forbidden") || message.includes("manual_push_forbidden")) {
+      return json({ error: "forbidden" }, 403);
+    }
+    if (
+      message.includes("invalid_customer_id") ||
+      message.includes("invalid_message") ||
+      message.includes("unsupported_action")
+    ) {
+      const code = message.includes("invalid_message") ? "invalid_message" : message;
+      return json({ error: code }, 400);
     }
     console.error("customer-push-admin error", message);
     return json({ error: "request_failed" }, 500);
