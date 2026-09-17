@@ -1,16 +1,17 @@
-export type PushEventType = "debt_created" | "payment_created";
+export type PushEventType = "debt_created" | "payment_created" | "manual";
 
 export type PushPayload = {
-  amount: number;
-  currency: string;
-  remaining_iqd: number;
+  amount?: number;
+  currency?: string;
+  remaining_iqd?: number;
   market_name: string;
   occurred_at: string;
+  message?: string;
 };
 
-function formatAmount(amount: number, currency: string): string {
-  const normalized = Number.isFinite(amount) ? amount : 0;
-  if (currency === "USD") {
+function formatAmount(amount: number | undefined, currency: string | undefined): string {
+  const normalized = Number.isFinite(amount) ? Number(amount) : 0;
+  if (String(currency ?? "").trim().toUpperCase() === "USD") {
     return `$${normalized.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -19,8 +20,9 @@ function formatAmount(amount: number, currency: string): string {
   return `${Math.round(normalized).toLocaleString("en-US")} د.ع`;
 }
 
-function formatIqd(amount: number): string {
-  return `${Math.round(Number.isFinite(amount) ? amount : 0).toLocaleString("en-US")} د.ع`;
+function formatIqd(amount: number | undefined): string {
+  const normalized = Number.isFinite(amount) ? Number(amount) : 0;
+  return `${Math.round(normalized).toLocaleString("en-US")} د.ع`;
 }
 
 export function retryDelayAfterFailure(attemptCount: number): number | null {
@@ -52,18 +54,26 @@ export function formatPushBody(
   eventType: PushEventType,
   payload: PushPayload,
 ): { title: string; body: string } {
-  const market = String(payload.market_name ?? "").trim();
-  const marketSuffix = market ? ` • مارکێت: ${market}` : "";
-  if (eventType === "debt_created") {
+  const market = String(payload.market_name ?? "").trim() || "ZHIROX";
+
+  if (eventType === "manual") {
     return {
-      title: "🧾 قەرزی نوێ تۆمارکرا",
-      body:
-        `بڕ: ${formatAmount(payload.amount, payload.currency)} • کۆی ماوە: ${formatIqd(payload.remaining_iqd)}${marketSuffix}`,
+      title: market,
+      body: String(payload.message ?? "").trim(),
     };
   }
+
+  if (eventType === "debt_created") {
+    return {
+      title: market,
+      body:
+        `🧾 قەرزی نوێ تۆمارکرا • بڕ: ${formatAmount(payload.amount, payload.currency)} • کۆی ماوە: ${formatIqd(payload.remaining_iqd)}`,
+    };
+  }
+
   return {
-    title: "💰 پارەدانەوە تۆمارکرا",
+    title: market,
     body:
-      `بڕی دراو: ${formatAmount(payload.amount, payload.currency)} • ماوە: ${formatIqd(payload.remaining_iqd)}${marketSuffix}`,
+      `💰 پارەدانەوە تۆمارکرا • بڕی دراو: ${formatAmount(payload.amount, payload.currency)} • ماوە: ${formatIqd(payload.remaining_iqd)}`,
   };
 }
