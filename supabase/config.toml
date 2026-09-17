@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.customer-read-link]
 verify_jwt = false
+
+[functions.customer-push]
+verify_jwt = false
