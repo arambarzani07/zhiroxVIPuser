@@ -118,7 +118,12 @@ class AdminSettingsScreen extends StatelessWidget {
                     ),
                   ]),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 22),
+                const AppSectionHeader(
+                  title: 'ئاگادارکردنەوەکان',
+                  subtitle: 'ناردنی تایبەت لە پڕۆفایلی کڕیار و ناردنی گشتی بۆ هەمووان',
+                ),
+                const SizedBox(height: 10),
                 const ManualPushBroadcastCard(),
                 const SizedBox(height: 22),
                 const AppSectionHeader(
