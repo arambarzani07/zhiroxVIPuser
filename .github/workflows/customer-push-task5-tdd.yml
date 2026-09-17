@@ -1,0 +1,28 @@
+name: Customer Push Task 5 TDD
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - 'supabase/functions/record-payment/**'
+      - '.github/workflows/customer-push-task5-tdd.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  record-payment-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run record-payment tests
+        run: deno test --allow-env supabase/functions/record-payment/index_test.ts
