@@ -33,6 +33,24 @@ Deno.test("token page never embeds raw customer id", async () => {
   assertEquals(html.includes("چالاککردنی ئاگادارکردنەوە"), true);
 });
 
+Deno.test("public API preflight allows JSON POST", async () => {
+  const res = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://push.zhirox.com",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
+      },
+    }),
+    deps(),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(res.headers.get("access-control-allow-origin"), "*");
+  assertEquals(res.headers.get("access-control-allow-methods")?.includes("POST"), true);
+  assertEquals(res.headers.get("access-control-allow-headers")?.includes("content-type"), true);
+});
+
 Deno.test("subscribe rejects missing PushSubscription keys", async () => {
   const res = await routeCustomerPush(
     new Request("https://x/functions/v1/customer-push", {
@@ -56,6 +74,8 @@ Deno.test("validate exposes only display data and VAPID public key", async () =>
     deps(),
   );
   assertEquals(res.status, 200);
+  assertEquals(res.headers.get("content-type")?.includes("application/json"), true);
+  assertEquals(res.headers.get("access-control-allow-origin"), "*");
   assertEquals(await res.json(), {
     customer_name: "Customer A",
     market_name: "Market A",
