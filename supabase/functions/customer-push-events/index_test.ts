@@ -84,7 +84,9 @@ Deno.test("live debt creates one idempotent debt_created event", async () => {
     {
       loadDebt: async () => liveDebt(),
       actorCanAccess: async () => true,
-      enqueuePush: async (args) => captured.push(args),
+      enqueuePush: async (args) => {
+        captured.push(args);
+      },
     },
   );
 
