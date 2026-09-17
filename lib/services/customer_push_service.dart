@@ -93,28 +93,77 @@ class CustomerPushLink {
   }
 }
 
+class CustomerPushSendResult {
+  final String campaignId;
+  final int queuedCustomers;
+  final int targetDevices;
+  final String marketName;
+
+  const CustomerPushSendResult({
+    required this.campaignId,
+    required this.queuedCustomers,
+    required this.targetDevices,
+    required this.marketName,
+  });
+
+  factory CustomerPushSendResult.fromJson(Map<String, dynamic> json) {
+    final campaignId = json['campaign_id'];
+    final queuedCustomers = json['queued_customers'];
+    final targetDevices = json['target_devices'];
+    final marketName = json['market_name'];
+    final validCampaignId = campaignId is String &&
+        RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(campaignId);
+
+    if (!validCampaignId ||
+        queuedCustomers is! int ||
+        queuedCustomers < 0 ||
+        targetDevices is! int ||
+        targetDevices < 0 ||
+        marketName is! String ||
+        marketName.trim().isEmpty) {
+      throw const FormatException('Malformed customer push send payload');
+    }
+
+    return CustomerPushSendResult(
+      campaignId: campaignId,
+      queuedCustomers: queuedCustomers,
+      targetDevices: targetDevices,
+      marketName: marketName.trim(),
+    );
+  }
+}
+
 abstract interface class CustomerPushGateway {
   Future<CustomerPushStatus> loadStatus(String customerId);
 
   Future<CustomerPushLink> createLink(String customerId);
 
   Future<int> revokeAll(String customerId);
+
+  Future<CustomerPushSendResult> sendManual(
+    String customerId,
+    String message,
+  );
+
+  Future<CustomerPushSendResult> broadcastManual(String message);
 }
 
 class CustomerPushService implements CustomerPushGateway {
+  static const int manualMessageMaxLength = 240;
+
   final CustomerPushAdminInvoker? _invoker;
 
   const CustomerPushService({CustomerPushAdminInvoker? invoker})
       : _invoker = invoker;
 
   Future<Object?> _invokeAdmin(
-    String action,
-    String customerId,
-  ) async {
-    final body = <String, dynamic>{
-      'action': action,
-      'customer_id': customerId,
-    };
+    String action, {
+    String? customerId,
+    String? message,
+  }) async {
+    final body = <String, dynamic>{'action': action};
+    if (customerId != null) body['customer_id'] = customerId;
+    if (message != null) body['message'] = message;
 
     final injected = _invoker;
     if (injected != null) {
@@ -142,25 +191,61 @@ class CustomerPushService implements CustomerPushGateway {
     );
   }
 
+  String _manualMessage(String message) {
+    final normalized = message.trim();
+    if (normalized.isEmpty || normalized.length > manualMessageMaxLength) {
+      throw ArgumentError.value(
+        message,
+        'message',
+        'Manual notification must contain 1-$manualMessageMaxLength characters',
+      );
+    }
+    return normalized;
+  }
+
   @override
   Future<CustomerPushStatus> loadStatus(String customerId) async {
-    final data = await _invokeAdmin('status', customerId);
+    final data = await _invokeAdmin('status', customerId: customerId);
     return CustomerPushStatus.fromJson(_requireMap(data));
   }
 
   @override
   Future<CustomerPushLink> createLink(String customerId) async {
-    final data = await _invokeAdmin('create_link', customerId);
+    final data = await _invokeAdmin('create_link', customerId: customerId);
     return CustomerPushLink.fromJson(_requireMap(data));
   }
 
   @override
   Future<int> revokeAll(String customerId) async {
-    final data = _requireMap(await _invokeAdmin('revoke_all', customerId));
+    final data = _requireMap(
+      await _invokeAdmin('revoke_all', customerId: customerId),
+    );
     final count = data['revoked_count'];
     if (count is! int || count < 0) {
       throw const FormatException('Malformed customer push revoke payload');
     }
     return count;
+  }
+
+  @override
+  Future<CustomerPushSendResult> sendManual(
+    String customerId,
+    String message,
+  ) async {
+    final data = await _invokeAdmin(
+      'send_manual',
+      customerId: customerId,
+      message: _manualMessage(message),
+    );
+    return CustomerPushSendResult.fromJson(_requireMap(data));
+  }
+
+  @override
+  Future<CustomerPushSendResult> broadcastManual(String message) async {
+    final data = await _invokeAdmin(
+      'broadcast_manual',
+      message: _manualMessage(message),
+    );
+    return CustomerPushSendResult.fromJson(_requireMap(data));
   }
 }
