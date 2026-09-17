@@ -42,6 +42,7 @@ function fakeWorker(options: {
   const deliveries: WorkerDelivery[] = [];
   const outboxPatches: Record<string, unknown>[] = [];
   const subscriptionPatches = new Map<string, Record<string, unknown>>();
+  const sentMessages: { title: string; body: string; url: string }[] = [];
   let fanoutAt: string | null = null;
 
   const deps: WorkerDeps = {
@@ -61,7 +62,8 @@ function fakeWorker(options: {
     },
     setFanoutAt: async (_outboxId, iso) => { fanoutAt = iso; },
     listDueDeliveries: async () => deliveries.filter((d) => d.status === "pending"),
-    sendPush: async () => {
+    sendPush: async (_subscription, message) => {
+      sentMessages.push(message);
       if (options.sendStatus) throw { statusCode: options.sendStatus, message: `HTTP ${options.sendStatus}` };
     },
     updateDelivery: async (deliveryId, patch) => {
@@ -81,8 +83,22 @@ function fakeWorker(options: {
     updateOutbox: async (_outboxId, patch) => { outboxPatches.push(patch); },
   };
 
-  return { deps, subscriptions, deliveries, outboxPatches, subscriptionPatches, get fanoutAt() { return fanoutAt; } };
+  return {
+    deps,
+    subscriptions,
+    deliveries,
+    outboxPatches,
+    subscriptionPatches,
+    sentMessages,
+    get fanoutAt() { return fanoutAt; },
+  };
 }
+
+Deno.test("notification click target uses canonical push domain", async () => {
+  const repo = fakeWorker({ subscriptions: [{ ...subA }] });
+  await processOutboxEvent(baseEvent(), repo.deps);
+  assertEquals(repo.sentMessages[0]?.url, "https://push.zhirox.com/");
+});
 
 Deno.test("fanout is frozen after first processing", async () => {
   const repo = fakeWorker();
