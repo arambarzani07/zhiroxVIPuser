@@ -8,7 +8,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="ZHIROX">
   <title>ZHIROX Notifications</title>
-  <link id="appManifest" rel="manifest" href="/manifest.webmanifest">
+  <script src="/manifest-bootstrap.js"></script>
+  <noscript><link rel="manifest" href="/manifest.webmanifest"></noscript>
   <style>
     :root { color-scheme: light; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
@@ -46,6 +47,10 @@
 
     <button id="enable" type="button" hidden>چالاککردنی ئاگادارکردنەوە</button>
     <p id="result"></p>
+    <section id="missingLinkHelp" class="notice" hidden>
+      <strong>لینکی نوێ پێویستە</strong>
+      <p>ئەم ئەپە بەبێ QR token کراوەتەوە. ئایکۆنەکە بسڕەوە، QR ـێکی نوێ لە سیستەم دروست بکە و دووبارە زیادیکە بۆ Home Screen.</p>
+    </section>
   </main>
 </body>
 </html>
