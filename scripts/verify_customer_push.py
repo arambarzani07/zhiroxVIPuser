@@ -130,6 +130,36 @@ assert 'ManualPushBroadcastCard' in settings_text, 'manager broadcast UI must be
 web = ROOT / 'customer-push-web'
 for name in ('index.html', 'app.js', 'sw.js', 'manifest.webmanifest', '_headers'):
     assert (web / name).exists(), f'missing customer push web asset: {name}'
+for name in ('styles.css',):
+    assert (web / name).exists(), f'missing official portal asset: {name}'
+
+index_html = (web / 'index.html').read_text(errors='ignore')
+for marker in (
+    'id="portalShell"',
+    'id="homeView"',
+    'id="transactionsView"',
+    'id="notificationsView"',
+    'id="marketBrand"',
+    'id="primaryRemaining"',
+    'id="notificationState"',
+    'data-portal-tab="home"',
+    'data-portal-tab="transactions"',
+    'data-portal-tab="notifications"',
+):
+    assert marker in index_html, f'official customer portal marker missing: {marker}'
+assert '<style>' not in index_html, 'official customer portal CSS must live in styles.css'
+assert 'aria-live="polite"' in index_html, 'portal needs a scoped polite status region'
+
+styles_text = (web / 'styles.css').read_text(errors='ignore')
+for marker in (
+    '.portal-shell',
+    '.balance-card',
+    '.portal-nav',
+    '@media (max-width: 420px)',
+    'prefers-reduced-motion',
+):
+    assert marker in styles_text, f'official portal style missing: {marker}'
+assert 'overflow-x: hidden' in styles_text, 'portal must guard narrow-screen horizontal overflow'
 
 app_js = (web / 'app.js').read_text(errors='ignore')
 assert (
@@ -147,6 +177,14 @@ assert "action: 'portal'" in app_js, 'customer push link must expose the read-on
 assert 'ماوەکەی تەواو بووە' not in app_js, 'permanent-link PWA must not describe links as expired'
 assert 'QR ـێکی نوێ دروست بکە و دووبارە هەوڵ بدە' not in app_js, 'retry errors must not imply permanent links need replacement'
 assert 'ئەم لینکە بەردەست نییە یان ڕاگیراوە.' in app_js, 'PWA must describe unavailable links as revoked/unavailable'
+for marker in (
+    "setActiveView('home')",
+    "setActiveView('transactions')",
+    "setActiveView('notifications')",
+    'renderNotificationState',
+    'renderPrimaryBalance',
+):
+    assert marker in app_js, f'official portal behavior missing: {marker}'
 
 portal_migrations = '\n'.join(
     path.read_text(errors='ignore')
