@@ -77,7 +77,7 @@ export function isLiveDebtEligible(input: {
 
 function requireUuid(value: unknown): string {
   const id = String(value ?? "").trim();
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     throw new Error("invalid_debt_id");
   }
   return id;
