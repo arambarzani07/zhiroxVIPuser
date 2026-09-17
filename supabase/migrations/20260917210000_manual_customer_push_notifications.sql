@@ -1,13 +1,14 @@
 -- Manual customer Web Push notifications.
 -- The manager writes only the message body. The notification title/brand is
 -- resolved server-side from the market profile and cannot be spoofed by a client.
+-- Preserve the existing due_reminder event already supported in production.
 
 alter table public.notification_outbox
   drop constraint if exists notification_outbox_event_type_check;
 
 alter table public.notification_outbox
   add constraint notification_outbox_event_type_check
-  check (event_type in ('debt_created','payment_created','manual'));
+  check (event_type in ('debt_created','payment_created','due_reminder','manual'));
 
 create table if not exists public.customer_manual_push_campaigns (
   id uuid primary key,
@@ -72,7 +73,9 @@ begin
     and actor.role = 'admin'
     and actor.active = true
     and actor.approved = true
-    and (actor.subscription_end is null or actor.subscription_end >= now());
+    and (actor.is_system_owner = true
+         or actor.subscription_end is null
+         or actor.subscription_end >= now());
 
   if v_market_name is null then
     raise exception 'manual_push_forbidden' using errcode = '42501';
