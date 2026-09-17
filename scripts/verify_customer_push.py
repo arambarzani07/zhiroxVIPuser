@@ -59,7 +59,7 @@ assert re.search(
     r"event_type\s+text\s+not\s+null\s+check\s*\(\s*event_type\s+in\s*\(\s*'debt_created'\s*,\s*'payment_created'\s*\)\s*\)",
     outbox_schema,
     re.IGNORECASE | re.DOTALL,
-), 'push outbox event_type must be limited to debt_created/payment_created'
+), 'base push outbox event_type must start with debt_created/payment_created'
 
 for forbidden in ('debt_updated', 'payment_updated', 'debt_deleted', 'payment_deleted'):
     assert forbidden not in outbox_schema, f'unsupported Web Push event type allowed: {forbidden}'
@@ -83,13 +83,46 @@ assert 'v_link.expires_at <= now()' not in permanent_schema, 'redeem must not en
 assert 'and link.used_at is null' not in permanent_schema.lower(), 'inspect must not consume links once used'
 assert 'set used_at = now()' not in permanent_schema.lower(), 'redeem must not consume a permanent link'
 
+manual_migration = ROOT / 'supabase/migrations/20260917210000_manual_customer_push_notifications.sql'
+assert manual_migration.exists(), 'manual customer push migration missing'
+manual_schema = manual_migration.read_text(errors='ignore')
+assert 'customer_manual_push_campaigns' in manual_schema, 'manual push audit table missing'
+assert 'enqueue_manual_customer_push_service' in manual_schema, 'manual push enqueue RPC missing'
+assert re.search(
+    r"event_type\s+in\s*\(\s*'debt_created'\s*,\s*'payment_created'\s*,\s*'manual'\s*\)",
+    manual_schema,
+    re.IGNORECASE | re.DOTALL,
+), 'manual migration must allow only debt_created/payment_created/manual push events'
+assert "actor.role = 'admin'" in manual_schema, 'manual push must be restricted to the market manager/admin'
+assert 'market_name' in manual_schema and 'p_message' in manual_schema, 'manual push payload must be server-branded with market name'
+assert "revoke all on table public.customer_manual_push_campaigns from public, anon, authenticated" in manual_schema.lower(), 'manual push audit table must not be client-writable'
+
 admin_text = (ROOT / 'supabase/functions/customer-push-admin/index.ts').read_text(errors='ignore')
 assert '90 * 24 * 60 * 60 * 1000' not in admin_text, 'customer push links must not auto-expire after 90 days'
 assert 'expires_at: null' in admin_text or 'expires_at: null,' in admin_text, 'admin API must return null expiry for permanent links'
+assert 'send_manual' in admin_text, 'admin API must support a single-customer manual push'
+assert 'broadcast_manual' in admin_text, 'admin API must support broadcast manual push'
+assert 'enqueue_manual_customer_push_service' in admin_text, 'admin API must route manual pushes through the secure RPC'
+assert 'MANUAL_PUSH_MESSAGE_MAX_LENGTH = 240' in admin_text, 'manual push message limit must remain bounded'
+
+payload_text = (ROOT / 'supabase/functions/_shared/customer_push/payload.ts').read_text(errors='ignore')
+assert '"manual"' in payload_text, 'push payload formatter must support manual notifications'
+assert 'title: market' in payload_text, 'push notification title must be the supermarket name'
+
+service_text = (ROOT / 'lib/services/customer_push_service.dart').read_text(errors='ignore')
+assert 'sendManual' in service_text, 'Flutter push service must support sending one manual notification'
+assert 'broadcastManual' in service_text, 'Flutter push service must support manual broadcast'
 
 card_text = (ROOT / 'lib/widgets/customer_push_card.dart').read_text(errors='ignore')
 assert '١٥ خولەک' not in card_text, 'manager UI must not claim a permanent QR expires in 15 minutes'
 assert 'ئەم لینکە بەردەوام کار دەکات تا بەڕێوەبەر ڕایدەگرێت.' in card_text, 'manager UI must explain permanent-link behavior'
+assert 'ناردنی ئاگاداری' in card_text, 'customer profile must expose manual notification send'
+
+broadcast_widget = ROOT / 'lib/widgets/manual_push_broadcast_card.dart'
+assert broadcast_widget.exists(), 'admin broadcast notification card missing'
+broadcast_text = broadcast_widget.read_text(errors='ignore')
+assert 'ئاگاداری گشتی' in broadcast_text, 'broadcast UI label missing'
+assert 'broadcastManual' in broadcast_text, 'broadcast UI must call the broadcast service'
 
 web = ROOT / 'customer-push-web'
 for name in ('index.html', 'app.js', 'sw.js', 'manifest.webmanifest', '_headers'):
