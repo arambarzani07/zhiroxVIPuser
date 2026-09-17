@@ -16,12 +16,12 @@ function expectRedirect(url: string, expected: string) {
   assertEquals(response.headers.get("location"), expected);
 }
 
-Deno.test("stable customer push gateway redirects Safari to HTML-safe static hosting", () => {
-  assertEquals(CUSTOMER_PUSH_STATIC_URL, staticPortal);
+Deno.test("stable customer push gateway keeps bearer token out of the static host request", () => {
+  assertEquals(new URL(CUSTOMER_PUSH_STATIC_URL).search, "");
   for (const base of [publicBase, runtimeBase]) {
     expectRedirect(
       `${base}?token=${token}`,
-      `${staticPortal}?token=${token}`,
+      `${CUSTOMER_PUSH_STATIC_URL}#token=${token}`,
     );
   }
 });
