@@ -24,7 +24,7 @@ Deno.test("retry schedule stops after failed attempt five", () => {
   );
 });
 
-Deno.test("payment copy uses IQD remaining balance", () => {
+Deno.test("payment notification uses supermarket name as title", () => {
   assertEquals(
     formatPushBody("payment_created", {
       amount: 25000,
@@ -34,9 +34,23 @@ Deno.test("payment copy uses IQD remaining balance", () => {
       occurred_at: "2026-09-17T00:00:00Z",
     }),
     {
-      title: "💰 پارەدانەوە تۆمارکرا",
+      title: "ZHIROX Market",
       body:
-        "بڕی دراو: 25,000 د.ع • ماوە: 100,000 د.ع • مارکێت: ZHIROX Market",
+        "💰 پارەدانەوە تۆمارکرا • بڕی دراو: 25,000 د.ع • ماوە: 100,000 د.ع",
+    },
+  );
+});
+
+Deno.test("manual notification uses supermarket name and manager message", () => {
+  assertEquals(
+    formatPushBody("manual", {
+      market_name: "کانی چنار",
+      message: "سبەی فرۆشگاکە تا کاتژمێر 10 داخراوە.",
+      occurred_at: "2026-09-17T00:00:00Z",
+    }),
+    {
+      title: "کانی چنار",
+      body: "سبەی فرۆشگاکە تا کاتژمێر 10 داخراوە.",
     },
   );
 });
