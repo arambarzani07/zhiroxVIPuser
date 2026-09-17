@@ -15,6 +15,15 @@ function deps(overrides: Partial<PublicPushDeps> = {}): PublicPushDeps {
       market_name: "Market A",
       expires_at: "2026-09-17T00:15:00Z",
     }),
+    portal: async () => ({
+      customer_name: "Customer A",
+      market_name: "Market A",
+      debt_limit: 100000,
+      can_subscribe: true,
+      totals: [{ currency: "IQD", total_debt: 50000, remaining: 30000, paid: 20000 }],
+      rows: [],
+      has_more: false,
+    }),
     redeem: async () => ({ linked: true }),
     unsubscribe: async () => true,
     consumeRateLimit: async () => true,
@@ -117,6 +126,37 @@ Deno.test("subscribe returns device secret once after redeem", async () => {
   assertEquals(res.status, 200);
   assertEquals(await res.json(), { linked: true, device_secret: "d".repeat(64) });
   assertEquals(receivedSecretHash, await sha256Hex("d".repeat(64)));
+});
+
+Deno.test("portal can authenticate with the same link token", async () => {
+  const res = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "portal", token }),
+    }),
+    deps(),
+  );
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.customer_name, "Customer A");
+  assertEquals(body.totals[0].remaining, 30000);
+  assertEquals(body.vapid_public_key, "BTestPublicKey");
+});
+
+Deno.test("portal can reopen from installed app using device credentials", async () => {
+  let receivedHash = "";
+  const secret = "b".repeat(64);
+  const res = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "portal", endpoint: "https://push.example/device", device_secret: secret }),
+    }),
+    deps({ portal: async (args) => { receivedHash = args.deviceSecretHash ?? ""; return { rows: [], totals: [] }; } }),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(receivedHash, await sha256Hex(secret));
 });
 
 Deno.test("expired token returns generic unavailable error", async () => {
