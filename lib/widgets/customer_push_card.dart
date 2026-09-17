@@ -62,32 +62,49 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
         context: context,
         builder: (dialogContext) {
           final url = link.url.toString();
-          return AlertDialog(
-            title: const Text('QR ـی ئاگادارکردنەوە'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  QrImageView(
-                    key: ValueKey<String>(url),
-                    data: url,
-                    version: QrVersions.auto,
-                    size: 240,
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'ئەم QR ـە تەنها یەکجار بەکاردێت و دوای ١٥ خولەک بەسەر دەچێت.',
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+          return Dialog(
+            child: SizedBox(
+              width: 320,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'QR ـی ئاگادارکردنەوە',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: 240,
+                      height: 240,
+                      child: QrImageView(
+                        key: ValueKey<String>(url),
+                        data: url,
+                        version: QrVersions.auto,
+                        size: 240,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'ئەم QR ـە تەنها یەکجار بەکاردێت و دوای ١٥ خولەک بەسەر دەچێت.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        child: const Text('داخستن'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('داخستن'),
-              ),
-            ],
           );
         },
       );
