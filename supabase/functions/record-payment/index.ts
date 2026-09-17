@@ -107,7 +107,7 @@ export async function finalizePaymentPush(
     if (!paymentId) throw new Error("payment_push_missing_canonical_id");
 
     const context = await deps.loadContext(request);
-    const isCustomerWide = request.customerId.trim().isNotEmpty;
+    const isCustomerWide = request.customerId.trim().length > 0;
     const useUsd = !isCustomerWide &&
       context.currency.trim().toUpperCase() === "USD" &&
       context.dollarRate > 0;
@@ -139,7 +139,10 @@ export async function finalizePaymentPush(
   return result;
 }
 
-type AdminClient = ReturnType<typeof createClient>;
+// Supabase's ungenerated-schema client type narrows arbitrary tables/RPCs to
+// `never` during standalone Deno type-checking. Keep this backend-only client
+// explicit so the Edge Function can remain testable without generated types.
+type AdminClient = any;
 
 async function loadPaymentPushContext(
   admin: AdminClient,
@@ -149,7 +152,7 @@ async function loadPaymentPushContext(
   let currency = "IQD";
   let dollarRate = 0;
 
-  if (request.debtId.trim().isNotEmpty) {
+  if (request.debtId.trim().length > 0) {
     const { data: debt, error: debtError } = await admin
       .from("debts")
       .select("customer_id,currency,dollar_rate")
