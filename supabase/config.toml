@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.customer-push]
 verify_jwt = false
+
+[functions.customer-push-worker]
+verify_jwt = false
