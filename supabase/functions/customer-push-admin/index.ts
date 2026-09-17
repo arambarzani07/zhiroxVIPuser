@@ -6,6 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+export const CUSTOMER_PUSH_PUBLIC_BASE_URL = "https://push.zhirox.com/";
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -114,7 +116,7 @@ async function handle(req: Request): Promise<Response> {
       now: () => new Date(),
       randomToken: () => randomHexToken(32),
       hash: sha256Hex,
-      publicBaseUrl: `${url}/functions/v1/customer-push`,
+      publicBaseUrl: CUSTOMER_PUSH_PUBLIC_BASE_URL,
       manageLink: async ({ actorId, customerId, tokenHash, expiresAt }) => {
         const { error } = await admin.rpc("manage_customer_push_link", {
           p_actor: actorId,
