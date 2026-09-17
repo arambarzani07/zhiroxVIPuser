@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { sha256Hex } from "../_shared/customer_push/crypto.ts";
 import {
   CUSTOMER_PUSH_PUBLIC_BASE_URL,
@@ -7,6 +7,33 @@ import {
 
 const actorId = "00000000-0000-0000-0000-000000000101";
 const customerId = "00000000-0000-0000-0000-000000000121";
+const requestId = "00000000-0000-0000-0000-000000000999";
+
+function deps(overrides: Record<string, unknown> = {}) {
+  return {
+    now: () => new Date("2026-09-17T00:00:00Z"),
+    randomToken: () => "a".repeat(64),
+    randomId: () => requestId,
+    hash: sha256Hex,
+    manageLink: async () => {},
+    status: async () => ({
+      active: false,
+      device_count: 0,
+      active_link_count: 1,
+      latest_status: null,
+      latest_at: null,
+    }),
+    revokeAll: async () => 0,
+    sendManual: async () => ({
+      campaign_id: requestId,
+      queued_customers: 0,
+      target_devices: 0,
+      market_name: "ZHIROX Market",
+    }),
+    publicBaseUrl: "https://push.zhirox.com/",
+    ...overrides,
+  } as any;
+}
 
 Deno.test("production QR links use the canonical push domain", () => {
   assertEquals(CUSTOMER_PUSH_PUBLIC_BASE_URL, "https://push.zhirox.com/");
@@ -18,24 +45,12 @@ Deno.test("create_link stores only token hash and has no expiry", async () => {
   const response = await handleAdminAction(
     { action: "create_link", customer_id: customerId },
     actorId,
-    {
-      now: () => new Date("2026-09-17T00:00:00Z"),
-      randomToken: () => "a".repeat(64),
-      hash: sha256Hex,
-      manageLink: async ({ tokenHash, expiresAt }) => {
+    deps({
+      manageLink: async ({ tokenHash, expiresAt }: any) => {
         storedHash = tokenHash;
         storedExpiresAt = expiresAt;
       },
-      status: async () => ({
-        active: false,
-        device_count: 0,
-        active_link_count: 1,
-        latest_status: null,
-        latest_at: null,
-      }),
-      revokeAll: async () => 0,
-      publicBaseUrl: "https://push.zhirox.com/",
-    },
+    }),
   );
 
   assertEquals(storedHash, await sha256Hex("a".repeat(64)));
@@ -51,11 +66,7 @@ Deno.test("status passes through active link count without secret material", asy
   const response = await handleAdminAction(
     { action: "status", customer_id: customerId },
     actorId,
-    {
-      now: () => new Date(),
-      randomToken: () => "b".repeat(64),
-      hash: sha256Hex,
-      manageLink: async () => {},
+    deps({
       status: async () => ({
         active: true,
         device_count: 2,
@@ -63,9 +74,7 @@ Deno.test("status passes through active link count without secret material", asy
         latest_status: "sent",
         latest_at: "2026-09-17T00:00:00Z",
       }),
-      revokeAll: async () => 0,
-      publicBaseUrl: "https://push.zhirox.com/",
-    },
+    }),
   );
 
   assertEquals(response, {
@@ -81,15 +90,101 @@ Deno.test("revoke_all returns revoked device count", async () => {
   const response = await handleAdminAction(
     { action: "revoke_all", customer_id: customerId },
     actorId,
-    {
-      now: () => new Date(),
-      randomToken: () => "c".repeat(64),
-      hash: sha256Hex,
-      manageLink: async () => {},
-      status: async () => ({}),
-      revokeAll: async () => 3,
-      publicBaseUrl: "https://example.test/customer-push",
-    },
+    deps({ revokeAll: async () => 3 }),
   );
   assertEquals(response, { revoked_count: 3 });
+});
+
+Deno.test("send_manual queues one customer and never accepts a client title", async () => {
+  let captured: Record<string, unknown> = {};
+  const response = await handleAdminAction(
+    {
+      action: "send_manual",
+      customer_id: customerId,
+      message: "  کڕیارێکی بەڕێز، کاڵای نوێ گەیشت.  ",
+      title: "spoofed title",
+    },
+    actorId,
+    deps({
+      sendManual: async (args: Record<string, unknown>) => {
+        captured = args;
+        return {
+          campaign_id: requestId,
+          queued_customers: 1,
+          target_devices: 2,
+          market_name: "کانی چنار",
+        };
+      },
+    }),
+  );
+
+  assertEquals(captured, {
+    actorId,
+    customerId,
+    message: "کڕیارێکی بەڕێز، کاڵای نوێ گەیشت.",
+    requestId,
+  });
+  assertEquals(response, {
+    campaign_id: requestId,
+    queued_customers: 1,
+    target_devices: 2,
+    market_name: "کانی چنار",
+  });
+});
+
+Deno.test("broadcast_manual does not require a customer id", async () => {
+  let captured: Record<string, unknown> = {};
+  const response = await handleAdminAction(
+    {
+      action: "broadcast_manual",
+      message: "ئەمڕۆ تا کاتژمێر 11 کراوەین.",
+    },
+    actorId,
+    deps({
+      sendManual: async (args: Record<string, unknown>) => {
+        captured = args;
+        return {
+          campaign_id: requestId,
+          queued_customers: 18,
+          target_devices: 23,
+          market_name: "کانی چنار",
+        };
+      },
+    }),
+  );
+
+  assertEquals(captured, {
+    actorId,
+    customerId: null,
+    message: "ئەمڕۆ تا کاتژمێر 11 کراوەین.",
+    requestId,
+  });
+  assertEquals(response, {
+    campaign_id: requestId,
+    queued_customers: 18,
+    target_devices: 23,
+    market_name: "کانی چنار",
+  });
+});
+
+Deno.test("manual push rejects empty and oversized messages", async () => {
+  await assertRejects(
+    () => handleAdminAction(
+      { action: "send_manual", customer_id: customerId, message: "   " },
+      actorId,
+      deps(),
+    ),
+    Error,
+    "invalid_message",
+  );
+
+  await assertRejects(
+    () => handleAdminAction(
+      { action: "broadcast_manual", message: "x".repeat(241) },
+      actorId,
+      deps(),
+    ),
+    Error,
+    "invalid_message",
+  );
 });
