@@ -9,7 +9,7 @@ import {
 const actorId = "00000000-0000-0000-0000-000000000101";
 const customerId = "00000000-0000-0000-0000-000000000121";
 const requestId = "00000000-0000-0000-0000-000000000999";
-const publicLinkBase = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push-link";
+const publicLinkBase = "https://push.zhirox.com/";
 
 function deps(overrides: Record<string, unknown> = {}) {
   return {
@@ -37,11 +37,11 @@ function deps(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
-Deno.test("production QR links use the stable Supabase portal gateway", () => {
+Deno.test("production QR links use the ZHIROX customer domain", () => {
   assertEquals(CUSTOMER_PUSH_PUBLIC_BASE_URL, publicLinkBase);
 });
 
-Deno.test("stable QR gateway redirects to an HTML-safe static portal", () => {
+Deno.test("legacy Supabase QR gateway redirects to the ZHIROX customer domain", () => {
   const token = "a".repeat(64);
   const response = routeCustomerPushLink(
     new Request(`${publicLinkBase}?token=${token}`),
@@ -49,7 +49,7 @@ Deno.test("stable QR gateway redirects to an HTML-safe static portal", () => {
   assertEquals(response.status, 307);
   assertEquals(
     response.headers.get("location"),
-    `${CUSTOMER_PUSH_STATIC_URL}#token=${token}`,
+    `${CUSTOMER_PUSH_STATIC_URL}?token=${token}`,
   );
 });
 

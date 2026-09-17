@@ -14,12 +14,12 @@ function expectRedirect(url: string, expected: string) {
   assertEquals(response.headers.get("location"), expected);
 }
 
-Deno.test("stable customer push gateway keeps bearer token out of the static host request", () => {
-  assertEquals(new URL(CUSTOMER_PUSH_STATIC_URL).search, "");
+Deno.test("stable customer push gateway redirects to push.zhirox.com", () => {
+  assertEquals(CUSTOMER_PUSH_STATIC_URL, "https://push.zhirox.com/");
   for (const base of [publicBase, runtimeBase]) {
     expectRedirect(
       `${base}?token=${token}`,
-      `${CUSTOMER_PUSH_STATIC_URL}#token=${token}`,
+      `${CUSTOMER_PUSH_STATIC_URL}?token=${token}`,
     );
   }
 });
@@ -35,7 +35,7 @@ Deno.test("gateway no longer serves HTML directly from Supabase Edge", async () 
 });
 
 
-Deno.test("install manifest carries the fragment token back to the immutable portal", async () => {
+Deno.test("install manifest points back to the ZHIROX customer domain", async () => {
   const response = manifestResponse(
     new Request(
       `https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push-manifest?token=${token}`,
@@ -44,5 +44,5 @@ Deno.test("install manifest carries the fragment token back to the immutable por
   assertEquals(response.status, 200);
   const body = await response.json();
   assertEquals(body.scope, new URL("./", CUSTOMER_PUSH_STATIC_URL).href);
-  assertEquals(body.start_url, `${CUSTOMER_PUSH_STATIC_URL}#token=${token}`);
+  assertEquals(body.start_url, `${CUSTOMER_PUSH_STATIC_URL}?token=${token}`);
 });
