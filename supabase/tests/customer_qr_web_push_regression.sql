@@ -20,6 +20,17 @@ begin
     raise exception 'customer push schema missing';
   end if;
 
+  insert into auth.users(
+    id,aud,role,email,encrypted_password,email_confirmed_at,
+    raw_app_meta_data,raw_user_meta_data,created_at,updated_at
+  ) values
+    (v_admin_a,'authenticated','authenticated','push-admin-a@test.local','',now(),'{}','{}',now(),now()),
+    (v_admin_b,'authenticated','authenticated','push-admin-b@test.local','',now(),'{}','{}',now(),now()),
+    (v_employee_ok,'authenticated','authenticated','push-emp-ok@test.local','',now(),'{}','{}',now(),now()),
+    (v_employee_no,'authenticated','authenticated','push-emp-no@test.local','',now(),'{}','{}',now(),now()),
+    (v_customer_a,'authenticated','authenticated','push-cust-a@test.local','',now(),'{}','{}',now(),now()),
+    (v_customer_b,'authenticated','authenticated','push-cust-b@test.local','',now(),'{}','{}',now(),now());
+
   insert into public.profiles(
     id,name,phone,role,market_name,admin_id,created_by,approved,active,can_send_notifications
   ) values
