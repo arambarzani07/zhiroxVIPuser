@@ -41,6 +41,25 @@ Deno.test("payment notification uses supermarket name as title", () => {
   );
 });
 
+Deno.test("due reminder preserves reminder wording and supermarket title", () => {
+  assertEquals(
+    formatPushBody("due_reminder", {
+      amount: 50000,
+      currency: "IQD",
+      remaining_iqd: 75000,
+      market_name: "کانی چنار",
+      occurred_at: "2026-09-17T00:00:00Z",
+      due_date: "2026-09-16",
+      overdue: true,
+    }),
+    {
+      title: "کانی چنار",
+      body:
+        "⚠️ قەرزەکەت دوا کەوتووە • بڕی دواخراو: 50,000 د.ع • کۆی ماوە: 75,000 د.ع",
+    },
+  );
+});
+
 Deno.test("manual notification uses supermarket name and manager message", () => {
   assertEquals(
     formatPushBody("manual", {
