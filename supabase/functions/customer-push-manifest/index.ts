@@ -1,5 +1,5 @@
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
-export const CUSTOMER_PUSH_STATIC_URL = "https://raw.githack.com/arambarzani07/zhiroxVIPuser/9b18c1b51f4cc6af71df221d5a50cb6b3ed5f83b/customer-push-web/index.html";
+export const CUSTOMER_PUSH_STATIC_URL = "https://raw.githack.com/arambarzani07/zhiroxVIPuser/e7091d5934f37bdf9e02aec34ec1e6653032a46a/customer-push-web/index.html";
 export const CUSTOMER_PUSH_STATIC_SCOPE = new URL("./", CUSTOMER_PUSH_STATIC_URL).href;
 
 export function manifestResponse(request: Request): Response {
