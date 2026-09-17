@@ -10,6 +10,7 @@ const actorId = "00000000-0000-0000-0000-000000000101";
 const customerId = "00000000-0000-0000-0000-000000000121";
 const requestId = "00000000-0000-0000-0000-000000000999";
 const publicLinkBase = "https://push.zhirox.com/";
+const gatewayBase = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push-link";
 
 function deps(overrides: Record<string, unknown> = {}) {
   return {
@@ -44,7 +45,7 @@ Deno.test("production QR links use the ZHIROX customer domain", () => {
 Deno.test("legacy Supabase QR gateway redirects to the ZHIROX customer domain", () => {
   const token = "a".repeat(64);
   const response = routeCustomerPushLink(
-    new Request(`${publicLinkBase}?token=${token}`),
+    new Request(`${gatewayBase}?token=${token}`),
   );
   assertEquals(response.status, 307);
   assertEquals(

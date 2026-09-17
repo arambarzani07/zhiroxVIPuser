@@ -1,11 +1,11 @@
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
-export const CUSTOMER_PUSH_STATIC_URL = "https://raw.githack.com/arambarzani07/zhiroxVIPuser/e7091d5934f37bdf9e02aec34ec1e6653032a46a/customer-push-web/index.html";
+export const CUSTOMER_PUSH_STATIC_URL = "https://push.zhirox.com/";
 export const CUSTOMER_PUSH_STATIC_SCOPE = new URL("./", CUSTOMER_PUSH_STATIC_URL).href;
 
 export function manifestResponse(request: Request): Response {
   const token = new URL(request.url).searchParams.get("token") ?? "";
   const startUrl = TOKEN_PATTERN.test(token)
-    ? `${CUSTOMER_PUSH_STATIC_URL}#token=${encodeURIComponent(token)}`
+    ? `${CUSTOMER_PUSH_STATIC_URL}?token=${encodeURIComponent(token)}`
     : CUSTOMER_PUSH_STATIC_URL;
 
   return new Response(JSON.stringify({

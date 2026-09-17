@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-export const CUSTOMER_PUSH_PUBLIC_BASE_URL = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push-link";
+export const CUSTOMER_PUSH_PUBLIC_BASE_URL = "https://push.zhirox.com/";
 export const MANUAL_PUSH_MESSAGE_MAX_LENGTH = 240;
 
 function json(body: unknown, status = 200) {

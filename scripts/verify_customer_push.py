@@ -98,12 +98,20 @@ assert 'market_name' in manual_schema and 'p_message' in manual_schema, 'manual 
 assert "revoke all on table public.customer_manual_push_campaigns from public, anon, authenticated" in manual_schema.lower(), 'manual push audit table must not be client-writable'
 
 admin_text = (ROOT / 'supabase/functions/customer-push-admin/index.ts').read_text(errors='ignore')
+assert 'https://push.zhirox.com/' in admin_text, 'customer QR links must use push.zhirox.com'
 assert '90 * 24 * 60 * 60 * 1000' not in admin_text, 'customer push links must not auto-expire after 90 days'
 assert 'expires_at: null' in admin_text or 'expires_at: null,' in admin_text, 'admin API must return null expiry for permanent links'
 assert 'send_manual' in admin_text, 'admin API must support a single-customer manual push'
 assert 'broadcast_manual' in admin_text, 'admin API must support broadcast manual push'
 assert 'enqueue_manual_customer_push_service' in admin_text, 'admin API must route manual pushes through the secure RPC'
 assert 'MANUAL_PUSH_MESSAGE_MAX_LENGTH = 240' in admin_text, 'manual push message limit must remain bounded'
+
+link_text = (ROOT / 'supabase/functions/customer-push-link/index.ts').read_text(errors='ignore')
+manifest_text = (ROOT / 'supabase/functions/customer-push-manifest/index.ts').read_text(errors='ignore')
+assert 'https://push.zhirox.com/' in link_text, 'legacy QR gateway must redirect to push.zhirox.com'
+assert 'https://push.zhirox.com/' in manifest_text, 'install manifest must use push.zhirox.com'
+assert 'raw.githack.com' not in link_text, 'production QR gateway must not depend on raw.githack.com'
+assert 'raw.githack.com' not in manifest_text, 'production manifest must not depend on raw.githack.com'
 
 payload_text = (ROOT / 'supabase/functions/_shared/customer_push/payload.ts').read_text(errors='ignore')
 assert '"manual"' in payload_text, 'push payload formatter must support manual notifications'

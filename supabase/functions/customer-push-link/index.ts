@@ -1,5 +1,5 @@
 export const CUSTOMER_PUSH_LINK_BASE_PATH = "/functions/v1/customer-push-link";
-export const CUSTOMER_PUSH_STATIC_URL = "https://raw.githack.com/arambarzani07/zhiroxVIPuser/e7091d5934f37bdf9e02aec34ec1e6653032a46a/customer-push-web/index.html";
+export const CUSTOMER_PUSH_STATIC_URL = "https://push.zhirox.com/";
 const CUSTOMER_PUSH_RUNTIME_PATH = "/customer-push-link";
 const CUSTOMER_PUSH_API_URL = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push";
 
@@ -225,7 +225,7 @@ export function routeCustomerPushLink(req: Request): Response {
   }
   if (suffix === "") {
     const location = isToken(token)
-      ? `${CUSTOMER_PUSH_STATIC_URL}#token=${encodeURIComponent(token)}`
+      ? `${CUSTOMER_PUSH_STATIC_URL}?token=${encodeURIComponent(token)}`
       : CUSTOMER_PUSH_STATIC_URL;
     return new Response(null, {
       status: 307,
