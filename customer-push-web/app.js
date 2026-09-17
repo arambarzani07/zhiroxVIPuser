@@ -108,14 +108,20 @@ async function api(payload) {
 }
 
 function resolveLinkToken() {
-  const queryToken = new URL(window.location.href).searchParams.get('token') || '';
-  if (queryToken) {
-    if (!TOKEN_PATTERN.test(queryToken)) return '';
-    localStorage.setItem(LINK_TOKEN_KEY, queryToken);
+  const currentUrl = new URL(window.location.href);
+  const queryToken = currentUrl.searchParams.get('token') || '';
+  const fragmentToken = new URLSearchParams(
+    currentUrl.hash.startsWith('#') ? currentUrl.hash.slice(1) : currentUrl.hash,
+  ).get('token') || '';
+  const linkToken = queryToken || fragmentToken;
+
+  if (linkToken) {
+    if (!TOKEN_PATTERN.test(linkToken)) return '';
+    localStorage.setItem(LINK_TOKEN_KEY, linkToken);
     if (manifestEl) {
       manifestEl.href = './manifest.webmanifest';
     }
-    return queryToken;
+    return linkToken;
   }
 
   const savedToken = localStorage.getItem(LINK_TOKEN_KEY) || '';
@@ -370,7 +376,7 @@ enableButton.addEventListener('click', async () => {
     localStorage.setItem(ENDPOINT_KEY, subscription.endpoint);
     localStorage.removeItem(LINK_TOKEN_KEY);
     activeToken = '';
-    if (window.location.search) window.history.replaceState(null, '', window.location.pathname);
+    if (window.location.search || window.location.hash) window.history.replaceState(null, '', window.location.pathname);
 
     renderNotificationState('active', 'ئاگادارکردنەوە چالاک کرا');
     setStatus('پەیوەستکرا.', 'ok');
