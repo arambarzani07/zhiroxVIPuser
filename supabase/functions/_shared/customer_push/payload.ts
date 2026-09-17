@@ -1,4 +1,8 @@
-export type PushEventType = "debt_created" | "payment_created" | "manual";
+export type PushEventType =
+  | "debt_created"
+  | "payment_created"
+  | "due_reminder"
+  | "manual";
 
 export type PushPayload = {
   amount?: number;
@@ -6,6 +10,8 @@ export type PushPayload = {
   remaining_iqd?: number;
   market_name: string;
   occurred_at: string;
+  due_date?: string;
+  overdue?: boolean;
   message?: string;
 };
 
@@ -68,6 +74,15 @@ export function formatPushBody(
       title: market,
       body:
         `🧾 قەرزی نوێ تۆمارکرا • بڕ: ${formatAmount(payload.amount, payload.currency)} • کۆی ماوە: ${formatIqd(payload.remaining_iqd)}`,
+    };
+  }
+
+  if (eventType === "due_reminder") {
+    return {
+      title: market,
+      body: payload.overdue === true
+        ? `⚠️ قەرزەکەت دوا کەوتووە • بڕی دواخراو: ${formatAmount(payload.amount, payload.currency)} • کۆی ماوە: ${formatIqd(payload.remaining_iqd)}`
+        : `⏰ بیرخستنەوەی قەرز • بڕی پێویست: ${formatAmount(payload.amount, payload.currency)} • کۆی ماوە: ${formatIqd(payload.remaining_iqd)}`,
     };
   }
 
