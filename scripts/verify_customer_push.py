@@ -80,6 +80,14 @@ for secret_name in (
     'CUSTOMER_PUSH_RATE_LIMIT_SALT',
 ):
     assert secret_name not in app_js, f'server secret leaked to customer push PWA: {secret_name}'
+assert "action: 'portal'" in app_js, 'customer push link must expose the read-only customer portal'
+
+portal_migrations = '\n'.join(
+    path.read_text(errors='ignore')
+    for path in (ROOT / 'supabase' / 'migrations').glob('*_customer_push_portal.sql')
+)
+assert 'read_customer_push_portal_service' in portal_migrations, 'customer portal RPC missing'
+assert 'device_secret_hash' in portal_migrations, 'installed portal must authenticate with device secret'
 
 sw_js = (web / 'sw.js').read_text(errors='ignore')
 assert 'customer_id' not in sw_js, 'service worker must not expose customer_id'
