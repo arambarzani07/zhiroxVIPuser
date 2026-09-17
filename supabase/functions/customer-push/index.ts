@@ -33,6 +33,7 @@ export type PublicPushDeps = {
   vapidPublicKey: string;
   rateLimitSalt: string;
   inspect: (tokenHash: string) => Promise<Record<string, unknown>>;
+  portal: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; offset: number }) => Promise<Record<string, unknown>>;
   redeem: (args: { tokenHash: string; endpoint: string; p256dh: string; auth: string; deviceSecretHash: string; userAgent: string; platform: string }) => Promise<Record<string, unknown>>;
   unsubscribe: (endpoint: string, deviceSecretHash: string) => Promise<boolean>;
   consumeRateLimit: (keyHash: string, limit: number, windowSeconds: number) => Promise<boolean>;
@@ -99,9 +100,30 @@ export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Pro
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch (_) { return json({ error: "invalid_json" }, 400); }
   const action = String(body.action ?? "");
-  if (action === "validate" || action === "subscribe") {
+  if (action === "validate" || action === "subscribe" || action === "portal") {
     if (!(await enforceRateLimit(req, deps))) return json({ error: "rate_limited" }, 429);
-    if (!isToken(body.token)) return json({ error: "link_unavailable" }, 400);
+    if (action !== "portal" && !isToken(body.token)) return json({ error: "link_unavailable" }, 400);
+  }
+
+  if (action === "portal") {
+    const token = isToken(body.token) ? body.token : null;
+    const endpoint = typeof body.endpoint === "string" && body.endpoint.startsWith("https://") ? body.endpoint : null;
+    const deviceSecret = isToken(body.device_secret) ? body.device_secret : null;
+    const offset = Number(body.offset ?? 0);
+    if ((!token && (!endpoint || !deviceSecret)) || !Number.isInteger(offset) || offset < 0 || offset > 1000000) {
+      return json({ error: "link_unavailable" }, 400);
+    }
+    try {
+      const portal = await deps.portal({
+        tokenHash: token ? await deps.hash(token) : null,
+        endpoint,
+        deviceSecretHash: deviceSecret ? await deps.hash(deviceSecret) : null,
+        offset,
+      });
+      return json({ ...portal, vapid_public_key: deps.vapidPublicKey });
+    } catch (_) {
+      return json({ error: "link_unavailable" }, 404);
+    }
   }
 
   if (action === "validate") {
@@ -150,6 +172,16 @@ async function serve(req: Request): Promise<Response> {
     rateLimitSalt: runtime.rateLimitSalt,
     inspect: async (tokenHash) => {
       const { data, error } = await admin.rpc("inspect_customer_push_link_service", { p_token_hash: tokenHash });
+      if (error) throw error;
+      return (data ?? {}) as Record<string, unknown>;
+    },
+    portal: async (args) => {
+      const { data, error } = await admin.rpc("read_customer_push_portal_service", {
+        p_token_hash: args.tokenHash,
+        p_endpoint: args.endpoint,
+        p_device_secret_hash: args.deviceSecretHash,
+        p_offset: args.offset,
+      });
       if (error) throw error;
       return (data ?? {}) as Record<string, unknown>;
     },
