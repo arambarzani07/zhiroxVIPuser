@@ -13,6 +13,7 @@ const marketNameEl = document.getElementById('marketName');
 const iosHelpEl = document.getElementById('iosHelp');
 const enableButton = document.getElementById('enable');
 const resultEl = document.getElementById('result');
+const manifestEl = document.getElementById('appManifest');
 
 function setStatus(message, kind = 'muted') {
   statusEl.textContent = message;
@@ -64,8 +65,9 @@ function resolveLinkToken() {
   if (queryToken) {
     if (!TOKEN_PATTERN.test(queryToken)) return '';
     localStorage.setItem(LINK_TOKEN_KEY, queryToken);
-    // Keep the token in the current URL until subscription succeeds so that
-    // iOS Add to Home Screen can reopen the same one-time onboarding link.
+    if (manifestEl) {
+      manifestEl.href = `/install-manifest.webmanifest?token=${encodeURIComponent(queryToken)}`;
+    }
     return queryToken;
   }
 
