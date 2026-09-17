@@ -1,16 +1,17 @@
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
+export const CUSTOMER_PUSH_STORAGE_SCOPE = "/storage/v1/object/public/customer-push-web/";
 
 export function manifestResponse(request: Request): Response {
   const token = new URL(request.url).searchParams.get("token") ?? "";
   const startUrl = TOKEN_PATTERN.test(token)
-    ? `/?token=${encodeURIComponent(token)}`
-    : "/";
+    ? `${CUSTOMER_PUSH_STORAGE_SCOPE}index.html?token=${encodeURIComponent(token)}`
+    : `${CUSTOMER_PUSH_STORAGE_SCOPE}index.html`;
 
   return new Response(JSON.stringify({
     name: "ZHIROX Customer Portal",
     short_name: "ZHIROX",
     start_url: startUrl,
-    scope: "/",
+    scope: CUSTOMER_PUSH_STORAGE_SCOPE,
     display: "standalone",
     theme_color: "#f4f6fa",
     background_color: "#f4f6fa",

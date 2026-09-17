@@ -1,4 +1,5 @@
 export const CUSTOMER_PUSH_LINK_BASE_PATH = "/functions/v1/customer-push-link";
+export const CUSTOMER_PUSH_STATIC_URL = "https://hsoyfbtpvwfmjokudznx.supabase.co/storage/v1/object/public/customer-push-web/index.html";
 const CUSTOMER_PUSH_RUNTIME_PATH = "/customer-push-link";
 const CUSTOMER_PUSH_API_URL = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push";
 
@@ -223,14 +224,16 @@ export function routeCustomerPushLink(req: Request): Response {
     return manifest(token);
   }
   if (suffix === "") {
-    return response(
-      head ? null : portalHtml(token),
-      200,
-      "text/html; charset=utf-8",
-      {
-        "Content-Security-Policy": "default-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'",
+    const location = isToken(token)
+      ? `${CUSTOMER_PUSH_STATIC_URL}?token=${encodeURIComponent(token)}`
+      : CUSTOMER_PUSH_STATIC_URL;
+    return new Response(null, {
+      status: 307,
+      headers: {
+        ...securityHeaders,
+        Location: location,
       },
-    );
+    });
   }
 
   return response("not_found", 404);

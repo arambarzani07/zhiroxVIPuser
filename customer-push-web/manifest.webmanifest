@@ -1,8 +1,8 @@
 {
   "name": "ZHIROX Customer Portal",
   "short_name": "ZHIROX",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/storage/v1/object/public/customer-push-web/index.html",
+  "scope": "/storage/v1/object/public/customer-push-web/",
   "display": "standalone",
   "theme_color": "#f4f6fa",
   "background_color": "#f4f6fa",

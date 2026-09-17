@@ -1,6 +1,7 @@
 'use strict';
 
-const PORTAL_PATH = '/';
+const PORTAL_SCOPE = '/storage/v1/object/public/customer-push-web/';
+const PORTAL_PATH = '/storage/v1/object/public/customer-push-web/index.html';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -13,7 +14,10 @@ self.addEventListener('activate', (event) => {
 function portalUrl(value) {
   try {
     const candidate = new URL(value || PORTAL_PATH, self.location.origin);
-    if (candidate.origin === self.location.origin) {
+    if (
+      candidate.origin === self.location.origin &&
+      candidate.pathname.startsWith(PORTAL_SCOPE)
+    ) {
       return `${candidate.pathname}${candidate.search}${candidate.hash}`;
     }
   } catch (_) {

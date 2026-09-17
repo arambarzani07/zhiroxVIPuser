@@ -113,7 +113,7 @@ function resolveLinkToken() {
     if (!TOKEN_PATTERN.test(queryToken)) return '';
     localStorage.setItem(LINK_TOKEN_KEY, queryToken);
     if (manifestEl) {
-      manifestEl.href = `/install-manifest.webmanifest?token=${encodeURIComponent(queryToken)}`;
+      manifestEl.href = `/functions/v1/customer-push-manifest?token=${encodeURIComponent(queryToken)}`;
     }
     return queryToken;
   }
@@ -344,7 +344,7 @@ enableButton.addEventListener('click', async () => {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') throw new Error('permission_denied');
 
-    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    const registration = await navigator.serviceWorker.register('/storage/v1/object/public/customer-push-web/sw.js', { scope: '/storage/v1/object/public/customer-push-web/' });
     await navigator.serviceWorker.ready;
 
     let subscription = await registration.pushManager.getSubscription();
@@ -370,7 +370,7 @@ enableButton.addEventListener('click', async () => {
     localStorage.setItem(ENDPOINT_KEY, subscription.endpoint);
     localStorage.removeItem(LINK_TOKEN_KEY);
     activeToken = '';
-    if (window.location.search) window.history.replaceState(null, '', '/');
+    if (window.location.search) window.history.replaceState(null, '', window.location.pathname);
 
     renderNotificationState('active', 'ئاگادارکردنەوە چالاک کرا');
     setStatus('پەیوەستکرا.', 'ok');
