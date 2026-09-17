@@ -4,7 +4,7 @@
 
 **Goal:** Move the customer Web Push onboarding PWA to `https://push.zhirox.com` on Netlify while keeping Supabase as the secure JSON API/backend.
 
-**Architecture:** A small static PWA will live under `customer-push-web/` and be deployed to a dedicated Netlify project. It will call `https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push` only for JSON actions. `customer-push-admin` will generate QR links for `https://push.zhirox.com/?token=...`, and the worker will open the generic `https://push.zhirox.com/` URL when a notification is tapped.
+**Architecture:** A small static PWA will live under `customer-push-web/` and be deployed to a dedicated Netlify project. It will call `https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push` only for JSON actions. `customer-push-admin` will generate QR links for `https://push.zhirox.com/?token=...`, the old Supabase GET link will redirect to the new origin for backward compatibility, and the worker will open the generic `https://push.zhirox.com/` URL when a notification is tapped.
 
 **Tech Stack:** Static HTML/CSS/JavaScript, Service Worker API, Push API, Netlify static hosting, Supabase Edge Functions (Deno), Flutter/Dart tests, Python policy verification, GitHub Actions.
 
@@ -40,10 +40,9 @@
 - `supabase/functions/customer-push-admin/index_test.ts` — assert canonical domain and 15-minute token behavior.
 - `supabase/functions/customer-push-worker/index.ts` — generic notification click URL.
 - `supabase/functions/customer-push-worker/index_test.ts` — assert generic click URL.
-- `supabase/functions/customer-push/index.ts` — keep supported production path JSON-only; preserve backward-compatible GET response temporarily if desired, but frontend no longer depends on it.
-- `supabase/functions/customer-push/index_test.ts` — assert JSON API behavior and CORS remain intact.
+- `supabase/functions/customer-push/index.ts` — JSON API plus backward-compatible GET redirect to the new PWA.
+- `supabase/functions/customer-push/index_test.ts` — assert JSON API, CORS, and redirect behavior.
 - `scripts/verify_customer_push.py` — enforce custom-domain/static-PWA policy.
-- `.github/workflows/ios-unsigned-ipa.yml` — no new workflow; existing customer-push gate must cover new static-PWA policy.
 
 ---
 
@@ -64,7 +63,7 @@
 
 - [ ] **Step 1: Extend the policy verifier first**
 
-Add exact assertions like:
+Add exact assertions:
 
 ```python
 web = ROOT / 'customer-push-web'
@@ -84,8 +83,6 @@ assert '"start_url": "/"' in manifest
 
 - [ ] **Step 2: Run verifier and confirm RED**
 
-Run:
-
 ```bash
 python3 scripts/verify_customer_push.py
 ```
@@ -94,7 +91,7 @@ Expected: FAIL because `customer-push-web/` assets do not exist yet.
 
 - [ ] **Step 3: Create the minimal static PWA**
 
-`index.html` must contain no backend secrets and must only reference same-origin assets:
+`index.html` contains no backend secrets and references only same-origin assets:
 
 ```html
 <!doctype html>
@@ -136,7 +133,7 @@ Expected: FAIL because `customer-push-web/` assets do not exist yet.
 - store only `device_secret` and endpoint in localStorage,
 - show generic Kurdish errors without rendering raw backend messages.
 
-`sw.js` must display `{title, body}` and open exactly `/` on click:
+`sw.js` displays `{title, body}` and opens exactly `/` on click:
 
 ```js
 self.addEventListener('push', (event) => {
@@ -153,9 +150,9 @@ self.addEventListener('notificationclick', (event) => {
 });
 ```
 
-`manifest.webmanifest` must use `/` for both `start_url` and `scope` and `display: "standalone"`.
+`manifest.webmanifest` uses `/` for both `start_url` and `scope` and `display: "standalone"`.
 
-`_headers` must include:
+`_headers` contains:
 
 ```text
 /*
@@ -275,7 +272,7 @@ git commit -m "feat(user): route customer push through custom domain"
 
 ---
 
-### Task 3: Keep the Supabase public function JSON-only for the supported production flow
+### Task 3: Redirect legacy Supabase GET links and keep POST JSON-only
 
 **Files:**
 - Modify: `supabase/functions/customer-push/index.ts`
@@ -283,31 +280,54 @@ git commit -m "feat(user): route customer push through custom domain"
 
 **Interfaces:**
 - `POST /functions/v1/customer-push` with `validate`, `subscribe`, `unsubscribe` remains unchanged.
-- CORS continues to allow the static PWA to call the endpoint from `https://push.zhirox.com`.
+- `GET .../customer-push?token=<valid-token>` returns HTTP `307` with `Location: https://push.zhirox.com/?token=<same-token>`.
+- `GET .../customer-push` without a token returns HTTP `307` with `Location: https://push.zhirox.com/`.
+- CORS continues to allow the static PWA to call POST from `https://push.zhirox.com`.
 
-- [ ] **Step 1: Add a regression test for JSON API and CORS**
+- [ ] **Step 1: Replace the old HTML-page test with redirect tests**
 
-For `validate`, assert:
+Add:
 
 ```ts
-assertEquals(res.status, 200);
-assertEquals(res.headers.get("content-type")?.includes("application/json"), true);
-assertEquals(res.headers.get("access-control-allow-origin"), "*");
+Deno.test("legacy token GET redirects to custom domain without changing token", async () => {
+  const res = await routeCustomerPush(
+    new Request(`https://x/functions/v1/customer-push?token=${token}`),
+    deps(),
+  );
+  assertEquals(res.status, 307);
+  assertEquals(res.headers.get("location"), `https://push.zhirox.com/?token=${token}`);
+});
+
+Deno.test("legacy generic GET redirects to custom domain", async () => {
+  const res = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push"),
+    deps(),
+  );
+  assertEquals(res.status, 307);
+  assertEquals(res.headers.get("location"), "https://push.zhirox.com/");
+});
 ```
 
-For `OPTIONS`, assert status `200` and that POST is included in `Access-Control-Allow-Methods`.
-
-- [ ] **Step 2: Run test before edits**
+Run:
 
 ```bash
 deno test --allow-env supabase/functions/customer-push
 ```
 
-Expected: current JSON tests pass; any new CORS assertion that exposes a gap must fail before the smallest production fix.
+Expected: FAIL because GET currently returns Edge-hosted HTML.
 
-- [ ] **Step 3: Remove production dependency on Edge-hosted PWA assets**
+- [ ] **Step 2: Implement redirects and preserve POST JSON API**
 
-Keep the POST route and public rate limiting exactly as-is. The GET fallback may return a small generic migration notice or remain for backward compatibility, but new QR links must never rely on the Edge-hosted manifest or service worker.
+For GET requests, return `307` with the exact custom-domain `Location` above. Do not redirect POST requests. Keep validation, subscription, unsubscription, rate limiting, and response JSON unchanged.
+
+- [ ] **Step 3: Add CORS assertions to the validate test**
+
+```ts
+assertEquals(res.headers.get("content-type")?.includes("application/json"), true);
+assertEquals(res.headers.get("access-control-allow-origin"), "*");
+```
+
+For `OPTIONS`, assert status `200` and `POST` in `Access-Control-Allow-Methods`.
 
 - [ ] **Step 4: Run customer-push Deno tests**
 
@@ -321,15 +341,12 @@ Expected: PASS.
 
 ```bash
 git add supabase/functions/customer-push
-git commit -m "refactor(user): keep customer push edge endpoint api focused"
+git commit -m "refactor(user): redirect customer push onboarding to custom domain"
 ```
 
 ---
 
 ### Task 4: Full repository verification before deployment
-
-**Files:**
-- Modify only if a failing existing gate requires a minimal compatibility fix: `.github/workflows/ios-unsigned-ipa.yml`
 
 - [ ] **Step 1: Run customer push policy**
 
@@ -380,8 +397,9 @@ The existing workflow must execute its customer-push policy/Deno gates and produ
 
 **Production resources:**
 - Supabase project: `hsoyfbtpvwfmjokudznx`.
-- Netlify project: create new dedicated project named `zhirox-push` if available.
+- Netlify project: new dedicated project `zhirox-push` if that name is available.
 - Canonical domain: `push.zhirox.com`.
+- Current connected Netlify tool can create/read/deploy projects but does not expose custom-domain or DNS mutation.
 
 - [ ] **Step 1: Create the dedicated Netlify project**
 
@@ -392,23 +410,25 @@ Use the connected Netlify account and create a new site named `zhirox-push`. Do 
 The deployed Netlify URL must serve:
 
 ```text
-/                    -> text/html
-/app.js              -> JavaScript
-/sw.js               -> application/javascript
+/                     -> text/html
+/app.js               -> JavaScript
+/sw.js                -> application/javascript
 /manifest.webmanifest -> application/manifest+json
 ```
 
-- [ ] **Step 3: Bind `push.zhirox.com`**
+If the Netlify deploy action cannot source the new static directory from this repository, stop before claiming deployment and report that exact connector limitation rather than creating a different hosting architecture.
 
-If the connected Netlify connector exposes custom-domain management, bind the domain directly and let Netlify provision TLS. If it does not expose domain/DNS mutation, record the exact Netlify site hostname and required CNAME target, then use the domain's DNS provider to create:
+- [ ] **Step 3: Configure the DNS record for the canonical domain**
+
+Because the connected Netlify tool does not expose custom-domain/DNS mutation, record the exact hostname of the new Netlify site. The DNS provider for `zhirox.com` must create exactly:
 
 ```text
 Type: CNAME
 Name: push
-Target: <the exact Netlify hostname for the new zhirox-push site>
+Target: <exact hostname of the new Netlify site>
 ```
 
-Do not claim production cutover complete until `https://push.zhirox.com` resolves over HTTPS.
+After the DNS record exists, add `push.zhirox.com` as the site's custom domain in Netlify and allow Netlify to provision TLS. If no DNS/custom-domain connector is available in the session, this is the only step that requires the user's DNS-provider UI or a newly connected DNS-provider plugin. Do not claim production cutover complete before HTTPS resolves.
 
 - [ ] **Step 4: Deploy changed Supabase functions**
 
@@ -421,12 +441,12 @@ Do not redeploy unrelated Edge Functions.
 
 - [ ] **Step 5: Verify fresh production state**
 
-Verify all of the following with fresh evidence:
+Verify:
 
 ```text
-GET https://push.zhirox.com/                         -> 200 text/html
-GET https://push.zhirox.com/sw.js                    -> 200 application/javascript
-GET https://push.zhirox.com/manifest.webmanifest     -> 200 application/manifest+json
+GET https://push.zhirox.com/                     -> 200 text/html
+GET https://push.zhirox.com/sw.js                -> 200 application/javascript
+GET https://push.zhirox.com/manifest.webmanifest -> 200 application/manifest+json
 ```
 
 Generate a new customer QR and verify its URL starts with:
@@ -435,11 +455,11 @@ Generate a new customer QR and verify its URL starts with:
 https://push.zhirox.com/?token=
 ```
 
-The token must be exactly 64 lowercase hex characters and have a 15-minute expiry.
+The token is exactly 64 lowercase hex characters and expires exactly 15 minutes after creation.
 
 - [ ] **Step 6: Verify runtime and worker remain healthy**
 
-Confirm the existing customer-push worker cron still runs every minute and returns HTTP 200 with a JSON body such as:
+Confirm the existing customer-push worker cron still runs every minute and returns HTTP 200 with JSON shaped like:
 
 ```json
 {"ok":true,"reconciled":0,"processed":0}
@@ -468,4 +488,4 @@ Report:
 - `push.zhirox.com` HTTPS status,
 - deployed Supabase function versions,
 - worker cron status,
-- real-device push status (pass / not yet performed).
+- real-device push status (`pass` or `not yet performed`).
