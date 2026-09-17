@@ -91,7 +91,10 @@ assert 'device_secret_hash' in portal_migrations, 'installed portal must authent
 
 sw_js = (web / 'sw.js').read_text(errors='ignore')
 assert 'customer_id' not in sw_js, 'service worker must not expose customer_id'
-assert "clients.openWindow('/')" in sw_js, 'notification clicks must open the generic PWA root'
+assert 'self.clients.matchAll' in sw_js, 'notification clicks must reuse an open customer portal'
+assert 'customerPortal.navigate(target)' in sw_js, 'notification clicks must refresh the customer portal'
+assert 'self.clients.openWindow(target)' in sw_js, 'notification clicks must open the portal when closed'
+assert 'portalUrl(data.url)' in sw_js, 'notification payload URL must be honored safely'
 
 manifest = (web / 'manifest.webmanifest').read_text(errors='ignore')
 assert re.search(r'"scope"\s*:\s*"/"', manifest), 'PWA scope must be /'
