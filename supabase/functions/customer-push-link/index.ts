@@ -1,4 +1,5 @@
 export const CUSTOMER_PUSH_LINK_BASE_PATH = "/functions/v1/customer-push-link";
+const CUSTOMER_PUSH_RUNTIME_PATH = "/customer-push-link";
 const CUSTOMER_PUSH_API_URL = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push";
 
 const securityHeaders: Record<string, string> = {
@@ -26,6 +27,15 @@ function response(
 
 function isToken(value: string): boolean {
   return /^[a-f0-9]{64}$/.test(value);
+}
+
+export function customerPushLinkSuffix(pathname: string): string {
+  if (pathname === "" || pathname === "/") return "";
+  for (const prefix of [CUSTOMER_PUSH_LINK_BASE_PATH, CUSTOMER_PUSH_RUNTIME_PATH]) {
+    if (pathname === prefix || pathname === `${prefix}/`) return "";
+    if (pathname.startsWith(`${prefix}/`)) return pathname.slice(prefix.length);
+  }
+  return pathname;
 }
 
 function manifest(token: string): Response {
@@ -169,7 +179,7 @@ async function load(next=0,append=false){const c=credentials(next);if(!c)throw n
 function configure(data){enable.hidden=true;iosHelp.hidden=true;setResult('');if(data.can_subscribe!==true){renderState('active','ئاگادارکردنەوە چالاکە');return}if(!supportsPush()){renderState('error','ئەم وێبگەڕە پشتگیری Web Push ناکات');return}if(Notification.permission==='denied'){renderState('error','مۆڵەتی ئاگادارکردنەوە ڕەتکراوەتەوە');return}if(ios()&&!standalone()){iosHelp.hidden=false;renderState('install-required','بۆ iPhone سەرەتا پۆرتال زیاد بکە بۆ Home Screen');return}enable.hidden=false;renderState('ready','ئاگادارکردنەوە هێشتا چالاک نەکراوە')}
 more.onclick=async()=>{more.disabled=true;try{await load(offset,true)}catch(_){setResult('نەتوانرا مامەڵەی زیاتر بهێنرێت.','err')}finally{more.disabled=false}};
 iosHelp.onclick=()=>{if(typeof dialog.showModal==='function')dialog.showModal();else setResult('لە Safari: Share → Add to Home Screen.','err')};
-enable.onclick=async()=>{enable.disabled=true;setResult('');try{if(!activeToken||!TOKEN.test(activeToken))throw new Error('link_unavailable');if(!supportsPush())throw new Error('push_unsupported');if(ios()&&!standalone())throw new Error('ios_not_standalone');const permission=await Notification.requestPermission();if(permission!=='granted')throw new Error('permission_denied');const registration=await navigator.serviceWorker.register(BASE+'/sw.js',{scope:BASE+'/'});await navigator.serviceWorker.ready;let sub=await registration.pushManager.getSubscription();if(!sub)sub=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:vapidKey(vapid)});const data=await api({action:'subscribe',token:activeToken,subscription:sub.toJSON(),platform:ios()?'ios':(/Android/i.test(navigator.userAgent||'')?'android':'desktop')});if(data.linked!==true||typeof data.device_secret!=='string')throw new Error('request_failed');localStorage.setItem(SECRET_KEY,data.device_secret);localStorage.setItem(ENDPOINT_KEY,sub.endpoint);localStorage.removeItem(LINK_KEY);activeToken='';history.replaceState(null,'',BASE+'/');renderState('active','ئاگادارکردنەوە چالاک کرا');setResult('ئاگادارکردنەوە بە سەرکەوتوویی چالاک کرا و بە ناوی سوپەرمارکێتەکەت دێت.','ok');enable.hidden=true;iosHelp.hidden=true;await load()}catch(e){const reason=e instanceof Error?e.message:'request_failed';if(reason==='ios_not_standalone'){iosHelp.hidden=false;renderState('install-required','بۆ iPhone سەرەتا پۆرتال زیاد بکە بۆ Home Screen');setResult('لە Safari زیادیکە بۆ Home Screen و لەوێوە بیکەرەوە.','err')}else if(reason==='permission_denied'){renderState('error','مۆڵەتی ئاگادارکردنەوە ڕەتکرایەوە');setResult('لە ڕێکخستنەکانی ئامێرەکەت مۆڵەت بدە.','err')}else{renderState('error','چالاککردن سەرکەوتوو نەبوو');setResult('دووبارە هەوڵ بدە.','err')}enable.disabled=false}};
+enable.onclick=async()=>{enable.disabled=true;setResult('');try{if(!activeToken||!TOKEN.test(activeToken))throw new Error('link_unavailable');if(!supportsPush())throw new Error('push_unsupported');if(ios()&&!standalone())throw new Error('ios_not_standalone');const permission=await Notification.requestPermission();if(permission!=='granted')throw new Error('permission_denied');const registration=await navigator.serviceWorker.register(BASE+'/sw.js',{scope:BASE+'/'});await navigator.serviceWorker.ready;let sub=await registration.pushManager.getSubscription();if(!sub){sub=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:vapidKey(vapid)})}const data=await api({action:'subscribe',token:activeToken,subscription:sub.toJSON(),platform:ios()?'ios':(/Android/i.test(navigator.userAgent||'')?'android':'desktop')});if(data.linked!==true||typeof data.device_secret!=='string'||!data.device_secret){throw new Error('request_failed')}localStorage.setItem(SECRET_KEY,data.device_secret);localStorage.setItem(ENDPOINT_KEY,sub.endpoint);localStorage.removeItem(LINK_KEY);activeToken='';history.replaceState(null,'',BASE+'/');renderState('active','ئاگادارکردنەوە چالاک کرا');setStatus('پەیوەستکرا.');setResult('ئاگادارکردنەوە بە سەرکەوتوویی چالاک کرا و بە ناوی سوپەرمارکێتەکەت دێت.','ok');enable.hidden=true;iosHelp.hidden=true;await load()}catch(e){const reason=e instanceof Error?e.message:'request_failed';if(reason==='permission_denied'){renderState('error','مۆڵەتی ئاگادارکردنەوە ڕەتکرایەوە');setResult('لە ڕێکخستنەکانی ئامێرەکەت مۆڵەت بدە.','err')}else if(reason==='ios_not_standalone'){iosHelp.hidden=false;renderState('install-required','بۆ iPhone سەرەتا پۆرتال زیاد بکە بۆ Home Screen');setResult('لە Safari زیادیکە بۆ Home Screen و لەوێوە بیکەرەوە.','err')}else{renderState('error','چالاککردن سەرکەوتوو نەبوو');setResult('دووبارە هەوڵ بدە.','err')}enable.disabled=false}};
 (async()=>{activeToken=resolveToken();if(!activeToken&&!credentials()){lock();return}try{const data=await load();tab('home');configure(data);setStatus('هەژمارەکەت ئامادەیە.')}catch(_){lock()}})();`;
 
 const serviceWorkerJs = String.raw`'use strict';
@@ -194,31 +204,27 @@ export function routeCustomerPushLink(req: Request): Response {
     return response("method_not_allowed", 405);
   }
 
-  const suffix = url.pathname.startsWith(CUSTOMER_PUSH_LINK_BASE_PATH)
-    ? url.pathname.slice(CUSTOMER_PUSH_LINK_BASE_PATH.length)
-    : url.pathname;
-  const body = req.method === "HEAD" ? null : undefined;
+  const suffix = customerPushLinkSuffix(url.pathname);
+  const head = req.method === "HEAD";
 
   if (suffix === "/styles.css") {
-    return response(body ?? styles, 200, "text/css; charset=utf-8");
+    return response(head ? null : styles, 200, "text/css; charset=utf-8");
   }
   if (suffix === "/app.js") {
-    return response(body ?? appJs, 200, "application/javascript; charset=utf-8");
+    return response(head ? null : appJs, 200, "application/javascript; charset=utf-8");
   }
   if (suffix === "/sw.js") {
-    return response(body ?? serviceWorkerJs, 200, "application/javascript; charset=utf-8", {
+    return response(head ? null : serviceWorkerJs, 200, "application/javascript; charset=utf-8", {
       "Service-Worker-Allowed": `${CUSTOMER_PUSH_LINK_BASE_PATH}/`,
     });
   }
   if (suffix === "/manifest.webmanifest") {
-    if (req.method === "HEAD") {
-      return response(null, 200, "application/manifest+json; charset=utf-8");
-    }
+    if (head) return response(null, 200, "application/manifest+json; charset=utf-8");
     return manifest(token);
   }
-  if (suffix === "" || suffix === "/") {
+  if (suffix === "") {
     return response(
-      body ?? portalHtml(token),
+      head ? null : portalHtml(token),
       200,
       "text/html; charset=utf-8",
       {
