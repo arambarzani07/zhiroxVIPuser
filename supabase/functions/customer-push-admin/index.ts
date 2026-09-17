@@ -34,7 +34,7 @@ export type AdminDeps = {
     actorId: string;
     customerId: string;
     tokenHash: string;
-    expiresAt: string;
+    expiresAt: string | null;
   }) => Promise<unknown>;
   status: (args: { actorId: string; customerId: string }) => Promise<Record<string, unknown>>;
   revokeAll: (args: { actorId: string; customerId: string }) => Promise<number>;
@@ -58,17 +58,16 @@ export async function handleAdminAction(
   if (action === "create_link") {
     const rawToken = deps.randomToken();
     const tokenHash = await deps.hash(rawToken);
-    const expires = new Date(deps.now().getTime() + 90 * 24 * 60 * 60 * 1000);
     await deps.manageLink({
       actorId,
       customerId,
       tokenHash,
-      expiresAt: expires.toISOString(),
+      expiresAt: null,
     });
     const separator = deps.publicBaseUrl.includes("?") ? "&" : "?";
     return {
       url: `${deps.publicBaseUrl}${separator}token=${encodeURIComponent(rawToken)}`,
-      expires_at: expires.toISOString(),
+      expires_at: null,
     };
   }
 
