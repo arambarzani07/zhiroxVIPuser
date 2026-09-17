@@ -19,6 +19,7 @@ import 'package:zhirox/utils/helpers.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/services/connectivity_service.dart';
+import 'package:zhirox/widgets/customer_push_card.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
@@ -1057,6 +1058,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
       if (!totalsComplete) _buildCurrencySummaryWarning(),
       _buildDebtLimitCard(),
+      if (auth.canSendNotifications)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+            child: CustomerPushCard(customerId: widget.userId),
+          ),
+        ),
     ];
 
     final transactions = <Widget>[
