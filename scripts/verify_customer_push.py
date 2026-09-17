@@ -44,22 +44,24 @@ assert (
     'enqueue_customer_push_event_service' in payment_text
 ), 'record-payment does not use customer push outbox RPC'
 
-migration_text = '\n'.join(
-    path.read_text(errors='ignore')
-    for path in (ROOT / 'supabase/migrations').glob('*.sql')
+push_migration = ROOT / 'supabase/migrations/20260917013000_customer_qr_web_push.sql'
+assert push_migration.exists(), 'customer push migration missing'
+push_schema = push_migration.read_text(errors='ignore')
+
+outbox_match = re.search(
+    r'create\s+table\s+public\.notification_outbox\s*\((.*?)\);',
+    push_schema,
+    re.IGNORECASE | re.DOTALL,
 )
+assert outbox_match is not None, 'notification_outbox schema missing'
+outbox_schema = outbox_match.group(1)
 assert re.search(
-    r"event_type\s+in\s*\(\s*'debt_created'\s*,\s*'payment_created'\s*\)",
-    migration_text,
-    re.IGNORECASE,
+    r"event_type\s+text\s+not\s+null\s+check\s*\(\s*event_type\s+in\s*\(\s*'debt_created'\s*,\s*'payment_created'\s*\)\s*\)",
+    outbox_schema,
+    re.IGNORECASE | re.DOTALL,
 ), 'push outbox event_type must be limited to debt_created/payment_created'
 
 for forbidden in ('debt_updated', 'payment_updated', 'debt_deleted', 'payment_deleted'):
-    outbox_check = re.search(
-        rf"event_type\s+in\s*\([^)]*'{re.escape(forbidden)}'",
-        migration_text,
-        re.IGNORECASE,
-    )
-    assert outbox_check is None, f'unsupported Web Push event type allowed: {forbidden}'
+    assert forbidden not in outbox_schema, f'unsupported Web Push event type allowed: {forbidden}'
 
 print('customer push policy verified')
