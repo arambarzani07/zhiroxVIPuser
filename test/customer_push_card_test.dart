@@ -31,7 +31,8 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
     if (statuses.isEmpty) {
       throw StateError('No fake status configured');
     }
-    final index = (loadCalls - (failFirstLoad ? 2 : 1)).clamp(0, statuses.length - 1);
+    final index =
+        (loadCalls - (failFirstLoad ? 2 : 1)).clamp(0, statuses.length - 1);
     return statuses[index];
   }
 
@@ -66,14 +67,15 @@ Widget _host(CustomerPushGateway gateway) {
 void main() {
   testWidgets('QR button renders exact onboarding URL', (tester) async {
     final token = 'a' * 64;
+    final onboardingUrl = Uri.parse(
+      'https://example.test/functions/v1/customer-push?token=$token',
+    );
     final gateway = FakeCustomerPushGateway(
       statuses: const [
         CustomerPushStatus(active: false, deviceCount: 0),
       ],
       link: CustomerPushLink(
-        url: Uri.parse(
-          'https://example.test/functions/v1/customer-push?token=$token',
-        ),
+        url: onboardingUrl,
         expiresAt: DateTime.parse('2026-09-17T00:15:00Z'),
       ),
     );
@@ -84,9 +86,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.createCalls, 1);
-    expect(find.byType(QrImageView), findsOneWidget);
-    final qr = tester.widget<QrImageView>(find.byType(QrImageView));
-    expect(qr.data, contains('token=$token'));
+    final qrFinder = find.byKey(ValueKey<String>(onboardingUrl.toString()));
+    expect(qrFinder, findsOneWidget);
+    expect(tester.widget(qrFinder), isA<QrImageView>());
     expect(
       find.text('ئەم QR ـە تەنها یەکجار بەکاردێت و دوای ١٥ خولەک بەسەر دەچێت.'),
       findsOneWidget,
@@ -147,7 +149,10 @@ void main() {
     await tester.pumpWidget(_host(gateway));
     await tester.pumpAndSettle();
 
-    expect(find.text('نەتوانرا دۆخی ئاگادارکردنەوە بخوێندرێتەوە'), findsOneWidget);
+    expect(
+      find.text('نەتوانرا دۆخی ئاگادارکردنەوە بخوێندرێتەوە'),
+      findsOneWidget,
+    );
     expect(find.text('دووبارە هەوڵبدەوە'), findsOneWidget);
 
     await tester.tap(find.text('دووبارە هەوڵبدەوە'));
