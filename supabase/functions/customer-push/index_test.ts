@@ -13,7 +13,7 @@ function deps(overrides: Partial<PublicPushDeps> = {}): PublicPushDeps {
     inspect: async () => ({
       customer_name: "Customer A",
       market_name: "Market A",
-      expires_at: "2026-09-17T00:15:00Z",
+      expires_at: null,
     }),
     portal: async () => ({
       customer_name: "Customer A",
@@ -80,7 +80,7 @@ Deno.test("subscribe rejects missing PushSubscription keys", async () => {
   assertEquals(await res.json(), { error: "invalid_subscription" });
 });
 
-Deno.test("validate exposes only display data and VAPID public key", async () => {
+Deno.test("validate exposes permanent display data and VAPID public key", async () => {
   const res = await routeCustomerPush(
     new Request("https://x/functions/v1/customer-push", {
       method: "POST",
@@ -95,9 +95,36 @@ Deno.test("validate exposes only display data and VAPID public key", async () =>
   assertEquals(await res.json(), {
     customer_name: "Customer A",
     market_name: "Market A",
-    expires_at: "2026-09-17T00:15:00Z",
+    expires_at: null,
     vapid_public_key: "BTestPublicKey",
   });
+});
+
+Deno.test("the same permanent token can be validated repeatedly", async () => {
+  let inspectCalls = 0;
+  const testDeps = deps({
+    inspect: async () => {
+      inspectCalls++;
+      return {
+        customer_name: "Customer A",
+        market_name: "Market A",
+        expires_at: null,
+      };
+    },
+  });
+
+  for (let index = 0; index < 2; index++) {
+    const res = await routeCustomerPush(
+      new Request("https://x/functions/v1/customer-push", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "validate", token }),
+      }),
+      testDeps,
+    );
+    assertEquals(res.status, 200);
+  }
+  assertEquals(inspectCalls, 2);
 });
 
 Deno.test("subscribe returns device secret once after redeem", async () => {
@@ -159,7 +186,7 @@ Deno.test("portal can reopen from installed app using device credentials", async
   assertEquals(receivedHash, await sha256Hex(secret));
 });
 
-Deno.test("expired token returns generic unavailable error", async () => {
+Deno.test("revoked or unavailable token returns generic error", async () => {
   const res = await routeCustomerPush(
     new Request("https://x/functions/v1/customer-push", {
       method: "POST",
