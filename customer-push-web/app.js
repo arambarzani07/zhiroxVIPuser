@@ -64,7 +64,8 @@ function resolveLinkToken() {
   if (queryToken) {
     if (!TOKEN_PATTERN.test(queryToken)) return '';
     localStorage.setItem(LINK_TOKEN_KEY, queryToken);
-    history.replaceState(null, '', '/');
+    // Keep the token in the current URL until subscription succeeds so that
+    // iOS Add to Home Screen can reopen the same one-time onboarding link.
     return queryToken;
   }
 
