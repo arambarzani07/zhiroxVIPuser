@@ -3,6 +3,7 @@ import { randomHexToken, sha256Hex } from "../_shared/customer_push/crypto.ts";
 import { loadOrInitializePushRuntime } from "../_shared/customer_push/runtime.ts";
 
 const basePath = "/functions/v1/customer-push";
+const publicBaseUrl = "https://push.zhirox.com/";
 const securityHeaders = {
   "Referrer-Policy": "no-referrer",
   "Cache-Control": "no-store",
@@ -87,14 +88,11 @@ const TOKEN=${JSON.stringify(safeToken)};const BASE=${JSON.stringify(basePath)};
 export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type", "Access-Control-Allow-Methods": "GET,POST,OPTIONS" } });
   const url = new URL(req.url);
-  if (req.method === "GET" && url.pathname.endsWith("/sw.js")) return serviceWorker();
-  if (req.method === "GET" && url.pathname.endsWith("/manifest.webmanifest")) {
-    const token = url.searchParams.get("token") ?? "";
-    return isToken(token) ? manifest(token) : json({ error: "link_unavailable" }, 404);
-  }
   if (req.method === "GET") {
     const token = url.searchParams.get("token") ?? "";
-    return isToken(token) ? onboarding(token) : genericLanding();
+    const destination = new URL(publicBaseUrl);
+    if (isToken(token)) destination.searchParams.set("token", token);
+    return Response.redirect(destination, 307);
   }
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
