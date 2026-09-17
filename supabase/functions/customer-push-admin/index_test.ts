@@ -49,7 +49,7 @@ Deno.test("stable QR gateway redirects to an HTML-safe static portal", () => {
   assertEquals(response.status, 307);
   assertEquals(
     response.headers.get("location"),
-    `${CUSTOMER_PUSH_STATIC_URL}?token=${token}`,
+    `${CUSTOMER_PUSH_STATIC_URL}#token=${token}`,
   );
 });
 
