@@ -12,8 +12,9 @@ Deno.test("production QR links use the canonical push domain", () => {
   assertEquals(CUSTOMER_PUSH_PUBLIC_BASE_URL, "https://push.zhirox.com/");
 });
 
-Deno.test("create_link stores only token hash and expires in 90 days", async () => {
+Deno.test("create_link stores only token hash and has no expiry", async () => {
   let storedHash = "";
+  let storedExpiresAt: string | null | undefined;
   const response = await handleAdminAction(
     { action: "create_link", customer_id: customerId },
     actorId,
@@ -21,12 +22,14 @@ Deno.test("create_link stores only token hash and expires in 90 days", async () 
       now: () => new Date("2026-09-17T00:00:00Z"),
       randomToken: () => "a".repeat(64),
       hash: sha256Hex,
-      manageLink: async ({ tokenHash }) => {
+      manageLink: async ({ tokenHash, expiresAt }) => {
         storedHash = tokenHash;
+        storedExpiresAt = expiresAt;
       },
       status: async () => ({
         active: false,
         device_count: 0,
+        active_link_count: 1,
         latest_status: null,
         latest_at: null,
       }),
@@ -36,14 +39,15 @@ Deno.test("create_link stores only token hash and expires in 90 days", async () 
   );
 
   assertEquals(storedHash, await sha256Hex("a".repeat(64)));
-  assertEquals(response.expires_at, "2026-12-16T00:00:00.000Z");
+  assertEquals(storedExpiresAt, null);
+  assertEquals(response.expires_at, null);
   assertEquals(
     response.url,
     `https://push.zhirox.com/?token=${"a".repeat(64)}`,
   );
 });
 
-Deno.test("status is passed through without secret material", async () => {
+Deno.test("status passes through active link count without secret material", async () => {
   const response = await handleAdminAction(
     { action: "status", customer_id: customerId },
     actorId,
@@ -55,17 +59,19 @@ Deno.test("status is passed through without secret material", async () => {
       status: async () => ({
         active: true,
         device_count: 2,
+        active_link_count: 3,
         latest_status: "sent",
         latest_at: "2026-09-17T00:00:00Z",
       }),
       revokeAll: async () => 0,
-      publicBaseUrl: "https://example.test/customer-push",
+      publicBaseUrl: "https://push.zhirox.com/",
     },
   );
 
   assertEquals(response, {
     active: true,
     device_count: 2,
+    active_link_count: 3,
     latest_status: "sent",
     latest_at: "2026-09-17T00:00:00Z",
   });
