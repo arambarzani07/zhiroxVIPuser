@@ -20,7 +20,7 @@ Deno.test("canonical payment id handles single and customer-wide results", () =>
 });
 
 Deno.test("customer-wide payment enqueues one event using total action amount", async () => {
-  let enqueued: Record<string, unknown> | null = null;
+  const captured: Record<string, unknown>[] = [];
   const paymentResult = {
     customer_id: customerId,
     amount: 25000,
@@ -42,14 +42,14 @@ Deno.test("customer-wide payment enqueues one event using total action amount", 
         remainingIqd: 100000,
       }),
       enqueuePush: async (args) => {
-        enqueued = args;
+        captured.push(args);
       },
       reportError: () => {},
     },
   );
 
   assertEquals(returned, paymentResult);
-  assertEquals(enqueued, {
+  assertEquals(captured, [{
     marketId,
     customerId,
     eventType: "payment_created",
@@ -62,11 +62,11 @@ Deno.test("customer-wide payment enqueues one event using total action amount", 
       market_name: "ZHIROX Market",
       occurred_at: "2026-09-17T00:00:00.000Z",
     },
-  });
+  }]);
 });
 
 Deno.test("debt-specific USD payment converts stored IQD amount for push copy", async () => {
-  let enqueued: Record<string, unknown> | null = null;
+  const captured: Record<string, unknown>[] = [];
   const paymentResult = { id: paymentIdA, debt_id: debtId, amount: 150000 };
 
   await finalizePaymentPush(
@@ -83,14 +83,15 @@ Deno.test("debt-specific USD payment converts stored IQD amount for push copy", 
         remainingIqd: 300000,
       }),
       enqueuePush: async (args) => {
-        enqueued = args;
+        captured.push(args);
       },
       reportError: () => {},
     },
   );
 
-  assertEquals((enqueued?.payload as Record<string, unknown>).amount, 100);
-  assertEquals((enqueued?.payload as Record<string, unknown>).currency, "USD");
+  const payload = captured[0]?.payload as Record<string, unknown>;
+  assertEquals(payload.amount, 100);
+  assertEquals(payload.currency, "USD");
 });
 
 Deno.test("push enqueue failure never fails a successful payment result", async () => {
