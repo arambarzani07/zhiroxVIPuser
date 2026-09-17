@@ -13,6 +13,7 @@ import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
+import 'package:zhirox/widgets/manual_push_broadcast_card.dart';
 
 class AdminSettingsScreen extends StatelessWidget {
   const AdminSettingsScreen({
@@ -117,6 +118,8 @@ class AdminSettingsScreen extends StatelessWidget {
                     ),
                   ]),
                 ),
+                const SizedBox(height: 14),
+                const ManualPushBroadcastCard(),
                 const SizedBox(height: 22),
                 const AppSectionHeader(
                   title: 'دارایی و بەڵگەنامە',
