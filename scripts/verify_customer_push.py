@@ -89,10 +89,10 @@ manual_schema = manual_migration.read_text(errors='ignore')
 assert 'customer_manual_push_campaigns' in manual_schema, 'manual push audit table missing'
 assert 'enqueue_manual_customer_push_service' in manual_schema, 'manual push enqueue RPC missing'
 assert re.search(
-    r"event_type\s+in\s*\(\s*'debt_created'\s*,\s*'payment_created'\s*,\s*'manual'\s*\)",
+    r"event_type\s+in\s*\(\s*'debt_created'\s*,\s*'payment_created'\s*,\s*'due_reminder'\s*,\s*'manual'\s*\)",
     manual_schema,
     re.IGNORECASE | re.DOTALL,
-), 'manual migration must allow only debt_created/payment_created/manual push events'
+), 'manual migration must preserve debt/payment/due reminder and add manual push events'
 assert "actor.role = 'admin'" in manual_schema, 'manual push must be restricted to the market manager/admin'
 assert 'market_name' in manual_schema and 'p_message' in manual_schema, 'manual push payload must be server-branded with market name'
 assert "revoke all on table public.customer_manual_push_campaigns from public, anon, authenticated" in manual_schema.lower(), 'manual push audit table must not be client-writable'
@@ -123,6 +123,9 @@ assert broadcast_widget.exists(), 'admin broadcast notification card missing'
 broadcast_text = broadcast_widget.read_text(errors='ignore')
 assert 'ئاگاداری گشتی' in broadcast_text, 'broadcast UI label missing'
 assert 'broadcastManual' in broadcast_text, 'broadcast UI must call the broadcast service'
+
+settings_text = (ROOT / 'lib/screens/admin/admin_settings_screen.dart').read_text(errors='ignore')
+assert 'ManualPushBroadcastCard' in settings_text, 'manager broadcast UI must be reachable from the admin area'
 
 web = ROOT / 'customer-push-web'
 for name in ('index.html', 'app.js', 'sw.js', 'manifest.webmanifest', '_headers'):
