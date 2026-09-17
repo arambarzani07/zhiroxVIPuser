@@ -14,6 +14,7 @@ const iosHelpEl = document.getElementById('iosHelp');
 const enableButton = document.getElementById('enable');
 const resultEl = document.getElementById('result');
 const manifestEl = document.getElementById('appManifest');
+const missingLinkHelpEl = document.getElementById('missingLinkHelp');
 
 function setStatus(message, kind = 'muted') {
   statusEl.textContent = message;
@@ -82,6 +83,7 @@ async function initialize() {
   activeToken = resolveLinkToken();
   if (!activeToken) {
     setStatus('ئەم لینکە بەردەست نییە یان ماوەکەی تەواو بووە.', 'err');
+    missingLinkHelpEl.hidden = false;
     return;
   }
 
