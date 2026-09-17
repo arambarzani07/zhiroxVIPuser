@@ -58,7 +58,7 @@ export async function handleAdminAction(
   if (action === "create_link") {
     const rawToken = deps.randomToken();
     const tokenHash = await deps.hash(rawToken);
-    const expires = new Date(deps.now().getTime() + 15 * 60 * 1000);
+    const expires = new Date(deps.now().getTime() + 90 * 24 * 60 * 60 * 1000);
     await deps.manageLink({
       actorId,
       customerId,
