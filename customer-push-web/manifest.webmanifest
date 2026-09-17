@@ -1,0 +1,11 @@
+{
+  "name": "ZHIROX Notifications",
+  "short_name": "ZHIROX",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "lang": "ku",
+  "dir": "rtl"
+}
