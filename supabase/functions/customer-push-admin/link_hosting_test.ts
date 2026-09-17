@@ -7,9 +7,6 @@ import {
 const token = "a".repeat(64);
 const publicBase = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push-link";
 const runtimeBase = "https://hsoyfbtpvwfmjokudznx.supabase.co/customer-push-link";
-const staticPortal =
-  "https://raw.githack.com/arambarzani07/zhiroxVIPuser/user-source/customer-push-web/index.html";
-
 function expectRedirect(url: string, expected: string) {
   const response = routeCustomerPushLink(new Request(url));
   assertEquals(response.status, 307);
@@ -27,7 +24,7 @@ Deno.test("stable customer push gateway keeps bearer token out of the static hos
 });
 
 Deno.test("stable customer push gateway preserves a token-free portal entry", () => {
-  expectRedirect(publicBase, staticPortal);
+  expectRedirect(publicBase, CUSTOMER_PUSH_STATIC_URL);
 });
 
 Deno.test("gateway no longer serves HTML directly from Supabase Edge", async () => {
