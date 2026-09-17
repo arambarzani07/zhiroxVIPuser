@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/services/dashboard_recent_activity.dart';
+import 'package:zhirox/services/debt_push_enqueue.dart';
 import 'package:zhirox/services/supabase_compat.dart';
 import 'package:zhirox/utils/constants.dart';
 
@@ -703,6 +704,23 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
       }
       rethrow;
     }
+
+    await enqueueDebtPushBestEffort(
+      debtId: created.id,
+      invoke: (debtId) async {
+        final response = await client.functions.invoke(
+          'customer-push-events',
+          body: {
+            'action': 'enqueue_debt',
+            'debt_id': debtId,
+          },
+        );
+        final data = response.data;
+        if (data is Map && data['error'] != null) {
+          throw _functionError(data);
+        }
+      },
+    );
 
     try {
       final formattedAmount =
