@@ -22,15 +22,22 @@ function deps(overrides: Partial<PublicPushDeps> = {}): PublicPushDeps {
   };
 }
 
-Deno.test("token page never embeds raw customer id", async () => {
+Deno.test("legacy token GET redirects to custom domain without changing token", async () => {
   const res = await routeCustomerPush(
     new Request(`https://x/functions/v1/customer-push?token=${token}`),
     deps(),
   );
-  const html = await res.text();
-  assertEquals(res.status, 200);
-  assertEquals(html.includes("customer_id"), false);
-  assertEquals(html.includes("چالاککردنی ئاگادارکردنەوە"), true);
+  assertEquals(res.status, 307);
+  assertEquals(res.headers.get("location"), `https://push.zhirox.com/?token=${token}`);
+});
+
+Deno.test("legacy generic GET redirects to custom domain", async () => {
+  const res = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push"),
+    deps(),
+  );
+  assertEquals(res.status, 307);
+  assertEquals(res.headers.get("location"), "https://push.zhirox.com/");
 });
 
 Deno.test("public API preflight allows JSON POST", async () => {
