@@ -90,7 +90,7 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
                     ),
                     const SizedBox(height: 14),
                     const Text(
-                      'ئەم QR ـە تەنها یەکجار بەکاردێت و دوای ١٥ خولەک بەسەر دەچێت.',
+                      'ئەم لینکە بەردەوام کار دەکات تا بەڕێوەبەر ڕایدەگرێت.',
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
@@ -108,6 +108,7 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
           );
         },
       );
+      if (mounted) await _loadStatus();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -125,8 +126,10 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('پچڕاندنەوەی ئاگادارکردنەوەکان'),
-        content: const Text('دڵنیایت لە پچڕاندنەوەی هەموو ئامێرەکان؟'),
+        title: const Text('ڕاگرتنی لینک و ئاگادارکردنەوەکان'),
+        content: const Text(
+          'دڵنیایت لە ڕاگرتنی هەموو QR لینک و ئامێرە چالاکەکان؟',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -134,7 +137,7 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('بەڵێ، پچڕێنەوە'),
+            child: const Text('بەڵێ، ڕایانبگرە'),
           ),
         ],
       ),
@@ -148,13 +151,15 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
       await _loadStatus();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$count ئامێر پچڕێندرایەوە')),
+        SnackBar(
+          content: Text('هەموو لینکەکان ڕاگیران و $count ئامێر ناچالاک کرا'),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('نەتوانرا ئامێرەکان پچڕێنرێنەوە'),
+          content: Text('نەتوانرا لینک و ئامێرەکان ڕابگیرێن'),
         ),
       );
     } finally {
@@ -166,6 +171,8 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final status = _status;
+    final canRevoke = status != null &&
+        (status.hasActiveLink || status.deviceCount > 0);
 
     return Card(
       margin: EdgeInsets.zero,
@@ -240,18 +247,26 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
                   'هێشتا هیچ ئامێرێک پەیوەست نییە',
                   textAlign: TextAlign.center,
                 ),
+              if ((status?.activeLinkCount ?? 0) > 0) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'QR لینکی چالاک: ${status!.activeLinkCount}',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
               const SizedBox(height: 14),
               FilledButton.icon(
                 onPressed: _busy ? null : _showQr,
                 icon: const Icon(Icons.qr_code_2_rounded),
                 label: const Text('QR ـی ئاگادارکردنەوە'),
               ),
-              if (status?.active == true) ...[
+              if (canRevoke) ...[
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _busy ? null : _revokeAll,
                   icon: const Icon(Icons.link_off_rounded),
-                  label: const Text('هەموو ئامێرەکان پچڕێنەوە'),
+                  label: const Text('هەموو لینک و ئامێرەکان ڕابگرە'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: theme.colorScheme.error,
                   ),
