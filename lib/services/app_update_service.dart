@@ -168,15 +168,27 @@ class AppUpdateService {
       await PBService.ensureInitialized();
       final row = await PBService.client
           .from('app_update_settings')
-          .select('mandatory, notes')
+          .select('mandatory, notes, rollout_percent, minimum_build')
           .eq('edition', edition)
           .maybeSingle();
       if (row != null) {
         final overrideNotes = row['notes']?.toString().trim() ?? '';
+        final rolloutPercent =
+            int.tryParse(row['rollout_percent']?.toString() ?? '') ?? 100;
+        final minimumBuild =
+            int.tryParse(row['minimum_build']?.toString() ?? '') ?? 0;
+        final forceByMinimum = minimumBuild > 0 && currentBuild < minimumBuild;
+        final effectiveMandatory = row['mandatory'] == true || forceByMinimum;
+
         info = info.copyWith(
-          mandatory: row['mandatory'] == true,
+          mandatory: effectiveMandatory,
           notes: overrideNotes.isEmpty ? info.notes : overrideNotes,
         );
+
+        if (!effectiveMandatory &&
+            !_includedInRollout(rolloutPercent.clamp(0, 100))) {
+          return null;
+        }
       }
     } catch (_) {
       // GitHub update discovery remains available if rollout policy is offline.
@@ -184,6 +196,21 @@ class AppUpdateService {
 
     if (info.latestBuild <= currentBuild) return null;
     return info;
+  }
+
+  static bool _includedInRollout(int percent) {
+    if (percent >= 100) return true;
+    if (percent <= 0) return false;
+
+    final subject = PBService.client.auth.currentUser?.id ?? '';
+    if (subject.isEmpty) return false;
+
+    var hash = 2166136261;
+    for (final unit in subject.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 16777619) & 0x7fffffff;
+    }
+    return (hash % 100) < percent;
   }
 
   static Future<bool> openDownload(AppUpdateInfo info) async {
