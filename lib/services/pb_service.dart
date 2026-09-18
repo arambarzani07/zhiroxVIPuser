@@ -677,6 +677,49 @@ class PBService {
     return Map<String, dynamic>.from(data);
   }
 
+  static Future<Map<String, dynamic>> getOwnerBackupResilienceOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_backup_resilience_overview');
+    if (raw is! Map) throw Exception('invalid_owner_backup_resilience_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerBackupResiliencePage({
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_backup_resilience_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_backup_resilience_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerBackupMonitoringPolicy({
+    required String adminId,
+    required int expectedIntervalHours,
+    required int verificationIntervalDays,
+    required bool alertEnabled,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_backup_monitoring_policy',
+      params: {
+        'p_admin_id': adminId,
+        'p_expected_interval_hours': expectedIntervalHours,
+        'p_verification_interval_days': verificationIntervalDays,
+        'p_alert_enabled': alertEnabled,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_backup_monitoring_policy');
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
     int page = 1,
     int perPage = 50,
