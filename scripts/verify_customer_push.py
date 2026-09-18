@@ -92,7 +92,7 @@ for marker in (
     'enqueue_customer_push_event_service',
     'record_payment_service',
     'record_customer_payment_service',
-    "eventType: \"payment_created\"",
+    'legacy_import_apply_payment',
 ):
     assert marker in automatic_schema, f'automatic customer push guarantee missing: {marker}'
 assert "'debt_created'" in automatic_schema, 'automatic debt push must be queued server-side'
