@@ -29,6 +29,11 @@ require('_includedInRollout' in service, 'update service must use stable rollout
 require('Generate update manifest' in workflow, 'workflow must generate update manifest')
 require('$UPDATE_MANIFEST' in workflow, 'workflow must publish update manifest')
 require('${GITHUB_RUN_NUMBER}.ipa' in workflow, 'every IPA must have a cache-safe unique build filename')
+require('--sequesterRsrc' not in workflow, 'IPA packaging must not preserve macOS resource-fork metadata')
+require('xattr -cr Payload' in workflow, 'IPA packaging must clear extended attributes before resigning')
+require("find Payload -type d -name '_CodeSignature' -prune -exec rm -rf {} +" in workflow, 'IPA packaging must remove stale nested code signatures')
+require('/usr/bin/zip -qry "$IPA_FILE" Payload' in workflow, 'IPA packaging must use a signer-friendly ZIP')
+require('unzip -t "$IPA_FILE"' in workflow, 'IPA workflow must validate archive integrity')
 require("'$ipaFileStem-${info.latestBuild}.ipa'" in service, 'update service must validate the unique IPA filename')
 
 print('Auto Update Center verification passed.')
