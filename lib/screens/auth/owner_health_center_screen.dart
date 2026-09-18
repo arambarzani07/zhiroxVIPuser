@@ -365,6 +365,9 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
         'admin_account_unlocked': 'کردنەوەی هەژماری Admin',
         'platform_operations_changed': 'گۆڕینی دۆخی پلاتفۆرم',
         'support_ticket_updated': 'نوێکردنەوەی Support Ticket',
+        'tenant_feature_plan_changed': 'گۆڕینی Feature Plan',
+        'feature_plan_entitlement_changed': 'گۆڕینی یاسای Feature Plan',
+        'tenant_feature_entitlement_changed': 'گۆڕینی Feature Override',
       }[action] ??
       action;
 
