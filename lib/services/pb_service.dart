@@ -105,6 +105,10 @@ class PBService {
         return 'هەژماری خاوەنی سیستەم ناتوانرێت بسڕدرێتەوە';
       case 'admin_not_found':
         return 'هەژماری بەڕێوەبەر نەدۆزرایەوە';
+      case 'owner_market_delete_disabled':
+        return 'خاوەنی سیستەم ناتوانێت ناوەڕۆکی مارکێت بسڕێتەوە؛ لەبری ئەوە هەژمارەکە Suspend یان Archive بکە.';
+      case 'invalid_lifecycle_status':
+        return 'دۆخی هەژمار دروست نییە';
       case 'tenant_member_delete_failed':
         return 'سڕینەوەی هەندێک هەژماری ناو مارکێت سەرکەوتوو نەبوو؛ دووبارە هەوڵ بدەرەوە';
       case 'admin_delete_failed':
@@ -276,8 +280,6 @@ class PBService {
             value is int ? value : int.tryParse('${value ?? 0}') ?? 0;
         admins.add({
           'admin': _profileRecord(Map<String, dynamic>.from(rawAdmin)),
-          'employeeCount': asInt(row['employee_count']),
-          'customerCount': asInt(row['customer_count']),
         });
       }
     }
@@ -290,6 +292,63 @@ class PBService {
       'totalPages': asInt(data['total_pages'], 1),
       'page': asInt(data['page'], safePage),
     };
+  }
+
+  static Future<Map<String, dynamic>> getOwnerPlatformOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_platform_overview');
+    if (raw is! Map) throw Exception('invalid_owner_platform_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerTenantsPage({
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_tenants_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_tenants_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<void> setOwnerTenantLifecycle({
+    required String adminId,
+    required String status,
+    String reason = '',
+  }) async {
+    await ensureInitialized();
+    await client.rpc(
+      'set_system_owner_tenant_lifecycle',
+      params: {
+        'p_admin_id': adminId,
+        'p_status': status,
+        'p_reason': reason,
+      },
+    );
+  }
+
+  static Future<void> setOwnerTenantLimits({
+    required String adminId,
+    required int deviceLimit,
+    required int staffLimit,
+    required String supportTier,
+  }) async {
+    await ensureInitialized();
+    await client.rpc(
+      'set_system_owner_tenant_limits',
+      params: {
+        'p_admin_id': adminId,
+        'p_device_limit': deviceLimit,
+        'p_staff_limit': staffLimit,
+        'p_support_tier': supportTier,
+      },
+    );
   }
 
   static Future<void> renewAdminSubscription(
