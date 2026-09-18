@@ -9,6 +9,7 @@ operations = Path('lib/screens/auth/owner_operations_center_screen.dart').read_t
 entitlements = Path('lib/screens/auth/owner_entitlements_center_screen.dart').read_text()
 recovery_devices = Path('lib/screens/auth/owner_recovery_device_center_screen.dart').read_text()
 backup_resilience = Path('lib/screens/auth/owner_backup_resilience_center_screen.dart').read_text()
+readiness = Path('lib/screens/auth/owner_readiness_center_screen.dart').read_text()
 recovery_function = Path('supabase/functions/owner-account-recovery/index.ts').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
 auth_provider = Path('lib/providers/auth_provider.dart').read_text()
@@ -36,6 +37,9 @@ recovery_device_migration = Path(
 backup_resilience_migration = Path(
     'supabase/migrations/20260918220000_owner_backup_resilience_center.sql'
 ).read_text()
+readiness_migration = Path(
+    'supabase/migrations/20260918223000_owner_readiness_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
@@ -46,6 +50,7 @@ required = [
     'OwnerEntitlementsCenterScreen',
     'OwnerRecoveryDeviceCenterScreen',
     'OwnerBackupResilienceCenterScreen',
+    'OwnerReadinessCenterScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
@@ -70,6 +75,8 @@ required = [
     'getOwnerBackupResilienceOverview',
     'getOwnerBackupResiliencePage',
     'setOwnerBackupMonitoringPolicy',
+    'getOwnerReadinessOverview',
+    'getOwnerReadinessPage',
     '_enforceAdminDeviceAuthorization',
     '_startDeviceAuthorizationHeartbeat',
     'getOwnerEntitlementsPage',
@@ -106,6 +113,8 @@ required = [
     'get_system_owner_backup_resilience_overview',
     'get_system_owner_backup_resilience_page',
     'set_system_owner_backup_monitoring_policy',
+    'get_system_owner_readiness_overview',
+    'get_system_owner_readiness_page',
     'system_owner_required',
 ]
 blob = '\n'.join([
@@ -118,6 +127,7 @@ blob = '\n'.join([
     entitlements,
     recovery_devices,
     backup_resilience,
+    readiness,
     recovery_function,
     service,
     auth_provider,
@@ -129,6 +139,7 @@ blob = '\n'.join([
     entitlements_migration,
     recovery_device_migration,
     backup_resilience_migration,
+    readiness_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -146,11 +157,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience):
+for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration):
+for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -210,5 +221,13 @@ assert 'payload' not in backup_resilience_migration.lower(), 'owner backup cente
 assert 'record_counts' not in backup_resilience_migration.lower(), 'owner backup center must not read tenant record counts'
 assert 'payload' not in backup_resilience.lower(), 'owner backup UI must not expose backup payloads'
 assert 'record_counts' not in backup_resilience.lower(), 'owner backup UI must not expose record counts'
+assert 'platform_admin_devices' in readiness_migration, 'readiness must include device posture metadata'
+assert 'owner_backup_monitoring_policies' in readiness_migration, 'readiness must respect backup policy metadata'
+assert 'platform_support_tickets' in readiness_migration, 'readiness must include support SLA metadata'
+assert 'subscription_end' in readiness_migration, 'readiness must include subscription state'
+assert 'payload' not in readiness_migration.lower(), 'readiness must not read backup payloads'
+assert 'record_counts' not in readiness_migration.lower(), 'readiness must not read tenant record counts'
+assert 'customer_id' not in readiness.lower(), 'readiness UI must not expose customer data'
+assert 'debt' not in readiness.lower(), 'readiness UI must not expose debt data'
 
 print('Owner platform privacy boundary verified.')
