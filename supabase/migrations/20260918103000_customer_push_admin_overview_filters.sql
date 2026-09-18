@@ -188,9 +188,9 @@ $$;
 -- Preserve the previous call signature for compatibility.
 create or replace function public.list_customer_push_overview_service(
   p_actor uuid,
-  p_search text,
-  p_limit integer,
-  p_offset integer
+  p_search text default '',
+  p_limit integer default 60,
+  p_offset integer default 0
 )
 returns jsonb
 language sql
