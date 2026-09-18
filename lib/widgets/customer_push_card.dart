@@ -18,14 +18,24 @@ class CustomerPushCard extends StatefulWidget {
 
 class _CustomerPushCardState extends State<CustomerPushCard> {
   CustomerPushStatus? _status;
+  List<CustomerPushHistoryItem> _history = const [];
   bool _loading = true;
+  bool _historyLoading = true;
   bool _busy = false;
   String? _error;
+  String? _historyError;
 
   @override
   void initState() {
     super.initState();
-    _loadStatus();
+    _loadAll();
+  }
+
+  Future<void> _loadAll() async {
+    await Future.wait<void>([
+      _loadStatus(),
+      _loadHistory(),
+    ]);
   }
 
   Future<void> _loadStatus() async {
@@ -48,6 +58,129 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
         _loading = false;
         _error = 'نەتوانرا دۆخی ئاگادارکردنەوە بخوێندرێتەوە';
       });
+    }
+  }
+
+  Future<void> _loadHistory() async {
+    if (!mounted) return;
+    setState(() {
+      _historyLoading = true;
+      _historyError = null;
+    });
+
+    try {
+      final history = await widget.gateway.loadHistory(widget.customerId);
+      if (!mounted) return;
+      setState(() {
+        _history = history;
+        _historyLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _historyLoading = false;
+        _historyError = 'نەتوانرا مێژووی ئاگادارکردنەوەکان بخوێندرێتەوە';
+      });
+    }
+  }
+
+  String _eventLabel(String eventType) {
+    switch (eventType) {
+      case 'debt_created':
+        return 'قەرز';
+      case 'payment_created':
+        return 'پارەدانەوە';
+      case 'manual':
+        return 'ئاگاداری دەستی';
+      case 'due_reminder':
+        return 'یادخستنەوە';
+      default:
+        return 'ئاگادارکردنەوە';
+    }
+  }
+
+  String _statusLabel(String value) {
+    switch (value) {
+      case 'sent':
+        return 'نێردرا';
+      case 'pending':
+        return 'لە ڕیزدایە';
+      case 'partial':
+        return 'بەشێکی نێردرا';
+      case 'failed':
+        return 'شکست';
+      case 'no_device':
+        return 'ئامێری چالاک نییە';
+      default:
+        return value;
+    }
+  }
+
+  IconData _statusIcon(String value) {
+    switch (value) {
+      case 'sent':
+        return Icons.check_circle_outline_rounded;
+      case 'pending':
+        return Icons.schedule_rounded;
+      case 'partial':
+        return Icons.warning_amber_rounded;
+      case 'failed':
+        return Icons.error_outline_rounded;
+      case 'no_device':
+        return Icons.phone_iphone_rounded;
+      default:
+        return Icons.notifications_none_rounded;
+    }
+  }
+
+  String _formatDate(DateTime value) {
+    final local = value.toLocal();
+    String two(int input) => input.toString().padLeft(2, '0');
+    return '${local.year}/${two(local.month)}/${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
+  }
+
+  String _historyDetail(CustomerPushHistoryItem item) {
+    final parts = <String>[
+      _statusLabel(item.status),
+      _formatDate(item.createdAt),
+    ];
+    if (item.amount != null) {
+      parts.add('${item.amount} ${item.currency ?? 'IQD'}');
+    }
+    if (item.deviceCount > 0) {
+      parts.add('ئامێر: ${item.deviceCount}');
+    }
+    return parts.join(' • ');
+  }
+
+  Future<void> _retryNotification(CustomerPushHistoryItem item) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final result = await widget.gateway.retryNotification(
+        widget.customerId,
+        item.id,
+      );
+      if (!mounted) return;
+      await _loadAll();
+      if (!mounted) return;
+      final message = result.alreadySent
+          ? 'ئەم ئاگادارکردنەوەیە پێشتر بە سەرکەوتوویی نێردراوە'
+          : 'دووبارە ناردنەوە بۆ ${result.retryDevices} ئامێر ڕیزکرا';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final text = error.toString().contains('no_active_push_subscription')
+          ? 'هیچ ئامێرێکی چالاک نییە؛ کڕیار دەبێت ئاگادارکردنەوە چالاک بکات'
+          : 'دووبارە ناردنەوە سەرکەوتوو نەبوو';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(text)),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -108,7 +241,7 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
           );
         },
       );
-      if (mounted) await _loadStatus();
+      if (mounted) await _loadAll();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -229,7 +362,7 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
     try {
       final count = await widget.gateway.revokeAll(widget.customerId);
       if (!mounted) return;
-      await _loadStatus();
+      await _loadAll();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -282,7 +415,7 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
                 if (!_loading && _error == null)
                   IconButton(
                     tooltip: 'نوێکردنەوە',
-                    onPressed: _busy ? null : _loadStatus,
+                    onPressed: _busy ? null : _loadAll,
                     icon: const Icon(Icons.refresh_rounded),
                   ),
               ],
@@ -305,7 +438,7 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
               Align(
                 alignment: Alignment.center,
                 child: TextButton.icon(
-                  onPressed: _busy ? null : _loadStatus,
+                  onPressed: _busy ? null : _loadAll,
                   icon: const Icon(Icons.refresh_rounded),
                   label: const Text('دووبارە هەوڵبدەوە'),
                 ),
@@ -361,6 +494,89 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
                   ),
                 ),
               ],
+              const SizedBox(height: 18),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'مێژووی ئاگادارکردنەوەکان',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'نوێکردنەوەی مێژوو',
+                    onPressed: _busy ? null : _loadHistory,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
+              if (_historyLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              else if (_historyError != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    _historyError!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                )
+              else if (_history.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    'هێشتا هیچ ئاگادارکردنەوەیەک تۆمار نەکراوە',
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                ..._history.take(10).map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(_statusIcon(item.status)),
+                        title: Text(
+                          item.message?.trim().isNotEmpty == true
+                              ? item.message!
+                              : _eventLabel(item.eventType),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(_historyDetail(item)),
+                        trailing: item.canRetry && status?.active == true
+                            ? TextButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => _retryNotification(item),
+                                child: const Text('دووبارە ناردنەوە'),
+                              )
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ],
         ),
