@@ -211,7 +211,7 @@ for secret_name in (
     'CUSTOMER_PUSH_RATE_LIMIT_SALT',
 ):
     assert secret_name not in app_js, f'server secret leaked to customer push PWA: {secret_name}'
-assert "action: 'portal'" in app_js, 'customer push link must expose the read-only customer portal'
+assert "action = 'portal'" in app_js and "portalCredentials(" in app_js, 'customer push link must expose the read-only customer portal'
 assert 'ماوەکەی تەواو بووە' not in app_js, 'permanent-link PWA must not describe links as expired'
 assert 'QR ـێکی نوێ دروست بکە و دووبارە هەوڵ بدە' not in app_js, 'retry errors must not imply permanent links need replacement'
 assert 'ئەم لینکە بەردەست نییە یان ڕاگیراوە.' in app_js, 'PWA must describe unavailable links as revoked/unavailable'
