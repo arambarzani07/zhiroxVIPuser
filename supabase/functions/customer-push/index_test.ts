@@ -24,6 +24,18 @@ function deps(overrides: Partial<PublicPushDeps> = {}): PublicPushDeps {
       rows: [],
       has_more: false,
     }),
+    notificationHistory: async () => ({
+      items: [{
+        id: "00000000-0000-0000-0000-000000000123",
+        event_type: "payment_created",
+        status: "sent",
+        created_at: "2026-09-18T08:30:00Z",
+        message: null,
+        amount: 2500,
+        currency: "IQD",
+      }],
+      limit: 20,
+    }),
     redeem: async () => ({ linked: true }),
     unsubscribe: async () => true,
     consumeRateLimit: async () => true,
@@ -185,6 +197,54 @@ Deno.test("portal can reopen from installed app using device credentials", async
   assertEquals(res.status, 200);
   assertEquals(receivedHash, await sha256Hex(secret));
 });
+
+Deno.test("notification history can authenticate with permanent token", async () => {
+  let receivedHash = "";
+  const res = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "notifications", token, limit: 10 }),
+    }),
+    deps({
+      notificationHistory: async (args) => {
+        receivedHash = args.tokenHash ?? "";
+        return { items: [{ event_type: "manual", status: "sent" }], limit: args.limit };
+      },
+    }),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(receivedHash, await sha256Hex(token));
+  assertEquals(await res.json(), {
+    items: [{ event_type: "manual", status: "sent" }],
+    limit: 10,
+  });
+});
+
+Deno.test("notification history can reopen with device credentials", async () => {
+  let receivedHash = "";
+  const secret = "b".repeat(64);
+  const res = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "notifications",
+        endpoint: "https://push.example/device",
+        device_secret: secret,
+      }),
+    }),
+    deps({
+      notificationHistory: async (args) => {
+        receivedHash = args.deviceSecretHash ?? "";
+        return { items: [], limit: args.limit };
+      },
+    }),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(receivedHash, await sha256Hex(secret));
+});
+
 
 Deno.test("revoked or unavailable token returns generic error", async () => {
   const res = await routeCustomerPush(
