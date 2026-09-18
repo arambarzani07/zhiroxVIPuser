@@ -17,7 +17,7 @@ require('ZHIROX_APP_EDITION' in service, 'update service must isolate owner/user
 require('releases/download/' in service, 'update service must use permanent release manifest')
 require("downloadUri.host != 'github.com'" in service, 'update download URL must be GitHub-only')
 require('AppLifecycleState.resumed' in gate, 'update gate must re-check on app resume')
-require('Auto Update Center' in gate, 'update gate UI is missing')
+require('ناوەندی نوێکردنەوەی خۆکار' in gate, 'update gate Kurdish UI is missing')
 require('AppUpdateService.currentBuild' in gate, 'update gate must compare build numbers')
 require("import 'package:zhirox/widgets/auto_update_gate.dart';" in main, 'main must import AutoUpdateGate')
 require('AutoUpdateGate(' in main, 'main must wrap the app with AutoUpdateGate')
