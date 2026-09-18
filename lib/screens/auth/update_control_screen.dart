@@ -247,7 +247,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
                         ),
                         const SizedBox(height: 5),
                         Text(
-                          'وەشانی Owner و User بە جیاوازی کۆنترۆڵ بکە: '
+                          'وەشانی خاوەنی سیستەم و بەکارهێنەر بە جیاوازی کۆنترۆڵ بکە: '
                           'نوێکردنەوەی ناچاری، ڕێژەی بڵاوکردنەوە، کەمترین بێلد و تێبینی وەشان. '
                           'ئەم بەشە هیچ داتای کاروباری مارکێت ناخوێنێتەوە.',
                           style: TextStyle(
