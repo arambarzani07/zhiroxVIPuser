@@ -3,15 +3,22 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('admin settings exposes a clearly labeled notifications section', () {
-    final source = File('lib/screens/admin/admin_settings_screen.dart')
+  test('admin settings exposes a clearly labeled notification center', () {
+    final settings = File('lib/screens/admin/admin_settings_screen.dart')
+        .readAsStringSync();
+    final center = File('lib/screens/admin/admin_notifications_screen.dart')
         .readAsStringSync();
 
     const heading = "title: 'ئاگادارکردنەوەکان'";
-    const card = 'const ManualPushBroadcastCard()';
+    const entry = "title: 'ناوەندی ئاگادارکردنەوەکان'";
 
-    expect(source, contains(heading));
-    expect(source, contains(card));
-    expect(source.indexOf(heading), lessThan(source.indexOf(card)));
+    expect(settings, contains(heading));
+    expect(settings, contains(entry));
+    expect(settings, contains('AdminNotificationsScreen'));
+    expect(settings.indexOf(heading), lessThan(settings.indexOf(entry)));
+
+    expect(center, contains('ManualPushBroadcastCard'));
+    expect(center, contains('loadOverview'));
+    expect(center, contains('ئاگادارکردنەوەکان'));
   });
 }
