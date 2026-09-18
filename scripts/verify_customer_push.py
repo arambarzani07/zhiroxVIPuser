@@ -299,3 +299,18 @@ for marker in (
     assert marker in notification_screen_text, f'manager notification center marker missing: {marker}'
 settings_text = (ROOT / 'lib/screens/admin/admin_settings_screen.dart').read_text(errors='ignore')
 assert 'AdminNotificationsScreen' in settings_text, 'manager notification center must be reachable from settings'
+
+
+# Customer portal notification history
+portal_history_migration = ROOT / 'supabase/migrations/20260918103000_customer_push_portal_notification_history.sql'
+assert portal_history_migration.exists(), 'customer portal notification history migration missing'
+portal_history_schema = portal_history_migration.read_text(errors='ignore')
+assert 'read_customer_push_notification_history_service' in portal_history_schema, 'customer portal notification history RPC missing'
+public_push_text = (ROOT / 'supabase/functions/customer-push/index.ts').read_text(errors='ignore')
+assert 'action === "notifications"' in public_push_text, 'public push API notification history action missing'
+assert 'read_customer_push_notification_history_service' in public_push_text, 'public push API history RPC missing'
+assert 'id="notificationHistory"' in index_html, 'portal notification history container missing'
+assert 'id="notificationHistoryRefresh"' in index_html, 'portal notification history refresh control missing'
+assert 'loadNotificationHistory' in app_js, 'portal notification history loader missing'
+assert 'renderNotificationHistory' in app_js, 'portal notification history renderer missing'
+assert '.notification-history-item' in styles_text, 'portal notification history styles missing'
