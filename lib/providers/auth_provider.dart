@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -129,6 +130,42 @@ class AuthProvider extends ChangeNotifier {
     _user = null;
   }
 
+  static const String kPlatformDeviceIdKey =
+      'zhirox_platform_admin_device_id';
+
+  Future<String> _getOrCreatePlatformDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final existing = prefs.getString(kPlatformDeviceIdKey)?.trim() ?? '';
+    if (existing.length >= 16) return existing;
+
+    final random = Random.secure();
+    final bytes = List<int>.generate(32, (_) => random.nextInt(256));
+    final generated = bytes
+        .map((value) => value.toRadixString(16).padLeft(2, '0'))
+        .join();
+    await prefs.setString(kPlatformDeviceIdKey, generated);
+    return generated;
+  }
+
+  Future<void> _enforceAdminDeviceAuthorization() async {
+    final current = _user;
+    if (current == null ||
+        userRole != 'admin' ||
+        current.getBoolValue('is_system_owner')) {
+      return;
+    }
+
+    final deviceId = await _getOrCreatePlatformDeviceId();
+    final state = await PBService.registerPlatformAdminDevice(deviceId);
+    if (state['allowed'] == true) return;
+
+    final status = (state['status'] ?? 'pending').toString();
+    if (status == 'revoked') {
+      throw 'ئەم ئامێرە لەلایەن خاوەنی سیستەمەوە ڕاگیراوە';
+    }
+    throw 'ئەم ئامێرە چاوەڕێی پەسەندکردنی خاوەنی سیستەمە';
+  }
+
   Future<void> _validateSubscription() async {
     final current = _user;
     if (current == null) return;
@@ -179,6 +216,7 @@ class AuthProvider extends ChangeNotifier {
       try {
         _user = await PBService.getUser(authUser.id);
         await _validateSubscription();
+        await _enforceAdminDeviceAuthorization();
       } catch (_) {
         await PBService.logout();
         await _clearLocalUser();
@@ -198,6 +236,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       _user = await PBService.getUser(current.id);
       await _validateSubscription();
+      await _enforceAdminDeviceAuthorization();
       if (!_disposed) notifyListeners();
     } catch (_) {}
   }
@@ -252,6 +291,7 @@ class AuthProvider extends ChangeNotifier {
       try {
         _user = await PBService.login(phone, password);
         await _validateSubscription();
+        await _enforceAdminDeviceAuthorization();
       } catch (e) {
         await PBService.logout();
         await _clearLocalUser();
