@@ -41,4 +41,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# Redeploy customer portal notification history.
+# Fresh run to publish the latest customer portal and notification history.
