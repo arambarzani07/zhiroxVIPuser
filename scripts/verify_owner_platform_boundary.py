@@ -10,6 +10,7 @@ entitlements = Path('lib/screens/auth/owner_entitlements_center_screen.dart').re
 recovery_devices = Path('lib/screens/auth/owner_recovery_device_center_screen.dart').read_text()
 recovery_function = Path('supabase/functions/owner-account-recovery/index.ts').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
+auth_provider = Path('lib/providers/auth_provider.dart').read_text()
 health_migration = Path(
     'supabase/migrations/20260918135500_owner_health_audit_center.sql'
 ).read_text()
@@ -60,6 +61,9 @@ required = [
     'setOwnerAdminDevicePolicy',
     'setOwnerAdminDeviceAuthorization',
     'recoverOwnerAdminAccount',
+    'registerPlatformAdminDevice',
+    '_enforceAdminDeviceAuthorization',
+    '_startDeviceAuthorizationHeartbeat',
     'getOwnerEntitlementsPage',
     'setOwnerTenantFeaturePlan',
     'setOwnerPlanEntitlement',
@@ -104,6 +108,7 @@ blob = '\n'.join([
     recovery_devices,
     recovery_function,
     service,
+    auth_provider,
     health_migration,
     subscription_migration,
     security_migration,
