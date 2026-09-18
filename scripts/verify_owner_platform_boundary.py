@@ -7,6 +7,8 @@ security = Path('lib/screens/auth/owner_security_center_screen.dart').read_text(
 support = Path('lib/screens/auth/owner_support_center_screen.dart').read_text()
 operations = Path('lib/screens/auth/owner_operations_center_screen.dart').read_text()
 entitlements = Path('lib/screens/auth/owner_entitlements_center_screen.dart').read_text()
+recovery_devices = Path('lib/screens/auth/owner_recovery_device_center_screen.dart').read_text()
+recovery_function = Path('supabase/functions/owner-account-recovery/index.ts').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
 health_migration = Path(
     'supabase/migrations/20260918135500_owner_health_audit_center.sql'
@@ -26,6 +28,9 @@ operations_migration = Path(
 entitlements_migration = Path(
     'supabase/migrations/20260918210000_owner_entitlements_center.sql'
 ).read_text()
+recovery_device_migration = Path(
+    'supabase/migrations/20260918213000_owner_recovery_device_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
@@ -34,6 +39,7 @@ required = [
     'OwnerSupportCenterScreen',
     'OwnerOperationsCenterScreen',
     'OwnerEntitlementsCenterScreen',
+    'OwnerRecoveryDeviceCenterScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
@@ -49,6 +55,11 @@ required = [
     'getPlatformOperationsState',
     'setOwnerOperationsState',
     'getOwnerEntitlementsOverview',
+    'getOwnerRecoveryDeviceOverview',
+    'getOwnerRecoveryDevicePage',
+    'setOwnerAdminDevicePolicy',
+    'setOwnerAdminDeviceAuthorization',
+    'recoverOwnerAdminAccount',
     'getOwnerEntitlementsPage',
     'setOwnerTenantFeaturePlan',
     'setOwnerPlanEntitlement',
@@ -74,6 +85,12 @@ required = [
     'set_system_owner_plan_entitlement',
     'set_system_owner_tenant_entitlement',
     'get_platform_entitlements_state',
+    'register_platform_admin_device',
+    'get_system_owner_recovery_device_overview',
+    'get_system_owner_recovery_device_page',
+    'set_system_owner_admin_device_policy',
+    'set_system_owner_admin_device_authorization',
+    'complete_system_owner_admin_recovery_service',
     'system_owner_required',
 ]
 blob = '\n'.join([
@@ -84,6 +101,8 @@ blob = '\n'.join([
     support,
     operations,
     entitlements,
+    recovery_devices,
+    recovery_function,
     service,
     health_migration,
     subscription_migration,
@@ -91,6 +110,7 @@ blob = '\n'.join([
     support_migration,
     operations_migration,
     entitlements_migration,
+    recovery_device_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -108,11 +128,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription, security, support, operations, entitlements):
+for screen in (health, subscription, security, support, operations, entitlements, recovery_devices):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration):
+for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -154,5 +174,15 @@ assert 'owner_platform_audit' in entitlements_migration, 'entitlement changes mu
 assert 'public.debts' not in entitlements_migration and 'public.payments' not in entitlements_migration, 'entitlements must not read market finance content'
 assert 'customer_id' not in entitlements.lower(), 'entitlements UI must not expose customer data'
 assert 'debt' not in entitlements.lower(), 'entitlements UI must not expose debt data'
+assert 'platform_admin_devices' in recovery_device_migration, 'admin device authorization storage missing'
+assert 'platform_account_recovery_events' in recovery_device_migration, 'account recovery audit storage missing'
+assert 'device_policy_mode' in recovery_device_migration, 'device approval policy missing'
+assert 'owner_platform_audit' in recovery_device_migration, 'recovery/device actions must be audited'
+assert 'auth.refresh_tokens' in recovery_device_migration and 'auth.sessions' in recovery_device_migration, 'recovery must revoke old sessions'
+assert 'public.debts' not in recovery_device_migration and 'public.payments' not in recovery_device_migration, 'recovery/device center must not read market finance content'
+assert 'customer_id' not in recovery_devices.lower(), 'recovery/device UI must not expose customer data'
+assert 'new_password' in recovery_function, 'recovery function must rotate password'
+assert 'complete_system_owner_admin_recovery_service' in recovery_function, 'recovery function must revoke sessions and audit'
+assert 'password' not in recovery_device_migration.lower().replace('password_reset', ''), 'recovery migration must not store passwords'
 
 print('Owner platform privacy boundary verified.')
