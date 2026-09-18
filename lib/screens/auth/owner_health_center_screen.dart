@@ -359,6 +359,10 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
   String _actionLabel(String action) => const {
         'tenant_lifecycle_changed': 'گۆڕینی دۆخی هەژمار',
         'tenant_limits_changed': 'گۆڕینی سنوورەکان',
+        'subscription_changed': 'گۆڕینی بەشداری',
+        'admin_sessions_revoked': 'ڕاگرتنی Session ـەکان',
+        'admin_account_locked': 'قوفڵکردنی هەژماری Admin',
+        'admin_account_unlocked': 'کردنەوەی هەژماری Admin',
       }[action] ??
       action;
 
