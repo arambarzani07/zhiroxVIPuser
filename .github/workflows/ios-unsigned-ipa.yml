@@ -150,8 +150,9 @@ jobs:
           # Online signing services re-sign the entire bundle. Remove stale
           # signatures/profiles and macOS metadata that can make codesign fail
           # with a generic server-side error.
-          find Payload -type d -name '_CodeSignature' -prune -exec rm -rf {} +
-          find Payload -type f \( -name 'CodeResources' -o -name 'embedded.mobileprovision' \) -delete
+          find Payload -type d -name '_CodeSignature' -prune -exec rm -rf '{}' '+'
+          find Payload -type f -name 'CodeResources' -delete
+          find Payload -type f -name 'embedded.mobileprovision' -delete
           xattr -cr Payload || true
 
           /usr/bin/zip -qry "$IPA_FILE" Payload \
@@ -159,11 +160,16 @@ jobs:
 
           unzip -t "$IPA_FILE"
 
-          if unzip -Z1 "$IPA_FILE" | grep -Eq '(^|/)__MACOSX/|(^|/)\._'; then
+          if unzip -Z1 "$IPA_FILE" | grep -E '(^|/)__MACOSX/|(^|/)\._' >/dev/null; then
             echo "IPA contains forbidden macOS metadata." >&2
             exit 1
           fi
-          if unzip -Z1 "$IPA_FILE" | grep -Eq '(^|/)_CodeSignature/|embedded\.mobileprovision
+
+          if unzip -Z1 "$IPA_FILE" | grep -E '(^|/)_CodeSignature/|embedded[.]mobileprovision$' >/dev/null; then
+            echo "IPA contains stale signing material." >&2
+            exit 1
+          fi
+
       - name: Generate update manifest
         shell: bash
         run: |
