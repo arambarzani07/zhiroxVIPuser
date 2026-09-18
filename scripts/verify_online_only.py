@@ -538,22 +538,28 @@ if 'if (online && mounted) _loadUsers();' in customer_list_source:
 if "_loadUsers(search: _searchController.text.trim());" not in customer_list_source:
     fail('lib/screens/shared/user_list_screen.dart: reconnect/search-preserving reload marker missing')
 
-# System Owner admin management must use the set-based, owner-checked Edge gateway.
+# System Owner admin management is platform-metadata only.
 for marker in (
     "'account-admin'",
     "'action': 'list_admins'",
     "'action': 'renew_subscription'",
-    "'employeeCount': asInt(row['employee_count'])",
-    "'customerCount': asInt(row['customer_count'])",
+    'getOwnerPlatformOverview',
+    'getOwnerTenantsPage',
+    'setOwnerTenantLifecycle',
+    'setOwnerTenantLimits',
 ):
     if marker not in pb:
-        fail(f'lib/services/pb_service.dart: System Owner admin-management marker missing: {marker}')
+        fail(f'lib/services/pb_service.dart: System Owner platform-management marker missing: {marker}')
 admin_section = pb.split('// ==================== Admin Subscription Management ====================', 1)[-1]
 admin_section = admin_section.split('// ==================== Admin Approval ====================', 1)[0]
-if 'for (final admin in result.items)' in admin_section:
-    fail('lib/services/pb_service.dart: Admin management must not restore per-admin N+1 queries')
-if 'admin_id = "$adminId" && role = "employee"' in admin_section or 'admin_id = "$adminId" && role = "customer"' in admin_section:
-    fail('lib/services/pb_service.dart: Admin management counts must stay set-based')
+for forbidden in (
+    "'employeeCount':",
+    "'customerCount':",
+    'admin_id = "$adminId" && role = "employee"',
+    'admin_id = "$adminId" && role = "customer"',
+):
+    if forbidden in admin_section:
+        fail(f'lib/services/pb_service.dart: Owner must not receive market-content/member-count data: {forbidden}')
 account_admin_edge = ROOT / 'supabase/functions/account-admin/index.ts'
 if not account_admin_edge.exists():
     fail('supabase/functions/account-admin/index.ts: System Owner admin-management gateway must be tracked')
@@ -564,11 +570,13 @@ else:
         'action === "renew_subscription"',
         'requesterProfile.is_system_owner !== true',
         '.eq("is_system_owner", false)',
-        'employee_count',
-        'customer_count',
+        'platform/account metadata only',
     ):
         if marker not in account_admin_management_source:
             fail(f'supabase/functions/account-admin/index.ts: System Owner admin-management marker missing: {marker}')
+    for forbidden in ('employee_count', 'customer_count'):
+        if forbidden in account_admin_management_source:
+            fail(f'supabase/functions/account-admin/index.ts: Owner list must not expose tenant member counts: {forbidden}')
 admin_rpc_migration = ROOT / 'supabase/migrations/20260911102326_system_owner_admin_management_rpcs.sql'
 if not admin_rpc_migration.exists():
     fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner admin-management migration must be tracked')
@@ -586,35 +594,48 @@ else:
         if marker not in admin_rpc_source.lower():
             fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner RPC security marker missing: {marker}')
 
-# System Owner admin deletion must use its JWT-verified dedicated Edge Function.
-admin_section = pb.split('// ==================== Admin Subscription Management ====================', 1)[-1]
-admin_section = admin_section.split('// ==================== Admin Approval ====================', 1)[0]
-if "'delete-account'" not in admin_section:
-    fail('lib/services/pb_service.dart: System Owner admin deletion must use delete-account')
-if "'account-admin'" in admin_section and "'action': 'delete_user'" in admin_section:
-    fail('lib/services/pb_service.dart: System Owner admin deletion must not use the legacy account-admin delete path')
+# Owner must never inspect or erase market business content. Market lifecycle
+# is suspend/archive only; hard deletion is intentionally disabled.
 secure_delete_edge = ROOT / 'supabase/functions/delete-account/index.ts'
 if not secure_delete_edge.exists():
-    fail('supabase/functions/delete-account/index.ts: secure admin deletion Edge Function must be tracked')
+    fail('supabase/functions/delete-account/index.ts: owner deletion guard must be tracked')
 else:
     secure_delete_source = secure_delete_edge.read_text(encoding='utf-8')
     for marker in (
         'requesterProfile.is_system_owner !== true',
         'target.role !== "admin"',
         'target.is_system_owner === true',
-        'admin.auth.admin.deleteUser(userId)',
-        'admin.auth.admin.deleteUser(targetId)',
-        'admin.storage.from("receipts").remove(batch)',
+        'owner_market_delete_disabled',
+        'Hard deletion would inspect and erase',
     ):
         if marker not in secure_delete_source:
-            fail(f'supabase/functions/delete-account/index.ts: secure deletion marker missing: {marker}')
+            fail(f'supabase/functions/delete-account/index.ts: owner privacy-boundary marker missing: {marker}')
     for forbidden in (
-        '.from("payments").delete()',
-        '.from("debts").delete()',
-        '.from("notifications").delete()',
+        '.from("debts")',
+        '.from("payments")',
+        '.from("notifications")',
+        '.from("receipts")',
+        'admin.auth.admin.deleteUser(targetId)',
+        'admin.storage.from("receipts").remove',
     ):
         if forbidden in secure_delete_source:
-            fail(f'supabase/functions/delete-account/index.ts: relational cleanup must stay FK-cascade driven, found {forbidden}')
+            fail(f'supabase/functions/delete-account/index.ts: Owner must not touch market content: {forbidden}')
+
+owner_platform_migration = ROOT / 'supabase/migrations/20260918114500_owner_platform_control_center.sql'
+if not owner_platform_migration.exists():
+    fail('Owner platform control migration must be tracked')
+else:
+    owner_platform_source = owner_platform_migration.read_text(encoding='utf-8')
+    for marker in (
+        'get_system_owner_platform_overview',
+        'get_system_owner_tenants_page',
+        'set_system_owner_tenant_lifecycle',
+        'set_system_owner_tenant_limits',
+        'owner_platform_audit',
+        'No market business content',
+    ):
+        if marker not in owner_platform_source:
+            fail(f'Owner platform control migration missing privacy-safe marker: {marker}')
 
 # Owner/User edition separation and privileged account-admin guards.
 edition = os.environ.get('GITHUB_REF_NAME', '')
