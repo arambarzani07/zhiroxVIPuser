@@ -83,6 +83,16 @@ h2 { margin: 0; font-size: 18px; }
 .notification-state[data-state="error"] { color: var(--danger); }
 .notification-state[data-state="install-required"] { color: var(--warning); }
 .notification-copy { margin: 0 0 16px; color: var(--muted); line-height: 1.8; }
+.notification-history { display: grid; gap: 10px; }
+.notification-history-item { padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.notification-history-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.notification-history-status { padding: 4px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); font-size: 11px; font-weight: 800; }
+.notification-history-status.status-sent { background: var(--success-soft); color: var(--success); }
+.notification-history-status.status-pending,
+.notification-history-status.status-partial { background: var(--warning-soft); color: var(--warning); }
+.notification-history-status.status-failed { background: var(--danger-soft); color: var(--danger); }
+.notification-history-body { margin-top: 8px; line-height: 1.7; }
+.notification-history-time { margin-top: 6px; color: var(--muted); font-size: 12px; direction: ltr; text-align: right; }
 .action-result { min-height: 0; margin: 12px 0 0; font-size: 13px; line-height: 1.7; }
 .action-result.ok { color: var(--success); }
 .action-result.err { color: var(--danger); }
