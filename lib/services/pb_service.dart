@@ -441,6 +441,51 @@ class PBService {
     return Map<String, dynamic>.from(raw);
   }
 
+  static Future<Map<String, dynamic>> getPlatformOperationsState() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_platform_operations_state');
+    if (raw is! Map) throw Exception('invalid_platform_operations_state');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerOperationsState({
+    required String platformStatus,
+    required bool maintenanceEnabled,
+    String maintenanceMessage = '',
+    DateTime? maintenanceStartsAt,
+    DateTime? maintenanceEndsAt,
+    required bool announcementEnabled,
+    String announcementTitle = '',
+    String announcementMessage = '',
+    String announcementSeverity = 'info',
+    DateTime? announcementStartsAt,
+    DateTime? announcementEndsAt,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_operations_state',
+      params: {
+        'p_platform_status': platformStatus,
+        'p_maintenance_enabled': maintenanceEnabled,
+        'p_maintenance_message': maintenanceMessage,
+        'p_maintenance_starts_at':
+            maintenanceStartsAt?.toUtc().toIso8601String(),
+        'p_maintenance_ends_at':
+            maintenanceEndsAt?.toUtc().toIso8601String(),
+        'p_announcement_enabled': announcementEnabled,
+        'p_announcement_title': announcementTitle,
+        'p_announcement_message': announcementMessage,
+        'p_announcement_severity': announcementSeverity,
+        'p_announcement_starts_at':
+            announcementStartsAt?.toUtc().toIso8601String(),
+        'p_announcement_ends_at':
+            announcementEndsAt?.toUtc().toIso8601String(),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_operations_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
     int page = 1,
     int perPage = 50,
