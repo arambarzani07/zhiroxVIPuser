@@ -281,7 +281,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'هەژمار و بەشداری',
+                            'هەژمار و بەشداریی پلاتفۆرم',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
@@ -353,7 +353,6 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                       data: _admins[index],
                       isDark: isDark,
                       onRenew: _showRenewDialog,
-                      onDelete: _showDeleteConfirm,
                     ),
                     childCount: _admins.length,
                   ),
@@ -794,107 +793,6 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     }
   }
 
-  Future<void> _showDeleteConfirm(
-    String adminId,
-    String marketName,
-    int totalUsers,
-  ) async {
-    bool loading = false;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final isDark = Theme.of(ctx).brightness == Brightness.dark;
-          final textSecondary = isDark
-              ? AppDarkColors.textSecondary
-              : const Color(0xFF667085);
-          return AlertDialog(
-            backgroundColor: isDark ? AppDarkColors.card : Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            title: Row(
-              children: [
-                const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.red,
-                  size: 22,
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    'سڕینەوەی $marketName',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            content: Text(
-              'هەموو داتای پەیوەست بە ئەم مارکێتە دەسڕێتەوە، لەوانە $totalUsers کارمەند/کڕیار، قەرزەکان و ئاگادارکردنەوەکان. ئەم کردارە ناگەڕێتەوە.',
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.6,
-                color: textSecondary,
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: loading ? null : () => Navigator.pop(ctx),
-                child: const Text('پاشگەزبوونەوە'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: loading
-                    ? null
-                    : () async {
-                        setDialogState(() => loading = true);
-                        try {
-                          await PBService.deleteAdminWithData(adminId);
-                          if (!ctx.mounted || !mounted) return;
-                          Navigator.pop(ctx);
-                          AppHelpers.showSnackBar(
-                            context,
-                            'بەڕێوەبەر و داتاکانی سڕانەوە.',
-                          );
-                          await _loadAdmins();
-                        } catch (e) {
-                          if (ctx.mounted) {
-                            setDialogState(() => loading = false);
-                          }
-                          if (mounted) {
-                            AppHelpers.showSnackBar(
-                              context,
-                              _friendlyError(e),
-                              isError: true,
-                            );
-                          }
-                        }
-                      },
-                child: loading
-                    ? const SizedBox(
-                        width: 19,
-                        height: 19,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('سڕینەوە'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildField(
     TextEditingController controller,
     String label,
@@ -956,19 +854,15 @@ class _AdminCard extends StatelessWidget {
     required this.data,
     required this.isDark,
     required this.onRenew,
-    required this.onDelete,
   });
 
   final Map<String, dynamic> data;
   final bool isDark;
   final void Function(String, String) onRenew;
-  final void Function(String, String, int) onDelete;
 
   @override
   Widget build(BuildContext context) {
     final admin = data['admin'] as RecordModel;
-    final employeeCount = data['employeeCount'] as int;
-    final customerCount = data['customerCount'] as int;
     final marketName = admin.getStringValue('market_name');
     final adminName = admin.getStringValue('name');
     final phone = admin.getStringValue('phone');
@@ -1086,12 +980,6 @@ class _AdminCard extends StatelessWidget {
                         admin.id,
                         subscriptionPlan.isEmpty ? 'custom' : subscriptionPlan,
                       );
-                    } else if (value == 'delete') {
-                      onDelete(
-                        admin.id,
-                        marketName,
-                        employeeCount + customerCount,
-                      );
                     }
                   },
                   itemBuilder: (context) => const [
@@ -1109,20 +997,6 @@ class _AdminCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.delete_outline_rounded,
-                            size: 19,
-                            color: Colors.red,
-                          ),
-                          SizedBox(width: 10),
-                          Text('سڕینەوە'),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ],
@@ -1134,16 +1008,6 @@ class _AdminCard extends StatelessWidget {
               spacing: 14,
               runSpacing: 7,
               children: [
-                _meta(
-                  Icons.badge_outlined,
-                  '$employeeCount کارمەند',
-                  textSecondary,
-                ),
-                _meta(
-                  Icons.people_outline_rounded,
-                  '$customerCount کڕیار',
-                  textSecondary,
-                ),
                 _meta(
                   Icons.workspace_premium_outlined,
                   _subscriptionPlanLabel(subscriptionPlan),
