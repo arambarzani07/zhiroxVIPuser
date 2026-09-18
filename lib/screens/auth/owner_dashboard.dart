@@ -7,6 +7,7 @@ import 'package:zhirox/screens/auth/import_permission_screen.dart';
 import 'package:zhirox/screens/auth/owner_platform_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_health_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_infrastructure_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_policy_compliance_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_subscription_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_security_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_support_center_screen.dart';
@@ -194,6 +195,29 @@ class _OwnerHome extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) =>
                             const OwnerInfrastructureCenterScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.orange.withValues(alpha: 0.10),
+                      child: const Icon(
+                        Icons.policy_outlined,
+                        color: Colors.orange,
+                      ),
+                    ),
+                    title: const Text('Policy & Compliance'),
+                    subtitle: const Text(
+                      'Terms، Privacy، acceptance و technical retention',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const OwnerPolicyComplianceCenterScreen(),
                       ),
                     ),
                   ),
