@@ -1,0 +1,87 @@
+name: Validate Legacy Import Center
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/services/legacy_import_service.dart'
+      - 'lib/screens/admin/legacy_import_screen.dart'
+      - 'lib/screens/admin/pending_requests_screen.dart'
+      - 'test/widget_test.dart'
+      - 'web/**'
+      - '.metadata'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/validate-import-center.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Ensure web platform exists
+        shell: bash
+        run: |
+          if [ ! -d web ]; then
+            flutter create . --platforms web
+          fi
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Clean import service lint
+        run: sed -i "/package:supabase_flutter\/supabase_flutter.dart/d" lib/services/legacy_import_service.dart
+
+      - name: Format import sources and tests
+        run: dart format lib/services/legacy_import_service.dart lib/screens/admin/legacy_import_screen.dart lib/screens/admin/pending_requests_screen.dart test/widget_test.dart
+
+      - name: Commit generated web platform, resolved sources and lockfile
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web .metadata \
+                  lib/services/legacy_import_service.dart \
+                  lib/screens/admin/legacy_import_screen.dart \
+                  lib/screens/admin/pending_requests_screen.dart \
+                  test/widget_test.dart \
+                  pubspec.lock
+          if ! git diff --cached --quiet; then
+            git commit -m "fix: configure Flutter web for Netlify deployment"
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          fi
+
+      - name: Analyze errors
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Tests
+        run: flutter test
+
+      - name: Production web build
+        run: flutter build web --release
+
+      - name: Upload resolved lockfile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-import-lockfile
+          path: pubspec.lock
+          if-no-files-found: error
+          retention-days: 3
