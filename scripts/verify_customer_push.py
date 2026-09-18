@@ -163,7 +163,7 @@ assert 'ئاگاداری گشتی' in broadcast_text, 'broadcast UI label missin
 assert 'broadcastManual' in broadcast_text, 'broadcast UI must call the broadcast service'
 
 settings_text = (ROOT / 'lib/screens/admin/admin_settings_screen.dart').read_text(errors='ignore')
-assert 'ManualPushBroadcastCard' in settings_text, 'manager broadcast UI must be reachable from the admin area'
+assert 'AdminNotificationsScreen' in settings_text, 'manager notification center must be reachable from the admin area'
 
 web = ROOT / 'customer-push-web'
 for name in ('index.html', 'app.js', 'sw.js', 'manifest.webmanifest', '_headers'):
