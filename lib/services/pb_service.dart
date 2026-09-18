@@ -372,21 +372,6 @@ class PBService {
     }
   }
 
-  static Future<void> deleteAdminWithData(String adminId) async {
-    await ensureInitialized();
-    try {
-      final response = await client.functions.invoke(
-        'delete-account',
-        body: {'user_id': adminId},
-      );
-      if (response.data is Map && response.data['error'] != null) {
-        throw _functionError(response.data);
-      }
-    } on FunctionsException catch (e) {
-      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
-    }
-  }
-
   static Future<int> checkSubscriptionDaysLeft(String adminId) async {
     final admin = await pb.collection('users').getOne(adminId);
     final subEnd = admin.getStringValue('subscription_end');
