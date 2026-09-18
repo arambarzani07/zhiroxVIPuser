@@ -143,7 +143,7 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Restore'),
+            child: const Text('گەڕاندنەوە'),
           ),
         ],
       ),
@@ -227,7 +227,7 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       bottom: TabBar(controller: tabs, tabs: const [
         Tab(icon: Icon(Icons.admin_panel_settings_outlined), text: 'دەسەڵات'),
         Tab(icon: Icon(Icons.history_rounded), text: 'Audit'),
-        Tab(icon: Icon(Icons.backup_outlined), text: 'Backup'),
+        Tab(icon: Icon(Icons.backup_outlined), text: 'پاشەکەوت'),
       ]),
     ),
     body: loading
@@ -272,7 +272,7 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
         return ListTile(
           leading: const CircleAvatar(child: Icon(Icons.history, size: 18)),
           title: Text(actionName((log['action'] ?? '').toString()) + ' • ' + (log['entity_type'] ?? '').toString()),
-          subtitle: Text('ID: ' + (log['entity_id'] ?? '').toString() + '\n' + (log['occurred_at'] ?? '').toString()),
+          subtitle: Text('ناسنامە: ' + (log['entity_id'] ?? '').toString() + '\n' + (log['occurred_at'] ?? '').toString()),
           isThreeLine: true,
         );
       },
@@ -308,11 +308,11 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
         const SizedBox(height: 8),
         ...backups.map((backup) => Card(child: ListTile(
           leading: const Icon(Icons.cloud_done_outlined),
-          title: Text((backup['label'] ?? 'Backup').toString()),
+          title: Text((backup['label'] ?? 'پاشەکەوت').toString()),
           subtitle: Text((backup['created_at'] ?? '').toString() + '\n' + (backup['record_counts'] ?? {}).toString()),
           isThreeLine: true,
           trailing: IconButton(
-            tooltip: 'Restore',
+            tooltip: 'گەڕاندنەوە',
             icon: const Icon(Icons.restore_rounded),
             onPressed: () => restoreBackup(backup),
           ),
@@ -327,8 +327,8 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
     'delete': 'سڕینەوە',
     'restore': 'گەڕاندنەوە',
     'permission_change': 'گۆڕینی دەسەڵات',
-    'backup': 'Backup',
-    'backup_restore': 'Restore',
+    'backup': 'پاشەکەوت',
+    'backup_restore': 'گەڕاندنەوە',
   }[value] ?? value;
 }
 
