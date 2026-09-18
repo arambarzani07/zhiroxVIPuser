@@ -107,7 +107,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
 
         _policies[edition] = _UpdatePolicy(
           edition: edition,
-          label: edition == 'owner' ? 'ZHIROX Owner' : 'ZHIROX User',
+          label: edition == 'owner' ? 'ژیرۆکس — خاوەنی سیستەم' : 'ژیرۆکس — بەکارهێنەر',
           mandatory: row['mandatory'] == true,
           notes: row['notes']?.toString() ?? '',
           rolloutPercent: rollout,
@@ -124,7 +124,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'زانیاری Release Center وەرنەگیرا. دووبارە هەوڵ بدە.';
+        _error = 'زانیاری ناوەندی وەشان وەرنەگیرا. دووبارە هەوڵ بدە.';
       });
     }
   }
@@ -137,7 +137,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
     if (minimumBuild == null || minimumBuild < 0 || minimumBuild > 99999999) {
       AppHelpers.showSnackBar(
         context,
-        'Minimum build دەبێت ژمارەیەکی دروست بێت.',
+        'کەمترین بێلد دەبێت ژمارەیەکی دروست بێت.',
         isError: true,
       );
       return;
@@ -159,7 +159,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
       if (!mounted) return;
       AppHelpers.showSnackBar(
         context,
-        'Release policy ـی ${policy.label} پاشەکەوت کرا.',
+        'سیاسەتی وەشانی ${policy.label} پاشەکەوت کرا.',
       );
       await _load();
     } catch (e) {
@@ -168,7 +168,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
       final message = text.contains('permission') ||
               text.contains('forbidden') ||
               text.contains('row-level security')
-          ? 'تەنها خاوەن سیستەم دەتوانێت Release Center بگۆڕێت.'
+          ? 'تەنها خاوەن سیستەم دەتوانێت ناوەندی وەشان بگۆڕێت.'
           : 'پاشەکەوتکردن سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.';
       AppHelpers.showSnackBar(context, message, isError: true);
     } finally {
@@ -192,7 +192,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
-        title: const Text('Release & Auto Update Center'),
+        title: const Text('ناوەندی وەشان و نوێکردنەوەی خۆکار'),
         backgroundColor: isDark ? AppDarkColors.surface : Colors.white,
         foregroundColor: textPrimary,
         elevation: 0,
@@ -238,7 +238,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Staged Release Control',
+                          'کۆنترۆڵی بڵاوکردنەوەی قۆناغ‌قۆناغ',
                           style: TextStyle(
                             color: textPrimary,
                             fontSize: 15,
@@ -248,8 +248,8 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
                         const SizedBox(height: 5),
                         Text(
                           'وەشانی Owner و User بە جیاوازی کۆنترۆڵ بکە: '
-                          'Mandatory، rollout percentage، minimum build و release notes. '
-                          'ئەم بەشە هیچ business data ـی مارکێت ناخوێنێتەوە.',
+                          'نوێکردنەوەی ناچاری، ڕێژەی بڵاوکردنەوە، کەمترین بێلد و تێبینی وەشان. '
+                          'ئەم بەشە هیچ داتای کاروباری مارکێت ناخوێنێتەوە.',
                           style: TextStyle(
                             color: textSecondary,
                             fontSize: 11.5,
@@ -354,7 +354,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Version Compliance — ZHIROX User',
+            'پابەندبوون بە وەشان — ژیرۆکس بەکارهێنەر',
             style: TextStyle(
               color: textPrimary,
               fontSize: 15,
@@ -363,7 +363,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'تەنها build/device metadata ـی ٣٠ ڕۆژی دوایی؛ '
+            'تەنها زانیاریی بێلد و ئامێری ٣٠ ڕۆژی دوایی؛ '
             'هیچ business data ـی مارکێت ناخوێنرێتەوە.',
             style: TextStyle(
               color: textSecondary,
@@ -378,27 +378,27 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
             children: [
               _summaryChip(
                 Icons.vertical_align_bottom_rounded,
-                'Minimum: $minimumBuild',
+                'کەمترین: $minimumBuild',
                 AppColors.primary,
               ),
               _summaryChip(
                 Icons.devices_outlined,
-                'Device: ${_asInt(_overview['active_devices_30d'])}',
+                'ئامێر: ${_asInt(_overview['active_devices_30d'])}',
                 Colors.blue,
               ),
               _summaryChip(
                 Icons.warning_amber_rounded,
-                'Outdated: ${_asInt(_overview['outdated_devices_30d'])}',
+                'کۆن: ${_asInt(_overview['outdated_devices_30d'])}',
                 Colors.orange,
               ),
               _summaryChip(
                 Icons.storefront_outlined,
-                'Tenant: ${_asInt(_overview['outdated_tenants_30d'])}',
+                'مارکێت: ${_asInt(_overview['outdated_tenants_30d'])}',
                 Colors.red,
               ),
               _summaryChip(
                 Icons.help_outline_rounded,
-                'Unknown: ${_asInt(_overview['unknown_build_devices_30d'])}',
+                'نەناسراو: ${_asInt(_overview['unknown_build_devices_30d'])}',
                 Colors.grey,
               ),
             ],
@@ -446,7 +446,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
       'outdated' => ('Outdated', Colors.red, Icons.system_update_alt_rounded),
       'review' => ('Review', Colors.orange, Icons.help_outline_rounded),
       'current' => ('Current', Colors.green, Icons.verified_rounded),
-      _ => ('No telemetry', Colors.grey, Icons.devices_other_outlined),
+      _ => ('هیچ داتای تەکنیکی نییە', Colors.grey, Icons.devices_other_outlined),
     };
 
     return Container(
@@ -505,27 +505,27 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
             children: [
               _complianceMini(
                 Icons.vertical_align_bottom_rounded,
-                'Min ${_asInt(item['minimum_build'])}',
+                'کەمترین ${_asInt(item['minimum_build'])}',
                 textSecondary,
               ),
               _complianceMini(
                 Icons.new_releases_outlined,
-                'Latest ${item['latest_build'] ?? '—'}',
+                'نوێترین ${item['latest_build'] ?? '—'}',
                 textSecondary,
               ),
               _complianceMini(
                 Icons.devices_outlined,
-                '${_asInt(item['active_device_count_30d'])} device',
+                '${_asInt(item['active_device_count_30d'])} ئامێر',
                 textSecondary,
               ),
               _complianceMini(
                 Icons.warning_amber_rounded,
-                '${_asInt(item['outdated_device_count_30d'])} outdated',
+                '${_asInt(item['outdated_device_count_30d'])} کۆن',
                 textSecondary,
               ),
               _complianceMini(
                 Icons.help_outline_rounded,
-                '${_asInt(item['unknown_build_device_count_30d'])} unknown',
+                '${_asInt(item['unknown_build_device_count_30d'])} نەناسراو',
                 textSecondary,
               ),
             ],
@@ -591,7 +591,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
                     Text(
                       policy.mandatory
                           ? 'نوێکردنەوە ناچارییە'
-                          : 'نوێکردنەوە بەپێی rollout policy',
+                          : 'نوێکردنەوە بەپێی سیاسەتی بڵاوکردنەوە',
                       style: TextStyle(
                         color:
                             policy.mandatory ? Colors.red : textSecondary,
@@ -613,7 +613,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Rollout: $rolloutLabel',
+            'بڵاوکردنەوە: $rolloutLabel',
             style: TextStyle(
               color: textPrimary,
               fontSize: 12.5,
@@ -656,15 +656,15 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
             enabled: !policy.saving,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-              labelText: 'Minimum supported build',
+              labelText: 'کەمترین بێلدی پشتگیریکراو',
               hintText: '0 = ناچالاک',
               prefixIcon: Icon(Icons.vertical_align_bottom_rounded),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'ئەگەر build ـی ئێستا لە Minimum build کەمتر بێت، '
-            'نوێکردنەوە خۆکار Mandatory دەبێت و rollout percentage پشتگوێ دەخرێت.',
+            'ئەگەر بێلدی ئێستا لە کەمترین بێلد کەمتر بێت، '
+            'نوێکردنەوە خۆکار ناچاری دەبێت و ڕێژەی بڵاوکردنەوە پشتگوێ دەخرێت.',
             style: TextStyle(
               color: textSecondary,
               fontSize: 10.5,
@@ -679,7 +679,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
             maxLines: 5,
             maxLength: 1000,
             decoration: const InputDecoration(
-              labelText: 'Release notes',
+              labelText: 'تێبینی وەشان',
               hintText:
                   'نموونە: چاککردنی خێرایی و زیادکردنی تایبەتمەندی نوێ...',
               alignLabelWithHint: true,
@@ -696,8 +696,8 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(
-                'Mandatory mode هەموو بەکارهێنەران ناچار دەکات '
-                'و rollout percentage لەم دۆخەدا کاریگەری نییە.',
+                'دۆخی ناچاری هەموو بەکارهێنەران ناچار دەکات '
+                'و ڕێژەی بڵاوکردنەوە لەم دۆخەدا کاریگەری نییە.',
                 style: TextStyle(
                   color: Colors.red,
                   fontSize: 10.5,
@@ -723,7 +723,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
               label: Text(
                 policy.saving
                     ? 'پاشەکەوت دەکرێت...'
-                    : 'پاشەکەوتکردنی Release Policy',
+                    : 'پاشەکەوتکردنی سیاسەتی وەشان',
               ),
             ),
           ),

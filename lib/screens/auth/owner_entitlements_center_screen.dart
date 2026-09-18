@@ -75,16 +75,16 @@ class _OwnerEntitlementsCenterScreenState
         _loading = false;
         _error = AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نەتوانرا Feature Entitlement ـەکان بهێنرێن.',
+          fallback: 'نەتوانرا دەسەڵاتی تایبەتمەندییەکان بهێنرێن.',
         );
       });
     }
   }
 
   String _planLabel(String key) => switch (key) {
-        'vip' => 'VIP',
-        'pro' => 'Pro',
-        _ => 'Standard',
+        'vip' => 'تایبەت',
+        'pro' => 'پێشکەوتوو',
+        _ => 'ئاسایی',
       };
 
   Color _planColor(String key) => switch (key) {
@@ -112,13 +112,13 @@ class _OwnerEntitlementsCenterScreenState
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           scrollable: true,
-          title: Text('Feature Plan — ${_planLabel(planKey)}'),
+          title: Text('پلانی تایبەتمەندی — ${_planLabel(planKey)}'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'ئەم گۆڕانکارییە بۆ هەموو مارکێتەکانی ئەم feature plan ـە '
-                'کاریگەری هەیە، مەگەر override ـی تایبەتیان هەبێت.',
+                'ئەم گۆڕانکارییە بۆ هەموو مارکێتەکانی ئەم پلانی تایبەتمەندی ـە '
+                'کاریگەری هەیە، مەگەر دەستکاری تایبەت ـی تایبەتیان هەبێت.',
               ),
               const SizedBox(height: 12),
               ..._features.map((feature) {
@@ -162,7 +162,7 @@ class _OwnerEntitlementsCenterScreenState
       if (!mounted) return;
       AppHelpers.showSnackBar(
         context,
-        'Feature Plan ـی ${_planLabel(planKey)} نوێ کرایەوە.',
+        'پلانی تایبەتمەندی ـی ${_planLabel(planKey)} نوێ کرایەوە.',
       );
       await _load();
     } catch (error) {
@@ -171,7 +171,7 @@ class _OwnerEntitlementsCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نوێکردنەوەی Feature Plan سەرکەوتوو نەبوو.',
+          fallback: 'نوێکردنەوەی پلانی تایبەتمەندی سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -197,7 +197,7 @@ class _OwnerEntitlementsCenterScreenState
       final key = '${feature['feature_key'] ?? ''}';
       final row = entitlements[key];
       final source = '${row?['source'] ?? 'plan'}';
-      if (source == 'override') {
+      if (source == 'دەستکاری تایبەت') {
         draft[key] = row?['enabled'] == true ? 'enabled' : 'disabled';
       } else {
         draft[key] = 'inherit';
@@ -216,16 +216,16 @@ class _OwnerEntitlementsCenterScreenState
               DropdownButtonFormField<String>(
                 initialValue: featurePlan,
                 decoration: const InputDecoration(
-                  labelText: 'Feature Plan',
+                  labelText: 'پلانی تایبەتمەندی',
                   prefixIcon: Icon(Icons.layers_outlined),
                 ),
                 items: const [
                   DropdownMenuItem(
                     value: 'standard',
-                    child: Text('Standard'),
+                    child: Text('ئاسایی'),
                   ),
-                  DropdownMenuItem(value: 'pro', child: Text('Pro')),
-                  DropdownMenuItem(value: 'vip', child: Text('VIP')),
+                  DropdownMenuItem(value: 'pro', child: Text('پێشکەوتوو')),
+                  DropdownMenuItem(value: 'vip', child: Text('تایبەت')),
                 ],
                 onChanged: (value) {
                   if (value != null) {
@@ -247,15 +247,15 @@ class _OwnerEntitlementsCenterScreenState
                     items: const [
                       DropdownMenuItem(
                         value: 'inherit',
-                        child: Text('Follow Feature Plan'),
+                        child: Text('شوێنکەوتنی پلانی تایبەتمەندی'),
                       ),
                       DropdownMenuItem(
                         value: 'enabled',
-                        child: Text('Override: Enabled'),
+                        child: Text('دەستکاری تایبەت: چالاک'),
                       ),
                       DropdownMenuItem(
                         value: 'disabled',
-                        child: Text('Override: Disabled'),
+                        child: Text('دەستکاری تایبەت: ناچالاک'),
                       ),
                     ],
                     onChanged: (value) {
@@ -268,7 +268,7 @@ class _OwnerEntitlementsCenterScreenState
               }),
               const SizedBox(height: 6),
               const Text(
-                'Owner تەنها feature access metadata دەگۆڕێت؛ '
+                'خاوەنی سیستەم تەنها دەسەڵاتی تایبەتمەندی زانیاریی سیستەمی دەگۆڕێت؛ '
                 'هیچ ناوەڕۆکی مارکێت لەم بەشەدا نییە.',
               ),
             ],
@@ -281,7 +281,7 @@ class _OwnerEntitlementsCenterScreenState
             FilledButton(
               onPressed: () => Navigator.pop(ctx, {
                 'feature_plan': featurePlan,
-                'overrides': Map<String, String>.from(draft),
+                'دەستکاری تایبەتs': Map<String, String>.from(draft),
               }),
               child: const Text('پاشەکەوت'),
             ),
@@ -302,7 +302,7 @@ class _OwnerEntitlementsCenterScreenState
         );
       }
 
-      final rawOverrides = result['overrides'];
+      final rawOverrides = result['دەستکاری تایبەتs'];
       if (rawOverrides is Map) {
         for (final entry in rawOverrides.entries) {
           final value = '${entry.value}';
@@ -319,7 +319,7 @@ class _OwnerEntitlementsCenterScreenState
       }
 
       if (!mounted) return;
-      AppHelpers.showSnackBar(context, 'Feature access نوێ کرایەوە.');
+      AppHelpers.showSnackBar(context, 'دەسەڵاتی تایبەتمەندی نوێ کرایەوە.');
       await _load();
     } catch (error) {
       if (!mounted) return;
@@ -327,7 +327,7 @@ class _OwnerEntitlementsCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نوێکردنەوەی Feature access سەرکەوتوو نەبوو.',
+          fallback: 'نوێکردنەوەی دەسەڵاتی تایبەتمەندی سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -338,7 +338,7 @@ class _OwnerEntitlementsCenterScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Feature Entitlements'),
+        title: const Text('دەسەڵاتی تایبەتمەندییەکان'),
         actions: [
           IconButton(
             tooltip: 'نوێکردنەوە',
@@ -384,8 +384,8 @@ class _OwnerEntitlementsCenterScreenState
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Feature access و override ـەکان تەنها '
-                                'platform metadata ـن. Owner ناوەڕۆکی '
+                                'دەسەڵاتی تایبەتمەندی و دەستکاری تایبەت ـەکان تەنها '
+                                'زانیاریی پلاتفۆرم ـن. خاوەنی سیستەم ناوەڕۆکی '
                                 'مارکێت نابینێت.',
                                 style: TextStyle(height: 1.55),
                               ),
@@ -400,26 +400,26 @@ class _OwnerEntitlementsCenterScreenState
                         children: [
                           _metric(
                             context,
-                            'Feature',
+                            'تایبەتمەندی',
                             _asInt(_overview['feature_count']).toString(),
                             Icons.widgets_outlined,
                           ),
                           _metric(
                             context,
-                            'Plan Rule',
+                            'یاسای پلان',
                             _asInt(_overview['plan_rule_count']).toString(),
                             Icons.rule_folder_outlined,
                           ),
                           _metric(
                             context,
-                            'Override',
-                            _asInt(_overview['override_count']).toString(),
+                            'دەستکاری تایبەت',
+                            _asInt(_overview['دەستکاری تایبەت_count']).toString(),
                             Icons.tune_outlined,
                           ),
                           _metric(
                             context,
-                            'مارکێتی Override',
-                            _asInt(_overview['tenants_with_overrides'])
+                            'مارکێتی دەستکاری تایبەت',
+                            _asInt(_overview['tenants_with_دەستکاری تایبەتs'])
                                 .toString(),
                             Icons.storefront_outlined,
                           ),
@@ -427,8 +427,8 @@ class _OwnerEntitlementsCenterScreenState
                       ),
                       const SizedBox(height: 20),
                       const AppSectionHeader(
-                        title: 'Feature Plan ـەکان',
-                        subtitle: 'Standard / Pro / VIP',
+                        title: 'پلانی تایبەتمەندی ـەکان',
+                        subtitle: 'ئاسایی / پێشکەوتوو / تایبەت',
                       ),
                       const SizedBox(height: 10),
                       ...['standard', 'pro', 'vip'].map(
@@ -439,9 +439,9 @@ class _OwnerEntitlementsCenterScreenState
                       ),
                       const SizedBox(height: 12),
                       const AppSectionHeader(
-                        title: 'Feature access ـی مارکێتەکان',
+                        title: 'دەسەڵاتی تایبەتمەندی ـی مارکێتەکان',
                         subtitle:
-                            'Plan + override ـی تایبەت بۆ هەر هەژمارێک',
+                            'Plan + دەستکاری تایبەت ـی تایبەت بۆ هەر هەژمارێک',
                       ),
                       const SizedBox(height: 10),
                       if (_items.isEmpty)
@@ -518,7 +518,7 @@ class _OwnerEntitlementsCenterScreenState
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 Text(
-                  '$enabled / ${_features.length} feature چالاکە',
+                  '$enabled / ${_features.length} تایبەتمەندی چالاکە',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -590,15 +590,15 @@ class _OwnerEntitlementsCenterScreenState
               ),
               _mini(
                 Icons.tune_rounded,
-                '${_asInt(item['override_count'])} override',
+                '${_asInt(item['override_count'])} دەستکاری تایبەت',
               ),
               _mini(
                 Icons.devices_outlined,
-                'Device: ${_asInt(item['device_limit'])}',
+                'ئامێر: ${_asInt(item['device_limit'])}',
               ),
               _mini(
                 Icons.groups_outlined,
-                'Staff: ${_asInt(item['staff_limit'])}',
+                'کارمەند: ${_asInt(item['staff_limit'])}',
               ),
             ],
           ),
@@ -608,7 +608,7 @@ class _OwnerEntitlementsCenterScreenState
             child: OutlinedButton.icon(
               onPressed: () => _editTenant(item),
               icon: const Icon(Icons.tune_rounded, size: 18),
-              label: const Text('ڕێکخستنی Feature access'),
+              label: const Text('ڕێکخستنی دەسەڵاتی تایبەتمەندی'),
             ),
           ),
         ],

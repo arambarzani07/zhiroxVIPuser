@@ -273,7 +273,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         adminName = admin.getStringValue('name');
         adminPhone = admin.getStringValue('phone');
       } catch (_) {
-        marketName = 'Zhirox System';
+        marketName = 'سیستەمی ژیرۆکس';
         adminName = 'Admin';
       }
 

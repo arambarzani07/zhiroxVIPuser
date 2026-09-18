@@ -65,7 +65,7 @@ class _OwnerBackupResilienceCenterScreenState
         _loading = false;
         _error = AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نەتوانرا دۆخی Backup بهێنرێت.',
+          fallback: 'نەتوانرا دۆخی پاشەکەوت بهێنرێت.',
         );
       });
     }
@@ -90,7 +90,7 @@ class _OwnerBackupResilienceCenterScreenState
               DropdownButtonFormField<int>(
                 initialValue: expectedHours,
                 decoration: const InputDecoration(
-                  labelText: 'چاوەڕوانکراوی Backup',
+                  labelText: 'چاوەڕوانکراوی پاشەکەوت',
                   prefixIcon: Icon(Icons.schedule_rounded),
                 ),
                 items: const [
@@ -110,7 +110,7 @@ class _OwnerBackupResilienceCenterScreenState
               DropdownButtonFormField<int>(
                 initialValue: verificationDays,
                 decoration: const InputDecoration(
-                  labelText: 'Verification freshness',
+                  labelText: 'ماوەی نوێبوونی پشتڕاستکردنەوە',
                   prefixIcon: Icon(Icons.verified_outlined),
                 ),
                 items: const [
@@ -132,14 +132,14 @@ class _OwnerBackupResilienceCenterScreenState
                 value: alertEnabled,
                 onChanged: (value) =>
                     setDialogState(() => alertEnabled = value),
-                title: const Text('Backup alert'),
+                title: const Text('ئاگادارکردنەوەی پاشەکەوت'),
                 subtitle: const Text(
-                  'ئاگادارکردنەوە کاتێک Backup کۆن یان verification دواخراوە',
+                  'ئاگادارکردنەوە کاتێک پاشەکەوت کۆن یان پشتڕاستکردنەوە دواخراوە',
                 ),
               ),
               const SizedBox(height: 8),
               const Text(
-                'Owner تەنها دۆخی backup و policy ـی چاودێری دەبینێت؛ '
+                'خاوەنی سیستەم تەنها دۆخی backup و policy ـی چاودێری دەبینێت؛ '
                 'هیچ ناوەڕۆکی backup یان زانیاری کاروباری پیشان نادرێت.',
               ),
             ],
@@ -174,7 +174,7 @@ class _OwnerBackupResilienceCenterScreenState
         alertEnabled: result['alert_enabled'] == true,
       );
       if (!mounted) return;
-      AppHelpers.showSnackBar(context, 'Backup policy نوێ کرایەوە.');
+      AppHelpers.showSnackBar(context, 'سیاسەتی پاشەکەوت نوێ کرایەوە.');
       await _load();
     } catch (error) {
       if (!mounted) return;
@@ -182,7 +182,7 @@ class _OwnerBackupResilienceCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نوێکردنەوەی Backup policy سەرکەوتوو نەبوو.',
+          fallback: 'نوێکردنەوەی سیاسەتی پاشەکەوت سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -193,7 +193,7 @@ class _OwnerBackupResilienceCenterScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Backup & Resilience'),
+        title: const Text('پاشەکەوت و بەردەوامی'),
         actions: [
           IconButton(
             tooltip: 'نوێکردنەوە',
@@ -240,8 +240,8 @@ class _OwnerBackupResilienceCenterScreenState
                             Expanded(
                               child: Text(
                                 'ئەم ناوەندە تەنها freshness، verification، '
-                                'retention metadata و policy ـی Backup چاودێری دەکات. '
-                                'Owner ناتوانێت ناوەڕۆکی Backup بکاتەوە.',
+                                'retention زانیاریی سیستەمی و policy ـی پاشەکەوت چاودێری دەکات. '
+                                'خاوەنی سیستەم ناتوانێت ناوەڕۆکی پاشەکەوت بکاتەوە.',
                                 style: TextStyle(height: 1.55),
                               ),
                             ),
@@ -261,32 +261,32 @@ class _OwnerBackupResilienceCenterScreenState
                           ),
                           _metric(
                             context,
-                            'Healthy',
+                            'ساغ',
                             _asInt(_overview['healthy_tenants']).toString(),
                             Icons.health_and_safety_outlined,
                           ),
                           _metric(
                             context,
-                            'Stale',
+                            'کۆن',
                             _asInt(_overview['stale_tenants']).toString(),
                             Icons.schedule_outlined,
                           ),
                           _metric(
                             context,
-                            'Backup نییە',
+                            'پاشەکەوت نییە',
                             _asInt(_overview['missing_backup_tenants']).toString(),
                             Icons.cloud_off_outlined,
                           ),
                           _metric(
                             context,
-                            'Verification due',
+                            'پشتڕاستکردنەوە دواخراوە',
                             _asInt(_overview['verification_due_tenants'])
                                 .toString(),
                             Icons.fact_check_outlined,
                           ),
                           _metric(
                             context,
-                            'Verification failed',
+                            'پشتڕاستکردنەوە شکستی هێنا',
                             _asInt(_overview['verification_failed_tenants'])
                                 .toString(),
                             Icons.gpp_bad_outlined,
@@ -295,7 +295,7 @@ class _OwnerBackupResilienceCenterScreenState
                       ),
                       const SizedBox(height: 20),
                       const AppSectionHeader(
-                        title: 'دۆخی Backup ـی مارکێتەکان',
+                        title: 'دۆخی پاشەکەوت ـی مارکێتەکان',
                         subtitle:
                             'Metadata تەنها — هیچ ناوەڕۆکی کاروباری نییە',
                       ),
@@ -401,11 +401,11 @@ class _OwnerBackupResilienceCenterScreenState
             children: [
               _mini(
                 Icons.event_available_outlined,
-                'Backup: ${_date(item['latest_backup_at'])}',
+                'پاشەکەوت: ${_date(item['latest_backup_at'])}',
               ),
               _mini(
                 Icons.verified_outlined,
-                'Verified: ${_date(item['last_verified_at'])}',
+                'پشتڕاستکراوە: ${_date(item['last_verified_at'])}',
               ),
               if (backupType.isNotEmpty)
                 _mini(Icons.category_outlined, backupType),
@@ -419,24 +419,24 @@ class _OwnerBackupResilienceCenterScreenState
               ),
               _mini(
                 Icons.schedule_rounded,
-                'Expected: ${_asInt(item['expected_interval_hours'])}h',
+                'چاوەڕوانکراو: ${_asInt(item['expected_interval_hours'])}h',
               ),
               _mini(
                 Icons.fact_check_outlined,
-                'Verify: ${_asInt(item['verification_interval_days'])}d',
+                'پشتڕاستکردنەوە: ${_asInt(item['verification_interval_days'])}d',
               ),
               if (restorable is bool)
                 _mini(
                   restorable
                       ? Icons.check_circle_outline_rounded
                       : Icons.error_outline_rounded,
-                  restorable ? 'Integrity OK' : 'Integrity issue',
+                  restorable ? 'ساغی داتا باشە' : 'کێشەی ساغی داتا',
                 ),
               _mini(
                 item['alert_enabled'] == true
                     ? Icons.notifications_active_outlined
                     : Icons.notifications_off_outlined,
-                item['alert_enabled'] == true ? 'Alert ON' : 'Alert OFF',
+                item['alert_enabled'] == true ? 'ئاگاداری چالاک' : 'ئاگاداری ناچالاک',
               ),
             ],
           ),
@@ -446,7 +446,7 @@ class _OwnerBackupResilienceCenterScreenState
             child: OutlinedButton.icon(
               onPressed: () => _editPolicy(item),
               icon: const Icon(Icons.tune_rounded, size: 18),
-              label: const Text('ڕێکخستنی Backup Monitoring'),
+              label: const Text('ڕێکخستنی چاودێری پاشەکەوت'),
             ),
           ),
         ],
@@ -465,11 +465,11 @@ class _OwnerBackupResilienceCenterScreenState
 
   Widget _statusChip(String state) {
     final (label, color) = switch (state) {
-      'healthy' => ('Healthy', Colors.green),
-      'stale' => ('Stale', Colors.orange),
-      'verification_due' => ('Verify', Colors.amber),
-      'verification_failed' => ('Failed', Colors.red),
-      _ => ('Missing', Colors.red),
+      'healthy' => ('ساغ', Colors.green),
+      'stale' => ('کۆن', Colors.orange),
+      'verification_due' => ('پشتڕاستکردنەوە', Colors.amber),
+      'verification_failed' => ('شکست', Colors.red),
+      _ => ('نییە', Colors.red),
     };
 
     return Container(

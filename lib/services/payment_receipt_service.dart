@@ -39,18 +39,18 @@ class PaymentReceiptService {
 
   static String _label(String key, String mode) {
     const labels = <String, List<String>>{
-      'title': ['پسوولەی پارەدانەوە', 'وصل دفعة', 'Payment receipt'],
-      'receipt_no': ['ژمارەی پسوولە', 'رقم الوصل', 'Receipt No.'],
+      'title': ['پسوولەی پارەدانەوە', 'وصل دفعة', 'پسوولەی پارەدانەوە'],
+      'receipt_no': ['ژمارەی پسوولە', 'رقم الوصل', 'ژمارەی پسوولە'],
       'date': ['بەروار', 'التاريخ', 'Date'],
       'customer': ['کڕیار', 'الزبون', 'Customer'],
       'customer_phone': ['مۆبایل', 'الهاتف', 'Phone'],
       'manager': ['بەڕێوەبەر', 'المدير', 'Manager'],
       'debt': ['بابەتی قەرز', 'بيان الدين', 'Debt'],
-      'paid': ['بڕی پارەدان', 'المبلغ المدفوع', 'Amount paid'],
+      'paid': ['بڕی پارەدان', 'المبلغ المدفوع', 'بڕی پارەی دراو'],
       'remaining': ['ماوەی قەرز', 'المتبقي', 'Remaining'],
-      'method': ['جۆری پارەدان', 'طريقة الدفع', 'Payment method'],
+      'method': ['جۆری پارەدان', 'طريقة الدفع', 'شێوازی پارەدان'],
       'note': ['تێبینی', 'ملاحظة', 'Note'],
-      'stamp': ['مۆر / واژۆی مارکێت', 'ختم / توقيع السوق', 'Market stamp / signature'],
+      'stamp': ['مۆر / واژۆی مارکێت', 'ختم / توقيع السوق', 'مۆر / واژۆی مارکێت'],
     };
     final values = labels[key] ?? <String>[key, key, key];
     switch (mode) {

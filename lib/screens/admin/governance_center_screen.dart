@@ -115,15 +115,15 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
   Future<void> createBackup() async {
     try {
       await PBService.client.rpc('create_tenant_backup', params: {
-        'p_label': 'Manual backup ' + DateTime.now().toIso8601String(),
+        'p_label': 'پاشەکەوتی دەستی ' + DateTime.now().toIso8601String(),
         'p_type': 'manual',
       });
-      toast('Backup درووست کرا');
+      toast('پاشەکەوت درووست کرا');
       await load();
     } catch (e) {
       toast(AppHelpers.backendErrorMessage(
         e,
-        fallback: 'Backup درووست نەکرا. دووبارە هەوڵ بدە.',
+        fallback: 'پاشەکەوت درووست نەکرا. دووبارە هەوڵ بدە.',
       ), bad: true);
     }
   }
@@ -132,7 +132,7 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('گەڕاندنەوەی Backup'),
+        title: const Text('گەڕاندنەوەی پاشەکەوت'),
         content: const Text(
           'پێش Restoreکردن Backupێکی پاراستن بە خۆکاری درووست دەکرێت. دڵنیایت؟',
         ),
@@ -159,7 +159,7 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
     } catch (e) {
       toast(AppHelpers.backendErrorMessage(
         e,
-        fallback: 'Restore سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+        fallback: 'گەڕاندنەوە سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
       ), bad: true);
     }
   }
@@ -191,7 +191,7 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
     } catch (e) {
       toast(AppHelpers.backendErrorMessage(
         e,
-        fallback: 'Export سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+        fallback: 'بردنەدەرەوە سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
       ), bad: true);
     }
   }
@@ -206,7 +206,7 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
     } catch (e) {
       toast(AppHelpers.backendErrorMessage(
         e,
-        fallback: 'Export سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+        fallback: 'بردنەدەرەوە سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
       ), bad: true);
     }
   }
@@ -287,14 +287,14 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
         FilledButton.icon(
           onPressed: createBackup,
           icon: const Icon(Icons.backup),
-          label: const Text('Backupی نوێ درووست بکە'),
+          label: const Text('پاشەکەوتی نوێ درووست بکە'),
         ),
         const SizedBox(height: 10),
         Row(children: [
           Expanded(child: OutlinedButton.icon(
             onPressed: exportCsv,
             icon: const Icon(Icons.table_view),
-            label: const Text('Excel / CSV'),
+            label: const Text('خشتە / CSV'),
           )),
           const SizedBox(width: 8),
           Expanded(child: OutlinedButton.icon(
@@ -304,7 +304,7 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
           )),
         ]),
         const SizedBox(height: 18),
-        const Text('Backup ـەکان', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+        const Text('پاشەکەوتەکان', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
         const SizedBox(height: 8),
         ...backups.map((backup) => Card(child: ListTile(
           leading: const Icon(Icons.cloud_done_outlined),
@@ -352,7 +352,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
     'can_delete_debts': 'سڕینەوەی قەرز',
     'can_record_payments': 'تۆمارکردنی پارەدان',
     'can_view_financial_reports': 'بینینی ڕاپۆرتی دارایی',
-    'can_export_data': 'Exportکردنی داتا',
+    'can_export_data': 'بردنەدەرەوەی داتا',
     'can_send_notifications': 'ناردنی ئاگادارکردنەوە',
   };
   late final Map<String, bool> values;

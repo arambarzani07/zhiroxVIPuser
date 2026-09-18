@@ -102,7 +102,7 @@ class _OwnerSubscriptionCenterScreenState
                   DropdownMenuItem(value: 'quarterly', child: Text('٣ مانگ')),
                   DropdownMenuItem(value: 'semiannual', child: Text('٦ مانگ')),
                   DropdownMenuItem(value: 'annual', child: Text('ساڵانە')),
-                  DropdownMenuItem(value: 'custom', child: Text('Custom')),
+                  DropdownMenuItem(value: 'custom', child: Text('تایبەت')),
                 ],
                 onChanged: (value) {
                   if (value != null) {
@@ -132,7 +132,7 @@ class _OwnerSubscriptionCenterScreenState
               ),
               const SizedBox(height: 12),
               Text(
-                'ئەم کردارە تەنها plan و بەرواری subscription دەگۆڕێت؛ '
+                'ئەم کردارە تەنها پلان و بەرواری بەشداری دەگۆڕێت؛ '
                 'هیچ داتای کاروباری مارکێت ناخوێنێتەوە.',
                 style: Theme.of(ctx).textTheme.bodySmall,
               ),
@@ -231,7 +231,7 @@ class _OwnerSubscriptionCenterScreenState
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Owner تەنها subscription، billing metadata و '
+                                'خاوەنی سیستەم تەنها بەشداری، زانیاریی پارەدان و '
                                 'دۆخی هەژمار بەڕێوەدەبات. ناوەڕۆکی مارکێت '
                                 'و زانیاریی کاروباری لەم بەشەدا نییە.',
                                 style: TextStyle(
@@ -274,13 +274,13 @@ class _OwnerSubscriptionCenterScreenState
                           ),
                           _metric(
                             context,
-                            'Pending ـی ٣٠ ڕۆژ',
+                            'چاوەڕوانی ٣٠ ڕۆژ',
                             _asInt(_overview['pending_payments_30d']).toString(),
                             Icons.hourglass_bottom_rounded,
                           ),
                           _metric(
                             context,
-                            'Failed ـی ٣٠ ڕۆژ',
+                            'شکستی ٣٠ ڕۆژ',
                             _asInt(_overview['failed_payments_30d']).toString(),
                             Icons.error_outline_rounded,
                           ),
@@ -296,7 +296,7 @@ class _OwnerSubscriptionCenterScreenState
                       const AppSectionHeader(
                         title: 'بەشدارییەکان',
                         subtitle:
-                            'plan، expiry و status ـی billing؛ بێ business data',
+                            'پلان، بەرواری کۆتایی و دۆخی پارەدان؛ بەبێ داتای کاروبار',
                       ),
                       const SizedBox(height: 10),
                       if (_items.isEmpty)
@@ -439,11 +439,11 @@ class _OwnerSubscriptionCenterScreenState
 
   Widget _statusChip(String status) {
     final (label, color) = switch (status) {
-      'trial' => ('Trial', Colors.blue),
-      'grace' => ('Grace', Colors.orange),
+      'trial' => ('تاقیکردنەوە', Colors.blue),
+      'grace' => ('ماوەی ڕێگەپێدراو', Colors.orange),
       'suspended' => ('Suspended', Colors.red),
-      'archived' => ('Archived', Colors.grey),
-      _ => ('Active', Colors.green),
+      'archived' => ('ئەرشیڤکراو', Colors.grey),
+      _ => ('چالاک', Colors.green),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),

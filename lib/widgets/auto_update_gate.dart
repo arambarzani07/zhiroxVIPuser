@@ -149,14 +149,14 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
       final opened = await AppUpdateService.openDownload(info);
       if (!mounted) return;
       if (!opened) {
-        setState(() => _error = 'نەتوانرا لینکی IPA لە Safari بکرێتەوە.');
+        setState(() => _error = 'نەتوانرا لینکی فایلی دامەزراندن لە Safari بکرێتەوە.');
       } else {
         // Re-check immediately when the user returns from Safari.
         _lastCheck = null;
       }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'نەتوانرا لینکی IPA لە Safari بکرێتەوە.');
+      setState(() => _error = 'نەتوانرا لینکی فایلی دامەزراندن لە Safari بکرێتەوە.');
     } finally {
       if (mounted) setState(() => _opening = false);
     }
@@ -196,7 +196,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
         alignment: Alignment.bottomLeft,
         child: FloatingActionButton.small(
           heroTag: 'system-owner-update-control',
-          tooltip: 'کۆنترۆڵی Auto Update',
+          tooltip: 'کۆنترۆڵی نوێکردنەوەی خۆکار',
           onPressed: _openUpdateControls,
           child: const Icon(Icons.system_update_alt_rounded),
         ),
@@ -211,7 +211,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
         alignment: Alignment.bottomRight,
         child: FloatingActionButton.small(
           heroTag: 'zhirox-intelligence-center',
-          tooltip: 'ZHIROX Intelligence Center',
+          tooltip: 'ناوەندی زیرەکی ژیرۆکس',
           onPressed: _openIntelligenceCenter,
           child: const Icon(Icons.auto_awesome_rounded),
         ),
@@ -286,7 +286,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Auto Update Center',
+                        'ناوەندی نوێکردنەوەی خۆکار',
                         style: TextStyle(
                           color: primaryText,
                           fontSize: 15.5,
@@ -295,7 +295,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        'IPA ـی نوێ بۆ ZHIROX ${info.edition == 'owner' ? 'Owner' : 'User'} بەردەستە',
+                        'فایلی دامەزراندنی نوێ بۆ ژیرۆکس ${info.edition == 'owner' ? 'Owner' : 'User'} بەردەستە',
                         style: TextStyle(
                           color: secondaryText,
                           fontSize: 11.5,
@@ -340,7 +340,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                     child: _buildVersionCell(
                       context,
                       'ئێستا',
-                      'Build ${AppUpdateService.currentBuild}',
+                      'بێلد ${AppUpdateService.currentBuild}',
                     ),
                   ),
                   Icon(Icons.arrow_back_rounded,
@@ -410,7 +410,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                           )
                         : const Icon(Icons.open_in_browser_rounded, size: 18),
                     label: Text(
-                      _opening ? 'دەکرێتەوە...' : 'دابەزاندنی IPA',
+                      _opening ? 'دەکرێتەوە...' : 'دابەزاندنی فایلی دامەزراندن',
                     ),
                   ),
                 ),

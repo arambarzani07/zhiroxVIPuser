@@ -127,7 +127,7 @@ class AdminSettingsScreen extends StatelessWidget {
                   child: Column(children: [
                     _SettingsRow(
                       icon: Icons.account_balance_wallet_outlined,
-                      title: 'بەشداری و FIB',
+                      title: 'بەشداری و پارەدان بە FIB',
                       subtitle: 'پلان و پارەدانی بەشداری',
                       onTap: () => _open(
                         context,
@@ -159,14 +159,14 @@ class AdminSettingsScreen extends StatelessWidget {
                 const SizedBox(height: 22),
                 const AppSectionHeader(
                   title: 'پاراستن و کۆنترۆڵ',
-                  subtitle: 'Audit، Backup و دەسەڵات',
+                  subtitle: 'چاودێری، پاشەکەوت و دەسەڵات',
                 ),
                 const SizedBox(height: 10),
                 AppSurface(
                   padding: EdgeInsets.zero,
                   child: _SettingsRow(
                     icon: Icons.admin_panel_settings_outlined,
-                    title: 'دەسەڵات، Audit و Backup',
+                    title: 'دەسەڵات، چاودێری و پاشەکەوت',
                     subtitle: 'کۆنترۆڵی ورد و گەڕاندنەوەی داتا',
                     onTap: () => _open(
                       context,

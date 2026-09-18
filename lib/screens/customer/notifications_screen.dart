@@ -595,7 +595,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             TextField(
               controller: botTokenController,
               decoration: const InputDecoration(
-                labelText: 'Bot Token',
+                labelText: 'کۆدی نهێنی بۆت',
                 hintText: '123456789:ABC...',
                 prefixIcon: Icon(Icons.key),
               ),
@@ -604,7 +604,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             TextField(
               controller: chatIdController,
               decoration: const InputDecoration(
-                labelText: 'Chat ID',
+                labelText: 'ناسنامەی چات',
                 hintText: '12345678',
                 prefixIcon: Icon(Icons.chat),
               ),
@@ -647,7 +647,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   } else {
                     AppHelpers.showSnackBar(
                       context,
-                      'پەیوەندی سەرکەوتوو نەبوو ❌\nدڵنیابەرەوە لە زانیاریەکان و بۆتەکە Start بکە',
+                      'پەیوەندی سەرکەوتوو نەبوو ❌\nدڵنیابەرەوە لە زانیارییەکان و بۆتەکە دەستپێبکە',
                       isError: true,
                     );
                   }
@@ -701,12 +701,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             children: [
               Text(
                 '١. لە تێلیگرام بۆ @BotFather بگەڕێ.\n'
-                '٢. دەستپێکردن (Start) بکە و بنووسە /newbot.\n'
+                '٢. دەستپێکردن بکە و بنووسە /newbot.\n'
                 '٣. ناوێک و یوزەرنەیمێک بۆ بۆتەکەت هەڵبژێرە.\n'
-                '٤. کۆدی API Token کۆپی بکە و لێرە لە بەشی Bot Token دایبنێ.\n\n'
-                '٥. بۆ @userinfobot بگەڕێ و Start بکە.\n'
-                '٦. کۆدی Id کۆپی بکە و لە بەشی Chat ID دایبنێ.\n\n'
-                '٧. گرنگ: دەبێت بۆتەکەی خۆت Start بکەیت بۆ ئەوەی بتوانێت نامەت بۆ بنێرێت.',
+                '٤. کۆدی API Token کۆپی بکە و لێرە لە بەشی کۆدی نهێنی بۆت دایبنێ.\n\n'
+                '٥. بۆ @userinfobot بگەڕێ و دەستپێبکە.\n'
+                '٦. کۆدی Id کۆپی بکە و لە بەشی ناسنامەی چات دایبنێ.\n\n'
+                '٧. گرنگ: دەبێت بۆتەکەی خۆت دەستپێبکەیت بۆ ئەوەی بتوانێت نامەت بۆ بنێرێت.',
                 style: TextStyle(height: 1.6, fontSize: 13),
               ),
             ],

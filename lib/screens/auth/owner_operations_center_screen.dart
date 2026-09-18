@@ -188,7 +188,7 @@ class _OwnerOperationsCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'پاشەکەوتکردنی Operations Center سەرکەوتوو نەبوو.',
+          fallback: 'پاشەکەوتکردنی ڕێکخستنەکانی پلاتفۆرم Center سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -203,7 +203,7 @@ class _OwnerOperationsCenterScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Platform Operations'),
+        title: const Text('بەڕێوەبردنی پلاتفۆرم'),
         actions: [
           IconButton(
             tooltip: 'نوێکردنەوە',
@@ -247,7 +247,7 @@ class _OwnerOperationsCenterScreenState
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Owner تەنها دۆخی پلاتفۆرم، Maintenance و '
+                              'خاوەنی سیستەم تەنها دۆخی پلاتفۆرم، Maintenance و '
                               'ئاگادارکردنەوەی سیستەمی کۆنترۆڵ دەکات. '
                               'ئەم بەشە هیچ ناوەڕۆکی کاروباری مارکێت ناخوێنێتەوە.',
                               style: TextStyle(
@@ -275,21 +275,21 @@ class _OwnerOperationsCenterScreenState
                           DropdownButtonFormField<String>(
                             initialValue: _platformStatus,
                             decoration: const InputDecoration(
-                              labelText: 'Platform status',
+                              labelText: 'دۆخی پلاتفۆرم',
                               prefixIcon: Icon(Icons.monitor_heart_outlined),
                             ),
                             items: const [
                               DropdownMenuItem(
                                 value: 'operational',
-                                child: Text('Operational'),
+                                child: Text('ئاسایی'),
                               ),
                               DropdownMenuItem(
                                 value: 'degraded',
-                                child: Text('Degraded'),
+                                child: Text('لاوازبوو'),
                               ),
                               DropdownMenuItem(
                                 value: 'partial_outage',
-                                child: Text('Partial outage'),
+                                child: Text('بەشێک وەستاوە'),
                               ),
                               DropdownMenuItem(
                                 value: 'maintenance',
@@ -406,7 +406,7 @@ class _OwnerOperationsCenterScreenState
                               style: TextStyle(fontWeight: FontWeight.w800),
                             ),
                             subtitle: const Text(
-                              'پەیامی گشتی پلاتفۆرم بەبێ business data',
+                              'پەیامی گشتی پلاتفۆرم بەبێ داتای کاروبار',
                             ),
                             value: _announcementEnabled,
                             onChanged: _saving
@@ -419,26 +419,26 @@ class _OwnerOperationsCenterScreenState
                           DropdownButtonFormField<String>(
                             initialValue: _announcementSeverity,
                             decoration: const InputDecoration(
-                              labelText: 'Severity',
+                              labelText: 'ئاستی گرنگی',
                               prefixIcon:
                                   Icon(Icons.notification_important_outlined),
                             ),
                             items: const [
                               DropdownMenuItem(
                                 value: 'info',
-                                child: Text('Info'),
+                                child: Text('زانیاری'),
                               ),
                               DropdownMenuItem(
                                 value: 'success',
-                                child: Text('Success'),
+                                child: Text('سەرکەوتوو'),
                               ),
                               DropdownMenuItem(
                                 value: 'warning',
-                                child: Text('Warning'),
+                                child: Text('ئاگاداری'),
                               ),
                               DropdownMenuItem(
                                 value: 'critical',
-                                child: Text('Critical'),
+                                child: Text('زۆر گرنگ'),
                               ),
                             ],
                             onChanged: _saving
@@ -538,7 +538,7 @@ class _OwnerOperationsCenterScreenState
                       label: Text(
                         _saving
                             ? 'پاشەکەوت دەکرێت...'
-                            : 'پاشەکەوتکردنی Operations',
+                            : 'پاشەکەوتکردنی ڕێکخستنەکانی پلاتفۆرم',
                       ),
                     ),
                     const SizedBox(height: 24),

@@ -67,7 +67,7 @@ class _OwnerRecoveryDeviceCenterScreenState
         _loading = false;
         _error = AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نەتوانرا زانیاری Recovery/Device بهێنرێت.',
+          fallback: 'نەتوانرا زانیاری گەڕاندنەوەی هەژمار و ئامێر بهێنرێت.',
         );
       });
     }
@@ -83,17 +83,17 @@ class _OwnerRecoveryDeviceCenterScreenState
           content: DropdownButtonFormField<String>(
             initialValue: policy,
             decoration: const InputDecoration(
-              labelText: 'Device Policy',
+              labelText: 'سیاسەتی ئامێر',
               prefixIcon: Icon(Icons.phonelink_lock_outlined),
             ),
             items: const [
               DropdownMenuItem(
                 value: 'observe',
-                child: Text('Observe — ئامێری نوێ خۆکار پەسەندە'),
+                child: Text('چاودێری — ئامێری نوێ خۆکار پەسەندە'),
               ),
               DropdownMenuItem(
                 value: 'approval_required',
-                child: Text('Approval Required — Owner پەسەندی دەکات'),
+                child: Text('پێویستی بە پەسەندکردن — خاوەنی سیستەم پەسەندی دەکات'),
               ),
             ],
             onChanged: (value) {
@@ -123,7 +123,7 @@ class _OwnerRecoveryDeviceCenterScreenState
         policy: selected,
       );
       if (!mounted) return;
-      AppHelpers.showSnackBar(context, 'Device Policy نوێ کرایەوە.');
+      AppHelpers.showSnackBar(context, 'سیاسەتی ئامێر نوێ کرایەوە.');
       await _load();
     } catch (error) {
       if (!mounted) return;
@@ -131,7 +131,7 @@ class _OwnerRecoveryDeviceCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'گۆڕینی Device Policy سەرکەوتوو نەبوو.',
+          fallback: 'گۆڕینی سیاسەتی ئامێر سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -149,9 +149,9 @@ class _OwnerRecoveryDeviceCenterScreenState
           ? 'پەسەندکردنی ئامێر'
           : status == 'revoked'
               ? 'ڕاگرتنی ئامێر'
-              : 'گواستنەوە بۆ Pending',
+              : 'گواستنەوە بۆ چاوەڕوان',
       message: status == 'revoked'
-          ? '$label ڕادەگیرێت و session ـی پەیوەست پچڕێنرێت. دڵنیایت؟'
+          ? '$label ڕادەگیرێت و دانیشتنی پەیوەست پچڕێنرێت. دڵنیایت؟'
           : '$label بگۆڕدرێت بۆ $status؟',
     );
     if (!ok) return;
@@ -190,14 +190,14 @@ class _OwnerRecoveryDeviceCenterScreenState
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
             scrollable: true,
-            title: const Text('Account Recovery'),
+            title: const Text('گەڕاندنەوەی هەژمار'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   '${item['market_name'] ?? 'مارکێت'} — وشەی نهێنی نوێ '
-                  'دادەنرێت، هەموو session ـەکان ڕادەگیرێن و device ـەکان '
-                  'دەچنە Pending.',
+                  'دادەنرێت، هەموو دانیشتنەکان ڕادەگیرێن و ئامێرەکان '
+                  'دەچنە چاوەڕوان.',
                 ),
                 const SizedBox(height: 14),
                 TextField(
@@ -250,7 +250,7 @@ class _OwnerRecoveryDeviceCenterScreenState
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'وشەی نهێنی لە audit یان database تۆمار ناکرێت.',
+                  'وشەی نهێنی لە تۆماری چاودێری یان داتابەیس تۆمار ناکرێت.',
                   style: TextStyle(fontSize: 11),
                 ),
               ],
@@ -297,8 +297,8 @@ class _OwnerRecoveryDeviceCenterScreenState
       if (!mounted) return;
       AppHelpers.showSnackBar(
         context,
-        'Recovery تەواو بوو — '
-        '${_asInt(result['revoked_session_count'])} session ڕاگیرا.',
+        'گەڕاندنەوەی هەژمار تەواو بوو — '
+        '${_asInt(result['revoked_session_count'])} دانیشتن ڕاگیرا.',
       );
       await _load();
     } catch (error) {
@@ -307,7 +307,7 @@ class _OwnerRecoveryDeviceCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'Account Recovery سەرکەوتوو نەبوو.',
+          fallback: 'گەڕاندنەوەی هەژمار سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -322,7 +322,7 @@ class _OwnerRecoveryDeviceCenterScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Recovery & Device Authorization'),
+        title: const Text('گەڕاندنەوەی هەژمار و مۆڵەتی ئامێر'),
         actions: [
           IconButton(
             tooltip: 'نوێکردنەوە',
@@ -368,7 +368,7 @@ class _OwnerRecoveryDeviceCenterScreenState
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Owner تەنها authentication/device metadata '
+                                'خاوەنی سیستەم تەنها زانیاریی چوونەژوورەوە و ئامێر '
                                 'بەڕێوەدەبات. ناوەڕۆکی کاروباری مارکێت '
                                 'لەم ناوەندەدا نییە.',
                                 style: TextStyle(height: 1.55),
@@ -396,26 +396,26 @@ class _OwnerRecoveryDeviceCenterScreenState
                           ),
                           _metric(
                             context,
-                            'Pending',
+                            'چاوەڕوان',
                             _asInt(_overview['pending_devices']).toString(),
                             Icons.hourglass_top_rounded,
                           ),
                           _metric(
                             context,
-                            'Revoked',
+                            'ڕاگرتنd',
                             _asInt(_overview['revoked_devices']).toString(),
                             Icons.phonelink_erase_rounded,
                           ),
                           _metric(
                             context,
-                            'Approval Required',
+                            'پێویستی بە پەسەندکردن',
                             _asInt(_overview['approval_required_accounts'])
                                 .toString(),
                             Icons.verified_user_outlined,
                           ),
                           _metric(
                             context,
-                            'Recovery / 30d',
+                            'گەڕاندنەوە / ٣٠ ڕۆژ',
                             _asInt(_overview['recoveries_30d']).toString(),
                             Icons.manage_accounts_outlined,
                           ),
@@ -423,9 +423,9 @@ class _OwnerRecoveryDeviceCenterScreenState
                       ),
                       const SizedBox(height: 20),
                       const AppSectionHeader(
-                        title: 'Admin Accounts',
+                        title: 'هەژمارەکانی بەڕێوەبەر',
                         subtitle:
-                            'Recovery، Device Policy و پەسەندکردنی ئامێر',
+                            'Recovery، سیاسەتی ئامێر و پەسەندکردنی ئامێر',
                       ),
                       const SizedBox(height: 10),
                       ..._items.map(
@@ -497,8 +497,8 @@ class _OwnerRecoveryDeviceCenterScreenState
         ),
         subtitle: Text(
           '${item['admin_name'] ?? ''} • '
-          '${_asInt(item['approved_device_count'])} approved / '
-          '${_asInt(item['pending_device_count'])} pending',
+          '${_asInt(item['approved_device_count'])} پەسەندکراو / '
+          '${_asInt(item['pending_device_count'])} چاوەڕوان',
         ),
         trailing: Chip(
           label: Text(
@@ -512,7 +512,7 @@ class _OwnerRecoveryDeviceCenterScreenState
                 child: OutlinedButton.icon(
                   onPressed: () => _changePolicy(item),
                   icon: const Icon(Icons.policy_outlined, size: 18),
-                  label: const Text('Device Policy'),
+                  label: const Text('سیاسەتی ئامێر'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -530,17 +530,17 @@ class _OwnerRecoveryDeviceCenterScreenState
             children: [
               _mini(
                 Icons.devices_outlined,
-                '${_asInt(item['device_count'])} device',
+                '${_asInt(item['device_count'])} ئامێر',
               ),
               const SizedBox(width: 12),
               _mini(
                 Icons.rule_outlined,
-                'Limit: ${_asInt(item['device_limit'])}',
+                'سنوور: ${_asInt(item['device_limit'])}',
               ),
               const SizedBox(width: 12),
               _mini(
                 Icons.history_rounded,
-                'Recovery: ${_date(item['last_recovery_at'])}',
+                'کۆتا گەڕاندنەوە: ${_date(item['last_recovery_at'])}',
               ),
             ],
           ),
@@ -569,6 +569,11 @@ class _OwnerRecoveryDeviceCenterScreenState
       'revoked' => Colors.red,
       _ => Colors.orange,
     };
+    final statusLabel = switch (status) {
+      'approved' => 'پەسەندکراو',
+      'revoked' => 'ڕاگیراو',
+      _ => 'چاوەڕوان',
+    };
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -594,7 +599,7 @@ class _OwnerRecoveryDeviceCenterScreenState
                   ),
                   Text(
                     '${device['platform'] ?? 'unknown'} • '
-                    'build ${device['app_version'] ?? 'unknown'} • '
+                    'وەشان ${device['app_version'] ?? 'unknown'} • '
                     '${_date(device['last_seen_at'])}',
                     style: Theme.of(context).textTheme.bodySmall,
                     textDirection: TextDirection.ltr,
@@ -607,19 +612,19 @@ class _OwnerRecoveryDeviceCenterScreenState
               itemBuilder: (_) => const [
                 PopupMenuItem(
                   value: 'approved',
-                  child: Text('Approve'),
+                  child: Text('پەسەندکردن'),
                 ),
                 PopupMenuItem(
                   value: 'pending',
-                  child: Text('Pending'),
+                  child: Text('چاوەڕوان'),
                 ),
                 PopupMenuItem(
                   value: 'revoked',
-                  child: Text('Revoke'),
+                  child: Text('ڕاگرتن'),
                 ),
               ],
               child: Chip(
-                label: Text(status),
+                label: Text(statusLabel),
                 labelStyle: TextStyle(
                   color: color,
                   fontSize: 10,

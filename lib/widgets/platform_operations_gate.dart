@@ -97,7 +97,7 @@ class _PlatformOperationsGateState extends State<PlatformOperationsGate>
         'partial_outage' =>
           'هەندێک خزمەتگوزاری بە شێوەی کاتی بەردەست نییە.',
         'maintenance' =>
-          'پلاتفۆرم لە دۆخی Maintenance ـدایە.',
+          'پلاتفۆرم لە دۆخی چاکسازی دایە.',
         _ => '',
       };
 
@@ -188,7 +188,7 @@ class _PlatformOperationsGateState extends State<PlatformOperationsGate>
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      'سیستەم لە Maintenance ـدایە',
+                      'سیستەم لە دۆخی چاکسازی دایە',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: textColor,

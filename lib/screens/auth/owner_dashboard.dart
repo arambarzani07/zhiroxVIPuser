@@ -112,7 +112,7 @@ class _OwnerHome extends StatelessWidget {
                   const Icon(Icons.shield_rounded, color: AppColors.primary, size: 32),
                   const SizedBox(height: 18),
                   Text(
-                    'System Owner',
+                    'خاوەنی سیستەم',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w800,
@@ -144,7 +144,7 @@ class _OwnerHome extends StatelessWidget {
                           color: AppColors.primary),
                     ),
                     title: const Text('کۆنترۆڵی پلاتفۆرم'),
-                    subtitle: const Text('Lifecycle، سنوور، Support و دۆخی هەژمار'),
+                    subtitle: const Text('ژیانەوەی هەژمار، سنوور، پشتیوانی و دۆخی هەژمار'),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
                       context,
@@ -165,7 +165,7 @@ class _OwnerHome extends StatelessWidget {
                     ),
                     title: const Text('تەندروستی و پاراستنی سیستەم'),
                     subtitle: const Text(
-                      'Backup، بەشداری، دۆخی پلاتفۆرم و Audit ـی Owner',
+                      'پاشەکەوت، بەشداری، دۆخی پلاتفۆرم و تۆماری چاودێری خاوەنی سیستەم',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -185,9 +185,9 @@ class _OwnerHome extends StatelessWidget {
                         color: Colors.cyan,
                       ),
                     ),
-                    title: const Text('Infrastructure Health'),
+                    title: const Text('تەندروستی ژێرخان'),
                     subtitle: const Text(
-                      'Cron jobs، Push queue و delivery health ـی پلاتفۆرم',
+                      'کارە خۆکارە کاتییەکان، ڕیزی ناردن و دۆخی گەیاندنی ئاگادارکردنەوەکان',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -208,9 +208,9 @@ class _OwnerHome extends StatelessWidget {
                         color: Colors.orange,
                       ),
                     ),
-                    title: const Text('Policy & Compliance'),
+                    title: const Text('سیاسەت و پابەندبوون'),
                     subtitle: const Text(
-                      'Terms، Privacy، acceptance و technical retention',
+                      'مەرجەکان، تایبەتمەندی، پەسەندکردن و ماوەی هەڵگرتنی داتای تەکنیکی',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -230,7 +230,7 @@ class _OwnerHome extends StatelessWidget {
                           color: AppColors.primary),
                     ),
                     title: const Text('هەژمارەکانی مارکێت'),
-                    subtitle: const Text('دروستکردن و نوێکردنەوەی بەشداری؛ بێ business data'),
+                    subtitle: const Text('دروستکردن و نوێکردنەوەی بەشداری؛ بەبێ داتای کاروبار'),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: onOpenMarkets,
                   ),
@@ -244,9 +244,9 @@ class _OwnerHome extends StatelessWidget {
                         color: Colors.blue,
                       ),
                     ),
-                    title: const Text('Tenant Readiness'),
+                    title: const Text('ئامادەیی مارکێتەکان'),
                     subtitle: const Text(
-                      'Access، subscription، device، backup، SLA و app telemetry',
+                      'دەستگەیشتن، بەشداری، ئامێر، پاشەکەوت، ماوەی خزمەتگوزاری و داتای تەکنیکی ئەپ',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -266,9 +266,9 @@ class _OwnerHome extends StatelessWidget {
                         color: Colors.teal,
                       ),
                     ),
-                    title: const Text('Platform Operations'),
+                    title: const Text('بەڕێوەبردنی پلاتفۆرم'),
                     subtitle: const Text(
-                      'Maintenance، system status و announcement',
+                      'چاکسازی، دۆخی سیستەم و ئاگادارکردنەوەی گشتی',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -288,9 +288,9 @@ class _OwnerHome extends StatelessWidget {
                         color: Colors.deepPurple,
                       ),
                     ),
-                    title: const Text('Feature Entitlements'),
+                    title: const Text('دەسەڵاتی تایبەتمەندییەکان'),
                     subtitle: const Text(
-                      'Standard / Pro / VIP و override ـی هەر مارکێت',
+                      'ئاسایی / پێشکەوتوو / تایبەت و دەستکاری تایبەتی هەر مارکێت',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -310,9 +310,9 @@ class _OwnerHome extends StatelessWidget {
                         color: Colors.indigo,
                       ),
                     ),
-                    title: const Text('Support Center'),
+                    title: const Text('ناوەندی پشتیوانی'),
                     subtitle: const Text(
-                      'Ticket، SLA و وەڵامدانەوەی تەکنیکی',
+                      'داواکاری پشتیوانی، ماوەی وەڵامدانەوە و وەڵامی تەکنیکی',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -332,9 +332,9 @@ class _OwnerHome extends StatelessWidget {
                         color: Colors.blueGrey,
                       ),
                     ),
-                    title: const Text('Recovery & Device Authorization'),
+                    title: const Text('گەڕاندنەوەی هەژمار و مۆڵەتی ئامێر'),
                     subtitle: const Text(
-                      'Account Recovery، Device Policy و Approve/Revoke',
+                      'گەڕاندنەوەی هەژمار، سیاسەتی ئامێر و پەسەند/ڕاگرتن',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -355,9 +355,9 @@ class _OwnerHome extends StatelessWidget {
                         color: Colors.teal,
                       ),
                     ),
-                    title: const Text('Backup & Resilience'),
+                    title: const Text('پاشەکەوت و بەردەوامی'),
                     subtitle: const Text(
-                      'Freshness، verification و Backup monitoring policy',
+                      'نوێبوونەوە، پشتڕاستکردنەوە و سیاسەتی چاودێری پاشەکەوت',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -380,7 +380,7 @@ class _OwnerHome extends StatelessWidget {
                     ),
                     title: const Text('ناوەندی پاراستن'),
                     subtitle: const Text(
-                      'Session، access، lock و suspicious-login metadata',
+                      'دانیشتن، دەستگەیشتن، قوفڵ و زانیاریی چوونەژوورەوەی گوماناوی',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -402,7 +402,7 @@ class _OwnerHome extends StatelessWidget {
                     ),
                     title: const Text('ناوەندی بەشداری'),
                     subtitle: const Text(
-                      'Plan، expiry و billing metadata ـی مارکێتەکان',
+                      'پلان، بەرواری کۆتایی و زانیاریی پارەدانی مارکێتەکان',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -420,8 +420,8 @@ class _OwnerHome extends StatelessWidget {
                       child: const Icon(Icons.move_to_inbox_rounded,
                           color: AppColors.primary),
                     ),
-                    title: const Text('مۆڵەتی Import'),
-                    subtitle: const Text('کردنەوە یان داخستنی Import بۆ هەر مارکێت'),
+                    title: const Text('مۆڵەتی هێنانەژوورەوە'),
+                    subtitle: const Text('چالاک یان ناچالاککردنی هێنانەژوورەوە بۆ هەر مارکێت'),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
                       context,
@@ -440,7 +440,7 @@ class _OwnerHome extends StatelessWidget {
                           color: AppColors.success),
                     ),
                     title: const Text('کۆنترۆڵی وەشان'),
-                    subtitle: const Text('IPA و زانیاری نوێکردنەوە'),
+                    subtitle: const Text('فایلی دامەزراندن و زانیاری نوێکردنەوە'),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
                       context,

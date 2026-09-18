@@ -23,6 +23,20 @@ class _OwnerPlatformCenterScreenState
   int _asInt(dynamic value) =>
       value is int ? value : int.tryParse('${value ?? 0}') ?? 0;
 
+  String _planLabel(String value) => switch (value) {
+        'monthly' => 'مانگانە',
+        'quarterly' => '٣ مانگ',
+        'semiannual' => '٦ مانگ',
+        'annual' => 'ساڵانە',
+        _ => 'تایبەت',
+      };
+
+  String _supportLabel(String value) => switch (value) {
+        'priority' => 'پێشەنگ',
+        'vip' => 'تایبەت',
+        _ => 'ئاسایی',
+      };
+
   @override
   void initState() {
     super.initState();
@@ -85,14 +99,14 @@ class _OwnerPlatformCenterScreenState
                     prefixIcon: Icon(Icons.account_tree_outlined),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'trial', child: Text('Trial')),
-                    DropdownMenuItem(value: 'active', child: Text('Active')),
-                    DropdownMenuItem(value: 'grace', child: Text('Grace')),
+                    DropdownMenuItem(value: 'trial', child: Text('تاقیکردنەوە')),
+                    DropdownMenuItem(value: 'active', child: Text('چالاک')),
+                    DropdownMenuItem(value: 'grace', child: Text('ماوەی ڕێگەپێدراو')),
                     DropdownMenuItem(
                       value: 'suspended',
-                      child: Text('Suspended'),
+                      child: Text('ڕاگیراو'),
                     ),
-                    DropdownMenuItem(value: 'archived', child: Text('Archived')),
+                    DropdownMenuItem(value: 'archived', child: Text('ئەرشیڤکراو')),
                   ],
                   onChanged: (value) {
                     if (value != null) {
@@ -189,19 +203,19 @@ class _OwnerPlatformCenterScreenState
                 DropdownButtonFormField<String>(
                   initialValue: tier,
                   decoration: const InputDecoration(
-                    labelText: 'ئاستی Support',
+                    labelText: 'ئاستی پشتیوانی',
                     prefixIcon: Icon(Icons.support_agent_rounded),
                   ),
                   items: const [
                     DropdownMenuItem(
                       value: 'standard',
-                      child: Text('Standard'),
+                      child: Text('ئاسایی'),
                     ),
                     DropdownMenuItem(
                       value: 'priority',
-                      child: Text('Priority'),
+                      child: Text('پێشەنگ'),
                     ),
-                    DropdownMenuItem(value: 'vip', child: Text('VIP')),
+                    DropdownMenuItem(value: 'vip', child: Text('تایبەت')),
                   ],
                   onChanged: (value) {
                     if (value != null) setDialogState(() => tier = value);
@@ -313,7 +327,7 @@ class _OwnerPlatformCenterScreenState
                                 SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    'Privacy Boundary',
+                                    'سنووری پاراستن',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 16,
@@ -324,7 +338,7 @@ class _OwnerPlatformCenterScreenState
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Owner تەنها metadata ـی هەژمار، بەشداری، دۆخ و تەکنیکی پلاتفۆرم بەڕێوەدەبات. '
+                              'خاوەنی سیستەم تەنها زانیاریی سیستەمی هەژمار، بەشداری، دۆخ و تەکنیکی پلاتفۆرم بەڕێوەدەبات. '
                               'کڕیار، قەرز، پارەدانەوە، پسوولە و ناوەڕۆکی مارکێت لێرە پیشان نادرێن.',
                               style: TextStyle(color: secondary, height: 1.55),
                             ),
@@ -350,7 +364,7 @@ class _OwnerPlatformCenterScreenState
                           ),
                           _metric(
                             context,
-                            'Suspended',
+                            'ڕاگیراو',
                             _asInt(_overview['suspended_tenants']),
                             Icons.pause_circle_outline_rounded,
                           ),
@@ -471,8 +485,8 @@ class _OwnerPlatformCenterScreenState
             spacing: 12,
             runSpacing: 8,
             children: [
-              _mini(Icons.workspace_premium_outlined, plan),
-              _mini(Icons.support_agent_rounded, tier),
+              _mini(Icons.workspace_premium_outlined, _planLabel(plan)),
+              _mini(Icons.support_agent_rounded, _supportLabel(tier)),
               _mini(
                 Icons.devices_outlined,
                 '${_asInt(tenant['device_limit'])} ئامێر',
@@ -525,11 +539,11 @@ class _OwnerPlatformCenterScreenState
 
   Widget _statusChip(String status) {
     final (label, color) = switch (status) {
-      'trial' => ('Trial', Colors.blue),
-      'grace' => ('Grace', Colors.orange),
-      'suspended' => ('Suspended', Colors.red),
-      'archived' => ('Archived', Colors.grey),
-      _ => ('Active', Colors.green),
+      'trial' => ('تاقیکردنەوە', Colors.blue),
+      'grace' => ('ماوەی ڕێگەپێدراو', Colors.orange),
+      'suspended' => ('ڕاگیراو', Colors.red),
+      'archived' => ('ئەرشیڤکراو', Colors.grey),
+      _ => ('چالاک', Colors.green),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),

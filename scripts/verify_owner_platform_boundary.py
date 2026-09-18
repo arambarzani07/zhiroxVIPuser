@@ -301,3 +301,41 @@ assert 'technical_log_days' in policy_compliance_migration, 'technical log reten
 assert 'audit_log_days' in policy_compliance_migration, 'audit log retention control missing'
 
 print('Owner platform privacy boundary verified.')
+
+# Owner-facing UI must remain Kurdish-first. Internal RPC/status keys may stay
+# English, but visible titles/actions below must not regress to English.
+owner_ui_files = [
+    Path('lib/screens/auth/owner_dashboard.dart'),
+    Path('lib/screens/auth/owner_backup_resilience_center_screen.dart'),
+    Path('lib/screens/auth/owner_entitlements_center_screen.dart'),
+    Path('lib/screens/auth/owner_health_center_screen.dart'),
+    Path('lib/screens/auth/owner_infrastructure_center_screen.dart'),
+    Path('lib/screens/auth/owner_operations_center_screen.dart'),
+    Path('lib/screens/auth/owner_platform_center_screen.dart'),
+    Path('lib/screens/auth/owner_policy_compliance_center_screen.dart'),
+    Path('lib/screens/auth/owner_readiness_center_screen.dart'),
+    Path('lib/screens/auth/owner_recovery_device_center_screen.dart'),
+    Path('lib/screens/auth/owner_security_center_screen.dart'),
+    Path('lib/screens/auth/owner_subscription_center_screen.dart'),
+    Path('lib/screens/auth/owner_support_center_screen.dart'),
+    Path('lib/screens/auth/update_control_screen.dart'),
+    Path('lib/screens/auth/import_permission_screen.dart'),
+]
+owner_ui_blob = '\n'.join(path.read_text(errors='ignore') for path in owner_ui_files)
+for forbidden_ui in (
+    "'Infrastructure Health'",
+    "'Policy & Compliance'",
+    "'Tenant Readiness'",
+    "'Platform Operations'",
+    "'Feature Entitlements'",
+    "'Support Center'",
+    "'Recovery & Device Authorization'",
+    "'Backup & Resilience'",
+    "'Revoke Sessions'",
+    "'Account Recovery'",
+    "'Device Policy'",
+    "'Release & Auto Update Center'",
+    "'Import کراوە",
+):
+    assert forbidden_ui not in owner_ui_blob, f'English owner UI regressed: {forbidden_ui}'
+

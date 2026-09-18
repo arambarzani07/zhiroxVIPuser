@@ -117,7 +117,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
           child: Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'Intelligence Center تەنها بۆ بەڕێوەبەر بەردەستە.',
+              'ناوەندی زیرەکی تەنها بۆ بەڕێوەبەر بەردەستە.',
               textAlign: TextAlign.center,
             ),
           ),
@@ -236,7 +236,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
               const SizedBox(height: 20),
               _buildSectionTitle(
                 icon: Icons.auto_awesome_rounded,
-                title: 'Smart Alerts',
+                title: 'ئاگادارییە زیرەکەکان',
                 subtitle: 'خاڵە گرنگەکان کە پێویستیان بە سەرنجە',
                 isDark: isDark,
               ),
@@ -247,7 +247,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
               const SizedBox(height: 20),
               _buildSectionTitle(
                 icon: Icons.shield_outlined,
-                title: 'Risk Score ـی کڕیارەکان',
+                title: 'نمرەی مەترسی کڕیارەکان',
                 subtitle:
                     'نمرەی ٠ تا ١٠٠ • لەسەر کڕیار بکە بۆ کردنەوەی هەژمار',
                 isDark: isDark,
@@ -256,7 +256,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
               if (snapshot.risks.isEmpty)
                 _emptyCard(
                   isDark,
-                  'هیچ قەرزی کراوەیەک نییە بۆ هەژمارکردنی Risk Score.',
+                  'هیچ قەرزی کراوەیەک نییە بۆ هەژمارکردنی نمرەی مەترسی.',
                 )
               else
                 ...snapshot.risks.take(8).map(
@@ -268,7 +268,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
                     ),
               const SizedBox(height: 12),
               Text(
-                'تێبینی: Risk Score لەم قۆناغەدا مۆدێلێکی هەژمارییە و لە دواکەوتن، بڕی قەرزی ماوە و ماوەی دواکەوتن دروست دەکرێت؛ بڕیاری کۆتایی لەلایەن بەڕێوەبەرە.',
+                'تێبینی: نمرەی مەترسی لەم قۆناغەدا مۆدێلێکی هەژمارییە و لە دواکەوتن، بڕی قەرزی ماوە و ماوەی دواکەوتن دروست دەکرێت؛ بڕیاری کۆتایی لەلایەن بەڕێوەبەرە.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 10.5,
@@ -331,7 +331,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'ZHIROX Intelligence Center',
+                      'ناوەندی زیرەکی ژیرۆکس',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 17,
@@ -369,7 +369,7 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Health Score',
+                      'نمرەی تەندروستی',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.72),
                         fontSize: 11,
@@ -970,7 +970,7 @@ class _IntelligenceSnapshot {
         _SmartAlert(
           title: 'کڕیاری مەترسیدار',
           message:
-              '$highRiskCount کڕیار Risk Score ـی ٧٠ یان زیاتر هەیە؛ پێداچوونەوەیان پێشنیار دەکرێت.',
+              '$highRiskCount کڕیار نمرەی مەترسی ٧٠ یان زیاتر هەیە؛ پێداچوونەوەیان پێشنیار دەکرێت.',
           icon: Icons.person_search_rounded,
           color: Colors.deepOrange,
         ),

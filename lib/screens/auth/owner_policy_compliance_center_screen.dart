@@ -32,10 +32,10 @@ class _OwnerPolicyComplianceCenterScreenState
   }
 
   String _policyLabel(String key) => switch (key) {
-        'terms' => 'Terms of Service',
-        'privacy' => 'Privacy Policy',
-        'security_notice' => 'Security Notice',
-        'service_policy' => 'Service Policy',
+        'terms' => 'مەرجەکانی خزمەتگوزاری',
+        'privacy' => 'سیاسەتی تایبەتمەندی',
+        'security_notice' => 'ئاگاداری پاراستن',
+        'service_policy' => 'سیاسەتی خزمەتگوزاری',
         _ => key,
       };
 
@@ -91,7 +91,7 @@ class _OwnerPolicyComplianceCenterScreenState
         _loading = false;
         _error = AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نەتوانرا زانیاری Policy/Compliance بهێنرێت.',
+          fallback: 'نەتوانرا زانیاری سیاسەت و پابەندبوون بهێنرێت.',
         );
       });
     }
@@ -109,32 +109,32 @@ class _OwnerPolicyComplianceCenterScreenState
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
             scrollable: true,
-            title: const Text('بڵاوکردنەوەی Policy نوێ'),
+            title: const Text('بڵاوکردنەوەی سیاسەت نوێ'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
                   initialValue: policyKey,
                   decoration: const InputDecoration(
-                    labelText: 'جۆری Policy',
+                    labelText: 'جۆری سیاسەت',
                     prefixIcon: Icon(Icons.policy_outlined),
                   ),
                   items: const [
                     DropdownMenuItem(
                       value: 'terms',
-                      child: Text('Terms of Service'),
+                      child: Text('مەرجەکانی خزمەتگوزاری'),
                     ),
                     DropdownMenuItem(
                       value: 'privacy',
-                      child: Text('Privacy Policy'),
+                      child: Text('سیاسەتی تایبەتمەندی'),
                     ),
                     DropdownMenuItem(
                       value: 'security_notice',
-                      child: Text('Security Notice'),
+                      child: Text('ئاگاداری پاراستن'),
                     ),
                     DropdownMenuItem(
                       value: 'service_policy',
-                      child: Text('Service Policy'),
+                      child: Text('سیاسەتی خزمەتگوزاری'),
                     ),
                   ],
                   onChanged: (value) {
@@ -158,7 +158,7 @@ class _OwnerPolicyComplianceCenterScreenState
                   minLines: 8,
                   maxLines: 16,
                   decoration: const InputDecoration(
-                    labelText: 'ناوەڕۆکی Policy',
+                    labelText: 'ناوەڕۆکی سیاسەت',
                     alignLabelWithHint: true,
                     prefixIcon: Icon(Icons.description_outlined),
                   ),
@@ -171,7 +171,7 @@ class _OwnerPolicyComplianceCenterScreenState
                       setDialogState(() => requiresReacceptance = value),
                   title: const Text('داوای پەسەندکردنەوەی نوێ'),
                   subtitle: const Text(
-                    'ئەگەر چالاک بێت، Admin ـەکان دەبێت وەشانی نوێ پەسەند بکەن.',
+                    'ئەگەر چالاک بێت، بەڕێوەبەر ـەکان دەبێت وەشانی نوێ پەسەند بکەن.',
                   ),
                 ),
               ],
@@ -220,7 +220,7 @@ class _OwnerPolicyComplianceCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'بڵاوکردنەوەی Policy سەرکەوتوو نەبوو.',
+          fallback: 'بڵاوکردنەوەی سیاسەت سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -246,7 +246,7 @@ class _OwnerPolicyComplianceCenterScreenState
         context: context,
         builder: (ctx) => AlertDialog(
           scrollable: true,
-          title: const Text('Data Retention Policy'),
+          title: const Text('Data Retention سیاسەت'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -254,7 +254,7 @@ class _OwnerPolicyComplianceCenterScreenState
                 controller: technical,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Technical logs — ڕۆژ',
+                  labelText: 'تۆماری تەکنیکی — ڕۆژ',
                   prefixIcon: Icon(Icons.article_outlined),
                 ),
               ),
@@ -263,7 +263,7 @@ class _OwnerPolicyComplianceCenterScreenState
                 controller: audit,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Owner audit — ڕۆژ',
+                  labelText: 'خاوەنی سیستەم audit — ڕۆژ',
                   prefixIcon: Icon(Icons.fact_check_outlined),
                 ),
               ),
@@ -272,13 +272,13 @@ class _OwnerPolicyComplianceCenterScreenState
                 controller: auth,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Auth session metadata — ڕۆژ',
+                  labelText: 'Auth session زانیاریی سیستەمی — ڕۆژ',
                   prefixIcon: Icon(Icons.login_rounded),
                 ),
               ),
               const SizedBox(height: 10),
               const Text(
-                'ئەمە تەنها retention ـی technical/platform metadata ـە؛ '
+                'ئەمە تەنها retention ـی technical/platform زانیاریی سیستەمی ـە؛ '
                 'هیچ ناوەڕۆکی کاروباری مارکێت بەڕێوە نابردرێت.',
                 style: TextStyle(fontSize: 11),
               ),
@@ -309,7 +309,7 @@ class _OwnerPolicyComplianceCenterScreenState
         authSessionDays: authDays,
       );
       if (!mounted) return;
-      AppHelpers.showSnackBar(context, 'Retention Policy نوێ کرایەوە.');
+      AppHelpers.showSnackBar(context, 'Retention سیاسەت نوێ کرایەوە.');
       await _load();
     } catch (error) {
       if (!mounted) return;
@@ -317,7 +317,7 @@ class _OwnerPolicyComplianceCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نوێکردنەوەی Retention Policy سەرکەوتوو نەبوو.',
+          fallback: 'نوێکردنەوەی Retention سیاسەت سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -349,7 +349,7 @@ class _OwnerPolicyComplianceCenterScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Policy & Compliance'),
+        title: const Text('سیاسەت & پابەندبوون'),
         actions: [
           IconButton(
             tooltip: 'نوێکردنەوە',
@@ -361,7 +361,7 @@ class _OwnerPolicyComplianceCenterScreenState
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _loading ? null : _publishPolicy,
         icon: const Icon(Icons.post_add_rounded),
-        label: const Text('Policy نوێ'),
+        label: const Text('سیاسەت نوێ'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -400,8 +400,8 @@ class _OwnerPolicyComplianceCenterScreenState
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Owner تەنها Policy، acceptance metadata و '
-                                'technical retention بەڕێوەدەبات. زانیاریی '
+                                'خاوەنی سیستەم تەنها سیاسەت، پەسەندکردن زانیاریی سیستەمی و '
+                                'ماوەی هەڵگرتنی داتای تەکنیکی بەڕێوەدەبات. زانیاریی '
                                 'کاروباری مارکێت لەم ناوەندەدا نییە.',
                                 style: TextStyle(height: 1.55),
                               ),
@@ -416,19 +416,19 @@ class _OwnerPolicyComplianceCenterScreenState
                         children: [
                           _metric(
                             context,
-                            'Policy ـی چالاک',
+                            'سیاسەت ـی چالاک',
                             _asInt(_overview['active_policy_count']).toString(),
                             Icons.policy_outlined,
                           ),
                           _metric(
                             context,
-                            'Admin',
+                            'بەڕێوەبەر',
                             _asInt(_overview['admin_account_count']).toString(),
                             Icons.admin_panel_settings_outlined,
                           ),
                           _metric(
                             context,
-                            'Compliant',
+                            'پابەند',
                             _asInt(_overview['compliant_admin_count']).toString(),
                             Icons.verified_user_outlined,
                           ),
@@ -446,7 +446,7 @@ class _OwnerPolicyComplianceCenterScreenState
                           const Expanded(
                             child: AppSectionHeader(
                               title: 'Data Retention',
-                              subtitle: 'Technical/platform metadata',
+                              subtitle: 'Technical/platform زانیاریی سیستەمی',
                             ),
                           ),
                           OutlinedButton.icon(
@@ -479,7 +479,7 @@ class _OwnerPolicyComplianceCenterScreenState
                       ),
                       const SizedBox(height: 20),
                       const AppSectionHeader(
-                        title: 'Policy ـە چالاکەکان',
+                        title: 'سیاسەت ـە چالاکەکان',
                         subtitle: 'Current platform documents',
                       ),
                       const SizedBox(height: 10),
@@ -488,7 +488,7 @@ class _OwnerPolicyComplianceCenterScreenState
                           child: Padding(
                             padding: EdgeInsets.all(18),
                             child: Center(
-                              child: Text('هێشتا هیچ Policy ـێک بڵاونەکراوەتەوە.'),
+                              child: Text('هێشتا هیچ سیاسەت ـێک بڵاونەکراوەتەوە.'),
                             ),
                           ),
                         )
@@ -501,15 +501,15 @@ class _OwnerPolicyComplianceCenterScreenState
                         ),
                       const SizedBox(height: 18),
                       const AppSectionHeader(
-                        title: 'Compliance ـی Admin',
-                        subtitle: 'Acceptance status ـی وەشانی چالاک',
+                        title: 'پابەندبوون ـی بەڕێوەبەر',
+                        subtitle: 'دۆخی پەسەندکردن ـی وەشانی چالاک',
                       ),
                       const SizedBox(height: 10),
                       if (_admins.isEmpty)
                         const AppSurface(
                           child: Padding(
                             padding: EdgeInsets.all(18),
-                            child: Center(child: Text('هیچ Admin ـێک نییە.')),
+                            child: Center(child: Text('هیچ بەڕێوەبەر ـێک نییە.')),
                           ),
                         )
                       else
@@ -560,7 +560,7 @@ class _OwnerPolicyComplianceCenterScreenState
   ) {
     final key = (doc['policy_key'] ?? '').toString();
     final version = _asInt(doc['version']);
-    final required = doc['requires_reacceptance'] == true;
+    final required = doc['requires_reپەسەندکردن'] == true;
 
     return AppSurface(
       child: Row(
@@ -590,7 +590,7 @@ class _OwnerPolicyComplianceCenterScreenState
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Chip(
-                label: Text(required ? 'Re-accept' : 'No re-accept'),
+                label: Text(required ? 'پەسەندکردنەوە' : 'پێویستی بە پەسەندکردنەوە نییە'),
               ),
               TextButton(
                 onPressed: () => _showPolicy(doc),
@@ -642,7 +642,7 @@ class _OwnerPolicyComplianceCenterScreenState
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                compliant ? 'Compliant' : 'Pending',
+                compliant ? 'پابەند' : 'Pending',
                 style: TextStyle(
                   color: compliant ? Colors.green : Colors.orange,
                   fontWeight: FontWeight.w800,
@@ -656,7 +656,7 @@ class _OwnerPolicyComplianceCenterScreenState
                 textDirection: TextDirection.ltr,
               ),
               Text(
-                _date(admin['last_acceptance_at']),
+                _date(admin['last_پەسەندکردن_at']),
                 style: Theme.of(context).textTheme.bodySmall,
                 textDirection: TextDirection.ltr,
               ),

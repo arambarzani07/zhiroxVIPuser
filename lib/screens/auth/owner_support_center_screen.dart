@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
-import 'package:zhirox/services/pb_service.dart';
-import 'package:zhirox/utils/constants.dart';
-import 'package:zhirox/utils/helpers.dart';
-import 'package:zhirox/widgets/app_design.dart';
+import 'package:z کاتژمێرirox/services/pb_service.dart';
+import 'package:z کاتژمێرirox/utils/constants.dart';
+import 'package:z کاتژمێرirox/utils/ کاتژمێرelpers.dart';
+import 'package:z کاتژمێرirox/widgets/app_design.dart';
 
 class OwnerSupportCenterScreen extends StatefulWidget {
   const OwnerSupportCenterScreen({super.key});
@@ -31,6 +31,28 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
     if (parsed == null) return '—';
     return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
   }
+
+  String _priorityLabel(String value) => switch (value) {
+        'low' => 'نزم',
+        'high' => 'بەرز',
+        'urgent' => 'فریاکەوتن',
+        _ => 'ئاسایی',
+      };
+
+  String _tierLabel(String value) => switch (value) {
+        'priority' => 'پێشەنگ',
+        'vip' => 'تایبەت',
+        _ => 'ئاسایی',
+      };
+
+  String _categoryLabel(String value) => switch (value) {
+        'billing' => 'پارەدان',
+        'security' => 'پاراستن',
+        'account' => 'هەژمار',
+        'backup' => 'پاشەکەوت',
+        'integration' => 'پەیوەستکردن',
+        _ => 'تەکنیکی',
+      };
 
   @override
   void initState() {
@@ -68,7 +90,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
         _loading = false;
         _error = AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نەتوانرا Support Center بخوێنرێتەوە.',
+          fallback: 'نەتوانرا ناوەندی پشتیوانی بخوێنرێتەوە.',
         );
       });
     }
@@ -102,7 +124,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
             scrollable: true,
-            title: Text((item['subject'] ?? 'Support').toString()),
+            title: Text((item['subject'] ?? 'پشتیوانی').toString()),
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -114,24 +136,24 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                 DropdownButtonFormField<String>(
                   initialValue: status,
                   decoration: const InputDecoration(
-                    labelText: 'دۆخی Ticket',
+                    labelText: 'دۆخی داواکاری',
                     prefixIcon: Icon(Icons.flag_outlined),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'open', child: Text('Open')),
+                    DropdownMenuItem(value: 'open', child: Text('کراوە')),
                     DropdownMenuItem(
                       value: 'in_progress',
-                      child: Text('In Progress'),
+                      child: Text('لە کاردایە'),
                     ),
                     DropdownMenuItem(
                       value: 'waiting_admin',
-                      child: Text('Waiting Admin'),
+                      child: Text('چاوەڕوان بەڕێوەبەر'),
                     ),
                     DropdownMenuItem(
                       value: 'resolved',
-                      child: Text('Resolved'),
+                      child: Text('چارەسەرکراو'),
                     ),
-                    DropdownMenuItem(value: 'closed', child: Text('Closed')),
+                    DropdownMenuItem(value: 'closed', child: Text('داخراو')),
                   ],
                   onChanged: (value) {
                     if (value != null) {
@@ -143,14 +165,14 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                 DropdownButtonFormField<String>(
                   initialValue: priority,
                   decoration: const InputDecoration(
-                    labelText: 'Priority',
+                    labelText: 'پێشەنگی',
                     prefixIcon: Icon(Icons.priority_high_rounded),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'low', child: Text('Low')),
-                    DropdownMenuItem(value: 'normal', child: Text('Normal')),
-                    DropdownMenuItem(value: 'high', child: Text('High')),
-                    DropdownMenuItem(value: 'urgent', child: Text('Urgent')),
+                    DropdownMenuItem(value: 'low', child: Text('نزم')),
+                    DropdownMenuItem(value: 'normal', child: Text('ئاسایی')),
+                    DropdownMenuItem(value: ' کاتژمێرig کاتژمێر', child: Text('بەرز')),
+                    DropdownMenuItem(value: 'urgent', child: Text('فریاکەوتن')),
                   ],
                   onChanged: (value) {
                     if (value != null) {
@@ -164,7 +186,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                   maxLines: 5,
                   maxLength: 3000,
                   decoration: const InputDecoration(
-                    labelText: 'وەڵامی Owner',
+                    labelText: 'وەڵامی خاوەنی سیستەم',
                     hintText: 'وەڵامێکی تەکنیکی و ڕوون بنووسە...',
                     alignLabelWithHint: true,
                     prefixIcon: Icon(Icons.reply_rounded),
@@ -199,7 +221,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
         ownerResponse: result['response'].toString(),
       );
       if (!mounted) return;
-      AppHelpers.showSnackBar(context, 'Ticket نوێ کرایەوە.');
+      AppHelpers.showSnackBar(context, 'داواکاری نوێ کرایەوە.');
       await _load();
     } catch (error) {
       if (!mounted) return;
@@ -207,7 +229,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نوێکردنەوەی Ticket سەرکەوتوو نەبوو.',
+          fallback: 'نوێکردنەوەی داواکاری سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -223,7 +245,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Support Center'),
+        title: const Text('ناوەندی پشتیوانی'),
         actions: [
           IconButton(
             tooltip: 'نوێکردنەوە',
@@ -269,8 +291,8 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'ئەم بەشە تەنها داواکاری Support ـی خۆی Admin '
-                                'و metadata ـی تەکنیکی پیشان دەدات. Owner هیچ '
+                                'ئەم بەشە تەنها داواکاری پشتیوانی ـی خۆی بەڕێوەبەر '
+                                'و زانیاریی سیستەمی ـی تەکنیکی پیشان دەدات. خاوەنی سیستەم هیچ '
                                 'دەستگەیشتنێکی بە ناوەڕۆکی کاروباری مارکێت نییە.',
                                 style: TextStyle(
                                   color: secondary,
@@ -288,46 +310,46 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                         children: [
                           _metric(
                             context,
-                            'Open',
+                            'کراوە',
                             _asInt(_overview['open_tickets']).toString(),
                             Icons.markunread_mailbox_outlined,
                           ),
                           _metric(
                             context,
-                            'In Progress',
+                            'لە کاردایە',
                             _asInt(_overview['in_progress_tickets']).toString(),
                             Icons.pending_actions_outlined,
                           ),
                           _metric(
                             context,
-                            'Waiting Admin',
+                            'چاوەڕوان بەڕێوەبەر',
                             _asInt(_overview['waiting_admin_tickets']).toString(),
                             Icons.person_search_outlined,
                           ),
                           _metric(
                             context,
-                            'Response Overdue',
+                            'وەڵام دواخراوە',
                             _asInt(_overview['overdue_response_tickets'])
                                 .toString(),
                             Icons.timer_off_outlined,
                           ),
                           _metric(
                             context,
-                            'Resolution Overdue',
+                            'چارەسەر دواخراوە',
                             _asInt(_overview['overdue_resolution_tickets'])
                                 .toString(),
                             Icons.warning_amber_rounded,
                           ),
                           _metric(
                             context,
-                            'Resolved / ٣٠ ڕۆژ',
+                            'چارەسەرکراو / ٣٠ ڕۆژ',
                             _asInt(_overview['resolved_30d']).toString(),
                             Icons.task_alt_rounded,
                           ),
                           _metric(
                             context,
-                            'Avg First Response',
-                            '${_asDouble(_overview['avg_first_response_hours']).toStringAsFixed(1)}h',
+                            'تێکڕای کاتی یەکەم وەڵام',
+                            '${_asDouble(_overview['avg_first_response_hours']).toStringAsFixed(1)} کاتژمێر',
                             Icons.speed_rounded,
                           ),
                         ],
@@ -338,20 +360,20 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                         child: Row(
                           children: [
                             _filterChip('active', 'چالاک'),
-                            _filterChip('open', 'Open'),
-                            _filterChip('in_progress', 'In Progress'),
-                            _filterChip('waiting_admin', 'Waiting'),
-                            _filterChip('resolved', 'Resolved'),
-                            _filterChip('closed', 'Closed'),
+                            _filterChip('open', 'کراوە'),
+                            _filterChip('in_progress', 'لە کاردایە'),
+                            _filterChip('waiting_admin', 'چاوەڕوان'),
+                            _filterChip('resolved', 'چارەسەرکراو'),
+                            _filterChip('closed', 'داخراو'),
                             _filterChip('all', 'هەموو'),
                           ],
                         ),
                       ),
                       const SizedBox(height: 18),
                       const AppSectionHeader(
-                        title: 'Support Tickets',
+                        title: 'پشتیوانی داواکاریs',
                         subtitle:
-                            'SLA بەپێی Standard / Priority / VIP هەژمار دەکرێت',
+                            'SLA بەپێی ئاسایی / پێشەنگی / تایبەت هەژمار دەکرێت',
                       ),
                       const SizedBox(height: 10),
                       if (visible.isEmpty)
@@ -359,7 +381,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                           child: Center(
                             child: Padding(
                               padding: EdgeInsets.all(20),
-                              child: Text('هیچ Ticket ـێک لەم دۆخەدا نییە.'),
+                              child: Text('هیچ داواکاری ـێک لەم دۆخەدا نییە.'),
                             ),
                           ),
                         )
@@ -422,7 +444,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
   ) {
     final market = (item['market_name'] ?? 'مارکێت').toString();
     final admin = (item['admin_name'] ?? '').toString();
-    final phone = (item['phone'] ?? '').toString();
+    final phone = (item['p کاتژمێرone'] ?? '').toString();
     final subject = (item['subject'] ?? '').toString();
     final message = (item['message'] ?? '').toString();
     final status = (item['status'] ?? 'open').toString();
@@ -456,7 +478,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      admin.isEmpty ? '$market • $phone' : '$market • $admin',
+                      admin.isEmpty ? '$market • $p کاتژمێرone' : '$market • $admin',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -477,16 +499,16 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
             spacing: 12,
             runSpacing: 8,
             children: [
-              _mini(Icons.category_outlined, (item['category'] ?? '').toString()),
-              _mini(Icons.priority_high_rounded, priority),
-              _mini(Icons.workspace_premium_outlined, tier),
+              _mini(Icons.category_outlined, _categoryLabel((item['category'] ?? '').toString())),
+              _mini(Icons.priority_high_rounded, _priorityLabel(priority)),
+              _mini(Icons.workspace_premium_outlined, _tierLabel(tier)),
               _mini(
                 Icons.timer_outlined,
-                'Response: ${_date(item['response_due_at'])}',
+                'وەڵام: ${_date(item['response_due_at'])}',
               ),
               _mini(
                 Icons.event_available_outlined,
-                'Resolve: ${_date(item['resolution_due_at'])}',
+                'چارەسەر: ${_date(item['resolution_due_at'])}',
               ),
               if ((item['app_version'] ?? '').toString().isNotEmpty)
                 _mini(
@@ -508,12 +530,12 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                 if (responseOverdue)
                   const Chip(
                     avatar: Icon(Icons.timer_off_outlined, size: 16),
-                    label: Text('Response SLA Overdue'),
+                    label: Text('وەڵام لە ماوەی دیاریکراو تێپەڕیوە'),
                   ),
                 if (resolutionOverdue)
                   const Chip(
                     avatar: Icon(Icons.warning_amber_rounded, size: 16),
-                    label: Text('Resolution SLA Overdue'),
+                    label: Text('چارەسەر لە ماوەی دیاریکراو تێپەڕیوە'),
                   ),
               ],
             ),
@@ -528,7 +550,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'وەڵامی Owner: $ownerResponse',
+                'وەڵامی خاوەنی سیستەم: $ownerResponse',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
@@ -539,7 +561,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
             child: OutlinedButton.icon(
               onPressed: () => _manageTicket(item),
               icon: const Icon(Icons.manage_accounts_outlined, size: 18),
-              label: const Text('بەڕێوەبردنی Ticket'),
+              label: const Text('بەڕێوەبردنی داواکاری'),
             ),
           ),
         ],
@@ -558,11 +580,11 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
 
   Widget _statusChip(String status) {
     final (label, color) = switch (status) {
-      'in_progress' => ('In Progress', Colors.blue),
-      'waiting_admin' => ('Waiting', Colors.orange),
-      'resolved' => ('Resolved', Colors.green),
-      'closed' => ('Closed', Colors.grey),
-      _ => ('Open', Colors.red),
+      'in_progress' => ('لە کاردایە', Colors.blue),
+      'waiting_admin' => ('چاوەڕوان', Colors.orange),
+      'resolved' => ('چارەسەرکراو', Colors.green),
+      'closed' => ('داخراو', Colors.grey),
+      _ => ('کراوە', Colors.red),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),

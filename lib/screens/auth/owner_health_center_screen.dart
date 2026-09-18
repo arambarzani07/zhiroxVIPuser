@@ -133,7 +133,7 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Privacy-safe Platform Health',
+                                    'تەندروستی پارێزراوی پلاتفۆرم',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 16,
@@ -141,8 +141,8 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'ئەم بەشە تەنها metadata ـی پلاتفۆرم، Backup، '
-                                    'بەشداری و کردارەکانی Owner نیشان دەدات. '
+                                    'ئەم بەشە تەنها زانیاریی سیستەمی ـی پلاتفۆرم، پاشەکەوت، '
+                                    'بەشداری و کردارەکانی خاوەنی سیستەم نیشان دەدات. '
                                     'هیچ کڕیار، قەرز، پارەدانەوە، پسوولە یان ناوەڕۆکی مارکێت نادات.',
                                     style: TextStyle(
                                       color: secondary,
@@ -162,14 +162,14 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                         children: [
                           _metric(
                             context,
-                            'Backup تازە',
+                            'پاشەکەوت تازە',
                             _asInt(_health['backup_fresh_tenants']).toString(),
                             Icons.cloud_done_outlined,
                             good: _asInt(_health['backup_stale_tenants']) == 0,
                           ),
                           _metric(
                             context,
-                            'Backup کۆن/نییە',
+                            'پاشەکەوت کۆن/نییە',
                             _asInt(_health['backup_stale_tenants']).toString(),
                             Icons.cloud_off_outlined,
                             good: _asInt(_health['backup_stale_tenants']) == 0,
@@ -183,7 +183,7 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                           ),
                           _metric(
                             context,
-                            'پارەدانی Failed',
+                            'پارەدانی شکست‌هێناو',
                             _asInt(_health['billing_failed_30d']).toString(),
                             Icons.error_outline_rounded,
                             good: _asInt(_health['billing_failed_30d']) == 0,
@@ -212,25 +212,25 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                             const SizedBox(height: 12),
                             _row(
                               Icons.storage_rounded,
-                              'Database',
-                              'Online',
+                              'داتابەیس',
+                              'بەردەست',
                               Colors.green,
                             ),
                             _row(
                               Icons.backup_outlined,
-                              'کۆتا Backup',
+                              'کۆتا پاشەکەوت',
                               _date(_health['latest_backup_at']),
                               null,
                             ),
                             _row(
                               Icons.system_update_alt_rounded,
-                              'کۆتا ڕێکخستنی Update',
+                              'کۆتا ڕێکخستنی نوێکردنەوە',
                               _date(_health['latest_update_config_at']),
                               null,
                             ),
                             _row(
                               Icons.history_rounded,
-                              'کۆتا کرداری Owner',
+                              'کۆتا کرداری خاوەنی سیستەم',
                               _date(_health['latest_owner_action_at']),
                               null,
                             ),
@@ -245,9 +245,9 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                       ),
                       const SizedBox(height: 18),
                       const AppSectionHeader(
-                        title: 'Owner Audit',
+                        title: 'تۆماری چاودێری خاوەنی سیستەم',
                         subtitle:
-                            'تەنها کردارەکانی پلاتفۆرم؛ business data تۆمار ناکرێت',
+                            'تەنها کردارەکانی پلاتفۆرم؛ داتای کاروبار تۆمار ناکرێت',
                       ),
                       const SizedBox(height: 8),
                       if (_audit.isEmpty)
@@ -255,7 +255,7 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                           child: Center(
                             child: Padding(
                               padding: EdgeInsets.all(16),
-                              child: Text('هێشتا کرداری Owner تۆمار نەکراوە.'),
+                              child: Text('هێشتا هیچ کرداری خاوەنی سیستەم تۆمار نەکراوە.'),
                             ),
                           ),
                         )
@@ -361,25 +361,25 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
         'tenant_limits_changed': 'گۆڕینی سنوورەکان',
         'subscription_changed': 'گۆڕینی بەشداری',
         'admin_sessions_revoked': 'ڕاگرتنی Session ـەکان',
-        'admin_account_locked': 'قوفڵکردنی هەژماری Admin',
-        'admin_account_unlocked': 'کردنەوەی هەژماری Admin',
+        'admin_account_locked': 'قوفڵکردنی هەژماری بەڕێوەبەر',
+        'admin_account_unlocked': 'کردنەوەی هەژماری بەڕێوەبەر',
         'platform_operations_changed': 'گۆڕینی دۆخی پلاتفۆرم',
-        'support_ticket_updated': 'نوێکردنەوەی Support Ticket',
-        'tenant_feature_plan_changed': 'گۆڕینی Feature Plan',
-        'feature_plan_entitlement_changed': 'گۆڕینی یاسای Feature Plan',
-        'tenant_feature_entitlement_changed': 'گۆڕینی Feature Override',
-        'admin_device_policy_changed': 'گۆڕینی Device Policy',
+        'support_ticket_updated': 'نوێکردنەوەی داواکاری پشتیوانی',
+        'tenant_feature_plan_changed': 'گۆڕینی پلانی تایبەتمەندی',
+        'feature_plan_entitlement_changed': 'گۆڕینی یاسای پلانی تایبەتمەندی',
+        'tenant_feature_entitlement_changed': 'گۆڕینی دەستکاری تایبەتی تایبەتمەندی',
+        'admin_device_policy_changed': 'گۆڕینی سیاسەتی ئامێر',
         'admin_device_authorization_changed': 'گۆڕینی مۆڵەتی ئامێر',
-        'admin_account_recovered': 'Account Recovery',
-        'backup_monitoring_policy_changed': 'گۆڕینی Backup Monitoring Policy',
-        'platform_policy_published': 'بڵاوکردنەوەی Platform Policy',
+        'admin_account_recovered': 'گەڕاندنەوەی هەژمار',
+        'backup_monitoring_policy_changed': 'گۆڕینی سیاسەتی چاودێری پاشەکەوت',
+        'platform_policy_published': 'بڵاوکردنەوەی سیاسەتی پلاتفۆرم',
         'platform_retention_policy_changed': 'گۆڕینی Data Retention Policy',
       }[action] ??
       action;
 
   String _auditSubtitle(Map<String, dynamic> item) {
     final market = (item['market_name'] ?? '').toString();
-    final metadata = item['metadata'];
+    final metadata = item['زانیاریی سیستەمی'];
     final parts = <String>[
       if (market.isNotEmpty) market,
     ];
@@ -387,8 +387,8 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
       final status = metadata['status']?.toString() ?? '';
       final tier = metadata['support_tier']?.toString() ?? '';
       final reason = metadata['reason']?.toString() ?? '';
-      if (status.isNotEmpty) parts.add('Status: $status');
-      if (tier.isNotEmpty) parts.add('Support: $tier');
+      if (status.isNotEmpty) parts.add('دۆخ: $status');
+      if (tier.isNotEmpty) parts.add('پشتیوانی: $tier');
       if (reason.isNotEmpty) parts.add(reason);
     }
     return parts.isEmpty ? 'کرداری پلاتفۆرم' : parts.join(' • ');

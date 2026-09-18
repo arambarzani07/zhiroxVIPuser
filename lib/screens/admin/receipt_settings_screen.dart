@@ -277,7 +277,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Live Preview ـی پسوولە')),
+          appBar: AppBar(title: const Text('پێشبینینی ڕاستەوخۆی پسوولە')),
           body: PdfPreview(
             pdfFileName: 'ZHIROX_Receipt_Preview.pdf',
             build: (_) => OfficialReceiptService.buildSettingsPreview(
@@ -370,7 +370,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
         actions: [
           if (!_loading && auth.userRole == 'admin')
             IconButton(
-              tooltip: 'Live Preview',
+              tooltip: 'پێشبینینی ڕاستەوخۆ',
               onPressed: _showPreview,
               icon: const Icon(Icons.preview_outlined),
             ),
@@ -453,7 +453,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Template v$_templateVersion • ڕێکخستنەکان تەنها بۆ ئەم مارکێتە',
+                                    'قاڵبی وەشان $_templateVersion • ڕێکخستنەکان تەنها بۆ ئەم مارکێتە',
                                     style: const TextStyle(fontSize: 11.5),
                                   ),
                                 ],
@@ -552,7 +552,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           controller: _colorController,
                           textDirection: TextDirection.ltr,
                           decoration: _decoration(
-                            'ڕەنگی سەرەکی HEX',
+                            'کۆدی ڕەنگی سەرەکی',
                             Icons.color_lens_outlined,
                             hint: '#0F766E',
                           ),
@@ -589,10 +589,10 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           },
                         ),
                       ]),
-                      _section('Template و قەبارەی چاپ', Icons.dashboard_customize_outlined, [
+                      _section('قاڵب و قەبارەی چاپ', Icons.dashboard_customize_outlined, [
                         DropdownButtonFormField<String>(
                           initialValue: _templateStyle,
-                          decoration: _decoration('Template ـی گشتی', Icons.style_outlined),
+                          decoration: _decoration('قاڵبی گشتی', Icons.style_outlined),
                           items: const [
                             DropdownMenuItem(value: 'classic', child: Text('Classic')),
                             DropdownMenuItem(value: 'modern', child: Text('Modern')),
@@ -604,7 +604,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         _gap(),
                         DropdownButtonFormField<String>(
                           initialValue: _debtTemplate,
-                          decoration: _decoration('Template ـی قەرز', Icons.request_quote_outlined),
+                          decoration: _decoration('قاڵبی قەرز', Icons.request_quote_outlined),
                           items: const [
                             DropdownMenuItem(value: 'classic', child: Text('Classic')),
                             DropdownMenuItem(value: 'modern', child: Text('Modern')),
@@ -616,7 +616,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         _gap(),
                         DropdownButtonFormField<String>(
                           initialValue: _paymentTemplate,
-                          decoration: _decoration('Template ـی پارەدانەوە', Icons.payments_outlined),
+                          decoration: _decoration('قاڵبی پارەدانەوە', Icons.payments_outlined),
                           items: const [
                             DropdownMenuItem(value: 'classic', child: Text('Classic')),
                             DropdownMenuItem(value: 'modern', child: Text('Modern')),
@@ -628,7 +628,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         _gap(),
                         DropdownButtonFormField<String>(
                           initialValue: _purchaseTemplate,
-                          decoration: _decoration('Template ـی کڕین', Icons.shopping_cart_outlined),
+                          decoration: _decoration('قاڵبی کڕین', Icons.shopping_cart_outlined),
                           items: const [
                             DropdownMenuItem(value: 'classic', child: Text('Classic')),
                             DropdownMenuItem(value: 'modern', child: Text('Modern')),
@@ -643,8 +643,8 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           decoration: _decoration('قەبارەی کاغەز', Icons.print_outlined),
                           items: const [
                             DropdownMenuItem(value: 'a4', child: Text('A4 ـ فەرمی')),
-                            DropdownMenuItem(value: 'thermal80', child: Text('80mm ـ Thermal/POS')),
-                            DropdownMenuItem(value: 'thermal58', child: Text('58mm ـ Thermal/POS')),
+                            DropdownMenuItem(value: 'thermal80', child: Text('٨٠ ملم ـ چاپی گەرمایی')),
+                            DropdownMenuItem(value: 'thermal58', child: Text('٥٨ ملم ـ چاپی گەرمایی')),
                           ],
                           onChanged: (value) {
                             if (value != null) setState(() => _paperSize = value);
@@ -660,13 +660,13 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           onChanged: (value) => setState(() => _marginMm = value),
                         ),
                       ]),
-                      _section('ژمارە، QR و Barcode', Icons.qr_code_2_outlined, [
+                      _section('ژمارە، کۆدی QR و بارکۆد', Icons.qr_code_2_outlined, [
                         TextFormField(
                           controller: _prefixController,
                           textDirection: TextDirection.ltr,
                           textCapitalization: TextCapitalization.characters,
                           decoration: _decoration(
-                            'Prefix ـی ژمارەی پسوولە',
+                            'پێشگری ژمارەی پسوولە',
                             Icons.confirmation_number_outlined,
                             hint: 'INV',
                           ),
@@ -681,13 +681,13 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         SwitchListTile(
                           value: _showQr,
                           onChanged: (value) => setState(() => _showQr = value),
-                          title: const Text('QR Code پیشان بدرێت'),
+                          title: const Text('کۆدی QR پیشان بدرێت'),
                           contentPadding: EdgeInsets.zero,
                         ),
                         SwitchListTile(
                           value: _showBarcode,
                           onChanged: (value) => setState(() => _showBarcode = value),
-                          title: const Text('Barcode پیشان بدرێت'),
+                          title: const Text('بارکۆد پیشان بدرێت'),
                           contentPadding: EdgeInsets.zero,
                         ),
                       ]),
@@ -721,7 +721,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           },
                         ),
                       ]),
-                      _section('زمان و Custom Fields', Icons.translate_outlined, [
+                      _section('زمان و خانە تایبەتەکان', Icons.translate_outlined, [
                         DropdownButtonFormField<String>(
                           initialValue: _languageMode,
                           decoration: _decoration('زمانی پسوولە', Icons.language_outlined),
@@ -730,7 +730,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                             DropdownMenuItem(value: 'ar', child: Text('عەرەبی')),
                             DropdownMenuItem(value: 'en', child: Text('English')),
                             DropdownMenuItem(value: 'ku_ar', child: Text('کوردی + عەرەبی')),
-                            DropdownMenuItem(value: 'ku_en', child: Text('کوردی + English')),
+                            DropdownMenuItem(value: 'ku_en', child: Text('کوردی + ئینگلیزی')),
                           ],
                           onChanged: (value) {
                             if (value != null) setState(() => _languageMode = value);
@@ -741,7 +741,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           controller: _customFieldsController,
                           maxLines: 5,
                           decoration: _decoration(
-                            'Custom Fields',
+                            'خانە تایبەتەکان',
                             Icons.dynamic_form_outlined,
                             hint: 'لق=دۆرێ\nکۆدی فرۆشگا=12345',
                           ).copyWith(
@@ -766,7 +766,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         child: OutlinedButton.icon(
                           onPressed: _showPreview,
                           icon: const Icon(Icons.preview_outlined),
-                          label: const Text('Live Preview ـی پسوولە'),
+                          label: const Text('پێشبینینی ڕاستەوخۆی پسوولە'),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -775,7 +775,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         child: ElevatedButton.icon(
                           onPressed: _saving ? null : _save,
                           icon: const Icon(Icons.save_outlined),
-                          label: const Text('پاشەکەوتکردنی Template ـی فەرمی'),
+                          label: const Text('پاشەکەوتکردنی قاڵبی فەرمی'),
                         ),
                       ),
                       const SizedBox(height: 20),

@@ -32,11 +32,11 @@ class _OwnerInfrastructureCenterScreenState
   String _duration(dynamic value) {
     final ms = _asInt(value);
     if (ms <= 0) return '—';
-    if (ms < 1000) return '$ms ms';
+    if (ms < 1000) return '$ms میلی‌چرکە';
     final seconds = ms / 1000;
-    if (seconds < 60) return '${seconds.toStringAsFixed(1)} s';
+    if (seconds < 60) return '${seconds.toStringAsFixed(1)} چرکە';
     final minutes = seconds / 60;
-    return '${minutes.toStringAsFixed(1)} min';
+    return '${minutes.toStringAsFixed(1)} خولەک';
   }
 
   @override
@@ -78,7 +78,7 @@ class _OwnerInfrastructureCenterScreenState
         _loading = false;
         _error = AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نەتوانرا دۆخی infrastructure بهێنرێت.',
+          fallback: 'نەتوانرا دۆخی ژێرخان بهێنرێت.',
         );
       });
     }
@@ -92,7 +92,7 @@ class _OwnerInfrastructureCenterScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Infrastructure Health'),
+        title: const Text('تەندروستی ژێرخان'),
         actions: [
           IconButton(
             tooltip: 'نوێکردنەوە',
@@ -143,8 +143,8 @@ class _OwnerInfrastructureCenterScreenState
                             Expanded(
                               child: Text(
                                 _healthy
-                                    ? 'Infrastructure ـی پلاتفۆرم ئاساییە.'
-                                    : 'هەندێک job یان delivery پێویستی بە پشکنین هەیە.',
+                                    ? 'ژێرخانی پلاتفۆرم ئاساییە.'
+                                    : 'هەندێک کاری خۆکار یان گەیاندن پێویستی بە پشکنین هەیە.',
                                 style: const TextStyle(height: 1.55),
                               ),
                             ),
@@ -158,28 +158,28 @@ class _OwnerInfrastructureCenterScreenState
                         children: [
                           _metric(
                             context,
-                            'Scheduled Job',
+                            'کاری کاتی خۆکار',
                             _asInt(_overview['active_jobs']).toString(),
                             Icons.schedule_rounded,
                             AppColors.primary,
                           ),
                           _metric(
                             context,
-                            'Job Failure / 24h',
+                            'شکستی کاری خۆکار / ٢٤ کاتژمێر',
                             _asInt(_overview['failed_jobs_24h']).toString(),
                             Icons.error_outline_rounded,
                             Colors.red,
                           ),
                           _metric(
                             context,
-                            'Push Queue',
+                            'ڕیزی ئاگادارکردنەوە',
                             _asInt(_overview['pending_push_queue']).toString(),
                             Icons.queue_rounded,
                             Colors.orange,
                           ),
                           _metric(
                             context,
-                            'Delivery Failure / 24h',
+                            'شکستی گەیاندن / ٢٤ کاتژمێر',
                             _asInt(_overview['failed_deliveries_24h'])
                                 .toString(),
                             Icons.notifications_off_outlined,
@@ -187,7 +187,7 @@ class _OwnerInfrastructureCenterScreenState
                           ),
                           _metric(
                             context,
-                            'Active Push Device',
+                            'ئامێری ئاگادارکردنەوەی چالاک',
                             _asInt(_overview['active_push_devices']).toString(),
                             Icons.phone_iphone_rounded,
                             Colors.teal,
@@ -200,25 +200,25 @@ class _OwnerInfrastructureCenterScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'کۆتا دۆخی Push و Job',
+                              'کۆتا دۆخی ئاگادارکردنەوە و کارە خۆکارەکان',
                               style: TextStyle(fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 12),
                             _row(
                               Icons.check_circle_outline_rounded,
-                              'کۆتا Push سەرکەوتوو',
+                              'کۆتا ئاگادارکردنەوەی سەرکەوتوو',
                               _date(_overview['latest_push_success_at']),
                             ),
                             const SizedBox(height: 8),
                             _row(
                               Icons.error_outline_rounded,
-                              'کۆتا Push شکست',
+                              'کۆتا شکستی ئاگادارکردنەوە',
                               _date(_overview['latest_push_failure_at']),
                             ),
                             const SizedBox(height: 8),
                             _row(
                               Icons.history_rounded,
-                              'کۆتا Job Run',
+                              'کۆتا جێبەجێکردنی کاری خۆکار',
                               _date(_overview['latest_job_run_at']),
                             ),
                           ],
@@ -226,9 +226,9 @@ class _OwnerInfrastructureCenterScreenState
                       ),
                       const SizedBox(height: 20),
                       const AppSectionHeader(
-                        title: 'Scheduled Jobs',
+                        title: 'کاری کاتی خۆکارs',
                         subtitle:
-                            'Schedule، دۆخی کۆتا run و شکستەکانی ٢٤ کاتژمێر',
+                            'خشتەی کات، دۆخی کۆتا جێبەجێکردن و شکستەکانی ٢٤ کاتژمێر',
                       ),
                       const SizedBox(height: 10),
                       if (_jobs.isEmpty)
@@ -236,7 +236,7 @@ class _OwnerInfrastructureCenterScreenState
                           child: Center(
                             child: Padding(
                               padding: EdgeInsets.all(18),
-                              child: Text('هیچ scheduled job ـێک نییە.'),
+                              child: Text('هیچ کاری خۆکاری کاتی نییە.'),
                             ),
                           ),
                         )
@@ -292,6 +292,15 @@ class _OwnerInfrastructureCenterScreenState
         : failed > 0 || (status != 'succeeded' && status != 'running')
             ? Colors.red
             : Colors.green;
+    final statusLabel = !active
+        ? 'ناچالاک'
+        : switch (status) {
+            'succeeded' => 'سەرکەوتوو',
+            'running' => 'لە جێبەجێکردندایە',
+            'failed' => 'شکست',
+            'never' => 'هێشتا جێبەجێ نەکراوە',
+            _ => 'نەناسراو',
+          };
 
     return AppSurface(
       child: Column(
@@ -309,7 +318,7 @@ class _OwnerInfrastructureCenterScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      (item['job_name'] ?? 'Scheduled Job').toString(),
+                      (item['job_name'] ?? 'کاری کاتی خۆکار').toString(),
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     Text(
@@ -321,7 +330,7 @@ class _OwnerInfrastructureCenterScreenState
                 ),
               ),
               Chip(
-                label: Text(active ? status : 'inactive'),
+                label: Text(statusLabel),
                 side: BorderSide.none,
               ),
             ],
@@ -333,11 +342,11 @@ class _OwnerInfrastructureCenterScreenState
             children: [
               _mini(
                 Icons.play_circle_outline_rounded,
-                '${_asInt(item['run_count_24h'])} run / 24h',
+                '${_asInt(item['run_count_24h'])} جێبەجێکردن / ٢٤ کاتژمێر',
               ),
               _mini(
                 Icons.error_outline_rounded,
-                '$failed failure / 24h',
+                '$failed شکست / ٢٤ کاتژمێر',
               ),
               _mini(
                 Icons.timer_outlined,

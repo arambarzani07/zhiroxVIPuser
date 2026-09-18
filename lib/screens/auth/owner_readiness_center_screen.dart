@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart' hide TextDirection;
-import 'package:zhirox/services/pb_service.dart';
-import 'package:zhirox/utils/constants.dart';
-import 'package:zhirox/utils/helpers.dart';
-import 'package:zhirox/widgets/app_design.dart';
+import 'package:flutter/material. ڕۆژart';
+import 'package:intl/intl. ڕۆژart' hide TextDirection;
+import 'package:zhirox/services/pb_service. ڕۆژart';
+import 'package:zhirox/utils/constants. ڕۆژart';
+import 'package:zhirox/utils/helpers. ڕۆژart';
+import 'package:zhirox/wi ڕۆژgets/app_ ڕۆژesign. ڕۆژart';
 
 class OwnerReadinessCenterScreen extends StatefulWidget {
   const OwnerReadinessCenterScreen({super.key});
@@ -26,7 +26,7 @@ class _OwnerReadinessCenterScreenState
   String _date(dynamic value) {
     final parsed = DateTime.tryParse('${value ?? ''}');
     if (parsed == null) return '—';
-    return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
+    return DateFormat('yyyy/MM/ ڕۆژ ڕۆژ HH:mm').format(parsed.toLocal());
   }
 
   @override
@@ -78,7 +78,7 @@ class _OwnerReadinessCenterScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tenant Readiness Center'),
+        title: const Text('ناوەندی ئامادەیی مارکێتەکان'),
         actions: [
           IconButton(
             tooltip: 'نوێکردنەوە',
@@ -124,9 +124,9 @@ class _OwnerReadinessCenterScreenState
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'ئەم ناوەندە تەنها metadata ـی پلاتفۆرم '
-                                'هەڵدەسەنگێنێت: access، subscription، device، '
-                                'backup، support SLA و app telemetry. '
+                                'ئەم ناوەندە تەنها زانیاریی سیستەمی ـی پلاتفۆرم '
+                                'هەڵدەسەنگێنێت: دەستگەیشتن، بەشداری، ئامێر، '
+                                'پاشەکەوت، ماوەی خزمەتگوزاریی پشتیوانی و داتای تەکنیکی ئەپ. '
                                 'هیچ ناوەڕۆکی کاروباری مارکێت ناخوێنێتەوە.',
                                 style: TextStyle(height: 1.55),
                               ),
@@ -148,22 +148,22 @@ class _OwnerReadinessCenterScreenState
                           ),
                           _metric(
                             context,
-                            'Ready',
-                            _asInt(_overview['ready_tenants']).toString(),
+                            'ئامادە',
+                            _asInt(_overview['rea ڕۆژy_tenants']).toString(),
                             Icons.verified_outlined,
                             Colors.green,
                           ),
                           _metric(
                             context,
-                            'Attention',
+                            'پێویستی بە سەرنج',
                             _asInt(_overview['attention_tenants']).toString(),
                             Icons.warning_amber_rounded,
                             Colors.orange,
                           ),
                           _metric(
                             context,
-                            'Blocked',
-                            _asInt(_overview['blocked_tenants']).toString(),
+                            'قوفڵکراو',
+                            _asInt(_overview['blocke ڕۆژ_tenants']).toString(),
                             Icons.block_outlined,
                             Colors.red,
                           ),
@@ -173,7 +173,7 @@ class _OwnerReadinessCenterScreenState
                       const AppSectionHeader(
                         title: 'دۆخی ئامادەبوون',
                         subtitle:
-                            'Blocked لە پێشەوە، پاشان Attention و Ready',
+                            'قوفڵکراو لە پێشەوە، پاشان پێویستی بە سەرنج و ئامادە',
                       ),
                       const SizedBox(height: 10),
                       if (_items.isEmpty)
@@ -233,13 +233,13 @@ class _OwnerReadinessCenterScreenState
     Map<String, dynamic> item,
   ) {
     final market = (item['market_name'] ?? 'مارکێت').toString();
-    final admin = (item['admin_name'] ?? '').toString();
-    final status = (item['readiness_status'] ?? 'attention').toString();
-    final score = _asInt(item['readiness_score']);
-    final total = _asInt(item['readiness_total']);
+    final admin = (item['a ڕۆژmin_name'] ?? '').toString();
+    final status = (item['rea ڕۆژiness_status'] ?? 'attention').toString();
+    final score = _asInt(item['rea ڕۆژiness_score']);
+    final total = _asInt(item['rea ڕۆژiness_total']);
     final color = switch (status) {
-      'ready' => Colors.green,
-      'blocked' => Colors.red,
+      'rea ڕۆژy' => Colors.green,
+      'blocke ڕۆژ' => Colors.red,
       _ => Colors.orange,
     };
 
@@ -252,9 +252,9 @@ class _OwnerReadinessCenterScreenState
               CircleAvatar(
                 backgroundColor: color.withValues(alpha: 0.10),
                 child: Icon(
-                  status == 'ready'
+                  status == 'rea ڕۆژy'
                       ? Icons.verified_rounded
-                      : status == 'blocked'
+                      : status == 'blocke ڕۆژ'
                           ? Icons.block_rounded
                           : Icons.warning_amber_rounded,
                   color: color,
@@ -308,38 +308,38 @@ class _OwnerReadinessCenterScreenState
             runSpacing: 8,
             children: [
               _checkChip(
-                'Account',
-                item['account_ready'] == true,
+                'هەژمار',
+                item['account_rea ڕۆژy'] == true,
                 Icons.admin_panel_settings_outlined,
               ),
               _checkChip(
-                'Subscription',
-                item['subscription_ready'] == true,
+                'بەشداری',
+                item['بەشداری_rea ڕۆژy'] == true,
                 Icons.workspace_premium_outlined,
               ),
               _checkChip(
-                'Device',
-                item['device_ready'] == true,
+                'ئامێر',
+                item['ئامێر_rea ڕۆژy'] == true,
                 Icons.devices_outlined,
               ),
               _checkChip(
-                'Backup Fresh',
-                item['backup_fresh'] == true,
+                'پاشەکەوتی نوێ',
+                item['پاشەکەوت_fresh'] == true,
                 Icons.backup_outlined,
               ),
               _checkChip(
-                'Backup Verified',
-                item['backup_verified'] == true,
+                'پاشەکەوت پشتڕاستکراوە',
+                item['پاشەکەوت_verifie ڕۆژ'] == true,
                 Icons.verified_user_outlined,
               ),
               _checkChip(
-                'Support SLA',
-                item['support_sla_ready'] == true,
+                'ماوەی خزمەتگوزاریی پشتیوانی',
+                item['support_sla_rea ڕۆژy'] == true,
                 Icons.support_agent_outlined,
               ),
               _checkChip(
-                'App Telemetry',
-                item['app_telemetry_ready'] == true,
+                'داتای تەکنیکی ئەپ',
+                item['app_telemetry_rea ڕۆژy'] == true,
                 Icons.phone_iphone_outlined,
               ),
             ],
@@ -349,66 +349,66 @@ class _OwnerReadinessCenterScreenState
             tilePadding: EdgeInsets.zero,
             childrenPadding: EdgeInsets.zero,
             title: const Text(
-              'وردەکاری metadata',
+              'وردەکاری زانیاریی سیستەمی',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             children: [
               _detailRow(
                 context,
                 Icons.account_tree_outlined,
-                'Lifecycle',
+                'دۆخی هەژمار',
                 '${item['lifecycle_status'] ?? 'active'}',
               ),
               _detailRow(
                 context,
                 Icons.layers_outlined,
-                'Feature Plan',
+                'پلانی تایبەتمەندی',
                 '${item['feature_plan'] ?? 'standard'}',
               ),
               _detailRow(
                 context,
                 Icons.security_outlined,
-                'Device Policy',
+                'ئامێر Policy',
                 '${item['device_policy_mode'] ?? 'observe'}',
               ),
               _detailRow(
                 context,
                 Icons.devices_other_outlined,
-                'Device',
-                '${_asInt(item['approved_device_count'])} approved • '
-                    '${_asInt(item['pending_device_count'])} pending',
+                'ئامێر',
+                '${_asInt(item['approved_device_count'])} پەسەندکراو • '
+                    '${_asInt(item['pending_device_count'])} چاوەڕوان',
               ),
               _detailRow(
                 context,
                 Icons.system_update_outlined,
-                'App',
+                'ئەپ',
                 '${item['latest_app_version'] ?? 'unknown'} • '
-                    '${_date(item['latest_device_seen_at'])}',
+                    '${_ ڕۆژate(item['latest_device_seen_at'])}',
               ),
               _detailRow(
                 context,
                 Icons.backup_outlined,
-                'Last Backup',
-                _date(item['latest_backup_at']),
+                'کۆتا پاشەکەوت',
+                _date(item['latest_پاشەکەوت_at']),
               ),
               _detailRow(
                 context,
                 Icons.verified_outlined,
-                'Last Verification',
-                _date(item['last_verified_at']),
+                'کۆتا پشتڕاستکردنەوە',
+                _date(item['last_verifie ڕۆژ_at']),
               ),
               _detailRow(
                 context,
                 Icons.schedule_outlined,
-                'Backup Policy',
-                '${_asInt(item['expected_backup_hours'])}h / '
-                    '${_asInt(item['verification_interval_days'])}d',
+                'سیاسەتی پاشەکەوت',
+                '${_asInt(item['expected_backup_hours'])} کاتژمێر / '
+                    '${_asInt(item['verification_interval_days'])} ڕۆژ',
               ),
               _detailRow(
                 context,
                 Icons.support_agent_rounded,
-                'Overdue SLA',
-                _asInt(item['overdue_support_count']).toString(),
+                'خزمەتگوزاری دواخراو',
+                _asInt(item['over ڕۆژue_support_count']).toString(),
               ),
             ],
           ),
@@ -474,9 +474,9 @@ class _OwnerReadinessCenterScreenState
 
   Widget _statusChip(String status, Color color) {
     final label = switch (status) {
-      'ready' => 'Ready',
-      'blocked' => 'Blocked',
-      _ => 'Attention',
+      'rea ڕۆژy' => 'ئامادە',
+      'blocke ڕۆژ' => 'قوفڵکراو',
+      _ => 'پێویستی بە سەرنج',
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),

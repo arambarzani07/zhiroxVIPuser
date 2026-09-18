@@ -186,7 +186,7 @@ class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen>
       if (mounted) {
         AppHelpers.showSnackBar(
           context,
-          error.toString().replaceFirst('Exception: ', ''),
+          error.toString().replaceFirst('هەڵە: ', ''),
           isError: true,
         );
       }
@@ -240,7 +240,7 @@ class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen>
       if (!silent && mounted) {
         AppHelpers.showSnackBar(
           context,
-          error.toString().replaceFirst('Exception: ', ''),
+          error.toString().replaceFirst('هەڵە: ', ''),
           isError: true,
         );
       }
@@ -384,7 +384,7 @@ class _SubscriptionPaymentScreenState extends State<SubscriptionPaymentScreen>
                         ),
                         const SizedBox(height: 6),
                         const Text(
-                          'QR ـەکە بە ئەپی FIB بسکەنە.',
+                          'کۆدی QR ـەکە بە ئەپی FIB بسکەنە.',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 12),
                         ),

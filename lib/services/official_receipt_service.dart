@@ -112,26 +112,26 @@ class OfficialReceiptService {
 
   static String _label(String key, String mode) {
     const labels = <String, List<String>>{
-      'receipt_no': ['ژمارەی پسوولە', 'رقم الوصل', 'Receipt No.'],
+      'receipt_no': ['ژمارەی پسوولە', 'رقم الوصل', 'ژمارەی پسوولە'],
       'date': ['بەروار', 'التاريخ', 'Date'],
       'customer': ['کڕیار', 'الزبون', 'Customer'],
-      'customer_phone': ['مۆبایلی کڕیار', 'هاتف الزبون', 'Customer phone'],
-      'due': ['بەرواری دانەوە', 'تاريخ الاستحقاق', 'Due date'],
+      'customer_phone': ['مۆبایلی کڕیار', 'هاتف الزبون', 'ژمارە مۆبایلی کڕیار'],
+      'due': ['بەرواری دانەوە', 'تاريخ الاستحقاق', 'بەرواری دانەوە'],
       'admin': ['بەڕێوەبەر', 'المدير', 'Manager'],
       'item': ['کاڵا', 'المادة', 'Item'],
       'qty': ['دانە', 'العدد', 'Qty'],
       'price': ['نرخ', 'السعر', 'Price'],
       'line_total': ['کۆ', 'المجموع', 'Total'],
       'subtotal': ['کۆی پێش داشکاندن', 'المجموع قبل الخصم', 'Subtotal'],
-      'total': ['کۆی کۆتایی', 'المجموع النهائي', 'Grand total'],
+      'total': ['کۆی کۆتایی', 'المجموع النهائي', 'کۆی گشتی'],
       'paid': ['پارەی وەرگیراو', 'المبلغ المستلم', 'Paid'],
       'remaining': ['ماوەی قەرز', 'المتبقي', 'Remaining'],
       'status': ['دۆخ', 'الحالة', 'Status'],
       'note': ['تێبینی', 'ملاحظة', 'Note'],
-      'payment_method': ['جۆری پارەدان', 'طريقة الدفع', 'Payment method'],
+      'payment_method': ['جۆری پارەدان', 'طريقة الدفع', 'شێوازی پارەدان'],
       'discount': ['داشکاندن', 'الخصم', 'Discount'],
-      'customer_signature': ['واژۆی کڕیار', 'توقيع الزبون', 'Customer signature'],
-      'market_stamp': ['مۆر / واژۆی مارکێت', 'ختم / توقيع السوق', 'Market stamp / signature'],
+      'customer_signature': ['واژۆی کڕیار', 'توقيع الزبون', 'واژۆی کڕیار'],
+      'market_stamp': ['مۆر / واژۆی مارکێت', 'ختم / توقيع السوق', 'مۆر / واژۆی مارکێت'],
     };
     final values = labels[key] ?? <String>[key, key, key];
     switch (mode) {

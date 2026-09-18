@@ -47,7 +47,7 @@ class PaymentReceiptActions {
       } catch (_) {}
     }
 
-    if (marketName.isEmpty) marketName = 'Zhirox System';
+    if (marketName.isEmpty) marketName = 'سیستەمی ژیرۆکس';
     if (adminName.isEmpty) adminName = 'ZHIROX';
     return _PaymentReceiptIdentity(
       adminId: adminId,
@@ -78,7 +78,7 @@ class PaymentReceiptActions {
                   'پسوولەی پارەدانەوە',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
-                subtitle: Text('Payment Template • چاپ یان Share بە PDF / Image'),
+                subtitle: Text('قاڵبی پارەدانەوە • چاپ یان هاوبەشکردن بە PDF / وێنە'),
               ),
               ListTile(
                 leading: const Icon(Icons.print_outlined),
@@ -87,12 +87,12 @@ class PaymentReceiptActions {
               ),
               ListTile(
                 leading: const Icon(Icons.picture_as_pdf_outlined),
-                title: const Text('Share PDF'),
+                title: const Text('هاوبەشکردنی PDF'),
                 onTap: () => Navigator.pop(sheetContext, 'share_pdf'),
               ),
               ListTile(
                 leading: const Icon(Icons.image_outlined),
-                title: const Text('Share Image'),
+                title: const Text('هاوبەشکردنی وێنە'),
                 onTap: () => Navigator.pop(sheetContext, 'share_image'),
               ),
               ListTile(

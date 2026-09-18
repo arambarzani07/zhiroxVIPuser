@@ -58,7 +58,7 @@ class FinancialDocumentActions {
       } catch (_) {}
     }
 
-    if (marketName.isEmpty) marketName = 'Zhirox System';
+    if (marketName.isEmpty) marketName = 'سیستەمی ژیرۆکس';
     if (adminName.isEmpty) adminName = 'ZHIROX';
     return _ReceiptIdentity(
       adminId: adminId,
@@ -139,7 +139,7 @@ class FinancialDocumentActions {
                     'پسوولەی فەرمی',
                     style: TextStyle(fontWeight: FontWeight.w800),
                   ),
-                  subtitle: Text('چاپ یان Share بە PDF / Image'),
+                  subtitle: Text('چاپ یان هاوبەشکردن بە PDF / وێنە'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.print_outlined),
@@ -148,12 +148,12 @@ class FinancialDocumentActions {
                 ),
                 ListTile(
                   leading: const Icon(Icons.picture_as_pdf_outlined),
-                  title: const Text('Share PDF'),
+                  title: const Text('هاوبەشکردنی PDF'),
                   onTap: () => Navigator.pop(sheetContext, 'share_pdf'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.image_outlined),
-                  title: const Text('Share Image'),
+                  title: const Text('هاوبەشکردنی وێنە'),
                   onTap: () => Navigator.pop(sheetContext, 'share_image'),
                 ),
               ],

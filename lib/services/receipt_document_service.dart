@@ -86,7 +86,7 @@ class ReceiptDocumentService {
     await PBService.ensureInitialized();
     final actorId = PBService.client.auth.currentUser?.id ?? '';
     if (actorId.isEmpty) {
-      throw StateError('Authentication required for receipt versioning.');
+      throw StateError('بۆ وەشانکردنی پسوولە پێویستە بچیتە ژوورەوە.');
     }
 
     try {

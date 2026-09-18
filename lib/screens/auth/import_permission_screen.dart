@@ -74,7 +74,7 @@ class _ImportPermissionScreenState extends State<ImportPermissionScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('نەتوانرا مۆڵەتی Import بگۆڕدرێت.')),
+          const SnackBar(content: Text('نەتوانرا مۆڵەتی هێنانەژوورەوە بگۆڕدرێت.')),
         );
       }
     } finally {
@@ -86,7 +86,7 @@ class _ImportPermissionScreenState extends State<ImportPermissionScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      appBar: AppBar(title: const Text('مۆڵەتی Import')),
+      appBar: AppBar(title: const Text('مۆڵەتی هێنانەژوورەوە')),
       body: RefreshIndicator(
         onRefresh: _load,
         child: _loading
@@ -113,7 +113,7 @@ class _ImportPermissionScreenState extends State<ImportPermissionScreen> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: const Text(
-                            'لێرە تەنها مۆڵەت دەدەیت. Import خۆی لە ئەپی بەڕێوەبەر (user-source) و لە tenant ـی هەمان مارکێت ئەنجام دەدرێت.',
+                            'لێرە تەنها مۆڵەت دەدەیت. هێنانەژوورەوە خۆی لە ئەپی بەڕێوەبەر و لە هەمان مارکێت ئەنجام دەدرێت.',
                             style: TextStyle(height: 1.6),
                           ),
                         );
@@ -148,8 +148,8 @@ class _ImportPermissionScreenState extends State<ImportPermissionScreen> {
                           ),
                           subtitle: Text(
                             enabled
-                                ? 'Import کراوە — بەڕێوەبەر دەتوانێت داتای خۆی بگوازێتەوە'
-                                : 'Import داخراوە',
+                                ? 'هێنانەژوورەوە کراوە — بەڕێوەبەر دەتوانێت داتای خۆی بگوازێتەوە'
+                                : 'هێنانەژوورەوە داخراوە',
                           ),
                         ),
                       );
