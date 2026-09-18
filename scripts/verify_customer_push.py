@@ -100,6 +100,19 @@ assert "'payment_created'" in automatic_schema, 'automatic payment push must be 
 assert 'exception when others' in automatic_schema.lower(), 'push side effects must remain best-effort and never roll back finance writes'
 assert 'daftar_live_sync' in automatic_schema and 'legacy_import' in automatic_schema, 'automatic debt trigger must suppress imported historical records'
 
+history_migration = ROOT / 'supabase/migrations/20260918100000_customer_push_history_retry.sql'
+assert history_migration.exists(), 'customer push history/retry migration missing'
+history_schema = history_migration.read_text(errors='ignore')
+for marker in (
+    'read_customer_push_history_service',
+    'retry_customer_push_service',
+    "'no_device'",
+    "'partial'",
+    'notification_deliveries',
+):
+    assert marker in history_schema, f'customer push history/retry marker missing: {marker}'
+assert 'no_active_push_subscription' in history_schema, 'retry must refuse when no active device exists'
+
 manual_migration = ROOT / 'supabase/migrations/20260917210000_manual_customer_push_notifications.sql'
 assert manual_migration.exists(), 'manual customer push migration missing'
 manual_schema = manual_migration.read_text(errors='ignore')
@@ -247,3 +260,17 @@ assert 'https://hsoyfbtpvwfmjokudznx.supabase.co' in headers
 assert 'Service-Worker-Allowed: /' in headers
 
 print('customer push policy verified')
+
+# Admin notification observability controls
+service_text = (ROOT / 'lib/services/customer_push_service.dart').read_text(errors='ignore')
+assert 'CustomerPushHistoryItem' in service_text, 'push history model missing'
+assert 'loadHistory' in service_text, 'push history gateway missing'
+assert 'retryNotification' in service_text, 'push retry gateway missing'
+card_text = (ROOT / 'lib/widgets/customer_push_card.dart').read_text(errors='ignore')
+assert 'مێژووی ئاگادارکردنەوەکان' in card_text, 'customer push history UI missing'
+assert 'دووبارە ناردنەوە' in card_text, 'customer push retry UI missing'
+admin_text = (ROOT / 'supabase/functions/customer-push-admin/index.ts').read_text(errors='ignore')
+assert 'action === "history"' in admin_text, 'admin API history action missing'
+assert 'action === "retry"' in admin_text, 'admin API retry action missing'
+assert 'read_customer_push_history_service' in admin_text, 'admin API history RPC missing'
+assert 'retry_customer_push_service' in admin_text, 'admin API retry RPC missing'
