@@ -21,6 +21,9 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   final ScrollController _scrollController = ScrollController();
 
   List<CustomerPushOverviewItem> _items = const [];
+  CustomerPushOverviewSummary? _summary;
+  String _filter = 'all';
+  String? _busyCustomerId;
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = false;
@@ -82,6 +85,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
     try {
       final page = await _gateway.loadOverview(
         search: _searchController.text.trim(),
+        filter: _filter,
         limit: _pageSize,
         offset: loadMore ? _items.length : 0,
       );
@@ -89,6 +93,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
       setState(() {
         _items = loadMore ? [..._items, ...page.items] : page.items;
         _totalCount = page.totalCount;
+        _summary = page.summary;
         _hasMore = page.hasMore;
         _loading = false;
         _loadingMore = false;
@@ -134,6 +139,117 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
     }
   }
 
+  int _filterCount(String filter) {
+    final summary = _summary;
+    if (summary == null) return 0;
+    switch (filter) {
+      case 'active':
+        return summary.active;
+      case 'inactive':
+        return summary.inactive;
+      case 'failed':
+        return summary.failed;
+      case 'pending':
+        return summary.pending;
+      default:
+        return summary.all;
+    }
+  }
+
+  String _filterLabel(String filter) {
+    switch (filter) {
+      case 'active':
+        return 'چالاک';
+      case 'inactive':
+        return 'ناچالاک';
+      case 'failed':
+        return 'شکست';
+      case 'pending':
+        return 'لە ڕیزدایە';
+      default:
+        return 'هەموو';
+    }
+  }
+
+  void _selectFilter(String filter) {
+    if (_filter == filter) return;
+    setState(() => _filter = filter);
+    unawaited(_load());
+  }
+
+  Future<void> _sendManual(CustomerPushOverviewItem item) async {
+    if (_busyCustomerId != null || !item.active) return;
+    final formKey = GlobalKey<FormState>();
+    var draft = '';
+    final message = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        title: Text('ئاگاداری بۆ ${item.name}'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            autofocus: true,
+            minLines: 3,
+            maxLines: 5,
+            maxLength: CustomerPushService.manualMessageMaxLength,
+            onChanged: (value) => draft = value,
+            decoration: const InputDecoration(
+              labelText: 'پەیامی ئاگادارکردنەوە',
+              border: OutlineInputBorder(),
+            ),
+            validator: (value) {
+              final normalized = value?.trim() ?? '';
+              if (normalized.isEmpty) return 'پەیام بنووسە';
+              if (normalized.length > CustomerPushService.manualMessageMaxLength) {
+                return 'پەیام زۆر درێژە';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('پاشگەزبوونەوە'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              if (formKey.currentState?.validate() != true) return;
+              Navigator.of(dialogContext).pop(draft.trim());
+            },
+            icon: const Icon(Icons.send_rounded),
+            label: const Text('ناردن'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || message == null) return;
+
+    setState(() => _busyCustomerId = item.customerId);
+    try {
+      final result = await _gateway.sendManual(item.customerId, message);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.targetDevices > 0
+                ? 'ئاگاداری بۆ ${result.targetDevices} ئامێر ڕیزکرا'
+                : 'هیچ ئامێرێکی چالاک بۆ ئەم کڕیارە نییە',
+          ),
+        ),
+      );
+      unawaited(_load());
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ناردنی ئاگاداری سەرکەوتوو نەبوو')),
+      );
+    } finally {
+      if (mounted) setState(() => _busyCustomerId = null);
+    }
+  }
+
   Future<void> _openCustomer(CustomerPushOverviewItem item) async {
     await Navigator.push(
       context,
@@ -166,6 +282,27 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
           children: [
             const ManualPushBroadcastCard(),
             const SizedBox(height: 18),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: const ['all', 'active', 'inactive', 'failed', 'pending']
+                    .map((filter) {
+                  final selected = _filter == filter;
+                  return Padding(
+                    padding: const EdgeInsetsDirectional.only(end: 8),
+                    child: ChoiceChip(
+                      selected: selected,
+                      showCheckmark: false,
+                      onSelected: (_) => _selectFilter(filter),
+                      label: Text(
+                        '${_filterLabel(filter)} (${_filterCount(filter)})',
+                      ),
+                    ),
+                  );
+                }).toList(growable: false),
+              ),
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 const Expanded(
@@ -280,7 +417,41 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                         ),
                       ],
                     ),
-                    trailing: const Icon(Icons.chevron_left_rounded),
+                    trailing: item.active
+                        ? PopupMenuButton<String>(
+                            tooltip: 'کردارەکان',
+                            enabled: _busyCustomerId == null,
+                            onSelected: (value) {
+                              if (value == 'send') {
+                                unawaited(_sendManual(item));
+                              } else if (value == 'open') {
+                                unawaited(_openCustomer(item));
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem<String>(
+                                value: 'send',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.send_rounded, size: 20),
+                                    SizedBox(width: 10),
+                                    Text('ناردنی ئاگاداری'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem<String>(
+                                value: 'open',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.person_outline_rounded, size: 20),
+                                    SizedBox(width: 10),
+                                    Text('کردنەوەی کڕیار'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : const Icon(Icons.chevron_left_rounded),
                   ),
                 );
               }),
