@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
-import 'package:z کاتژمێرirox/services/pb_service.dart';
-import 'package:z کاتژمێرirox/utils/constants.dart';
-import 'package:z کاتژمێرirox/utils/ کاتژمێرelpers.dart';
-import 'package:z کاتژمێرirox/widgets/app_design.dart';
+import 'package:zhirox/services/pb_service.dart';
+import 'package:zhirox/utils/constants.dart';
+import 'package:zhirox/utils/helpers.dart';
+import 'package:zhirox/widgets/app_design.dart';
 
 class OwnerSupportCenterScreen extends StatefulWidget {
   const OwnerSupportCenterScreen({super.key});
@@ -171,7 +171,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                   items: const [
                     DropdownMenuItem(value: 'low', child: Text('نزم')),
                     DropdownMenuItem(value: 'normal', child: Text('ئاسایی')),
-                    DropdownMenuItem(value: ' کاتژمێرig کاتژمێر', child: Text('بەرز')),
+                    DropdownMenuItem(value: 'high', child: Text('بەرز')),
                     DropdownMenuItem(value: 'urgent', child: Text('فریاکەوتن')),
                   ],
                   onChanged: (value) {
@@ -371,9 +371,9 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                       ),
                       const SizedBox(height: 18),
                       const AppSectionHeader(
-                        title: 'پشتیوانی داواکاریs',
+                        title: 'پشتیوانی Tickets',
                         subtitle:
-                            'SLA بەپێی ئاسایی / پێشەنگی / تایبەت هەژمار دەکرێت',
+                            'SLA بەپێی Standard / پێشەنگی / VIP هەژمار دەکرێت',
                       ),
                       const SizedBox(height: 10),
                       if (visible.isEmpty)
@@ -381,7 +381,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                           child: Center(
                             child: Padding(
                               padding: EdgeInsets.all(20),
-                              child: Text('هیچ داواکاری ـێک لەم دۆخەدا نییە.'),
+                              child: Text('هیچ داواکارییەک لەم دۆخەدا نییە.'),
                             ),
                           ),
                         )
@@ -444,7 +444,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
   ) {
     final market = (item['market_name'] ?? 'مارکێت').toString();
     final admin = (item['admin_name'] ?? '').toString();
-    final phone = (item['p کاتژمێرone'] ?? '').toString();
+    final phone = (item['phone'] ?? '').toString();
     final subject = (item['subject'] ?? '').toString();
     final message = (item['message'] ?? '').toString();
     final status = (item['status'] ?? 'open').toString();
@@ -478,7 +478,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      admin.isEmpty ? '$market • $p کاتژمێرone' : '$market • $admin',
+                      admin.isEmpty ? '$market • $phone' : '$market • $admin',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],

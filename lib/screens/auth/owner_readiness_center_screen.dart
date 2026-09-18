@@ -1,9 +1,9 @@
-import 'package:flutter/material. ڕۆژart';
-import 'package:intl/intl. ڕۆژart' hide TextDirection;
-import 'package:zhirox/services/pb_service. ڕۆژart';
-import 'package:zhirox/utils/constants. ڕۆژart';
-import 'package:zhirox/utils/helpers. ڕۆژart';
-import 'package:zhirox/wi ڕۆژgets/app_ ڕۆژesign. ڕۆژart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' hide TextDirection;
+import 'package:zhirox/services/pb_service.dart';
+import 'package:zhirox/utils/constants.dart';
+import 'package:zhirox/utils/helpers.dart';
+import 'package:zhirox/widgets/app_design.dart';
 
 class OwnerReadinessCenterScreen extends StatefulWidget {
   const OwnerReadinessCenterScreen({super.key});
@@ -26,8 +26,27 @@ class _OwnerReadinessCenterScreenState
   String _date(dynamic value) {
     final parsed = DateTime.tryParse('${value ?? ''}');
     if (parsed == null) return '—';
-    return DateFormat('yyyy/MM/ ڕۆژ ڕۆژ HH:mm').format(parsed.toLocal());
+    return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
   }
+
+  String _lifecycleLabel(String value) => switch (value) {
+        'trial' => 'تاقیکردنەوە',
+        'grace' => 'ماوەی ڕێگەپێدراو',
+        'suspended' => 'ڕاگیراو',
+        'archived' => 'ئەرشیڤکراو',
+        _ => 'چالاک',
+      };
+
+  String _featurePlanLabel(String value) => switch (value) {
+        'pro' => 'پێشکەوتوو',
+        'vip' => 'تایبەت',
+        _ => 'ئاسایی',
+      };
+
+  String _devicePolicyLabel(String value) => switch (value) {
+        'approval_required' => 'پێویستی بە پەسەندکردن',
+        _ => 'چاودێری',
+      };
 
   @override
   void initState() {
@@ -124,7 +143,7 @@ class _OwnerReadinessCenterScreenState
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'ئەم ناوەندە تەنها زانیاریی سیستەمی ـی پلاتفۆرم '
+                                'ئەم ناوەندە تەنها زانیاریی سیستەمی پلاتفۆرم '
                                 'هەڵدەسەنگێنێت: دەستگەیشتن، بەشداری، ئامێر، '
                                 'پاشەکەوت، ماوەی خزمەتگوزاریی پشتیوانی و داتای تەکنیکی ئەپ. '
                                 'هیچ ناوەڕۆکی کاروباری مارکێت ناخوێنێتەوە.',
@@ -149,7 +168,7 @@ class _OwnerReadinessCenterScreenState
                           _metric(
                             context,
                             'ئامادە',
-                            _asInt(_overview['rea ڕۆژy_tenants']).toString(),
+                            _asInt(_overview['ready_tenants']).toString(),
                             Icons.verified_outlined,
                             Colors.green,
                           ),
@@ -163,7 +182,7 @@ class _OwnerReadinessCenterScreenState
                           _metric(
                             context,
                             'قوفڵکراو',
-                            _asInt(_overview['blocke ڕۆژ_tenants']).toString(),
+                            _asInt(_overview['blocked_tenants']).toString(),
                             Icons.block_outlined,
                             Colors.red,
                           ),
@@ -233,13 +252,13 @@ class _OwnerReadinessCenterScreenState
     Map<String, dynamic> item,
   ) {
     final market = (item['market_name'] ?? 'مارکێت').toString();
-    final admin = (item['a ڕۆژmin_name'] ?? '').toString();
-    final status = (item['rea ڕۆژiness_status'] ?? 'attention').toString();
-    final score = _asInt(item['rea ڕۆژiness_score']);
-    final total = _asInt(item['rea ڕۆژiness_total']);
+    final admin = (item['admin_name'] ?? '').toString();
+    final status = (item['readiness_status'] ?? 'attention').toString();
+    final score = _asInt(item['readiness_score']);
+    final total = _asInt(item['readiness_total']);
     final color = switch (status) {
-      'rea ڕۆژy' => Colors.green,
-      'blocke ڕۆژ' => Colors.red,
+      'ready' => Colors.green,
+      'blocked' => Colors.red,
       _ => Colors.orange,
     };
 
@@ -252,9 +271,9 @@ class _OwnerReadinessCenterScreenState
               CircleAvatar(
                 backgroundColor: color.withValues(alpha: 0.10),
                 child: Icon(
-                  status == 'rea ڕۆژy'
+                  status == 'ready'
                       ? Icons.verified_rounded
-                      : status == 'blocke ڕۆژ'
+                      : status == 'blocked'
                           ? Icons.block_rounded
                           : Icons.warning_amber_rounded,
                   color: color,
@@ -309,37 +328,37 @@ class _OwnerReadinessCenterScreenState
             children: [
               _checkChip(
                 'هەژمار',
-                item['account_rea ڕۆژy'] == true,
+                item['account_ready'] == true,
                 Icons.admin_panel_settings_outlined,
               ),
               _checkChip(
                 'بەشداری',
-                item['بەشداری_rea ڕۆژy'] == true,
+                item['subscription_ready'] == true,
                 Icons.workspace_premium_outlined,
               ),
               _checkChip(
                 'ئامێر',
-                item['ئامێر_rea ڕۆژy'] == true,
+                item['device_ready'] == true,
                 Icons.devices_outlined,
               ),
               _checkChip(
                 'پاشەکەوتی نوێ',
-                item['پاشەکەوت_fresh'] == true,
+                item['backup_fresh'] == true,
                 Icons.backup_outlined,
               ),
               _checkChip(
                 'پاشەکەوت پشتڕاستکراوە',
-                item['پاشەکەوت_verifie ڕۆژ'] == true,
+                item['backup_verified'] == true,
                 Icons.verified_user_outlined,
               ),
               _checkChip(
                 'ماوەی خزمەتگوزاریی پشتیوانی',
-                item['support_sla_rea ڕۆژy'] == true,
+                item['support_sla_ready'] == true,
                 Icons.support_agent_outlined,
               ),
               _checkChip(
                 'داتای تەکنیکی ئەپ',
-                item['app_telemetry_rea ڕۆژy'] == true,
+                item['app_telemetry_ready'] == true,
                 Icons.phone_iphone_outlined,
               ),
             ],
@@ -357,19 +376,19 @@ class _OwnerReadinessCenterScreenState
                 context,
                 Icons.account_tree_outlined,
                 'دۆخی هەژمار',
-                '${item['lifecycle_status'] ?? 'active'}',
+                _lifecycleLabel((item['lifecycle_status'] ?? 'active').toString()),
               ),
               _detailRow(
                 context,
                 Icons.layers_outlined,
                 'پلانی تایبەتمەندی',
-                '${item['feature_plan'] ?? 'standard'}',
+                _featurePlanLabel((item['feature_plan'] ?? 'standard').toString()),
               ),
               _detailRow(
                 context,
                 Icons.security_outlined,
                 'ئامێر Policy',
-                '${item['device_policy_mode'] ?? 'observe'}',
+                _devicePolicyLabel((item['device_policy_mode'] ?? 'observe').toString()),
               ),
               _detailRow(
                 context,
@@ -383,19 +402,19 @@ class _OwnerReadinessCenterScreenState
                 Icons.system_update_outlined,
                 'ئەپ',
                 '${item['latest_app_version'] ?? 'unknown'} • '
-                    '${_ ڕۆژate(item['latest_device_seen_at'])}',
+                    '${_date(item['latest_device_seen_at'])}',
               ),
               _detailRow(
                 context,
                 Icons.backup_outlined,
                 'کۆتا پاشەکەوت',
-                _date(item['latest_پاشەکەوت_at']),
+                _date(item['latest_backup_at']),
               ),
               _detailRow(
                 context,
                 Icons.verified_outlined,
                 'کۆتا پشتڕاستکردنەوە',
-                _date(item['last_verifie ڕۆژ_at']),
+                _date(item['last_verified_at']),
               ),
               _detailRow(
                 context,
@@ -408,7 +427,7 @@ class _OwnerReadinessCenterScreenState
                 context,
                 Icons.support_agent_rounded,
                 'خزمەتگوزاری دواخراو',
-                _asInt(item['over ڕۆژue_support_count']).toString(),
+                _asInt(item['overdue_support_count']).toString(),
               ),
             ],
           ),
@@ -474,8 +493,8 @@ class _OwnerReadinessCenterScreenState
 
   Widget _statusChip(String status, Color color) {
     final label = switch (status) {
-      'rea ڕۆژy' => 'ئامادە',
-      'blocke ڕۆژ' => 'قوفڵکراو',
+      'ready' => 'ئامادە',
+      'blocked' => 'قوفڵکراو',
       _ => 'پێویستی بە سەرنج',
     };
     return Container(

@@ -78,7 +78,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     final raw = error.toString().toLowerCase();
     if (raw.contains('socketexception') ||
         raw.contains('clientexception') ||
-        raw.contains('کێشەی پەیوەندی بە ڕاژەکار') ||
+        raw.contains('failed host lookup') ||
         raw.contains('network') ||
         raw.contains('connection')) {
       return 'پەیوەندی بە سێرڤەر نەکرا. ئینتەرنێتەکەت بپشکنە و دووبارە هەوڵ بدە.';
