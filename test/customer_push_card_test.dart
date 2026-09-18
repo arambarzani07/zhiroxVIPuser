@@ -107,50 +107,6 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
   Future<CustomerPushSendResult> broadcastManual(String message) async {
     throw UnimplementedError();
   }
-  testWidgets('history renders delivery state and manager can retry failed push',
-      (tester) async {
-    final failedId = '00000000-0000-0000-0000-000000000777';
-    final gateway = FakeCustomerPushGateway(
-      statuses: const [
-        CustomerPushStatus(
-          active: true,
-          deviceCount: 1,
-          activeLinkCount: 1,
-        ),
-      ],
-      history: [
-        CustomerPushHistoryItem(
-          id: failedId,
-          eventType: 'payment_created',
-          status: 'failed',
-          createdAt: DateTime.utc(2026, 9, 18, 8, 30),
-          sentCount: 0,
-          failedCount: 1,
-          expiredCount: 0,
-          pendingCount: 0,
-          deviceCount: 1,
-          attemptCount: 3,
-          amount: 2500,
-          currency: 'IQD',
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(_host(gateway));
-    await tester.pumpAndSettle();
-
-    expect(find.text('مێژووی ئاگادارکردنەوەکان'), findsOneWidget);
-    expect(find.text('پارەدانەوە'), findsOneWidget);
-    expect(find.text('دووبارە ناردنەوە'), findsOneWidget);
-
-    await tester.tap(find.text('دووبارە ناردنەوە'));
-    await tester.pumpAndSettle();
-
-    expect(gateway.retryCalls, 1);
-    expect(gateway.lastRetryOutboxId, failedId);
-    expect(find.text('دووبارە ناردنەوە بۆ 1 ئامێر ڕیزکرا'), findsOneWidget);
-  });
-
 }
 
 Widget _host(CustomerPushGateway gateway) {
@@ -331,4 +287,48 @@ void main() {
     expect(gateway.loadCalls, 2);
     expect(find.text('هێشتا هیچ ئامێرێک پەیوەست نییە'), findsOneWidget);
   });
+  testWidgets('history renders delivery state and manager can retry failed push',
+      (tester) async {
+    final failedId = '00000000-0000-0000-0000-000000000777';
+    final gateway = FakeCustomerPushGateway(
+      statuses: const [
+        CustomerPushStatus(
+          active: true,
+          deviceCount: 1,
+          activeLinkCount: 1,
+        ),
+      ],
+      history: [
+        CustomerPushHistoryItem(
+          id: failedId,
+          eventType: 'payment_created',
+          status: 'failed',
+          createdAt: DateTime.utc(2026, 9, 18, 8, 30),
+          sentCount: 0,
+          failedCount: 1,
+          expiredCount: 0,
+          pendingCount: 0,
+          deviceCount: 1,
+          attemptCount: 3,
+          amount: 2500,
+          currency: 'IQD',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_host(gateway));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مێژووی ئاگادارکردنەوەکان'), findsOneWidget);
+    expect(find.text('پارەدانەوە'), findsOneWidget);
+    expect(find.text('دووبارە ناردنەوە'), findsOneWidget);
+
+    await tester.tap(find.text('دووبارە ناردنەوە'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.retryCalls, 1);
+    expect(gateway.lastRetryOutboxId, failedId);
+    expect(find.text('دووبارە ناردنەوە بۆ 1 ئامێر ڕیزکرا'), findsOneWidget);
+  });
+
 }
