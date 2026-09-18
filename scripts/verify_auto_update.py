@@ -8,6 +8,7 @@ def require(condition: bool, message: str) -> None:
 
 service = Path('lib/services/app_update_service.dart').read_text()
 gate = Path('lib/widgets/auto_update_gate.dart').read_text()
+control = Path('lib/screens/auth/update_control_screen.dart').read_text()
 main = Path('lib/main.dart').read_text()
 workflow = Path('.github/workflows/ios-unsigned-ipa.yml').read_text()
 
@@ -25,6 +26,11 @@ require('--dart-define=ZHIROX_BUILD_NUMBER="$BUILD_NUMBER"' in workflow, 'iOS bu
 require('Align Owner build number with User' in workflow, 'owner build must align to the latest user build number')
 require('user-update.json' in workflow, 'owner build alignment must read the user update manifest')
 require('--dart-define=ZHIROX_APP_EDITION="$UPDATE_EDITION"' in workflow, 'iOS build must embed app edition')
+require('rollout_percent' in service, 'update service must honor staged rollout policy')
+require('minimum_build' in service, 'update service must enforce minimum supported build')
+require('_includedInRollout' in service, 'update service must use stable rollout bucketing')
+require('rollout_percent' in control, 'owner release center must expose rollout percentage')
+require('minimum_build' in control, 'owner release center must expose minimum build')
 require('Generate update manifest' in workflow, 'workflow must generate update manifest')
 require('$UPDATE_MANIFEST' in workflow, 'workflow must publish update manifest')
 
