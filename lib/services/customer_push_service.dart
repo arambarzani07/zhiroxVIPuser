@@ -153,12 +153,53 @@ class CustomerPushOverviewItem {
   }
 }
 
+class CustomerPushOverviewSummary {
+  final int all;
+  final int active;
+  final int inactive;
+  final int failed;
+  final int pending;
+
+  const CustomerPushOverviewSummary({
+    required this.all,
+    required this.active,
+    required this.inactive,
+    required this.failed,
+    required this.pending,
+  });
+
+  factory CustomerPushOverviewSummary.fromJson(Map<String, dynamic> json) {
+    final all = json['all'];
+    final active = json['active'];
+    final inactive = json['inactive'];
+    final failed = json['failed'];
+    final pending = json['pending'];
+    if (all is! int ||
+        active is! int ||
+        inactive is! int ||
+        failed is! int ||
+        pending is! int ||
+        [all, active, inactive, failed, pending].any((value) => value < 0)) {
+      throw const FormatException('Malformed customer push overview summary');
+    }
+    return CustomerPushOverviewSummary(
+      all: all,
+      active: active,
+      inactive: inactive,
+      failed: failed,
+      pending: pending,
+    );
+  }
+}
+
 class CustomerPushOverviewPage {
   final List<CustomerPushOverviewItem> items;
   final int totalCount;
   final int offset;
   final int limit;
   final bool hasMore;
+  final String filter;
+  final CustomerPushOverviewSummary summary;
 
   const CustomerPushOverviewPage({
     required this.items,
@@ -166,6 +207,8 @@ class CustomerPushOverviewPage {
     required this.offset,
     required this.limit,
     required this.hasMore,
+    required this.filter,
+    required this.summary,
   });
 
   factory CustomerPushOverviewPage.fromJson(Map<String, dynamic> json) {
@@ -174,6 +217,8 @@ class CustomerPushOverviewPage {
     final offset = json['offset'];
     final limit = json['limit'];
     final hasMore = json['has_more'];
+    final filter = json['filter'];
+    final summaryRaw = json['summary'];
 
     if (rawItems is! List ||
         totalCount is! int ||
@@ -182,7 +227,9 @@ class CustomerPushOverviewPage {
         offset < 0 ||
         limit is! int ||
         limit <= 0 ||
-        hasMore is! bool) {
+        hasMore is! bool ||
+        filter is! String ||
+        summaryRaw is! Map) {
       throw const FormatException('Malformed customer push overview response');
     }
 
@@ -201,6 +248,10 @@ class CustomerPushOverviewPage {
       offset: offset,
       limit: limit,
       hasMore: hasMore,
+      filter: filter,
+      summary: CustomerPushOverviewSummary.fromJson(
+        summaryRaw.map((key, value) => MapEntry(key.toString(), value)),
+      ),
     );
   }
 }
@@ -384,6 +435,7 @@ class CustomerPushSendResult {
 abstract interface class CustomerPushGateway {
   Future<CustomerPushOverviewPage> loadOverview({
     String search = '',
+    String filter = 'all',
     int limit = 60,
     int offset = 0,
   });
@@ -426,6 +478,7 @@ class CustomerPushService implements CustomerPushGateway {
     String? message,
     String? outboxId,
     String? search,
+    String? filter,
     int? limit,
     int? offset,
   }) async {
@@ -434,6 +487,7 @@ class CustomerPushService implements CustomerPushGateway {
     if (message != null) body['message'] = message;
     if (outboxId != null) body['outbox_id'] = outboxId;
     if (search != null) body['search'] = search;
+    if (filter != null) body['filter'] = filter;
     if (limit != null) body['limit'] = limit;
     if (offset != null) body['offset'] = offset;
 
@@ -478,12 +532,19 @@ class CustomerPushService implements CustomerPushGateway {
   @override
   Future<CustomerPushOverviewPage> loadOverview({
     String search = '',
+    String filter = 'all',
     int limit = 60,
     int offset = 0,
   }) async {
+    const allowedFilters = {'all', 'active', 'inactive', 'failed', 'pending'};
+    final normalizedFilter = filter.trim().toLowerCase();
+    if (!allowedFilters.contains(normalizedFilter)) {
+      throw ArgumentError.value(filter, 'filter', 'Unsupported push overview filter');
+    }
     final data = await _invokeAdmin(
       'overview',
       search: search.trim(),
+      filter: normalizedFilter,
       limit: limit.clamp(1, 100).toInt(),
       offset: offset < 0 ? 0 : offset,
     );
