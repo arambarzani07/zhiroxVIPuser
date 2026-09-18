@@ -28,6 +28,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String _friendlyLoginError(Object error) {
     final raw = error.toString().toLowerCase();
+    final original = error.toString();
+    if (original.contains('چاوەڕێی پەسەندکردنی خاوەنی سیستەمە')) {
+      return 'ئەم ئامێرە چاوەڕێی پەسەندکردنی خاوەنی سیستەمە.';
+    }
+    if (original.contains('لەلایەن خاوەنی سیستەمەوە ڕاگیراوە')) {
+      return 'ئەم ئامێرە لەلایەن خاوەنی سیستەمەوە ڕاگیراوە.';
+    }
     if (raw.contains('socketexception') ||
         raw.contains('clientexception') ||
         raw.contains('network') ||
