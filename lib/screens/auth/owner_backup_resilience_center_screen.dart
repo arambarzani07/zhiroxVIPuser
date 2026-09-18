@@ -90,7 +90,7 @@ class _OwnerBackupResilienceCenterScreenState
               DropdownButtonFormField<int>(
                 initialValue: expectedHours,
                 decoration: const InputDecoration(
-                  labelText: 'چاوەڕوانکراوی Backup',
+                  labelText: 'چاوەڕوانکراوی پاشەکەوت',
                   prefixIcon: Icon(Icons.schedule_rounded),
                 ),
                 items: const [
@@ -240,7 +240,7 @@ class _OwnerBackupResilienceCenterScreenState
                             Expanded(
                               child: Text(
                                 'ئەم ناوەندە تەنها نوێبوونەوە و پشتڕاستکردنەوە، '
-                                'retention metadata و policy ـی Backup چاودێری دەکات. '
+                                'ماوەی هەڵگرتنی زانیاریی سیستەمی و سیاسەتی پاشەکەوت چاودێری دەکات. '
                                 'خاوەنی سیستەم ناتوانێت ناوەڕۆکی پاشەکەوت بکاتەوە.',
                                 style: TextStyle(height: 1.55),
                               ),
@@ -401,21 +401,21 @@ class _OwnerBackupResilienceCenterScreenState
             children: [
               _mini(
                 Icons.event_available_outlined,
-                'Backup: ${_date(item['latest_backup_at'])}',
+                'پاشەکەوت: ${_date(item['latest_backup_at'])}',
               ),
               _mini(
                 Icons.verified_outlined,
-                'Verified: ${_date(item['last_verified_at'])}',
+                'پشتڕاستکراوە: ${_date(item['last_verified_at'])}',
               ),
               if (backupType.isNotEmpty)
                 _mini(Icons.category_outlined, backupType),
               _mini(
                 Icons.inventory_2_outlined,
-                '${_asInt(item['backup_count'])} backup',
+                '${_asInt(item['backup_count'])} پاشەکەوت',
               ),
               _mini(
                 Icons.autorenew_rounded,
-                '${_asInt(item['automatic_backup_count'])} automatic',
+                '${_asInt(item['automatic_backup_count'])} خۆکار',
               ),
               _mini(
                 Icons.schedule_rounded,
@@ -423,7 +423,7 @@ class _OwnerBackupResilienceCenterScreenState
               ),
               _mini(
                 Icons.fact_check_outlined,
-                'Verify: ${_asInt(item['verification_interval_days'])}d',
+                'پشتڕاستکردنەوە: ${_asInt(item['verification_interval_days'])} ڕۆژ',
               ),
               if (restorable is bool)
                 _mini(

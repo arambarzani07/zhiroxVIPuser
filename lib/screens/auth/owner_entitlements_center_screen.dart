@@ -590,15 +590,15 @@ class _OwnerEntitlementsCenterScreenState
               ),
               _mini(
                 Icons.tune_rounded,
-                '${_asInt(item['override_count'])} override',
+                '${_asInt(item['override_count'])} دەستکاری تایبەت',
               ),
               _mini(
                 Icons.devices_outlined,
-                'Device: ${_asInt(item['device_limit'])}',
+                'ئامێر: ${_asInt(item['device_limit'])}',
               ),
               _mini(
                 Icons.groups_outlined,
-                'Staff: ${_asInt(item['staff_limit'])}',
+                'کارمەند: ${_asInt(item['staff_limit'])}',
               ),
             ],
           ),

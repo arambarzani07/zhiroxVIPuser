@@ -406,7 +406,7 @@ class _OwnerOperationsCenterScreenState
                               style: TextStyle(fontWeight: FontWeight.w800),
                             ),
                             subtitle: const Text(
-                              'پەیامی گشتی پلاتفۆرم بەبێ business data',
+                              'پەیامی گشتی پلاتفۆرم بەبێ داتای کاروبار',
                             ),
                             value: _announcementEnabled,
                             onChanged: _saving

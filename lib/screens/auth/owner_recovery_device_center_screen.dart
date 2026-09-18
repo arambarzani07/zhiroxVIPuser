@@ -152,7 +152,7 @@ class _OwnerRecoveryDeviceCenterScreenState
               : 'گواستنەوە بۆ چاوەڕوان',
       message: status == 'revoked'
           ? '$label ڕادەگیرێت و دانیشتنی پەیوەست پچڕێنرێت. دڵنیایت؟'
-          : '$label بگۆڕدرێت بۆ $status؟',
+          : '$label دۆخەکەی بگۆڕدرێت؟',
     );
     if (!ok) return;
 

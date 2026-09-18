@@ -211,7 +211,7 @@ class _OwnerPolicyComplianceCenterScreenState
       if (!mounted) return;
       AppHelpers.showSnackBar(
         context,
-        '${_policyLabel(policyKey)} v${_asInt(result['version'])} بڵاوکرایەوە.',
+        '${_policyLabel(policyKey)} وەشانی ${_asInt(result['version'])} بڵاوکرایەوە.',
       );
       await _load();
     } catch (error) {
@@ -509,7 +509,7 @@ class _OwnerPolicyComplianceCenterScreenState
                         const AppSurface(
                           child: Padding(
                             padding: EdgeInsets.all(18),
-                            child: Center(child: Text('هیچ Admin ـێک نییە.')),
+                            child: Center(child: Text('هیچ بەڕێوەبەرێک نییە.')),
                           ),
                         )
                       else
@@ -580,7 +580,7 @@ class _OwnerPolicyComplianceCenterScreenState
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${_policyLabel(key)} • v$version • ${_date(doc['published_at'])}',
+                  '${_policyLabel(key)} • وەشان $version • ${_date(doc['published_at'])}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],

@@ -387,7 +387,7 @@ class _OwnerReadinessCenterScreenState
               _detailRow(
                 context,
                 Icons.security_outlined,
-                'ئامێر Policy',
+                'سیاسەتی ئامێر',
                 _devicePolicyLabel((item['device_policy_mode'] ?? 'observe').toString()),
               ),
               _detailRow(
