@@ -39,6 +39,16 @@ export type AdminDeps = {
     expiresAt: string | null;
   }) => Promise<unknown>;
   status: (args: { actorId: string; customerId: string }) => Promise<Record<string, unknown>>;
+  history: (args: {
+    actorId: string;
+    customerId: string;
+    limit: number;
+  }) => Promise<Record<string, unknown>>;
+  retry: (args: {
+    actorId: string;
+    customerId: string;
+    outboxId: string;
+  }) => Promise<Record<string, unknown>>;
   revokeAll: (args: { actorId: string; customerId: string }) => Promise<number>;
   sendManual: (args: {
     actorId: string;
@@ -52,6 +62,12 @@ export type AdminDeps = {
 function requireCustomerId(value: unknown): string {
   const id = String(value ?? "").trim();
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("invalid_customer_id");
+  return id;
+}
+
+function requireOutboxId(value: unknown): string {
+  const id = String(value ?? "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("invalid_outbox_id");
   return id;
 }
 
@@ -100,6 +116,22 @@ export async function handleAdminAction(
 
   if (action === "status") {
     return await deps.status({ actorId, customerId });
+  }
+
+  if (action === "history") {
+    const requestedLimit = Number(body.limit ?? 20);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(Math.trunc(requestedLimit), 100))
+      : 20;
+    return await deps.history({ actorId, customerId, limit });
+  }
+
+  if (action === "retry") {
+    return await deps.retry({
+      actorId,
+      customerId,
+      outboxId: requireOutboxId(body.outbox_id),
+    });
   }
 
   if (action === "revoke_all") {
@@ -171,6 +203,30 @@ async function handle(req: Request): Promise<Response> {
         if (error) throw error;
         return (data ?? {}) as Record<string, unknown>;
       },
+      history: async ({ actorId, customerId, limit }) => {
+        const { data, error } = await admin.rpc(
+          "read_customer_push_history_service",
+          {
+            p_actor: actorId,
+            p_customer: customerId,
+            p_limit: limit,
+          },
+        );
+        if (error) throw error;
+        return (data ?? {}) as Record<string, unknown>;
+      },
+      retry: async ({ actorId, customerId, outboxId }) => {
+        const { data, error } = await admin.rpc(
+          "retry_customer_push_service",
+          {
+            p_actor: actorId,
+            p_customer: customerId,
+            p_outbox_id: outboxId,
+          },
+        );
+        if (error) throw error;
+        return (data ?? {}) as Record<string, unknown>;
+      },
       revokeAll: async ({ actorId, customerId }) => {
         const { data, error } = await admin.rpc(
           "revoke_customer_push_subscriptions_service",
@@ -201,11 +257,18 @@ async function handle(req: Request): Promise<Response> {
     }
     if (
       message.includes("invalid_customer_id") ||
+      message.includes("invalid_outbox_id") ||
       message.includes("invalid_message") ||
       message.includes("unsupported_action")
     ) {
       const code = message.includes("invalid_message") ? "invalid_message" : message;
       return json({ error: code }, 400);
+    }
+    if (message.includes("no_active_push_subscription")) {
+      return json({ error: "no_active_push_subscription" }, 409);
+    }
+    if (message.includes("push_event_not_found")) {
+      return json({ error: "push_event_not_found" }, 404);
     }
     console.error("customer-push-admin error", message);
     return json({ error: "request_failed" }, 500);
