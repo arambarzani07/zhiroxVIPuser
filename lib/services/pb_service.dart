@@ -568,6 +568,83 @@ class PBService {
     return Map<String, dynamic>.from(raw);
   }
 
+  static Future<Map<String, dynamic>> getOwnerRecoveryDeviceOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_recovery_device_overview');
+    if (raw is! Map) throw Exception('invalid_owner_recovery_device_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerRecoveryDevicePage({
+    int page = 1,
+    int perPage = 30,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_recovery_device_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_recovery_device_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerAdminDevicePolicy({
+    required String adminId,
+    required String policy,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_admin_device_policy',
+      params: {
+        'p_admin_id': adminId,
+        'p_policy': policy,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_device_policy_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerAdminDeviceAuthorization({
+    required String deviceId,
+    required String status,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_admin_device_authorization',
+      params: {
+        'p_device_id': deviceId,
+        'p_status': status,
+      },
+    );
+    if (raw is! Map) {
+      throw Exception('invalid_owner_device_authorization_result');
+    }
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> recoverOwnerAdminAccount({
+    required String adminId,
+    required String newPassword,
+    String reason = '',
+  }) async {
+    await ensureInitialized();
+    final response = await client.functions.invoke(
+      'owner-account-recovery',
+      body: {
+        'admin_id': adminId,
+        'new_password': newPassword,
+        'reason': reason,
+      },
+    );
+    final data = response.data;
+    if (data is! Map) throw Exception('invalid_owner_recovery_result');
+    if (data['error'] != null) throw _functionError(data);
+    return Map<String, dynamic>.from(data);
+  }
+
   static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
     int page = 1,
     int perPage = 50,
