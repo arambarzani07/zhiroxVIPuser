@@ -41,4 +41,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# Redeploy after binding push.zhirox.com.
+# Redeploy after fixing iOS Safari Web Push onboarding.
