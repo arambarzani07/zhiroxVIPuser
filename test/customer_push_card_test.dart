@@ -16,6 +16,12 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
       targetDevices: 1,
       marketName: 'کانی چنار',
     ),
+    this.history = const [],
+    this.retryResult = const CustomerPushRetryResult(
+      outboxId: '00000000-0000-0000-0000-000000000888',
+      retryDevices: 1,
+      alreadySent: false,
+    ),
   });
 
   final List<CustomerPushStatus> statuses;
@@ -23,12 +29,17 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
   final Object? statusError;
   final int revokedCount;
   final CustomerPushSendResult sendResult;
+  final List<CustomerPushHistoryItem> history;
+  final CustomerPushRetryResult retryResult;
 
   int loadCalls = 0;
   int createCalls = 0;
   int revokeCalls = 0;
   int sendCalls = 0;
+  int historyCalls = 0;
+  int retryCalls = 0;
   String? lastMessage;
+  String? lastRetryOutboxId;
   bool failFirstLoad = false;
 
   @override
@@ -54,6 +65,29 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
   }
 
   @override
+  Future<List<CustomerPushHistoryItem>> loadHistory(
+    String customerId, {
+    int limit = 20,
+  }) async {
+    historyCalls++;
+    return history.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<CustomerPushRetryResult> retryNotification(
+    String customerId,
+    String outboxId,
+  ) async {
+    retryCalls++;
+    lastRetryOutboxId = outboxId;
+    return CustomerPushRetryResult(
+      outboxId: outboxId,
+      retryDevices: retryResult.retryDevices,
+      alreadySent: retryResult.alreadySent,
+    );
+  }
+
+  @override
   Future<int> revokeAll(String customerId) async {
     revokeCalls++;
     return revokedCount;
@@ -73,6 +107,50 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
   Future<CustomerPushSendResult> broadcastManual(String message) async {
     throw UnimplementedError();
   }
+  testWidgets('history renders delivery state and manager can retry failed push',
+      (tester) async {
+    final failedId = '00000000-0000-0000-0000-000000000777';
+    final gateway = FakeCustomerPushGateway(
+      statuses: const [
+        CustomerPushStatus(
+          active: true,
+          deviceCount: 1,
+          activeLinkCount: 1,
+        ),
+      ],
+      history: [
+        CustomerPushHistoryItem(
+          id: failedId,
+          eventType: 'payment_created',
+          status: 'failed',
+          createdAt: DateTime.utc(2026, 9, 18, 8, 30),
+          sentCount: 0,
+          failedCount: 1,
+          expiredCount: 0,
+          pendingCount: 0,
+          deviceCount: 1,
+          attemptCount: 3,
+          amount: 2500,
+          currency: 'IQD',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_host(gateway));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مێژووی ئاگادارکردنەوەکان'), findsOneWidget);
+    expect(find.text('پارەدانەوە'), findsOneWidget);
+    expect(find.text('دووبارە ناردنەوە'), findsOneWidget);
+
+    await tester.tap(find.text('دووبارە ناردنەوە'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.retryCalls, 1);
+    expect(gateway.lastRetryOutboxId, failedId);
+    expect(find.text('دووبارە ناردنەوە بۆ 1 ئامێر ڕیزکرا'), findsOneWidget);
+  });
+
 }
 
 Widget _host(CustomerPushGateway gateway) {
