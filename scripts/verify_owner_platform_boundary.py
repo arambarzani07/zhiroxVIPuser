@@ -300,7 +300,7 @@ assert 'body_markdown' in policy_compliance_migration, 'policy text body missing
 assert 'technical_log_days' in policy_compliance_migration, 'technical log retention control missing'
 assert 'audit_log_days' in policy_compliance_migration, 'audit log retention control missing'
 
-assert "item['blocked_tenants']" in readiness, 'readiness internal blocked_tenants key must remain stable'
+assert "_overview['blocked_tenants']" in readiness, 'readiness internal blocked_tenants key must remain stable'
 assert "item['device_policy_mode']" in readiness, 'readiness internal device policy key must remain stable'
 assert "'blocked' => Colors.red" in readiness, 'readiness raw status values must remain stable'
 assert "'high' => 'بەرز'" in support, 'support priority raw status values must remain stable'
