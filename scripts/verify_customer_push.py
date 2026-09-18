@@ -100,6 +100,19 @@ assert "'payment_created'" in automatic_schema, 'automatic payment push must be 
 assert 'exception when others' in automatic_schema.lower(), 'push side effects must remain best-effort and never roll back finance writes'
 assert 'daftar_live_sync' in automatic_schema and 'legacy_import' in automatic_schema, 'automatic debt trigger must suppress imported historical records'
 
+overview_filter_migration = ROOT / 'supabase/migrations/20260918103000_customer_push_admin_overview_filters.sql'
+assert overview_filter_migration.exists(), 'customer push overview filter migration missing'
+overview_filter_schema = overview_filter_migration.read_text(errors='ignore')
+for marker in (
+    'list_customer_push_overview_service',
+    'p_filter',
+    "'active'",
+    "'inactive'",
+    "'failed'",
+    "'pending'",
+):
+    assert marker in overview_filter_schema, f'customer push overview filter marker missing: {marker}'
+
 history_migration = ROOT / 'supabase/migrations/20260918100000_customer_push_history_retry.sql'
 assert history_migration.exists(), 'customer push history/retry migration missing'
 history_schema = history_migration.read_text(errors='ignore')
@@ -314,3 +327,8 @@ assert 'id="notificationHistoryRefresh"' in index_html, 'portal notification his
 assert 'loadNotificationHistory' in app_js, 'portal notification history loader missing'
 assert 'renderNotificationHistory' in app_js, 'portal notification history renderer missing'
 assert '.notification-history-item' in styles_text, 'portal notification history styles missing'
+
+admin_center_text = (ROOT / 'lib/screens/admin/admin_notifications_screen.dart').read_text(errors='ignore')
+for marker in ('هەموو', 'چالاک', 'ناچالاک', 'شکست', 'لە ڕیزدایە', 'ناردنی ئاگاداری'):
+    assert marker in admin_center_text, f'admin notification center filters missing: {marker}'
+assert 'filter:' in admin_center_text, 'admin notification center must use server-side filtering'
