@@ -42,6 +42,7 @@ export type AdminDeps = {
   overview: (args: {
     actorId: string;
     search: string;
+    filter: string;
     limit: number;
     offset: number;
   }) => Promise<Record<string, unknown>>;
@@ -104,6 +105,10 @@ export async function handleAdminAction(
 
   if (action === "overview") {
     const search = String(body.search ?? "").trim();
+    const filter = String(body.filter ?? "all").trim().toLowerCase();
+    if (!["all", "active", "inactive", "failed", "pending"].includes(filter)) {
+      throw new Error("invalid_overview_filter");
+    }
     const rawLimit = Number(body.limit ?? 60);
     const rawOffset = Number(body.offset ?? 0);
     const limit = Number.isFinite(rawLimit)
@@ -112,7 +117,7 @@ export async function handleAdminAction(
     const offset = Number.isFinite(rawOffset)
       ? Math.max(0, Math.trunc(rawOffset))
       : 0;
-    return await deps.overview({ actorId, search, limit, offset });
+    return await deps.overview({ actorId, search, filter, limit, offset });
   }
 
   const customerId = requireCustomerId(body.customer_id);
@@ -214,12 +219,13 @@ async function handle(req: Request): Promise<Response> {
         });
         if (error) throw error;
       },
-      overview: async ({ actorId, search, limit, offset }) => {
+      overview: async ({ actorId, search, filter, limit, offset }) => {
         const { data, error } = await admin.rpc(
           "list_customer_push_overview_service",
           {
             p_actor: actorId,
             p_search: search,
+            p_filter: filter,
             p_limit: limit,
             p_offset: offset,
           },
@@ -290,6 +296,7 @@ async function handle(req: Request): Promise<Response> {
     if (
       message.includes("invalid_customer_id") ||
       message.includes("invalid_outbox_id") ||
+      message.includes("invalid_overview_filter") ||
       message.includes("invalid_message") ||
       message.includes("unsupported_action")
     ) {
