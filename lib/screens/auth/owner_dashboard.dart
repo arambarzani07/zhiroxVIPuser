@@ -9,6 +9,7 @@ import 'package:zhirox/screens/auth/owner_health_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_subscription_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_security_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_support_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_operations_center_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -180,6 +181,28 @@ class _OwnerHome extends StatelessWidget {
                     subtitle: const Text('دروستکردن و نوێکردنەوەی بەشداری؛ بێ business data'),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: onOpenMarkets,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.teal.withValues(alpha: 0.10),
+                      child: const Icon(
+                        Icons.settings_input_antenna_rounded,
+                        color: Colors.teal,
+                      ),
+                    ),
+                    title: const Text('Platform Operations'),
+                    subtitle: const Text(
+                      'Maintenance، system status و announcement',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerOperationsCenterScreen(),
+                      ),
+                    ),
                   ),
                   const Divider(height: 1),
                   ListTile(
