@@ -6,6 +6,7 @@ import 'package:zhirox/screens/auth/admin_management_screen.dart';
 import 'package:zhirox/screens/auth/import_permission_screen.dart';
 import 'package:zhirox/screens/auth/owner_platform_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_health_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_infrastructure_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_subscription_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_security_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_support_center_screen.dart';
@@ -170,6 +171,29 @@ class _OwnerHome extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const OwnerHealthCenterScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.cyan.withValues(alpha: 0.10),
+                      child: const Icon(
+                        Icons.dns_outlined,
+                        color: Colors.cyan,
+                      ),
+                    ),
+                    title: const Text('Infrastructure Health'),
+                    subtitle: const Text(
+                      'Cron jobs، Push queue و delivery health ـی پلاتفۆرم',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const OwnerInfrastructureCenterScreen(),
                       ),
                     ),
                   ),
