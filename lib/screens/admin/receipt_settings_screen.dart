@@ -594,8 +594,8 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           initialValue: _templateStyle,
                           decoration: _decoration('قاڵبی گشتی', Icons.style_outlined),
                           items: const [
-                            DropdownMenuItem(value: 'classic', child: Text('Classic')),
-                            DropdownMenuItem(value: 'modern', child: Text('Modern')),
+                            DropdownMenuItem(value: 'classic', child: Text('کلاسیک')),
+                            DropdownMenuItem(value: 'modern', child: Text('مۆدێرن')),
                           ],
                           onChanged: (value) {
                             if (value != null) setState(() => _templateStyle = value);
@@ -606,8 +606,8 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           initialValue: _debtTemplate,
                           decoration: _decoration('قاڵبی قەرز', Icons.request_quote_outlined),
                           items: const [
-                            DropdownMenuItem(value: 'classic', child: Text('Classic')),
-                            DropdownMenuItem(value: 'modern', child: Text('Modern')),
+                            DropdownMenuItem(value: 'classic', child: Text('کلاسیک')),
+                            DropdownMenuItem(value: 'modern', child: Text('مۆدێرن')),
                           ],
                           onChanged: (value) {
                             if (value != null) setState(() => _debtTemplate = value);
@@ -618,8 +618,8 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           initialValue: _paymentTemplate,
                           decoration: _decoration('قاڵبی پارەدانەوە', Icons.payments_outlined),
                           items: const [
-                            DropdownMenuItem(value: 'classic', child: Text('Classic')),
-                            DropdownMenuItem(value: 'modern', child: Text('Modern')),
+                            DropdownMenuItem(value: 'classic', child: Text('کلاسیک')),
+                            DropdownMenuItem(value: 'modern', child: Text('مۆدێرن')),
                           ],
                           onChanged: (value) {
                             if (value != null) setState(() => _paymentTemplate = value);
@@ -630,8 +630,8 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           initialValue: _purchaseTemplate,
                           decoration: _decoration('قاڵبی کڕین', Icons.shopping_cart_outlined),
                           items: const [
-                            DropdownMenuItem(value: 'classic', child: Text('Classic')),
-                            DropdownMenuItem(value: 'modern', child: Text('Modern')),
+                            DropdownMenuItem(value: 'classic', child: Text('کلاسیک')),
+                            DropdownMenuItem(value: 'modern', child: Text('مۆدێرن')),
                           ],
                           onChanged: (value) {
                             if (value != null) setState(() => _purchaseTemplate = value);
@@ -728,7 +728,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           items: const [
                             DropdownMenuItem(value: 'ku', child: Text('کوردی')),
                             DropdownMenuItem(value: 'ar', child: Text('عەرەبی')),
-                            DropdownMenuItem(value: 'en', child: Text('English')),
+                            DropdownMenuItem(value: 'en', child: Text('ئینگلیزی')),
                             DropdownMenuItem(value: 'ku_ar', child: Text('کوردی + عەرەبی')),
                             DropdownMenuItem(value: 'ku_en', child: Text('کوردی + ئینگلیزی')),
                           ],
