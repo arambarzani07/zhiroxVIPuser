@@ -194,6 +194,38 @@ class PBService {
     }
   }
 
+  static Future<Map<String, dynamic>> registerPlatformAdminDevice(
+    String deviceId,
+  ) async {
+    await ensureInitialized();
+    final platform = kIsWeb
+        ? 'web'
+        : switch (defaultTargetPlatform) {
+            TargetPlatform.iOS => 'ios',
+            TargetPlatform.android => 'android',
+            TargetPlatform.macOS => 'macos',
+            TargetPlatform.windows => 'windows',
+            TargetPlatform.linux => 'linux',
+            TargetPlatform.fuchsia => 'fuchsia',
+          };
+    final label = kIsWeb ? 'ZHIROX Web' : 'ZHIROX ${platform.toUpperCase()}';
+    const build = String.fromEnvironment(
+      'ZHIROX_BUILD_NUMBER',
+      defaultValue: 'unknown',
+    );
+    final raw = await client.rpc(
+      'register_platform_admin_device',
+      params: {
+        'p_device_id': deviceId,
+        'p_platform': platform,
+        'p_device_label': label,
+        'p_app_version': build,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_admin_device_state');
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<void> logout() async {
     await ensureInitialized();
     try {
