@@ -33,7 +33,7 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
 
   String _money(dynamic value) {
     final n = _asDouble(value);
-    return NumberFormat('#,##0', 'en').format(n) + ' د.ع';
+    return "${NumberFormat('#,##0', 'en').format(n)} د.ع";
   }
 
   @override
