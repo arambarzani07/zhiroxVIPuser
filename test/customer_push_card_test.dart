@@ -43,6 +43,21 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
   bool failFirstLoad = false;
 
   @override
+  Future<CustomerPushOverviewPage> loadOverview({
+    String search = '',
+    int limit = 60,
+    int offset = 0,
+  }) async {
+    return const CustomerPushOverviewPage(
+      items: [],
+      totalCount: 0,
+      offset: 0,
+      limit: 60,
+      hasMore: false,
+    );
+  }
+
+  @override
   Future<CustomerPushStatus> loadStatus(String customerId) async {
     loadCalls++;
     if (failFirstLoad && loadCalls == 1) {
