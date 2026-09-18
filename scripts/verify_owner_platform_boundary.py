@@ -5,6 +5,7 @@ health = Path('lib/screens/auth/owner_health_center_screen.dart').read_text()
 subscription = Path('lib/screens/auth/owner_subscription_center_screen.dart').read_text()
 security = Path('lib/screens/auth/owner_security_center_screen.dart').read_text()
 support = Path('lib/screens/auth/owner_support_center_screen.dart').read_text()
+operations = Path('lib/screens/auth/owner_operations_center_screen.dart').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
 health_migration = Path(
     'supabase/migrations/20260918135500_owner_health_audit_center.sql'
@@ -18,12 +19,16 @@ security_migration = Path(
 support_migration = Path(
     'supabase/migrations/20260918180000_owner_support_center.sql'
 ).read_text()
+operations_migration = Path(
+    'supabase/migrations/20260918200000_owner_operations_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
     'OwnerSubscriptionCenterScreen',
     'OwnerSecurityCenterScreen',
     'OwnerSupportCenterScreen',
+    'OwnerOperationsCenterScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
@@ -36,6 +41,8 @@ required = [
     'getOwnerSupportOverview',
     'getOwnerSupportTicketsPage',
     'updateOwnerSupportTicket',
+    'getPlatformOperationsState',
+    'setOwnerOperationsState',
     'get_system_owner_health_overview',
     'get_system_owner_platform_audit_page',
     'get_system_owner_subscription_overview',
@@ -49,6 +56,8 @@ required = [
     'get_system_owner_support_tickets_page',
     'update_system_owner_support_ticket',
     'create_platform_support_ticket',
+    'get_platform_operations_state',
+    'set_system_owner_operations_state',
     'system_owner_required',
 ]
 blob = '\n'.join([
@@ -57,11 +66,13 @@ blob = '\n'.join([
     subscription,
     security,
     support,
+    operations,
     service,
     health_migration,
     subscription_migration,
     security_migration,
     support_migration,
+    operations_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -79,11 +90,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription, security, support):
+for screen in (health, subscription, security, support, operations):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration, security_migration, support_migration):
+for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -112,5 +123,11 @@ assert 'response_due_at' in support_migration and 'resolution_due_at' in support
 assert 'support_tier' in support_migration, 'support SLA must be tier-aware'
 assert 'owner_platform_audit' in support_migration, 'support owner actions must be audited'
 assert 'public.debts' not in support_migration and 'public.payments' not in support_migration, 'support center must not query market finance content'
+assert 'platform_operations_config' in operations_migration, 'platform operations config missing'
+assert 'maintenance_enabled' in operations_migration, 'maintenance control missing'
+assert 'announcement_enabled' in operations_migration, 'platform announcement control missing'
+assert 'owner_platform_audit' in operations_migration, 'operations changes must be audited'
+assert 'public.debts' not in operations_migration and 'public.payments' not in operations_migration, 'operations center must not query market finance content'
+assert 'customer_id' not in operations.lower(), 'operations UI must not expose customer data'
 
 print('Owner platform privacy boundary verified.')
