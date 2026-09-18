@@ -7,6 +7,7 @@ import 'package:zhirox/screens/auth/import_permission_screen.dart';
 import 'package:zhirox/screens/auth/owner_platform_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_health_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_subscription_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_security_center_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -178,6 +179,28 @@ class _OwnerHome extends StatelessWidget {
                     subtitle: const Text('دروستکردن و نوێکردنەوەی بەشداری؛ بێ business data'),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: onOpenMarkets,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.red.withValues(alpha: 0.10),
+                      child: const Icon(
+                        Icons.security_rounded,
+                        color: Colors.red,
+                      ),
+                    ),
+                    title: const Text('ناوەندی پاراستن'),
+                    subtitle: const Text(
+                      'Session، access، lock و suspicious-login metadata',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerSecurityCenterScreen(),
+                      ),
+                    ),
                   ),
                   const Divider(height: 1),
                   ListTile(
