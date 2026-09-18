@@ -11,6 +11,7 @@ import 'package:zhirox/screens/auth/owner_security_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_support_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_operations_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_entitlements_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_recovery_device_center_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -246,6 +247,29 @@ class _OwnerHome extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const OwnerSupportCenterScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.blueGrey.withValues(alpha: 0.10),
+                      child: const Icon(
+                        Icons.phonelink_lock_rounded,
+                        color: Colors.blueGrey,
+                      ),
+                    ),
+                    title: const Text('Recovery & Device Authorization'),
+                    subtitle: const Text(
+                      'Account Recovery، Device Policy و Approve/Revoke',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const OwnerRecoveryDeviceCenterScreen(),
                       ),
                     ),
                   ),
