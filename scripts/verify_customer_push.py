@@ -83,6 +83,23 @@ assert 'v_link.expires_at <= now()' not in permanent_schema, 'redeem must not en
 assert 'and link.used_at is null' not in permanent_schema.lower(), 'inspect must not consume links once used'
 assert 'set used_at = now()' not in permanent_schema.lower(), 'redeem must not consume a permanent link'
 
+automatic_migration = ROOT / 'supabase/migrations/20260918090000_guaranteed_customer_push_events.sql'
+assert automatic_migration.exists(), 'guaranteed automatic customer push migration missing'
+automatic_schema = automatic_migration.read_text(errors='ignore')
+for marker in (
+    'trg_customer_push_debt_insert',
+    'trg_customer_push_payment_insert',
+    'enqueue_customer_push_event_service',
+    'record_payment_service',
+    'record_customer_payment_service',
+    "eventType: \"payment_created\"",
+):
+    assert marker in automatic_schema, f'automatic customer push guarantee missing: {marker}'
+assert "'debt_created'" in automatic_schema, 'automatic debt push must be queued server-side'
+assert "'payment_created'" in automatic_schema, 'automatic payment push must be queued server-side'
+assert 'exception when others' in automatic_schema.lower(), 'push side effects must remain best-effort and never roll back finance writes'
+assert 'daftar_live_sync' in automatic_schema and 'legacy_import' in automatic_schema, 'automatic debt trigger must suppress imported historical records'
+
 manual_migration = ROOT / 'supabase/migrations/20260917210000_manual_customer_push_notifications.sql'
 assert manual_migration.exists(), 'manual customer push migration missing'
 manual_schema = manual_migration.read_text(errors='ignore')
