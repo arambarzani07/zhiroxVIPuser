@@ -26,6 +26,7 @@ class BroadcastGateway implements CustomerPushGateway {
   @override
   Future<CustomerPushOverviewPage> loadOverview({
     String search = '',
+    String filter = 'all',
     int limit = 60,
     int offset = 0,
   }) =>
