@@ -811,6 +811,67 @@ class PBService {
     return Map<String, dynamic>.from(raw);
   }
 
+  static Future<Map<String, dynamic>> getOwnerPolicyOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_policy_overview');
+    if (raw is! Map) throw Exception('invalid_owner_policy_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerPolicyPage({
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_policy_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_policy_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> publishOwnerPolicyDocument({
+    required String policyKey,
+    required String title,
+    required String bodyMarkdown,
+    required bool requiresReacceptance,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'publish_system_owner_policy_document',
+      params: {
+        'p_policy_key': policyKey,
+        'p_title': title,
+        'p_body_markdown': bodyMarkdown,
+        'p_requires_reacceptance': requiresReacceptance,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_policy_publish_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerRetentionPolicy({
+    required int technicalLogDays,
+    required int auditLogDays,
+    required int authSessionDays,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_retention_policy',
+      params: {
+        'p_technical_log_days': technicalLogDays,
+        'p_audit_log_days': auditLogDays,
+        'p_auth_session_days': authSessionDays,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_retention_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
     int page = 1,
     int perPage = 50,
