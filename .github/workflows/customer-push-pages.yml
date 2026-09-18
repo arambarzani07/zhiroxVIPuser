@@ -40,3 +40,5 @@ jobs:
       - name: Deploy customer portal
         id: deployment
         uses: actions/deploy-pages@v4
+
+# Redeploy after binding push.zhirox.com.
