@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
+import 'package:zhirox/screens/admin/admin_notifications_screen.dart';
 import 'package:zhirox/screens/admin/debt_restore_screen.dart';
 import 'package:zhirox/screens/admin/governance_center_screen.dart';
 import 'package:zhirox/screens/admin/intelligence_center_screen.dart';
@@ -13,7 +14,6 @@ import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
-import 'package:zhirox/widgets/manual_push_broadcast_card.dart';
 
 class AdminSettingsScreen extends StatelessWidget {
   const AdminSettingsScreen({
@@ -124,7 +124,18 @@ class AdminSettingsScreen extends StatelessWidget {
                   subtitle: 'ناردنی تایبەت لە پڕۆفایلی کڕیار و ناردنی گشتی بۆ هەمووان',
                 ),
                 const SizedBox(height: 10),
-                const ManualPushBroadcastCard(),
+                AppSurface(
+                  padding: EdgeInsets.zero,
+                  child: _SettingsRow(
+                    icon: Icons.notifications_active_outlined,
+                    title: 'ناوەندی ئاگادارکردنەوەکان',
+                    subtitle: 'کڕیار، دۆخی Push، مێژوو، دووبارە ناردنەوە و ناردنی گشتی',
+                    onTap: () => _open(
+                      context,
+                      const AdminNotificationsScreen(),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 22),
                 const AppSectionHeader(
                   title: 'دارایی و بەڵگەنامە',
