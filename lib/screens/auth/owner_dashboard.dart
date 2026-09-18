@@ -5,6 +5,7 @@ import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/auth/admin_management_screen.dart';
 import 'package:zhirox/screens/auth/import_permission_screen.dart';
 import 'package:zhirox/screens/auth/owner_platform_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_health_center_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -139,6 +140,28 @@ class _OwnerHome extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const OwnerPlatformCenterScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.success.withValues(alpha: 0.12),
+                      child: const Icon(
+                        Icons.monitor_heart_outlined,
+                        color: AppColors.success,
+                      ),
+                    ),
+                    title: const Text('تەندروستی و پاراستنی سیستەم'),
+                    subtitle: const Text(
+                      'Backup، بەشداری، دۆخی پلاتفۆرم و Audit ـی Owner',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerHealthCenterScreen(),
                       ),
                     ),
                   ),

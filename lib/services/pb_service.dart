@@ -299,6 +299,29 @@ class PBService {
     return Map<String, dynamic>.from(raw);
   }
 
+  static Future<Map<String, dynamic>> getOwnerHealthOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_health_overview');
+    if (raw is! Map) throw Exception('invalid_owner_health_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_platform_audit_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_platform_audit_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<Map<String, dynamic>> getOwnerTenantsPage({
     int page = 1,
     int perPage = 20,

@@ -110,6 +110,10 @@ jobs:
       - name: Verify Auto Update Center
         run: python3 scripts/verify_auto_update.py
 
+      - name: Verify Owner platform privacy boundary
+        if: github.ref_name == 'owner-source'
+        run: python3 scripts/verify_owner_platform_boundary.py
+
       - name: Prepare independent iOS identity
         run: |
           sed -i '' "s/com.karoxghafoor.zhirox/${BUNDLE_ID}/g" ios/Runner.xcodeproj/project.pbxproj
