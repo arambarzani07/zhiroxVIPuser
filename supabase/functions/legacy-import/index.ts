@@ -395,6 +395,11 @@ Deno.serve(async (req) => {
           receipt_image_path: "",
           created_at: occurredAt,
           updated_at: occurredAt,
+          reference_snapshot: {
+            source: "legacy_import",
+            source_id: sourceId,
+            source_fingerprint: fingerprint,
+          },
           subtotal: amount,
           discount_percent: 0,
           discount_amount: 0,
