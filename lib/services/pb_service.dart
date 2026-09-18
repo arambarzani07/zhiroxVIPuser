@@ -743,6 +743,51 @@ class PBService {
     return Map<String, dynamic>.from(raw);
   }
 
+  static Future<Map<String, dynamic>> getOwnerReleaseOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_release_overview');
+    if (raw is! Map) throw Exception('invalid_owner_release_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerReleaseCompliancePage({
+    int page = 1,
+    int perPage = 30,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_release_compliance_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_release_compliance_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerReleasePolicy({
+    required String edition,
+    required bool mandatory,
+    required String notes,
+    required int rolloutPercent,
+    required int minimumBuild,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_release_policy',
+      params: {
+        'p_edition': edition,
+        'p_mandatory': mandatory,
+        'p_notes': notes,
+        'p_rollout_percent': rolloutPercent,
+        'p_minimum_build': minimumBuild,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_release_policy_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
     int page = 1,
     int perPage = 50,
