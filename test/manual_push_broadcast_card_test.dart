@@ -28,6 +28,20 @@ class BroadcastGateway implements CustomerPushGateway {
       throw UnimplementedError();
 
   @override
+  Future<List<CustomerPushHistoryItem>> loadHistory(
+    String customerId, {
+    int limit = 20,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<CustomerPushRetryResult> retryNotification(
+    String customerId,
+    String outboxId,
+  ) =>
+      throw UnimplementedError();
+
+  @override
   Future<int> revokeAll(String customerId) => throw UnimplementedError();
 
   @override
