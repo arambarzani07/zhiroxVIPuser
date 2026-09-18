@@ -372,6 +372,8 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
         'admin_device_authorization_changed': 'گۆڕینی مۆڵەتی ئامێر',
         'admin_account_recovered': 'Account Recovery',
         'backup_monitoring_policy_changed': 'گۆڕینی Backup Monitoring Policy',
+        'platform_policy_published': 'بڵاوکردنەوەی Platform Policy',
+        'platform_retention_policy_changed': 'گۆڕینی Data Retention Policy',
       }[action] ??
       action;
 
