@@ -10,6 +10,7 @@ entitlements = Path('lib/screens/auth/owner_entitlements_center_screen.dart').re
 recovery_devices = Path('lib/screens/auth/owner_recovery_device_center_screen.dart').read_text()
 backup_resilience = Path('lib/screens/auth/owner_backup_resilience_center_screen.dart').read_text()
 readiness = Path('lib/screens/auth/owner_readiness_center_screen.dart').read_text()
+release_center = Path('lib/screens/auth/update_control_screen.dart').read_text()
 recovery_function = Path('supabase/functions/owner-account-recovery/index.ts').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
 auth_provider = Path('lib/providers/auth_provider.dart').read_text()
@@ -40,6 +41,9 @@ backup_resilience_migration = Path(
 readiness_migration = Path(
     'supabase/migrations/20260918223000_owner_readiness_center.sql'
 ).read_text()
+release_migration = Path(
+    'supabase/migrations/20260918230000_owner_release_compliance_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
@@ -51,6 +55,7 @@ required = [
     'OwnerRecoveryDeviceCenterScreen',
     'OwnerBackupResilienceCenterScreen',
     'OwnerReadinessCenterScreen',
+    'UpdateControlScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
@@ -77,6 +82,9 @@ required = [
     'setOwnerBackupMonitoringPolicy',
     'getOwnerReadinessOverview',
     'getOwnerReadinessPage',
+    'getOwnerReleaseOverview',
+    'getOwnerReleaseCompliancePage',
+    'setOwnerReleasePolicy',
     '_enforceAdminDeviceAuthorization',
     '_startDeviceAuthorizationHeartbeat',
     'getOwnerEntitlementsPage',
@@ -115,6 +123,9 @@ required = [
     'set_system_owner_backup_monitoring_policy',
     'get_system_owner_readiness_overview',
     'get_system_owner_readiness_page',
+    'get_system_owner_release_overview',
+    'get_system_owner_release_compliance_page',
+    'set_system_owner_release_policy',
     'system_owner_required',
 ]
 blob = '\n'.join([
@@ -128,6 +139,7 @@ blob = '\n'.join([
     recovery_devices,
     backup_resilience,
     readiness,
+    release_center,
     recovery_function,
     service,
     auth_provider,
@@ -140,6 +152,7 @@ blob = '\n'.join([
     recovery_device_migration,
     backup_resilience_migration,
     readiness_migration,
+    release_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -157,11 +170,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness):
+for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness, release_center):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration):
+for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration, release_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -229,5 +242,12 @@ assert 'payload' not in readiness_migration.lower(), 'readiness must not read ba
 assert 'record_counts' not in readiness_migration.lower(), 'readiness must not read tenant record counts'
 assert 'customer_id' not in readiness.lower(), 'readiness UI must not expose customer data'
 assert 'debt' not in readiness.lower(), 'readiness UI must not expose debt data'
+assert 'app_update_settings' in release_migration, 'release policy source missing'
+assert 'platform_admin_devices' in release_migration, 'release compliance telemetry missing'
+assert 'minimum_build' in release_migration, 'minimum supported build missing'
+assert 'owner_platform_audit' in release_migration, 'release policy changes must be audited'
+assert 'public.debts' not in release_migration and 'public.payments' not in release_migration, 'release center must not read market finance content'
+assert 'customer_id' not in release_center.lower(), 'release UI must not expose customer data'
+assert 'debt' not in release_center.lower(), 'release UI must not expose debt data'
 
 print('Owner platform privacy boundary verified.')
