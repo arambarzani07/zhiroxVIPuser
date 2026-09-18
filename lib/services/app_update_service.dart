@@ -201,6 +201,21 @@ class AppUpdateService {
     return info;
   }
 
+  static bool _includedInRollout(int percent) {
+    if (percent >= 100) return true;
+    if (percent <= 0) return false;
+
+    final subject = PBService.client.auth.currentUser?.id ?? '';
+    if (subject.isEmpty) return false;
+
+    var hash = 2166136261;
+    for (final unit in subject.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 16777619) & 0x7fffffff;
+    }
+    return (hash % 100) < percent;
+  }
+
   static Future<bool> openDownload(AppUpdateInfo info) async {
     final uri = Uri.parse(info.downloadUrl);
     return launchUrl(uri, mode: LaunchMode.externalApplication);
