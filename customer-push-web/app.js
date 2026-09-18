@@ -281,6 +281,13 @@ function configureNotificationExperience(data) {
     return;
   }
 
+  if (isIos() && !isStandalone()) {
+    showIosHelpButton.hidden = false;
+    renderNotificationState('install-required', 'بۆ iPhone سەرەتا پۆرتال زیاد بکە بۆ Home Screen');
+    setResult('لە Safari: Share → Add to Home Screen، پاشان پۆرتالەکە لە Home Screen بکەرەوە و ئاگادارکردنەوە چالاک بکە.', 'err');
+    return;
+  }
+
   if (!supportsPush()) {
     renderNotificationState('error', 'ئەم وێبگەڕە پشتگیری Web Push ناکات');
     return;
@@ -289,12 +296,6 @@ function configureNotificationExperience(data) {
   if (Notification.permission === 'denied') {
     renderNotificationState('error', 'مۆڵەتی ئاگادارکردنەوە ڕەتکراوەتەوە');
     setResult('لە ڕێکخستنەکانی وێبگەڕ یان ئامێرەکەت مۆڵەتی ئاگادارکردنەوە چالاک بکە.', 'err');
-    return;
-  }
-
-  if (isIos() && !isStandalone()) {
-    showIosHelpButton.hidden = false;
-    renderNotificationState('install-required', 'بۆ iPhone سەرەتا پۆرتال زیاد بکە بۆ Home Screen');
     return;
   }
 
