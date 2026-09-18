@@ -398,6 +398,49 @@ class PBService {
     return Map<String, dynamic>.from(raw);
   }
 
+  static Future<Map<String, dynamic>> getOwnerSupportOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_support_overview');
+    if (raw is! Map) throw Exception('invalid_owner_support_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerSupportTicketsPage({
+    int page = 1,
+    int perPage = 30,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_support_tickets_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_support_tickets_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> updateOwnerSupportTicket({
+    required String ticketId,
+    required String status,
+    required String priority,
+    String ownerResponse = '',
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'update_system_owner_support_ticket',
+      params: {
+        'p_ticket_id': ticketId,
+        'p_status': status,
+        'p_priority': priority,
+        'p_owner_response': ownerResponse,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_support_ticket_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
     int page = 1,
     int perPage = 50,
