@@ -276,8 +276,6 @@ class PBService {
         final row = Map<String, dynamic>.from(item);
         final rawAdmin = row['admin'];
         if (rawAdmin is! Map) continue;
-        int asInt(dynamic value) =>
-            value is int ? value : int.tryParse('${value ?? 0}') ?? 0;
         admins.add({
           'admin': _profileRecord(Map<String, dynamic>.from(rawAdmin)),
         });
