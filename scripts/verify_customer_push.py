@@ -204,6 +204,10 @@ assert 'QR ـێکی نوێ دروست بکە و دووبارە هەوڵ بدە' 
 assert 'ئەم لینکە بەردەست نییە یان ڕاگیراوە.' in app_js, 'PWA must describe unavailable links as revoked/unavailable'
 assert 'URLSearchParams(' in app_js and "currentUrl.hash" in app_js, 'PWA must recover the QR bearer token from the URL fragment'
 assert "window.location.search || window.location.hash" in app_js, 'PWA must scrub query/fragment credentials after subscription'
+configure_start = app_js.index('function configureNotificationExperience')
+configure_end = app_js.index('async function initialize', configure_start)
+configure_block = app_js[configure_start:configure_end]
+assert configure_block.index('isIos() && !isStandalone()') < configure_block.index('!supportsPush()'), 'iOS Safari must show Add to Home Screen guidance before generic push unsupported state'
 manifest_bootstrap = (web / 'manifest-bootstrap.js').read_text(errors='ignore')
 assert 'currentUrl.hash' in manifest_bootstrap or 'window.location.hash' in manifest_bootstrap, 'install manifest bootstrap must recover the QR token from the URL fragment'
 assert 'customer-push-manifest?token=' in manifest_bootstrap, 'install manifest bootstrap must request a token-aware manifest before Add to Home Screen'
