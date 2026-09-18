@@ -231,6 +231,15 @@ class PBService {
     });
   }
 
+  // ==================== Platform Operations ====================
+
+  static Future<Map<String, dynamic>> getPlatformOperationsState() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_platform_operations_state');
+    if (raw is! Map) throw Exception('invalid_platform_operations_state');
+    return Map<String, dynamic>.from(raw);
+  }
+
   // ==================== Admin Subscription Management ====================
 
   static Future<int> checkSubscriptionDaysLeft(String adminId) async {
