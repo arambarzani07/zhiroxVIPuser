@@ -363,6 +363,7 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
         'admin_sessions_revoked': 'ڕاگرتنی Session ـەکان',
         'admin_account_locked': 'قوفڵکردنی هەژماری Admin',
         'admin_account_unlocked': 'کردنەوەی هەژماری Admin',
+        'platform_operations_changed': 'گۆڕینی دۆخی پلاتفۆرم',
         'support_ticket_updated': 'نوێکردنەوەی Support Ticket',
       }[action] ??
       action;
