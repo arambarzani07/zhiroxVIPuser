@@ -371,6 +371,7 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
         'admin_device_policy_changed': 'گۆڕینی Device Policy',
         'admin_device_authorization_changed': 'گۆڕینی مۆڵەتی ئامێر',
         'admin_account_recovered': 'Account Recovery',
+        'backup_monitoring_policy_changed': 'گۆڕینی Backup Monitoring Policy',
       }[action] ??
       action;
 
