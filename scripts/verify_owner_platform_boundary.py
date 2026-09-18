@@ -3,6 +3,7 @@ from pathlib import Path
 dashboard = Path('lib/screens/auth/owner_dashboard.dart').read_text()
 health = Path('lib/screens/auth/owner_health_center_screen.dart').read_text()
 subscription = Path('lib/screens/auth/owner_subscription_center_screen.dart').read_text()
+security = Path('lib/screens/auth/owner_security_center_screen.dart').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
 health_migration = Path(
     'supabase/migrations/20260918135500_owner_health_audit_center.sql'
@@ -10,29 +11,43 @@ health_migration = Path(
 subscription_migration = Path(
     'supabase/migrations/20260918162000_owner_subscription_center.sql'
 ).read_text()
+security_migration = Path(
+    'supabase/migrations/20260918170000_owner_security_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
     'OwnerSubscriptionCenterScreen',
+    'OwnerSecurityCenterScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
     'getOwnerSubscriptionsPage',
     'setOwnerSubscription',
+    'getOwnerSecurityOverview',
+    'getOwnerSecurityPage',
+    'revokeOwnerAdminSessions',
+    'setOwnerAdminLock',
     'get_system_owner_health_overview',
     'get_system_owner_platform_audit_page',
     'get_system_owner_subscription_overview',
     'get_system_owner_subscriptions_page',
     'set_system_owner_subscription',
+    'get_system_owner_security_overview',
+    'get_system_owner_security_page',
+    'revoke_system_owner_admin_sessions',
+    'set_system_owner_admin_lock',
     'system_owner_required',
 ]
 blob = '\n'.join([
     dashboard,
     health,
     subscription,
+    security,
     service,
     health_migration,
     subscription_migration,
+    security_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -50,11 +65,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription):
+for screen in (health, subscription, security):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration):
+for migration in (health_migration, subscription_migration, security_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -72,5 +87,11 @@ assert 'owner_platform_audit' in subscription_migration, 'subscription changes m
 assert 'market_name' in subscription_migration, 'subscription center needs tenant identity metadata'
 assert 'debt' not in subscription.lower(), 'subscription UI must not expose debt data'
 assert 'payment-ledger' not in subscription.lower(), 'subscription UI must not expose market payment ledger'
+assert 'auth.sessions' in security_migration, 'security center must use auth session metadata'
+assert 'auth.users' in security_migration, 'security center must use auth login metadata'
+assert 'count(distinct s.ip)' in security_migration.lower(), 'security center must derive IP-change risk without exposing raw IPs'
+assert "'session_id'" not in security_migration, 'security center must not expose raw session identifiers'
+assert 'user_agent' not in security.lower(), 'security UI must not expose raw user agents'
+assert 'ip_address' not in security.lower(), 'security UI must not expose raw IP addresses'
 
 print('Owner platform privacy boundary verified.')
