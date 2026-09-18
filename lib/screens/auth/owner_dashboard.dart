@@ -6,6 +6,7 @@ import 'package:zhirox/screens/auth/admin_management_screen.dart';
 import 'package:zhirox/screens/auth/import_permission_screen.dart';
 import 'package:zhirox/screens/auth/owner_platform_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_health_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_subscription_center_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -177,6 +178,28 @@ class _OwnerHome extends StatelessWidget {
                     subtitle: const Text('دروستکردن و نوێکردنەوەی بەشداری؛ بێ business data'),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: onOpenMarkets,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.amber.withValues(alpha: 0.14),
+                      child: const Icon(
+                        Icons.workspace_premium_outlined,
+                        color: Colors.amber,
+                      ),
+                    ),
+                    title: const Text('ناوەندی بەشداری'),
+                    subtitle: const Text(
+                      'Plan، expiry و billing metadata ـی مارکێتەکان',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerSubscriptionCenterScreen(),
+                      ),
+                    ),
                   ),
                   const Divider(height: 1),
                   ListTile(
