@@ -24,6 +24,14 @@ class BroadcastGateway implements CustomerPushGateway {
       throw UnimplementedError();
 
   @override
+  Future<CustomerPushOverviewPage> loadOverview({
+    String search = '',
+    int limit = 60,
+    int offset = 0,
+  }) =>
+      throw UnimplementedError();
+
+  @override
   Future<CustomerPushStatus> loadStatus(String customerId) =>
       throw UnimplementedError();
 
