@@ -10,6 +10,7 @@ import 'package:zhirox/screens/auth/owner_subscription_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_security_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_support_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_operations_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_entitlements_center_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -201,6 +202,28 @@ class _OwnerHome extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const OwnerOperationsCenterScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.deepPurple.withValues(alpha: 0.10),
+                      child: const Icon(
+                        Icons.tune_rounded,
+                        color: Colors.deepPurple,
+                      ),
+                    ),
+                    title: const Text('Feature Entitlements'),
+                    subtitle: const Text(
+                      'Standard / Pro / VIP و override ـی هەر مارکێت',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerEntitlementsCenterScreen(),
                       ),
                     ),
                   ),
