@@ -274,3 +274,28 @@ assert 'action === "history"' in admin_text, 'admin API history action missing'
 assert 'action === "retry"' in admin_text, 'admin API retry action missing'
 assert 'read_customer_push_history_service' in admin_text, 'admin API history RPC missing'
 assert 'retry_customer_push_service' in admin_text, 'admin API retry RPC missing'
+
+
+# Manager notification center
+overview_migration = ROOT / 'supabase/migrations/20260918101500_customer_push_admin_overview.sql'
+assert overview_migration.exists(), 'manager push overview migration missing'
+overview_schema = overview_migration.read_text(errors='ignore')
+assert 'list_customer_push_overview_service' in overview_schema, 'manager push overview RPC missing'
+assert "'active_link_count'" in overview_schema, 'manager push overview must expose active links'
+assert "'device_count'" in overview_schema, 'manager push overview must expose active devices'
+assert 'action === "overview"' in admin_text, 'admin API overview action missing'
+assert 'list_customer_push_overview_service' in admin_text, 'admin API overview RPC missing'
+assert 'CustomerPushOverviewItem' in service_text, 'manager push overview model missing'
+assert 'loadOverview' in service_text, 'manager push overview gateway missing'
+notification_screen = ROOT / 'lib/screens/admin/admin_notifications_screen.dart'
+assert notification_screen.exists(), 'manager notification center screen missing'
+notification_screen_text = notification_screen.read_text(errors='ignore')
+for marker in (
+    'ئاگادارکردنەوەکان',
+    'ManualPushBroadcastCard',
+    'loadOverview',
+    'notifications_active_rounded',
+):
+    assert marker in notification_screen_text, f'manager notification center marker missing: {marker}'
+settings_text = (ROOT / 'lib/screens/admin/admin_settings_screen.dart').read_text(errors='ignore')
+assert 'AdminNotificationsScreen' in settings_text, 'manager notification center must be reachable from settings'
