@@ -10,6 +10,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isInitializing = true;
   bool _disposed = false;
+  Timer? _deviceAuthorizationTimer;
 
   RecordModel? get user => _user;
   bool get isLoggedIn => _user != null;
@@ -98,6 +99,8 @@ class AuthProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _deviceAuthorizationTimer?.cancel();
+    _deviceAuthorizationTimer = null;
     final current = _user;
     if (current != null) {
       unawaited(PBService.pb.collection('users').unsubscribe(current.id));
@@ -169,6 +172,31 @@ class AuthProvider extends ChangeNotifier {
     throw 'ئەم ئامێرە چاوەڕێی پەسەندکردنی خاوەنی سیستەمە';
   }
 
+  void _startDeviceAuthorizationHeartbeat() {
+    _deviceAuthorizationTimer?.cancel();
+    final current = _user;
+    if (current == null ||
+        userRole != 'admin' ||
+        current.getBoolValue('is_system_owner')) {
+      return;
+    }
+
+    _deviceAuthorizationTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) async {
+        try {
+          await _enforceAdminDeviceAuthorization();
+        } catch (error) {
+          final text = error.toString();
+          final blocked = text.contains('چاوەڕێی پەسەندکردنی') ||
+              text.contains('لەلایەن خاوەنی سیستەمەوە ڕاگیراوە');
+          if (!blocked || _disposed) return;
+          await logout();
+        }
+      },
+    );
+  }
+
   Future<void> _validateSubscription() async {
     final current = _user;
     if (current == null) return;
@@ -229,6 +257,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _subscribeToUserChanges();
+      _startDeviceAuthorizationHeartbeat();
     } finally {
       _isInitializing = false;
       if (!_disposed) notifyListeners();
@@ -315,6 +344,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _subscribeToUserChanges();
+      _startDeviceAuthorizationHeartbeat();
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(kLockoutTimeKey);
@@ -374,6 +404,8 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    _deviceAuthorizationTimer?.cancel();
+    _deviceAuthorizationTimer = null;
     final current = _user;
     if (current != null) {
       try {
