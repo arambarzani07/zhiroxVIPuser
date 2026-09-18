@@ -368,6 +368,9 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
         'tenant_feature_plan_changed': 'گۆڕینی Feature Plan',
         'feature_plan_entitlement_changed': 'گۆڕینی یاسای Feature Plan',
         'tenant_feature_entitlement_changed': 'گۆڕینی Feature Override',
+        'admin_device_policy_changed': 'گۆڕینی Device Policy',
+        'admin_device_authorization_changed': 'گۆڕینی مۆڵەتی ئامێر',
+        'admin_account_recovered': 'Account Recovery',
       }[action] ??
       action;
 
