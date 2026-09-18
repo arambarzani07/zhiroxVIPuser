@@ -30,9 +30,26 @@ for path in LIB.rglob('*.dart'):
 
 
 main = (LIB / 'main.dart').read_text(encoding='utf-8')
+platform_operations_gate = (LIB / 'widgets/platform_operations_gate.dart').read_text(encoding='utf-8')
 for marker in ('class _OnlineOnlyGate', 'child: _OnlineOnlyGate', 'IgnorePointer', 'ConnectivityService.instance'):
     if marker not in main:
         fail(f'lib/main.dart: online-only gate marker missing: {marker}')
+
+for marker in (
+    "import 'package:zhirox/widgets/platform_operations_gate.dart';",
+    'PlatformOperationsGate(',
+):
+    if marker not in main:
+        fail(f'lib/main.dart: platform operations gate marker missing: {marker}')
+for marker in (
+    'getPlatformOperationsState',
+    "state['maintenance_effective'] == true",
+    "state['announcement_effective'] == true",
+    'Timer.periodic(const Duration(minutes: 1)',
+    "getBoolValue('is_system_owner')",
+):
+    if marker not in platform_operations_gate:
+        fail(f'lib/widgets/platform_operations_gate.dart: runtime operations marker missing: {marker}')
 
 
 auth = (LIB / 'providers/auth_provider.dart').read_text(encoding='utf-8')
