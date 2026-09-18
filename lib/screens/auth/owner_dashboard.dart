@@ -4,6 +4,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/auth/admin_management_screen.dart';
 import 'package:zhirox/screens/auth/import_permission_screen.dart';
+import 'package:zhirox/screens/auth/owner_platform_center_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -87,7 +88,7 @@ class _OwnerHome extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'کۆنترۆڵی مارکێتەکان و وەشانی ئەپ لە یەک شوێن',
+              'کۆنترۆڵی پلاتفۆرم، بەشداری و وەشان — بەبێ دەستگەیشتن بە ناوەڕۆکی مارکێت',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -128,11 +129,29 @@ class _OwnerHome extends StatelessWidget {
                     minTileHeight: 72,
                     leading: const CircleAvatar(
                       backgroundColor: AppColors.primarySoft,
+                      child: Icon(Icons.admin_panel_settings_outlined,
+                          color: AppColors.primary),
+                    ),
+                    title: const Text('کۆنترۆڵی پلاتفۆرم'),
+                    subtitle: const Text('Lifecycle، سنوور، Support و دۆخی هەژمار'),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerPlatformCenterScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: const CircleAvatar(
+                      backgroundColor: AppColors.primarySoft,
                       child: Icon(Icons.storefront_rounded,
                           color: AppColors.primary),
                     ),
-                    title: const Text('بەڕێوەبردنی مارکێتەکان'),
-                    subtitle: const Text('زیادکردن و نوێکردنەوەی بەشداریکردن'),
+                    title: const Text('هەژمارەکانی مارکێت'),
+                    subtitle: const Text('دروستکردن و نوێکردنەوەی بەشداری؛ بێ business data'),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: onOpenMarkets,
                   ),
