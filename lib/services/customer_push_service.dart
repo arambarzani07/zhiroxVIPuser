@@ -365,7 +365,7 @@ class CustomerPushService implements CustomerPushGateway {
       await _invokeAdmin(
         'history',
         customerId: customerId,
-        limit: limit.clamp(1, 100),
+        limit: limit.clamp(1, 100).toInt(),
       ),
     );
     final items = data['items'];
