@@ -8,6 +8,7 @@ support = Path('lib/screens/auth/owner_support_center_screen.dart').read_text()
 operations = Path('lib/screens/auth/owner_operations_center_screen.dart').read_text()
 entitlements = Path('lib/screens/auth/owner_entitlements_center_screen.dart').read_text()
 recovery_devices = Path('lib/screens/auth/owner_recovery_device_center_screen.dart').read_text()
+backup_resilience = Path('lib/screens/auth/owner_backup_resilience_center_screen.dart').read_text()
 recovery_function = Path('supabase/functions/owner-account-recovery/index.ts').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
 auth_provider = Path('lib/providers/auth_provider.dart').read_text()
@@ -32,6 +33,9 @@ entitlements_migration = Path(
 recovery_device_migration = Path(
     'supabase/migrations/20260918213000_owner_recovery_device_center.sql'
 ).read_text()
+backup_resilience_migration = Path(
+    'supabase/migrations/20260918220000_owner_backup_resilience_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
@@ -41,6 +45,7 @@ required = [
     'OwnerOperationsCenterScreen',
     'OwnerEntitlementsCenterScreen',
     'OwnerRecoveryDeviceCenterScreen',
+    'OwnerBackupResilienceCenterScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
@@ -62,6 +67,9 @@ required = [
     'setOwnerAdminDeviceAuthorization',
     'recoverOwnerAdminAccount',
     'registerPlatformAdminDevice',
+    'getOwnerBackupResilienceOverview',
+    'getOwnerBackupResiliencePage',
+    'setOwnerBackupMonitoringPolicy',
     '_enforceAdminDeviceAuthorization',
     '_startDeviceAuthorizationHeartbeat',
     'getOwnerEntitlementsPage',
@@ -95,6 +103,9 @@ required = [
     'set_system_owner_admin_device_policy',
     'set_system_owner_admin_device_authorization',
     'complete_system_owner_admin_recovery_service',
+    'get_system_owner_backup_resilience_overview',
+    'get_system_owner_backup_resilience_page',
+    'set_system_owner_backup_monitoring_policy',
     'system_owner_required',
 ]
 blob = '\n'.join([
@@ -106,6 +117,7 @@ blob = '\n'.join([
     operations,
     entitlements,
     recovery_devices,
+    backup_resilience,
     recovery_function,
     service,
     auth_provider,
@@ -116,6 +128,7 @@ blob = '\n'.join([
     operations_migration,
     entitlements_migration,
     recovery_device_migration,
+    backup_resilience_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -133,11 +146,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription, security, support, operations, entitlements, recovery_devices):
+for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration):
+for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -189,5 +202,13 @@ assert 'customer_id' not in recovery_devices.lower(), 'recovery/device UI must n
 assert 'new_password' in recovery_function, 'recovery function must rotate password'
 assert 'complete_system_owner_admin_recovery_service' in recovery_function, 'recovery function must revoke sessions and audit'
 assert 'password' not in recovery_device_migration.lower().replace('password_reset', ''), 'recovery migration must not store passwords'
+assert 'owner_backup_monitoring_policies' in backup_resilience_migration, 'backup monitoring policy storage missing'
+assert 'tenant_backups' in backup_resilience_migration, 'backup resilience metadata source missing'
+assert 'last_verified_at' in backup_resilience_migration, 'backup verification freshness missing'
+assert 'owner_platform_audit' in backup_resilience_migration, 'backup policy changes must be audited'
+assert 'payload' not in backup_resilience_migration.lower(), 'owner backup center must not read backup payloads'
+assert 'record_counts' not in backup_resilience_migration.lower(), 'owner backup center must not read tenant record counts'
+assert 'payload' not in backup_resilience.lower(), 'owner backup UI must not expose backup payloads'
+assert 'record_counts' not in backup_resilience.lower(), 'owner backup UI must not expose record counts'
 
 print('Owner platform privacy boundary verified.')
