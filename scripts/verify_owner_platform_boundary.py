@@ -6,6 +6,7 @@ subscription = Path('lib/screens/auth/owner_subscription_center_screen.dart').re
 security = Path('lib/screens/auth/owner_security_center_screen.dart').read_text()
 support = Path('lib/screens/auth/owner_support_center_screen.dart').read_text()
 operations = Path('lib/screens/auth/owner_operations_center_screen.dart').read_text()
+entitlements = Path('lib/screens/auth/owner_entitlements_center_screen.dart').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
 health_migration = Path(
     'supabase/migrations/20260918135500_owner_health_audit_center.sql'
@@ -22,6 +23,9 @@ support_migration = Path(
 operations_migration = Path(
     'supabase/migrations/20260918200000_owner_operations_center.sql'
 ).read_text()
+entitlements_migration = Path(
+    'supabase/migrations/20260918210000_owner_entitlements_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
@@ -29,6 +33,7 @@ required = [
     'OwnerSecurityCenterScreen',
     'OwnerSupportCenterScreen',
     'OwnerOperationsCenterScreen',
+    'OwnerEntitlementsCenterScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
@@ -43,6 +48,10 @@ required = [
     'updateOwnerSupportTicket',
     'getPlatformOperationsState',
     'setOwnerOperationsState',
+    'getOwnerEntitlementsOverview',
+    'getOwnerEntitlementsPage',
+    'setOwnerPlanEntitlement',
+    'setOwnerTenantEntitlement',
     'get_system_owner_health_overview',
     'get_system_owner_platform_audit_page',
     'get_system_owner_subscription_overview',
@@ -58,6 +67,11 @@ required = [
     'create_platform_support_ticket',
     'get_platform_operations_state',
     'set_system_owner_operations_state',
+    'get_system_owner_entitlements_overview',
+    'get_system_owner_entitlements_page',
+    'set_system_owner_plan_entitlement',
+    'set_system_owner_tenant_entitlement',
+    'get_platform_entitlements_state',
     'system_owner_required',
 ]
 blob = '\n'.join([
@@ -67,12 +81,14 @@ blob = '\n'.join([
     security,
     support,
     operations,
+    entitlements,
     service,
     health_migration,
     subscription_migration,
     security_migration,
     support_migration,
     operations_migration,
+    entitlements_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -90,11 +106,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription, security, support, operations):
+for screen in (health, subscription, security, support, operations, entitlements):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration):
+for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -129,5 +145,12 @@ assert 'announcement_enabled' in operations_migration, 'platform announcement co
 assert 'owner_platform_audit' in operations_migration, 'operations changes must be audited'
 assert 'public.debts' not in operations_migration and 'public.payments' not in operations_migration, 'operations center must not query market finance content'
 assert 'customer_id' not in operations.lower(), 'operations UI must not expose customer data'
+assert 'platform_feature_catalog' in entitlements_migration, 'feature catalog missing'
+assert 'platform_plan_entitlements' in entitlements_migration, 'plan entitlement matrix missing'
+assert 'owner_tenant_entitlement_overrides' in entitlements_migration, 'tenant override storage missing'
+assert 'owner_platform_audit' in entitlements_migration, 'entitlement changes must be audited'
+assert 'public.debts' not in entitlements_migration and 'public.payments' not in entitlements_migration, 'entitlements must not read market finance content'
+assert 'customer_id' not in entitlements.lower(), 'entitlements UI must not expose customer data'
+assert 'debt' not in entitlements.lower(), 'entitlements UI must not expose debt data'
 
 print('Owner platform privacy boundary verified.')
