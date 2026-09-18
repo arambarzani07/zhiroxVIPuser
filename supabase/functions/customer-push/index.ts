@@ -34,6 +34,7 @@ export type PublicPushDeps = {
   rateLimitSalt: string;
   inspect: (tokenHash: string) => Promise<Record<string, unknown>>;
   portal: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; offset: number }) => Promise<Record<string, unknown>>;
+  notificationHistory: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; limit: number }) => Promise<Record<string, unknown>>;
   redeem: (args: { tokenHash: string; endpoint: string; p256dh: string; auth: string; deviceSecretHash: string; userAgent: string; platform: string }) => Promise<Record<string, unknown>>;
   unsubscribe: (endpoint: string, deviceSecretHash: string) => Promise<boolean>;
   consumeRateLimit: (keyHash: string, limit: number, windowSeconds: number) => Promise<boolean>;
@@ -100,9 +101,20 @@ export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Pro
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch (_) { return json({ error: "invalid_json" }, 400); }
   const action = String(body.action ?? "");
-  if (action === "validate" || action === "subscribe" || action === "portal") {
+  if (
+    action === "validate" ||
+    action === "subscribe" ||
+    action === "portal" ||
+    action === "notifications"
+  ) {
     if (!(await enforceRateLimit(req, deps))) return json({ error: "rate_limited" }, 429);
-    if (action !== "portal" && !isToken(body.token)) return json({ error: "link_unavailable" }, 400);
+    if (
+      action !== "portal" &&
+      action !== "notifications" &&
+      !isToken(body.token)
+    ) {
+      return json({ error: "link_unavailable" }, 400);
+    }
   }
 
   if (action === "portal") {
@@ -121,6 +133,32 @@ export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Pro
         offset,
       });
       return json({ ...portal, vapid_public_key: deps.vapidPublicKey });
+    } catch (_) {
+      return json({ error: "link_unavailable" }, 404);
+    }
+  }
+
+  if (action === "notifications") {
+    const token = isToken(body.token) ? body.token : null;
+    const endpoint = typeof body.endpoint === "string" && body.endpoint.startsWith("https://")
+      ? body.endpoint
+      : null;
+    const deviceSecret = isToken(body.device_secret) ? body.device_secret : null;
+    const rawLimit = Number(body.limit ?? 20);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.max(1, Math.min(Math.trunc(rawLimit), 50))
+      : 20;
+    if (!token && (!endpoint || !deviceSecret)) {
+      return json({ error: "link_unavailable" }, 400);
+    }
+    try {
+      const history = await deps.notificationHistory({
+        tokenHash: token ? await deps.hash(token) : null,
+        endpoint,
+        deviceSecretHash: deviceSecret ? await deps.hash(deviceSecret) : null,
+        limit,
+      });
+      return json(history);
     } catch (_) {
       return json({ error: "link_unavailable" }, 404);
     }
@@ -182,6 +220,19 @@ async function serve(req: Request): Promise<Response> {
         p_device_secret_hash: args.deviceSecretHash,
         p_offset: args.offset,
       });
+      if (error) throw error;
+      return (data ?? {}) as Record<string, unknown>;
+    },
+    notificationHistory: async (args) => {
+      const { data, error } = await admin.rpc(
+        "read_customer_push_notification_history_service",
+        {
+          p_token_hash: args.tokenHash,
+          p_endpoint: args.endpoint,
+          p_device_secret_hash: args.deviceSecretHash,
+          p_limit: args.limit,
+        },
+      );
       if (error) throw error;
       return (data ?? {}) as Record<string, unknown>;
     },
