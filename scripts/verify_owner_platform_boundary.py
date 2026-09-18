@@ -12,6 +12,7 @@ backup_resilience = Path('lib/screens/auth/owner_backup_resilience_center_screen
 readiness = Path('lib/screens/auth/owner_readiness_center_screen.dart').read_text()
 release_center = Path('lib/screens/auth/update_control_screen.dart').read_text()
 infrastructure = Path('lib/screens/auth/owner_infrastructure_center_screen.dart').read_text()
+policy_compliance = Path('lib/screens/auth/owner_policy_compliance_center_screen.dart').read_text()
 recovery_function = Path('supabase/functions/owner-account-recovery/index.ts').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
 auth_provider = Path('lib/providers/auth_provider.dart').read_text()
@@ -48,6 +49,9 @@ release_migration = Path(
 infrastructure_migration = Path(
     'supabase/migrations/20260918233000_owner_infrastructure_center.sql'
 ).read_text()
+policy_compliance_migration = Path(
+    'supabase/migrations/20260918235000_owner_policy_compliance_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
@@ -61,6 +65,7 @@ required = [
     'OwnerReadinessCenterScreen',
     'UpdateControlScreen',
     'OwnerInfrastructureCenterScreen',
+    'OwnerPolicyComplianceCenterScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
@@ -92,6 +97,10 @@ required = [
     'setOwnerReleasePolicy',
     'getOwnerInfrastructureOverview',
     'getOwnerInfrastructureJobsPage',
+    'getOwnerPolicyOverview',
+    'getOwnerPolicyPage',
+    'publishOwnerPolicyDocument',
+    'setOwnerRetentionPolicy',
     '_enforceAdminDeviceAuthorization',
     '_startDeviceAuthorizationHeartbeat',
     'getOwnerEntitlementsPage',
@@ -135,6 +144,12 @@ required = [
     'set_system_owner_release_policy',
     'get_system_owner_infrastructure_overview',
     'get_system_owner_infrastructure_jobs_page',
+    'get_system_owner_policy_overview',
+    'get_system_owner_policy_page',
+    'publish_system_owner_policy_document',
+    'set_system_owner_retention_policy',
+    'get_platform_policy_state',
+    'accept_platform_policy',
     'system_owner_required',
 ]
 blob = '\n'.join([
@@ -150,6 +165,7 @@ blob = '\n'.join([
     readiness,
     release_center,
     infrastructure,
+    policy_compliance,
     recovery_function,
     service,
     auth_provider,
@@ -164,6 +180,7 @@ blob = '\n'.join([
     readiness_migration,
     release_migration,
     infrastructure_migration,
+    policy_compliance_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -181,11 +198,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness, release_center, infrastructure):
+for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness, release_center, infrastructure, policy_compliance):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration, release_migration, infrastructure_migration):
+for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration, release_migration, infrastructure_migration, policy_compliance_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -270,5 +287,17 @@ for sensitive in ('customer_id', 'market_id', 'payload', 'endpoint', 'user_agent
 assert 'customer_id' not in infrastructure.lower(), 'infrastructure UI must not expose customer data'
 assert 'market_id' not in infrastructure.lower(), 'infrastructure UI must not expose tenant delivery detail'
 assert 'payload' not in infrastructure.lower(), 'infrastructure UI must not expose notification payloads'
+
+assert 'platform_policy_documents' in policy_compliance_migration, 'policy document storage missing'
+assert 'platform_policy_acceptances' in policy_compliance_migration, 'policy acceptance storage missing'
+assert 'platform_retention_policy' in policy_compliance_migration, 'retention policy storage missing'
+assert 'requires_reacceptance' in policy_compliance_migration, 'policy re-acceptance control missing'
+assert 'owner_platform_audit' in policy_compliance_migration, 'policy changes must be audited'
+assert 'public.debts' not in policy_compliance_migration and 'public.payments' not in policy_compliance_migration, 'policy center must not read market finance content'
+assert 'customer_id' not in policy_compliance.lower(), 'policy UI must not expose customer data'
+assert 'debt' not in policy_compliance.lower(), 'policy UI must not expose debt data'
+assert 'body_markdown' in policy_compliance_migration, 'policy text body missing'
+assert 'technical_log_days' in policy_compliance_migration, 'technical log retention control missing'
+assert 'audit_log_days' in policy_compliance_migration, 'audit log retention control missing'
 
 print('Owner platform privacy boundary verified.')
