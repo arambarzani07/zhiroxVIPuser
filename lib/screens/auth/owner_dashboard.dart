@@ -12,6 +12,7 @@ import 'package:zhirox/screens/auth/owner_support_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_operations_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_entitlements_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_recovery_device_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_backup_resilience_center_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -270,6 +271,29 @@ class _OwnerHome extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) =>
                             const OwnerRecoveryDeviceCenterScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.teal.withValues(alpha: 0.10),
+                      child: const Icon(
+                        Icons.cloud_done_outlined,
+                        color: Colors.teal,
+                      ),
+                    ),
+                    title: const Text('Backup & Resilience'),
+                    subtitle: const Text(
+                      'Freshness، verification و Backup monitoring policy',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const OwnerBackupResilienceCenterScreen(),
                       ),
                     ),
                   ),
