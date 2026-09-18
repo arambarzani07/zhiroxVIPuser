@@ -22,6 +22,8 @@ const recentLedgerEl = document.getElementById('recentLedger');
 const ledgerEl = document.getElementById('ledger');
 const loadMoreButton = document.getElementById('loadMore');
 const notificationStateEl = document.getElementById('notificationState');
+const notificationHistoryEl = document.getElementById('notificationHistory');
+const notificationHistoryRefreshButton = document.getElementById('notificationHistoryRefresh');
 const showIosHelpButton = document.getElementById('showIosHelp');
 const iosHelpDialog = document.getElementById('iosHelpDialog');
 const openTransactionsButton = document.getElementById('openTransactions');
@@ -65,7 +67,10 @@ function setActiveView(name) {
 
 homeTab.addEventListener('click', () => setActiveView('home'));
 transactionsTab.addEventListener('click', () => setActiveView('transactions'));
-notificationsTab.addEventListener('click', () => setActiveView('notifications'));
+notificationsTab.addEventListener('click', () => {
+  setActiveView('notifications');
+  void loadNotificationHistory();
+});
 openTransactionsButton.addEventListener('click', () => setActiveView('transactions'));
 
 function isIos() {
@@ -141,12 +146,18 @@ function money(value, currency) {
   return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number(value))} ${currency || 'IQD'}`;
 }
 
-function portalCredentials(offset = 0) {
-  if (activeToken) return { action: 'portal', token: activeToken, offset };
+function portalCredentials(offset = 0, action = 'portal') {
+  if (activeToken) {
+    return action === 'portal'
+      ? { action, token: activeToken, offset }
+      : { action, token: activeToken };
+  }
   const endpoint = localStorage.getItem(ENDPOINT_KEY) || '';
   const deviceSecret = localStorage.getItem(DEVICE_SECRET_KEY) || '';
   if (endpoint.startsWith('https://') && TOKEN_PATTERN.test(deviceSecret)) {
-    return { action: 'portal', endpoint, device_secret: deviceSecret, offset };
+    return action === 'portal'
+      ? { action, endpoint, device_secret: deviceSecret, offset }
+      : { action, endpoint, device_secret: deviceSecret };
   }
   return null;
 }
@@ -238,6 +249,107 @@ function renderNotificationState(state, message) {
   notificationStateEl.textContent = message;
 }
 
+function notificationEventLabel(eventType) {
+  switch (eventType) {
+    case 'debt_created':
+      return 'قەرز';
+    case 'payment_created':
+      return 'پارەدانەوە';
+    case 'manual':
+      return 'پەیامی بەڕێوەبەر';
+    case 'due_reminder':
+      return 'یادخستنەوە';
+    default:
+      return 'ئاگادارکردنەوە';
+  }
+}
+
+function notificationStatusLabel(status) {
+  switch (status) {
+    case 'sent':
+      return 'نێردرا';
+    case 'pending':
+      return 'لە ڕیزدایە';
+    case 'partial':
+      return 'بەشێکی نێردرا';
+    case 'failed':
+      return 'شکست';
+    case 'no_device':
+      return 'ئامێری چالاک نەبوو';
+    default:
+      return '';
+  }
+}
+
+function renderNotificationHistory(items) {
+  notificationHistoryEl.replaceChildren();
+  if (!Array.isArray(items) || items.length === 0) {
+    addText(
+      notificationHistoryEl,
+      'p',
+      'هێشتا هیچ ئاگادارکردنەوەیەک تۆمار نەکراوە.',
+      'empty',
+    );
+    return;
+  }
+
+  for (const item of items) {
+    const card = document.createElement('article');
+    card.className = 'notification-history-item';
+
+    const head = document.createElement('div');
+    head.className = 'notification-history-head';
+    addText(head, 'strong', notificationEventLabel(item.event_type));
+    addText(
+      head,
+      'span',
+      notificationStatusLabel(item.status),
+      `notification-history-status status-${item.status || 'unknown'}`,
+    );
+    card.appendChild(head);
+
+    const detail = typeof item.message === 'string' && item.message.trim()
+      ? item.message.trim()
+      : item.amount != null
+        ? money(item.amount, item.currency)
+        : '';
+    if (detail) addText(card, 'div', detail, 'notification-history-body');
+
+    const date = new Date(item.created_at);
+    if (!Number.isNaN(date.getTime())) {
+      addText(
+        card,
+        'div',
+        date.toLocaleString('ku-IQ'),
+        'notification-history-time',
+      );
+    }
+
+    notificationHistoryEl.appendChild(card);
+  }
+}
+
+async function loadNotificationHistory() {
+  const credentials = portalCredentials(0, 'notifications');
+  if (!credentials) return;
+
+  notificationHistoryRefreshButton.disabled = true;
+  try {
+    const data = await api({ ...credentials, limit: 20 });
+    renderNotificationHistory(data.items);
+  } catch (_) {
+    notificationHistoryEl.replaceChildren();
+    addText(
+      notificationHistoryEl,
+      'p',
+      'نەتوانرا مێژووی ئاگادارکردنەوەکان باربکرێت.',
+      'empty',
+    );
+  } finally {
+    notificationHistoryRefreshButton.disabled = false;
+  }
+}
+
 function showLockedPortal() {
   portalAppEl.hidden = true;
   lockedStateEl.hidden = false;
@@ -314,6 +426,7 @@ async function initialize() {
     const data = await loadPortal();
     setActiveView('home');
     configureNotificationExperience(data);
+    await loadNotificationHistory();
     setStatus('هەژمارەکەت ئامادەیە.', 'ok');
   } catch (_) {
     showLockedPortal();
@@ -329,6 +442,10 @@ loadMoreButton.addEventListener('click', async () => {
   } finally {
     loadMoreButton.disabled = false;
   }
+});
+
+notificationHistoryRefreshButton.addEventListener('click', () => {
+  void loadNotificationHistory();
 });
 
 showIosHelpButton.addEventListener('click', () => {
@@ -385,6 +502,7 @@ enableButton.addEventListener('click', async () => {
     enableButton.hidden = true;
     showIosHelpButton.hidden = true;
     await loadPortal();
+    await loadNotificationHistory();
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'request_failed';
     if (reason === 'permission_denied') {
