@@ -486,6 +486,88 @@ class PBService {
     return Map<String, dynamic>.from(raw);
   }
 
+  static Future<Map<String, dynamic>> getOwnerEntitlementsOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_entitlements_overview');
+    if (raw is! Map) throw Exception('invalid_owner_entitlements_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerEntitlementsPage({
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_entitlements_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_entitlements_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerTenantFeaturePlan({
+    required String adminId,
+    required String planKey,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_tenant_feature_plan',
+      params: {
+        'p_admin_id': adminId,
+        'p_plan_key': planKey,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_feature_plan_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerPlanEntitlement({
+    required String planKey,
+    required String featureKey,
+    required bool enabled,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_plan_entitlement',
+      params: {
+        'p_plan_key': planKey,
+        'p_feature_key': featureKey,
+        'p_enabled': enabled,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_plan_entitlement_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerTenantEntitlement({
+    required String adminId,
+    required String featureKey,
+    bool? enabled,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_tenant_entitlement',
+      params: {
+        'p_admin_id': adminId,
+        'p_feature_key': featureKey,
+        'p_enabled': enabled,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_tenant_entitlement_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getPlatformEntitlementsState() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_platform_entitlements_state');
+    if (raw is! Map) throw Exception('invalid_platform_entitlements_state');
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
     int page = 1,
     int perPage = 50,
