@@ -45,6 +45,7 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
   @override
   Future<CustomerPushOverviewPage> loadOverview({
     String search = '',
+    String filter = 'all',
     int limit = 60,
     int offset = 0,
   }) async {
@@ -54,6 +55,14 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
       offset: 0,
       limit: 60,
       hasMore: false,
+      filter: 'all',
+      summary: CustomerPushOverviewSummary(
+        all: 0,
+        active: 0,
+        inactive: 0,
+        failed: 0,
+        pending: 0,
+      ),
     );
   }
 
