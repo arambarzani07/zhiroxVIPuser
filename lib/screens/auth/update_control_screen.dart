@@ -40,8 +40,13 @@ class _UpdatePolicy {
 
 class _UpdateControlScreenState extends State<UpdateControlScreen> {
   final Map<String, _UpdatePolicy> _policies = {};
+  Map<String, dynamic> _overview = const {};
+  List<Map<String, dynamic>> _compliance = const [];
   bool _loading = true;
   String? _error;
+
+  int _asInt(dynamic value) =>
+      value is num ? value.toInt() : int.tryParse('${value ?? 0}') ?? 0;
 
   @override
   void initState() {
@@ -63,13 +68,25 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
       _error = null;
     });
     try {
-      await PBService.ensureInitialized();
-      final rows = await PBService.client
-          .from('app_update_settings')
-          .select(
-            'edition, mandatory, notes, rollout_percent, minimum_build, updated_at',
-          )
-          .order('edition');
+      final results = await Future.wait([
+        PBService.getOwnerReleaseOverview(),
+        PBService.getOwnerReleaseCompliancePage(page: 1, perPage: 100),
+      ]);
+      final overview = results[0];
+      final page = results[1];
+      final rows = overview['policies'] is List
+          ? overview['policies'] as List
+          : const <dynamic>[];
+
+      final compliance = <Map<String, dynamic>>[];
+      final rawCompliance = page['items'];
+      if (rawCompliance is List) {
+        for (final item in rawCompliance) {
+          if (item is Map) {
+            compliance.add(Map<String, dynamic>.from(item));
+          }
+        }
+      }
 
       if (!mounted) return;
       for (final policy in _policies.values) {
@@ -98,7 +115,11 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
         );
       }
 
-      setState(() => _loading = false);
+      setState(() {
+        _overview = Map<String, dynamic>.from(overview);
+        _compliance = compliance;
+        _loading = false;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -124,22 +145,14 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
 
     setState(() => policy.saving = true);
     try {
-      await PBService.ensureInitialized();
-      final uid = PBService.client.auth.currentUser?.id;
-      if (uid == null) throw StateError('not_authenticated');
-
       final notes = policy.notesController.text.trim();
-      await PBService.client
-          .from('app_update_settings')
-          .update({
-            'mandatory': policy.mandatory,
-            'notes': notes,
-            'rollout_percent': policy.rolloutPercent.clamp(0, 100),
-            'minimum_build': minimumBuild,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-            'updated_by': uid,
-          })
-          .eq('edition', policy.edition);
+      await PBService.setOwnerReleasePolicy(
+        edition: policy.edition,
+        mandatory: policy.mandatory,
+        notes: notes,
+        rolloutPercent: policy.rolloutPercent.clamp(0, 100),
+        minimumBuild: minimumBuild,
+      );
 
       policy.notes = notes;
       policy.minimumBuild = minimumBuild;
@@ -148,6 +161,7 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
         context,
         'Release policy ـی ${policy.label} پاشەکەوت کرا.',
       );
+      await _load();
     } catch (e) {
       if (!mounted) return;
       final text = e.toString().toLowerCase();
@@ -295,10 +309,244 @@ class _UpdateControlScreenState extends State<UpdateControlScreen> {
                   textPrimary: textPrimary,
                   textSecondary: textSecondary,
                 ),
+              const SizedBox(height: 18),
+              _buildComplianceSummary(
+                surface: surface,
+                border: border,
+                textPrimary: textPrimary,
+                textSecondary: textSecondary,
+              ),
+              const SizedBox(height: 14),
+              ..._compliance.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _buildComplianceCard(
+                    item,
+                    surface: surface,
+                    border: border,
+                    textPrimary: textPrimary,
+                    textSecondary: textSecondary,
+                  ),
+                ),
+              ),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildComplianceSummary({
+    required Color surface,
+    required Color border,
+    required Color textPrimary,
+    required Color textSecondary,
+  }) {
+    final minimumBuild = _asInt(_overview['user_minimum_build']);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Version Compliance — ZHIROX User',
+            style: TextStyle(
+              color: textPrimary,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'تەنها build/device metadata ـی ٣٠ ڕۆژی دوایی؛ '
+            'هیچ business data ـی مارکێت ناخوێنرێتەوە.',
+            style: TextStyle(
+              color: textSecondary,
+              fontSize: 11,
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _summaryChip(
+                Icons.vertical_align_bottom_rounded,
+                'Minimum: $minimumBuild',
+                AppColors.primary,
+              ),
+              _summaryChip(
+                Icons.devices_outlined,
+                'Device: ${_asInt(_overview['active_devices_30d'])}',
+                Colors.blue,
+              ),
+              _summaryChip(
+                Icons.warning_amber_rounded,
+                'Outdated: ${_asInt(_overview['outdated_devices_30d'])}',
+                Colors.orange,
+              ),
+              _summaryChip(
+                Icons.storefront_outlined,
+                'Tenant: ${_asInt(_overview['outdated_tenants_30d'])}',
+                Colors.red,
+              ),
+              _summaryChip(
+                Icons.help_outline_rounded,
+                'Unknown: ${_asInt(_overview['unknown_build_devices_30d'])}',
+                Colors.grey,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+            textDirection: TextDirection.ltr,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComplianceCard(
+    Map<String, dynamic> item, {
+    required Color surface,
+    required Color border,
+    required Color textPrimary,
+    required Color textSecondary,
+  }) {
+    final state = (item['compliance_state'] ?? 'no_telemetry').toString();
+    final (label, color, icon) = switch (state) {
+      'outdated' => ('Outdated', Colors.red, Icons.system_update_alt_rounded),
+      'review' => ('Review', Colors.orange, Icons.help_outline_rounded),
+      'current' => ('Current', Colors.green, Icons.verified_rounded),
+      _ => ('No telemetry', Colors.grey, Icons.devices_other_outlined),
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: color.withValues(alpha: 0.10),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${item['market_name'] ?? 'مارکێت'}',
+                      style: TextStyle(
+                        color: textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      '${item['admin_name'] ?? ''}',
+                      style: TextStyle(
+                        color: textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Chip(
+                label: Text(label),
+                labelStyle: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+                backgroundColor: color.withValues(alpha: 0.08),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              _complianceMini(
+                Icons.vertical_align_bottom_rounded,
+                'Min ${_asInt(item['minimum_build'])}',
+                textSecondary,
+              ),
+              _complianceMini(
+                Icons.new_releases_outlined,
+                'Latest ${item['latest_build'] ?? '—'}',
+                textSecondary,
+              ),
+              _complianceMini(
+                Icons.devices_outlined,
+                '${_asInt(item['active_device_count_30d'])} device',
+                textSecondary,
+              ),
+              _complianceMini(
+                Icons.warning_amber_rounded,
+                '${_asInt(item['outdated_device_count_30d'])} outdated',
+                textSecondary,
+              ),
+              _complianceMini(
+                Icons.help_outline_rounded,
+                '${_asInt(item['unknown_build_device_count_30d'])} unknown',
+                textSecondary,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _complianceMini(IconData icon, String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: TextStyle(color: color, fontSize: 11),
+          textDirection: TextDirection.ltr,
+        ),
+      ],
     );
   }
 
