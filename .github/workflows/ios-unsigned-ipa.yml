@@ -55,6 +55,37 @@ jobs:
               ;;
           esac
 
+      - name: Align Owner build number with User
+        if: github.ref_name == 'owner-source'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/zhirox-user-version
+          mkdir -p /tmp/zhirox-user-version
+          gh release download user-latest \
+            --pattern user-update.json \
+            --dir /tmp/zhirox-user-version \
+            --clobber
+          USER_BUILD_NUMBER="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('/tmp/zhirox-user-version/user-update.json').read_text())
+          value = int(manifest['build_number'])
+          if value <= 0:
+              raise SystemExit('invalid user build number')
+          print(value)
+          PY
+          )"
+          echo "BUILD_NUMBER=${USER_BUILD_NUMBER}" >> "$GITHUB_ENV"
+          echo "Owner build number aligned to User: ${USER_BUILD_NUMBER}"
+
+      - name: Resolve User build number
+        if: github.ref_name == 'user-source'
+        shell: bash
+        run: echo "BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -110,15 +141,15 @@ jobs:
       - name: Build iOS without signing
         run: |
           flutter build ios --release --no-codesign \
-            --build-number "$GITHUB_RUN_NUMBER" \
-            --dart-define=ZHIROX_BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
+            --build-number "$BUILD_NUMBER" \
+            --dart-define=ZHIROX_BUILD_NUMBER="$BUILD_NUMBER" \
             --dart-define=ZHIROX_APP_EDITION="$UPDATE_EDITION"
 
       - name: Verify app identity
         run: |
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "$BUNDLE_ID"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "$DISPLAY_NAME"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "$GITHUB_RUN_NUMBER"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "$BUILD_NUMBER"
 
       - name: Package unsigned IPA
         run: |
@@ -155,7 +186,7 @@ jobs:
               'schema': 1,
               'edition': os.environ['UPDATE_EDITION'],
               'version': semantic_version,
-              'build_number': int(os.environ['GITHUB_RUN_NUMBER']),
+              'build_number': int(os.environ['BUILD_NUMBER']),
               'commit': os.environ['GITHUB_SHA'],
               'published_at': datetime.datetime.now(
                   datetime.timezone.utc
