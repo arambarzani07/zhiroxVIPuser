@@ -11,6 +11,7 @@ recovery_devices = Path('lib/screens/auth/owner_recovery_device_center_screen.da
 backup_resilience = Path('lib/screens/auth/owner_backup_resilience_center_screen.dart').read_text()
 readiness = Path('lib/screens/auth/owner_readiness_center_screen.dart').read_text()
 release_center = Path('lib/screens/auth/update_control_screen.dart').read_text()
+infrastructure = Path('lib/screens/auth/owner_infrastructure_center_screen.dart').read_text()
 recovery_function = Path('supabase/functions/owner-account-recovery/index.ts').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
 auth_provider = Path('lib/providers/auth_provider.dart').read_text()
@@ -44,6 +45,9 @@ readiness_migration = Path(
 release_migration = Path(
     'supabase/migrations/20260918230000_owner_release_compliance_center.sql'
 ).read_text()
+infrastructure_migration = Path(
+    'supabase/migrations/20260918233000_owner_infrastructure_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
@@ -56,6 +60,7 @@ required = [
     'OwnerBackupResilienceCenterScreen',
     'OwnerReadinessCenterScreen',
     'UpdateControlScreen',
+    'OwnerInfrastructureCenterScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
@@ -85,6 +90,8 @@ required = [
     'getOwnerReleaseOverview',
     'getOwnerReleaseCompliancePage',
     'setOwnerReleasePolicy',
+    'getOwnerInfrastructureOverview',
+    'getOwnerInfrastructureJobsPage',
     '_enforceAdminDeviceAuthorization',
     '_startDeviceAuthorizationHeartbeat',
     'getOwnerEntitlementsPage',
@@ -126,6 +133,8 @@ required = [
     'get_system_owner_release_overview',
     'get_system_owner_release_compliance_page',
     'set_system_owner_release_policy',
+    'get_system_owner_infrastructure_overview',
+    'get_system_owner_infrastructure_jobs_page',
     'system_owner_required',
 ]
 blob = '\n'.join([
@@ -140,6 +149,7 @@ blob = '\n'.join([
     backup_resilience,
     readiness,
     release_center,
+    infrastructure,
     recovery_function,
     service,
     auth_provider,
@@ -153,6 +163,7 @@ blob = '\n'.join([
     backup_resilience_migration,
     readiness_migration,
     release_migration,
+    infrastructure_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -170,11 +181,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness, release_center):
+for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness, release_center, infrastructure):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration, release_migration):
+for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration, release_migration, infrastructure_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -249,5 +260,15 @@ assert 'owner_platform_audit' in release_migration, 'release policy changes must
 assert 'public.debts' not in release_migration and 'public.payments' not in release_migration, 'release center must not read market finance content'
 assert 'customer_id' not in release_center.lower(), 'release UI must not expose customer data'
 assert 'debt' not in release_center.lower(), 'release UI must not expose debt data'
+assert 'cron.job' in infrastructure_migration, 'infrastructure center must inspect scheduled jobs'
+assert 'cron.job_run_details' in infrastructure_migration, 'infrastructure center must inspect recent job runs'
+assert 'notification_outbox' in infrastructure_migration, 'infrastructure center must aggregate push queue health'
+assert 'notification_deliveries' in infrastructure_migration, 'infrastructure center must aggregate delivery health'
+assert 'customer_push_subscriptions' in infrastructure_migration, 'infrastructure center must aggregate active push devices'
+for sensitive in ('customer_id', 'market_id', 'payload', 'endpoint', 'user_agent', 'last_error', 'return_message', 'command'):
+    assert sensitive not in infrastructure_migration.lower(), f'infrastructure RPC exposes sensitive detail: {sensitive}'
+assert 'customer_id' not in infrastructure.lower(), 'infrastructure UI must not expose customer data'
+assert 'market_id' not in infrastructure.lower(), 'infrastructure UI must not expose tenant delivery detail'
+assert 'payload' not in infrastructure.lower(), 'infrastructure UI must not expose notification payloads'
 
 print('Owner platform privacy boundary verified.')
