@@ -226,7 +226,7 @@ class _OwnerInfrastructureCenterScreenState
                       ),
                       const SizedBox(height: 20),
                       const AppSectionHeader(
-                        title: 'کاری کاتی خۆکارs',
+                        title: 'کارە خۆکارە کاتییەکان',
                         subtitle:
                             'خشتەی کات، دۆخی کۆتا جێبەجێکردن و شکستەکانی ٢٤ کاتژمێر',
                       ),

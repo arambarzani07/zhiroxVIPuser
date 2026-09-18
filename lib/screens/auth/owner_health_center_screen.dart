@@ -141,7 +141,7 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'ئەم بەشە تەنها زانیاریی سیستەمی ـی پلاتفۆرم، پاشەکەوت، '
+                                    'ئەم بەشە تەنها زانیاریی سیستەمی پلاتفۆرم و پاشەکەوت، '
                                     'بەشداری و کردارەکانی خاوەنی سیستەم نیشان دەدات. '
                                     'هیچ کڕیار، قەرز، پارەدانەوە، پسوولە یان ناوەڕۆکی مارکێت نادات.',
                                     style: TextStyle(
@@ -162,7 +162,7 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                         children: [
                           _metric(
                             context,
-                            'پاشەکەوت تازە',
+                            'پاشەکەوتی نوێ',
                             _asInt(_health['backup_fresh_tenants']).toString(),
                             Icons.cloud_done_outlined,
                             good: _asInt(_health['backup_stale_tenants']) == 0,
@@ -360,9 +360,9 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
         'tenant_lifecycle_changed': 'گۆڕینی دۆخی هەژمار',
         'tenant_limits_changed': 'گۆڕینی سنوورەکان',
         'subscription_changed': 'گۆڕینی بەشداری',
-        'admin_sessions_revoked': 'ڕاگرتنی Session ـەکان',
-        'admin_account_locked': 'قوفڵکردنی هەژماری بەڕێوەبەر',
-        'admin_account_unlocked': 'کردنەوەی هەژماری بەڕێوەبەر',
+        'admin_sessions_revoked': 'ڕاگرتنی دانیشتنەکان',
+        'admin_account_locked': 'قوفڵکردنی هەژماری Admin',
+        'admin_account_unlocked': 'کردنەوەی هەژماری Admin',
         'platform_operations_changed': 'گۆڕینی دۆخی پلاتفۆرم',
         'support_ticket_updated': 'نوێکردنەوەی داواکاری پشتیوانی',
         'tenant_feature_plan_changed': 'گۆڕینی پلانی تایبەتمەندی',
@@ -373,13 +373,13 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
         'admin_account_recovered': 'گەڕاندنەوەی هەژمار',
         'backup_monitoring_policy_changed': 'گۆڕینی سیاسەتی چاودێری پاشەکەوت',
         'platform_policy_published': 'بڵاوکردنەوەی سیاسەتی پلاتفۆرم',
-        'platform_retention_policy_changed': 'گۆڕینی Data Retention Policy',
+        'platform_retention_policy_changed': 'گۆڕینی سیاسەتی ماوەی هەڵگرتنی داتا',
       }[action] ??
       action;
 
   String _auditSubtitle(Map<String, dynamic> item) {
     final market = (item['market_name'] ?? '').toString();
-    final metadata = item['زانیاریی سیستەمی'];
+    final metadata = item['metadata'];
     final parts = <String>[
       if (market.isNotEmpty) market,
     ];

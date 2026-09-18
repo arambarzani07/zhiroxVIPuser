@@ -109,7 +109,7 @@ class _OwnerPolicyComplianceCenterScreenState
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
             scrollable: true,
-            title: const Text('بڵاوکردنەوەی سیاسەت نوێ'),
+            title: const Text('بڵاوکردنەوەی سیاسەتی نوێ'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -171,7 +171,7 @@ class _OwnerPolicyComplianceCenterScreenState
                       setDialogState(() => requiresReacceptance = value),
                   title: const Text('داوای پەسەندکردنەوەی نوێ'),
                   subtitle: const Text(
-                    'ئەگەر چالاک بێت، بەڕێوەبەر ـەکان دەبێت وەشانی نوێ پەسەند بکەن.',
+                    'ئەگەر چالاک بێت، بەڕێوەبەرەکان دەبێت وەشانی نوێ پەسەند بکەن.',
                   ),
                 ),
               ],
@@ -246,7 +246,7 @@ class _OwnerPolicyComplianceCenterScreenState
         context: context,
         builder: (ctx) => AlertDialog(
           scrollable: true,
-          title: const Text('Data Retention سیاسەت'),
+          title: const Text('سیاسەتی ماوەی هەڵگرتنی داتا'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -263,7 +263,7 @@ class _OwnerPolicyComplianceCenterScreenState
                 controller: audit,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'خاوەنی سیستەم audit — ڕۆژ',
+                  labelText: 'تۆماری چاودێری خاوەنی سیستەم — ڕۆژ',
                   prefixIcon: Icon(Icons.fact_check_outlined),
                 ),
               ),
@@ -272,13 +272,13 @@ class _OwnerPolicyComplianceCenterScreenState
                 controller: auth,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Auth session زانیاریی سیستەمی — ڕۆژ',
+                  labelText: 'زانیاریی دانیشتنی چوونەژوورەوە — ڕۆژ',
                   prefixIcon: Icon(Icons.login_rounded),
                 ),
               ),
               const SizedBox(height: 10),
               const Text(
-                'ئەمە تەنها retention ـی technical/platform زانیاریی سیستەمی ـە؛ '
+                'ئەمە تەنها ماوەی هەڵگرتنی زانیاریی تەکنیکی پلاتفۆرمە؛ '
                 'هیچ ناوەڕۆکی کاروباری مارکێت بەڕێوە نابردرێت.',
                 style: TextStyle(fontSize: 11),
               ),
@@ -309,7 +309,7 @@ class _OwnerPolicyComplianceCenterScreenState
         authSessionDays: authDays,
       );
       if (!mounted) return;
-      AppHelpers.showSnackBar(context, 'Retention سیاسەت نوێ کرایەوە.');
+      AppHelpers.showSnackBar(context, 'سیاسەتی ماوەی هەڵگرتن نوێ کرایەوە.');
       await _load();
     } catch (error) {
       if (!mounted) return;
@@ -317,7 +317,7 @@ class _OwnerPolicyComplianceCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'نوێکردنەوەی Retention سیاسەت سەرکەوتوو نەبوو.',
+          fallback: 'نوێکردنەوەی سیاسەتی ماوەی هەڵگرتن سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -349,7 +349,7 @@ class _OwnerPolicyComplianceCenterScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('سیاسەت & پابەندبوون'),
+        title: const Text('سیاسەت و پابەندبوون'),
         actions: [
           IconButton(
             tooltip: 'نوێکردنەوە',
@@ -361,7 +361,7 @@ class _OwnerPolicyComplianceCenterScreenState
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _loading ? null : _publishPolicy,
         icon: const Icon(Icons.post_add_rounded),
-        label: const Text('سیاسەت نوێ'),
+        label: const Text('سیاسەتی نوێ'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -400,8 +400,8 @@ class _OwnerPolicyComplianceCenterScreenState
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'خاوەنی سیستەم تەنها سیاسەت، پەسەندکردن زانیاریی سیستەمی و '
-                                'ماوەی هەڵگرتنی داتای تەکنیکی بەڕێوەدەبات. زانیاریی '
+                                'خاوەنی سیستەم تەنها سیاسەت و زانیاریی پەسەندکردن '
+                                'و ماوەی هەڵگرتنی داتای تەکنیکی بەڕێوەدەبات. زانیاریی '
                                 'کاروباری مارکێت لەم ناوەندەدا نییە.',
                                 style: TextStyle(height: 1.55),
                               ),
@@ -416,7 +416,7 @@ class _OwnerPolicyComplianceCenterScreenState
                         children: [
                           _metric(
                             context,
-                            'سیاسەت ـی چالاک',
+                            'سیاسەتە چالاکەکان',
                             _asInt(_overview['active_policy_count']).toString(),
                             Icons.policy_outlined,
                           ),
@@ -445,8 +445,8 @@ class _OwnerPolicyComplianceCenterScreenState
                         children: [
                           const Expanded(
                             child: AppSectionHeader(
-                              title: 'Data Retention',
-                              subtitle: 'Technical/platform زانیاریی سیستەمی',
+                              title: 'ماوەی هەڵگرتنی داتا',
+                              subtitle: 'زانیاریی تەکنیکی پلاتفۆرم',
                             ),
                           ),
                           OutlinedButton.icon(
@@ -479,8 +479,8 @@ class _OwnerPolicyComplianceCenterScreenState
                       ),
                       const SizedBox(height: 20),
                       const AppSectionHeader(
-                        title: 'سیاسەت ـە چالاکەکان',
-                        subtitle: 'Current platform documents',
+                        title: 'سیاسەتە چالاکەکان',
+                        subtitle: 'بەڵگەنامە چالاکەکانی پلاتفۆرم',
                       ),
                       const SizedBox(height: 10),
                       if (_documents.isEmpty)
@@ -488,7 +488,7 @@ class _OwnerPolicyComplianceCenterScreenState
                           child: Padding(
                             padding: EdgeInsets.all(18),
                             child: Center(
-                              child: Text('هێشتا هیچ سیاسەت ـێک بڵاونەکراوەتەوە.'),
+                              child: Text('هێشتا هیچ سیاسەتێک بڵاونەکراوەتەوە.'),
                             ),
                           ),
                         )
@@ -501,15 +501,15 @@ class _OwnerPolicyComplianceCenterScreenState
                         ),
                       const SizedBox(height: 18),
                       const AppSectionHeader(
-                        title: 'پابەندبوون ـی بەڕێوەبەر',
-                        subtitle: 'دۆخی پەسەندکردن ـی وەشانی چالاک',
+                        title: 'پابەندبوونی بەڕێوەبەر',
+                        subtitle: 'دۆخی پەسەندکردنی وەشانی چالاک',
                       ),
                       const SizedBox(height: 10),
                       if (_admins.isEmpty)
                         const AppSurface(
                           child: Padding(
                             padding: EdgeInsets.all(18),
-                            child: Center(child: Text('هیچ بەڕێوەبەر ـێک نییە.')),
+                            child: Center(child: Text('هیچ Admin ـێک نییە.')),
                           ),
                         )
                       else
@@ -560,7 +560,7 @@ class _OwnerPolicyComplianceCenterScreenState
   ) {
     final key = (doc['policy_key'] ?? '').toString();
     final version = _asInt(doc['version']);
-    final required = doc['requires_reپەسەندکردن'] == true;
+    final required = doc['requires_reacceptance'] == true;
 
     return AppSurface(
       child: Row(
@@ -656,7 +656,7 @@ class _OwnerPolicyComplianceCenterScreenState
                 textDirection: TextDirection.ltr,
               ),
               Text(
-                _date(admin['last_پەسەندکردن_at']),
+                _date(admin['last_acceptance_at']),
                 style: Theme.of(context).textTheme.bodySmall,
                 textDirection: TextDirection.ltr,
               ),

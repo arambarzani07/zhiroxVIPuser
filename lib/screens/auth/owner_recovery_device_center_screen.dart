@@ -142,7 +142,7 @@ class _OwnerRecoveryDeviceCenterScreenState
     Map<String, dynamic> device,
     String status,
   ) async {
-    final label = (device['device_label'] ?? 'Device').toString();
+    final label = (device['device_label'] ?? 'ئامێر').toString();
     final ok = await AppHelpers.showConfirmDialog(
       context,
       title: status == 'approved'
@@ -390,7 +390,7 @@ class _OwnerRecoveryDeviceCenterScreenState
                           ),
                           _metric(
                             context,
-                            'Device',
+                            'ئامێر',
                             _asInt(_overview['registered_devices']).toString(),
                             Icons.devices_outlined,
                           ),
@@ -402,7 +402,7 @@ class _OwnerRecoveryDeviceCenterScreenState
                           ),
                           _metric(
                             context,
-                            'ڕاگرتنd',
+                            'ڕاگیراو',
                             _asInt(_overview['revoked_devices']).toString(),
                             Icons.phonelink_erase_rounded,
                           ),
@@ -425,7 +425,7 @@ class _OwnerRecoveryDeviceCenterScreenState
                       const AppSectionHeader(
                         title: 'هەژمارەکانی بەڕێوەبەر',
                         subtitle:
-                            'Recovery، سیاسەتی ئامێر و پەسەندکردنی ئامێر',
+                            'گەڕاندنەوەی هەژمار، سیاسەتی ئامێر و پەسەندکردنی ئامێر',
                       ),
                       const SizedBox(height: 10),
                       ..._items.map(

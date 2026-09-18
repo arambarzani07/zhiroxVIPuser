@@ -76,7 +76,7 @@ class _OwnerSecurityCenterScreenState
       context,
       title: 'دەرکردن لە هەموو ئامێرەکان',
       message:
-          'هەموو دانیشتنەکانی ئەم هەژمارە ڕادەگیرێن و پێویستە دووبارە بچێتە ژوورەوە. دڵنیایت؟',
+          'هەموو session ـەکانی ئەم هەژمارە ڕادەگیرێن و پێویستە دووبارە بچێتە ژوورەوە. دڵنیایت؟',
     );
     if (!ok) return;
 
@@ -87,7 +87,7 @@ class _OwnerSecurityCenterScreenState
       if (!mounted) return;
       AppHelpers.showSnackBar(
         context,
-        '${_asInt(result['revoked_session_count'])} دانیشتن ڕاگیرا.',
+        '${_asInt(result['revoked_session_count'])} session ڕاگیرا.',
       );
       await _load();
     } catch (error) {
@@ -96,7 +96,7 @@ class _OwnerSecurityCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'ڕاگرتنی دانیشتنەکان سەرکەوتوو نەبوو.',
+          fallback: 'ڕاگرتنی session ـەکان سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -111,7 +111,7 @@ class _OwnerSecurityCenterScreenState
       title: locked ? 'کردنەوەی هەژمار' : 'قوفڵکردنی هەژمار',
       message: locked
           ? 'هەژماری $market دووبارە چالاک بکرێتەوە؟'
-          : 'هەژماری $market قوفڵ دەکرێت و هەموو دانیشتنەکانی ڕادەگیرێن. دڵنیایت؟',
+          : 'هەژماری $market قوفڵ دەکرێت و هەموو session ـەکانی ڕادەگیرێن. دڵنیایت؟',
     );
     if (!ok) return;
 
@@ -191,7 +191,7 @@ class _OwnerSecurityCenterScreenState
                             Expanded(
                               child: Text(
                                 'خاوەنی سیستەم تەنها زانیاریی سیستەمی چوونەژوورەوە، دانیشتن و دۆخی '
-                                'پاراستنی هەژماری بەڕێوەبەر دەبینێت. IP، device detail '
+                                'پاراستنی هەژماری بەڕێوەبەر دەبینێت. وردەکاری ناونیشانی تۆڕ و ئامێر '
                                 'و ناوەڕۆکی مارکێت پیشان نادرێن.',
                                 style: TextStyle(
                                   color: secondary,
@@ -216,7 +216,7 @@ class _OwnerSecurityCenterScreenState
                           _metric(
                             context,
                             'دانیشتنی چالاک',
-                            _asInt(_overview['active_دانیشتنs']).toString(),
+                            _asInt(_overview['active_sessions']).toString(),
                             Icons.devices_outlined,
                           ),
                           _metric(
@@ -342,31 +342,31 @@ class _OwnerSecurityCenterScreenState
             children: [
               _mini(
                 Icons.devices_outlined,
-                '${_asInt(item['active_sessions'])} دانیشتن',
+                '${_asInt(item['active_sessions'])} session',
               ),
               _mini(
                 Icons.verified_user_outlined,
-                '${_asInt(item['aal2_sessions'])} پاراستنی دوو ئاستی',
+                '${_asInt(item['aal2_sessions'])} AAL2',
               ),
               _mini(
                 Icons.network_check_rounded,
-                '${_asInt(item['recent_ip_count_24h'])} ناونیشانی تۆڕ/٢٤ک',
+                '${_asInt(item['recent_ip_count_24h'])} IP/24h',
               ),
               _mini(
                 Icons.devices_other_outlined,
-                '${_asInt(item['recent_device_count_30d'])} ئامێر/٣٠ ڕۆژ',
+                '${_asInt(item['recent_device_count_30d'])} device/30d',
               ),
               _mini(
                 Icons.event_available_outlined,
-                'چوونەژوورەوە: ${_date(item['last_sign_in_at'])}',
+                'Login: ${_date(item['last_sign_in_at'])}',
               ),
               _mini(
                 Icons.history_rounded,
-                'دانیشتن: ${_date(item['last_session_at'])}',
+                'Session: ${_date(item['last_session_at'])}',
               ),
               _mini(
                 Icons.rule_rounded,
-                'سنوور: ${_asInt(item['device_limit'])}',
+                'Limit: ${_asInt(item['device_limit'])}',
               ),
             ],
           ),
@@ -375,7 +375,7 @@ class _OwnerSecurityCenterScreenState
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _asInt(item['active_دانیشتنs']) == 0
+                  onPressed: _asInt(item['active_sessions']) == 0
                       ? null
                       : () => _revokeSessions(item),
                   icon: const Icon(Icons.logout_rounded, size: 18),

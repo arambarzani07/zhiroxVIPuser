@@ -117,8 +117,8 @@ class _OwnerEntitlementsCenterScreenState
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'ئەم گۆڕانکارییە بۆ هەموو مارکێتەکانی ئەم پلانی تایبەتمەندی ـە '
-                'کاریگەری هەیە، مەگەر دەستکاری تایبەت ـی تایبەتیان هەبێت.',
+                'ئەم گۆڕانکارییە بۆ هەموو مارکێتەکانی ئەم پلانی تایبەتمەندییە '
+                'کاریگەری هەیە، مەگەر دەستکاری تایبەتیان هەبێت.',
               ),
               const SizedBox(height: 12),
               ..._features.map((feature) {
@@ -162,7 +162,7 @@ class _OwnerEntitlementsCenterScreenState
       if (!mounted) return;
       AppHelpers.showSnackBar(
         context,
-        'پلانی تایبەتمەندی ـی ${_planLabel(planKey)} نوێ کرایەوە.',
+        'پلانی تایبەتمەندیی ${_planLabel(planKey)} نوێ کرایەوە.',
       );
       await _load();
     } catch (error) {
@@ -197,7 +197,7 @@ class _OwnerEntitlementsCenterScreenState
       final key = '${feature['feature_key'] ?? ''}';
       final row = entitlements[key];
       final source = '${row?['source'] ?? 'plan'}';
-      if (source == 'دەستکاری تایبەت') {
+      if (source == 'override') {
         draft[key] = row?['enabled'] == true ? 'enabled' : 'disabled';
       } else {
         draft[key] = 'inherit';
@@ -268,7 +268,7 @@ class _OwnerEntitlementsCenterScreenState
               }),
               const SizedBox(height: 6),
               const Text(
-                'خاوەنی سیستەم تەنها دەسەڵاتی تایبەتمەندی زانیاریی سیستەمی دەگۆڕێت؛ '
+                'خاوەنی سیستەم تەنها زانیاریی دەسەڵاتی تایبەتمەندی دەگۆڕێت؛ '
                 'هیچ ناوەڕۆکی مارکێت لەم بەشەدا نییە.',
               ),
             ],
@@ -281,7 +281,7 @@ class _OwnerEntitlementsCenterScreenState
             FilledButton(
               onPressed: () => Navigator.pop(ctx, {
                 'feature_plan': featurePlan,
-                'دەستکاری تایبەتs': Map<String, String>.from(draft),
+                'overrides': Map<String, String>.from(draft),
               }),
               child: const Text('پاشەکەوت'),
             ),
@@ -302,7 +302,7 @@ class _OwnerEntitlementsCenterScreenState
         );
       }
 
-      final rawOverrides = result['دەستکاری تایبەتs'];
+      final rawOverrides = result['overrides'];
       if (rawOverrides is Map) {
         for (final entry in rawOverrides.entries) {
           final value = '${entry.value}';
@@ -384,8 +384,8 @@ class _OwnerEntitlementsCenterScreenState
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'دەسەڵاتی تایبەتمەندی و دەستکاری تایبەت ـەکان تەنها '
-                                'زانیاریی پلاتفۆرم ـن. خاوەنی سیستەم ناوەڕۆکی '
+                                'دەسەڵاتی تایبەتمەندی و دەستکارییە تایبەتەکان تەنها '
+                                'زانیاریی سیستەمی پلاتفۆرمن. خاوەنی سیستەم ناوەڕۆکی '
                                 'مارکێت نابینێت.',
                                 style: TextStyle(height: 1.55),
                               ),
@@ -413,13 +413,13 @@ class _OwnerEntitlementsCenterScreenState
                           _metric(
                             context,
                             'دەستکاری تایبەت',
-                            _asInt(_overview['دەستکاری تایبەت_count']).toString(),
+                            _asInt(_overview['override_count']).toString(),
                             Icons.tune_outlined,
                           ),
                           _metric(
                             context,
                             'مارکێتی دەستکاری تایبەت',
-                            _asInt(_overview['tenants_with_دەستکاری تایبەتs'])
+                            _asInt(_overview['tenants_with_overrides'])
                                 .toString(),
                             Icons.storefront_outlined,
                           ),
@@ -427,7 +427,7 @@ class _OwnerEntitlementsCenterScreenState
                       ),
                       const SizedBox(height: 20),
                       const AppSectionHeader(
-                        title: 'پلانی تایبەتمەندی ـەکان',
+                        title: 'پلانەکانی تایبەتمەندی',
                         subtitle: 'ئاسایی / پێشکەوتوو / تایبەت',
                       ),
                       const SizedBox(height: 10),
@@ -439,9 +439,9 @@ class _OwnerEntitlementsCenterScreenState
                       ),
                       const SizedBox(height: 12),
                       const AppSectionHeader(
-                        title: 'دەسەڵاتی تایبەتمەندی ـی مارکێتەکان',
+                        title: 'دەسەڵاتی تایبەتمەندیی مارکێتەکان',
                         subtitle:
-                            'Plan + دەستکاری تایبەت ـی تایبەت بۆ هەر هەژمارێک',
+                            'پلان + دەستکاری تایبەت بۆ هەر هەژمارێک',
                       ),
                       const SizedBox(height: 10),
                       if (_items.isEmpty)
@@ -590,15 +590,15 @@ class _OwnerEntitlementsCenterScreenState
               ),
               _mini(
                 Icons.tune_rounded,
-                '${_asInt(item['override_count'])} دەستکاری تایبەت',
+                '${_asInt(item['override_count'])} override',
               ),
               _mini(
                 Icons.devices_outlined,
-                'ئامێر: ${_asInt(item['device_limit'])}',
+                'Device: ${_asInt(item['device_limit'])}',
               ),
               _mini(
                 Icons.groups_outlined,
-                'کارمەند: ${_asInt(item['staff_limit'])}',
+                'Staff: ${_asInt(item['staff_limit'])}',
               ),
             ],
           ),

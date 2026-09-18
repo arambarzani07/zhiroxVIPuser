@@ -90,7 +90,7 @@ class _OwnerBackupResilienceCenterScreenState
               DropdownButtonFormField<int>(
                 initialValue: expectedHours,
                 decoration: const InputDecoration(
-                  labelText: 'چاوەڕوانکراوی پاشەکەوت',
+                  labelText: 'چاوەڕوانکراوی Backup',
                   prefixIcon: Icon(Icons.schedule_rounded),
                 ),
                 items: const [
@@ -139,8 +139,8 @@ class _OwnerBackupResilienceCenterScreenState
               ),
               const SizedBox(height: 8),
               const Text(
-                'خاوەنی سیستەم تەنها دۆخی backup و policy ـی چاودێری دەبینێت؛ '
-                'هیچ ناوەڕۆکی backup یان زانیاری کاروباری پیشان نادرێت.',
+                'خاوەنی سیستەم تەنها دۆخی پاشەکەوت و سیاسەتی چاودێری دەبینێت؛ '
+                'هیچ ناوەڕۆکی پاشەکەوت یان زانیاری کاروباری پیشان نادرێت.',
               ),
             ],
           ),
@@ -239,8 +239,8 @@ class _OwnerBackupResilienceCenterScreenState
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'ئەم ناوەندە تەنها freshness، verification، '
-                                'retention زانیاریی سیستەمی و policy ـی پاشەکەوت چاودێری دەکات. '
+                                'ئەم ناوەندە تەنها نوێبوونەوە و پشتڕاستکردنەوە، '
+                                'retention metadata و policy ـی Backup چاودێری دەکات. '
                                 'خاوەنی سیستەم ناتوانێت ناوەڕۆکی پاشەکەوت بکاتەوە.',
                                 style: TextStyle(height: 1.55),
                               ),
@@ -295,9 +295,9 @@ class _OwnerBackupResilienceCenterScreenState
                       ),
                       const SizedBox(height: 20),
                       const AppSectionHeader(
-                        title: 'دۆخی پاشەکەوت ـی مارکێتەکان',
+                        title: 'دۆخی پاشەکەوتی مارکێتەکان',
                         subtitle:
-                            'Metadata تەنها — هیچ ناوەڕۆکی کاروباری نییە',
+                            'تەنها زانیاریی سیستەمی — هیچ ناوەڕۆکی کاروباری نییە',
                       ),
                       const SizedBox(height: 10),
                       if (_items.isEmpty)
@@ -401,11 +401,11 @@ class _OwnerBackupResilienceCenterScreenState
             children: [
               _mini(
                 Icons.event_available_outlined,
-                'پاشەکەوت: ${_date(item['latest_backup_at'])}',
+                'Backup: ${_date(item['latest_backup_at'])}',
               ),
               _mini(
                 Icons.verified_outlined,
-                'پشتڕاستکراوە: ${_date(item['last_verified_at'])}',
+                'Verified: ${_date(item['last_verified_at'])}',
               ),
               if (backupType.isNotEmpty)
                 _mini(Icons.category_outlined, backupType),
@@ -419,11 +419,11 @@ class _OwnerBackupResilienceCenterScreenState
               ),
               _mini(
                 Icons.schedule_rounded,
-                'چاوەڕوانکراو: ${_asInt(item['expected_interval_hours'])}h',
+                'Expected: ${_asInt(item['expected_interval_hours'])}h',
               ),
               _mini(
                 Icons.fact_check_outlined,
-                'پشتڕاستکردنەوە: ${_asInt(item['verification_interval_days'])}d',
+                'Verify: ${_asInt(item['verification_interval_days'])}d',
               ),
               if (restorable is bool)
                 _mini(

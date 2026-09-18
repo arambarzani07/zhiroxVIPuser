@@ -136,7 +136,7 @@ class _OwnerOperationsCenterScreenState
         _maintenanceController.text.trim().isEmpty) {
       AppHelpers.showSnackBar(
         context,
-        'بۆ Maintenance پەیامێک بنووسە.',
+        'بۆ دۆخی چاکسازی پەیامێک بنووسە.',
         isError: true,
       );
       return;
@@ -188,7 +188,7 @@ class _OwnerOperationsCenterScreenState
         context,
         AppHelpers.backendErrorMessage(
           error,
-          fallback: 'پاشەکەوتکردنی ڕێکخستنەکانی پلاتفۆرم Center سەرکەوتوو نەبوو.',
+          fallback: 'پاشەکەوتکردنی ڕێکخستنەکانی پلاتفۆرم سەرکەوتوو نەبوو.',
         ),
         isError: true,
       );
@@ -247,7 +247,7 @@ class _OwnerOperationsCenterScreenState
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'خاوەنی سیستەم تەنها دۆخی پلاتفۆرم، Maintenance و '
+                              'خاوەنی سیستەم تەنها دۆخی پلاتفۆرم، چاکسازی و '
                               'ئاگادارکردنەوەی سیستەمی کۆنترۆڵ دەکات. '
                               'ئەم بەشە هیچ ناوەڕۆکی کاروباری مارکێت ناخوێنێتەوە.',
                               style: TextStyle(
@@ -293,7 +293,7 @@ class _OwnerOperationsCenterScreenState
                               ),
                               DropdownMenuItem(
                                 value: 'maintenance',
-                                child: Text('Maintenance'),
+                                child: Text('چاکسازی'),
                               ),
                             ],
                             onChanged: _saving
@@ -317,11 +317,11 @@ class _OwnerOperationsCenterScreenState
                             secondary:
                                 const Icon(Icons.build_circle_outlined),
                             title: const Text(
-                              'Maintenance Mode',
+                              'دۆخی چاکسازی',
                               style: TextStyle(fontWeight: FontWeight.w800),
                             ),
                             subtitle: const Text(
-                              'وەستاندن یان schedule کردنی خزمەتگوزاری',
+                              'وەستاندن یان دیاریکردنی کاتی خزمەتگوزاری',
                             ),
                             value: _maintenanceEnabled,
                             onChanged: _saving
@@ -338,7 +338,7 @@ class _OwnerOperationsCenterScreenState
                             maxLines: 5,
                             maxLength: 1000,
                             decoration: const InputDecoration(
-                              labelText: 'پەیامی Maintenance',
+                              labelText: 'پەیامی چاکسازی',
                               hintText:
                                   'نموونە: سیستەم بۆ ماوەیەکی کورت نوێ دەکرێتەوە...',
                               alignLabelWithHint: true,
@@ -402,11 +402,11 @@ class _OwnerOperationsCenterScreenState
                             secondary:
                                 const Icon(Icons.campaign_outlined),
                             title: const Text(
-                              'System Announcement',
+                              'ئاگادارکردنەوەی گشتی سیستەم',
                               style: TextStyle(fontWeight: FontWeight.w800),
                             ),
                             subtitle: const Text(
-                              'پەیامی گشتی پلاتفۆرم بەبێ داتای کاروبار',
+                              'پەیامی گشتی پلاتفۆرم بەبێ business data',
                             ),
                             value: _announcementEnabled,
                             onChanged: _saving
