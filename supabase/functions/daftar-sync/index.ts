@@ -235,7 +235,12 @@ async function upsertLegacyLink(
   if (error) throw error;
 }
 
-async function findLegacyTarget(admin: any, source: SyncSource, entityKind: string, sourceId: string) {
+async function findLegacyTarget(
+  admin: any,
+  source: SyncSource,
+  entityKind: string,
+  sourceId: string,
+): Promise<string | null> {
   const { data, error } = await admin.from("legacy_import_links")
     .select("target_id")
     .eq("admin_id", source.admin_id)
@@ -243,7 +248,13 @@ async function findLegacyTarget(admin: any, source: SyncSource, entityKind: stri
     .eq("source_id", sourceId)
     .limit(20);
   if (error) throw error;
-  const targets = [...new Set((data ?? []).map((row: { target_id: string }) => row.target_id))];
+  const targets: string[] = [
+    ...new Set<string>(
+      (data ?? [])
+        .map((row: { target_id?: unknown }) => String(row.target_id ?? "").trim())
+        .filter((value: string) => value.length > 0),
+    ),
+  ];
   if (targets.length > 1) throw new Error(`${entityKind}_source_id_conflict:${sourceId}`);
   return targets[0] ?? null;
 }
@@ -351,6 +362,13 @@ async function sourceDebtIds(admin: any, syncSourceId: string): Promise<string[]
   return ids;
 }
 
+type SourceDebtCandidate = {
+  id: string;
+  remaining: number;
+  custom_date: string | null;
+  created_at: string;
+};
+
 async function availableSourceDebts(
   admin: any,
   linkedIds: Set<string>,
@@ -365,8 +383,9 @@ async function availableSourceDebts(
     .gt("remaining", 0)
     .limit(5000);
   if (error) throw error;
-  const rows = (data ?? []).filter((row: { id: string }) => linkedIds.has(row.id));
-  rows.sort((left, right) => {
+  const rows: SourceDebtCandidate[] = ((data ?? []) as SourceDebtCandidate[])
+    .filter((row) => linkedIds.has(row.id));
+  rows.sort((left: SourceDebtCandidate, right: SourceDebtCandidate) => {
     const dateDifference = Date.parse(left.custom_date ?? left.created_at) - Date.parse(right.custom_date ?? right.created_at);
     return dateDifference || String(left.id).localeCompare(String(right.id));
   });
