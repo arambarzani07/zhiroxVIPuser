@@ -20,10 +20,11 @@ class _DebtRestoreScreenState extends State<DebtRestoreScreen> {
 
   Future<Map<String, String>> _authenticatedHeaders() async {
     await PBService.ensureInitialized();
-    var session = PBService.client.auth.currentSession;
-    if (session == null) {
+    final currentSession = PBService.client.auth.currentSession;
+    if (currentSession == null) {
       throw Exception('authentication_required');
     }
+    var session = currentSession;
 
     try {
       final refreshed = await PBService.client.auth.refreshSession();
