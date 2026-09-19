@@ -927,6 +927,90 @@ class PBService {
     return Map<String, dynamic>.from(data);
   }
 
+  static Future<Map<String, dynamic>> getOwnerIncidentOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_incident_overview');
+    if (raw is! Map) throw Exception('invalid_owner_incident_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerIncidentsPage({
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_incidents_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_incidents_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> createOwnerIncident({
+    required String title,
+    required String summary,
+    required String severity,
+    required String status,
+    required String affectedComponent,
+    required bool publicVisible,
+    DateTime? startsAt,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'create_system_owner_incident',
+      params: {
+        'p_title': title,
+        'p_summary': summary,
+        'p_severity': severity,
+        'p_status': status,
+        'p_affected_component': affectedComponent,
+        'p_public_visible': publicVisible,
+        'p_starts_at': startsAt?.toUtc().toIso8601String(),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_incident_create_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> updateOwnerIncident({
+    required String incidentId,
+    required String title,
+    required String summary,
+    required String severity,
+    required String status,
+    required String affectedComponent,
+    required bool publicVisible,
+    DateTime? startsAt,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'update_system_owner_incident',
+      params: {
+        'p_incident_id': incidentId,
+        'p_title': title,
+        'p_summary': summary,
+        'p_severity': severity,
+        'p_status': status,
+        'p_affected_component': affectedComponent,
+        'p_public_visible': publicVisible,
+        'p_starts_at': startsAt?.toUtc().toIso8601String(),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_incident_update_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getPlatformIncidentStatus() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_platform_incident_status');
+    if (raw is! Map) throw Exception('invalid_platform_incident_status');
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
     int page = 1,
     int perPage = 50,
