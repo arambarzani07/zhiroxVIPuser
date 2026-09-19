@@ -8,6 +8,7 @@ import 'package:zhirox/screens/auth/owner_platform_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_health_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_infrastructure_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_policy_compliance_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_domain_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_subscription_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_security_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_support_center_screen.dart';
@@ -195,6 +196,28 @@ class _OwnerHome extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) =>
                             const OwnerInfrastructureCenterScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.blue.withValues(alpha: 0.10),
+                      child: const Icon(
+                        Icons.language_rounded,
+                        color: Colors.blue,
+                      ),
+                    ),
+                    title: const Text('دۆمەین و HTTPS'),
+                    subtitle: const Text(
+                      'ڕێکخستنی CNAME و پشکنینی DNS/HTTPS ـی هەر مارکێت',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerDomainCenterScreen(),
                       ),
                     ),
                   ),
