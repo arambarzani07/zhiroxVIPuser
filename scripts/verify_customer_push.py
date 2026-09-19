@@ -179,7 +179,7 @@ settings_text = (ROOT / 'lib/screens/admin/admin_settings_screen.dart').read_tex
 assert 'AdminNotificationsScreen' in settings_text, 'manager notification center must be reachable from the admin area'
 
 web = ROOT / 'customer-push-web'
-for name in ('index.html', 'app.js', 'sw.js', 'manifest.webmanifest', '_headers'):
+for name in ('index.html', 'app.js', 'sw.js', 'manifest.webmanifest', '_headers', 'apple-touch-icon.png'):
     assert (web / name).exists(), f'missing customer push web asset: {name}'
 for name in ('styles.css',):
     assert (web / name).exists(), f'missing official portal asset: {name}'
@@ -200,6 +200,7 @@ for marker in (
     assert marker in index_html, f'official customer portal marker missing: {marker}'
 assert '<style>' not in index_html, 'official customer portal CSS must live in styles.css'
 assert 'aria-live="polite"' in index_html, 'portal needs a scoped polite status region'
+assert 'rel="apple-touch-icon"' in index_html and 'apple-touch-icon.png' in index_html, 'iOS Add to Home Screen must use the ZHIROX app logo'
 
 styles_text = (web / 'styles.css').read_text(errors='ignore')
 for marker in (
@@ -265,6 +266,8 @@ assert "navigator.serviceWorker.register('./sw.js', { scope: './' })" in app_js,
 manifest = (web / 'manifest.webmanifest').read_text(errors='ignore')
 assert re.search(r'"scope"\s*:\s*"\./"', manifest), 'PWA scope must stay inside the static portal directory'
 assert re.search(r'"start_url"\s*:\s*"\./index\.html"', manifest), 'PWA start_url must stay inside the static portal directory'
+assert 'apple-touch-icon.png' in manifest, 'static PWA manifest must expose the ZHIROX app logo'
+assert 'apple-touch-icon.png' in manifest_text, 'token-aware install manifest must expose the ZHIROX app logo'
 
 headers = (web / '_headers').read_text(errors='ignore')
 assert 'Referrer-Policy: no-referrer' in headers
