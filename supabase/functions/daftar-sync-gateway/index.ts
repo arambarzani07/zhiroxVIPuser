@@ -12,6 +12,7 @@ type SyncSource = {
   trigger_secret_hash: string;
   contacts_etag?: string | null;
   transactions_etag?: string | null;
+  mirror_bootstrapped_at?: string | null;
 };
 
 function json(body: unknown, status = 200) {
@@ -71,7 +72,7 @@ async function loadSyncSource(admin: any, sourceId: string): Promise<SyncSource 
   for (let attempt = 1; attempt <= 4; attempt++) {
     const { data, error } = await admin
       .from("daftar_sync_sources")
-      .select("id, legacy_user_id, api_base_url, trigger_secret_hash, contacts_etag, transactions_etag")
+      .select("id, legacy_user_id, api_base_url, trigger_secret_hash, contacts_etag, transactions_etag, mirror_bootstrapped_at")
       .eq("id", sourceId)
       .eq("enabled", true)
       .maybeSingle();
@@ -231,7 +232,7 @@ Deno.serve(async (req) => {
       ),
     ]);
 
-    if (!contactsProbe.changed && !transactionsProbe.changed) {
+    if (source.mirror_bootstrapped_at && !contactsProbe.changed && !transactionsProbe.changed) {
       await markUpToDate(admin, source.id);
       return json({
         ok: true,
