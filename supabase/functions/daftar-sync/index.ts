@@ -717,6 +717,14 @@ Deno.serve(async (req) => {
     const newTransactionCheckpoint = delta.length > 0
       ? Math.max(Number(source.last_transaction_id), ...delta.map((row) => Number(row.id)))
       : Number(source.last_transaction_id);
+    const { data: reconciliation, error: reconciliationError } = await admin.rpc(
+      "reconcile_daftar_account_28",
+      { p_source_id: source.id },
+    );
+    if (reconciliationError) {
+      throw new Error(`reconciliation_failed:${reconciliationError.message}`);
+    }
+
     const result = {
       ...counters,
       processed_contacts: newContacts.length,
@@ -726,6 +734,7 @@ Deno.serve(async (req) => {
       mirror_bootstrapped: Boolean(source.mirror_bootstrapped_at),
       mirror_contacts: contacts.length,
       mirror_transactions: transactions.length,
+      reconciliation,
     };
 
     const finishedAt = new Date().toISOString();
