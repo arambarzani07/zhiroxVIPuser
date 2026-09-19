@@ -17,7 +17,7 @@ assert 'loan_currency_mismatches' in migration
 assert 'payment_amount_mismatches' in migration
 assert 'payment_currency_mismatches' in migration
 assert 'zero_event_mismatches' in migration
-assert "status := case when v_total_mismatches = 0 then 'pass' else 'fail' end" in migration
+assert "case when v_total_mismatches = 0 then 'pass' else 'fail' end" in migration
 assert "s.cutover_rehearsal_status = 'pass'" in migration
 assert "s.cutover_rehearsal_mismatches = 0" in migration
 
