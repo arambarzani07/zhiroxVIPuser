@@ -12,3 +12,7 @@ verify_jwt = false
 
 [functions.customer-push-worker]
 verify_jwt = false
+
+
+[functions.debt-restore-admin]
+verify_jwt = false
