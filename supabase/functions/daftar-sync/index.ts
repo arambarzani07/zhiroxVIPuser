@@ -16,6 +16,7 @@ type SyncSource = {
   last_transaction_id: number;
   contacts_etag?: string | null;
   transactions_etag?: string | null;
+  mirror_bootstrapped_at?: string | null;
 };
 
 type LegacyContact = {
@@ -189,6 +190,32 @@ async function upsertSeen(
     payload_hash: payloadHash,
   }, { onConflict: "sync_source_id,entity_kind,source_id", ignoreDuplicates: true });
   if (error) throw error;
+}
+
+async function mirrorRows(
+  admin: any,
+  table: "daftar_mirror_contacts" | "daftar_mirror_transactions",
+  syncSourceId: string,
+  rows: Array<{ id: number }>,
+) {
+  const mirroredAt = new Date().toISOString();
+  for (let offset = 0; offset < rows.length; offset += 250) {
+    const chunk = rows.slice(offset, offset + 250);
+    const records = await Promise.all(
+      chunk.map(async (row) => ({
+        sync_source_id: syncSourceId,
+        source_id: String(row.id),
+        payload: row,
+        payload_hash: await sha256Hex(JSON.stringify(row)),
+        last_mirrored_at: mirroredAt,
+      })),
+    );
+    const { error } = await admin.from(table).upsert(records, {
+      onConflict: "sync_source_id,source_id",
+      defaultToNull: false,
+    });
+    if (error) throw error;
+  }
 }
 
 async function upsertLegacyLink(
@@ -401,9 +428,18 @@ Deno.serve(async (req) => {
     if (runError) throw runError;
     runId = run.id;
 
+    const mirrorBootstrap = !source.mirror_bootstrapped_at;
     let [contactsFetch, transactionsFetch] = await Promise.all([
-      fetchRows<LegacyContact>(`${source.api_base_url}/contacts`, source.legacy_user_id, source.contacts_etag),
-      fetchRows<LegacyTransaction>(`${source.api_base_url}/transactions`, source.legacy_user_id, source.transactions_etag),
+      fetchRows<LegacyContact>(
+        `${source.api_base_url}/contacts`,
+        source.legacy_user_id,
+        mirrorBootstrap ? null : source.contacts_etag,
+      ),
+      fetchRows<LegacyTransaction>(
+        `${source.api_base_url}/transactions`,
+        source.legacy_user_id,
+        mirrorBootstrap ? null : source.transactions_etag,
+      ),
     ]);
     // A changed transaction may refer to an unchanged contact. Fetch the small
     // contact list once without ETag so customer mapping remains complete.
@@ -419,6 +455,21 @@ Deno.serve(async (req) => {
     const transactions = transactionsRaw.filter((row) => Number(row.user_id) === Number(source!.legacy_user_id));
     counters.fetched_contacts = contacts.length;
     counters.fetched_transactions = transactions.length;
+
+    await Promise.all([
+      mirrorRows(admin, "daftar_mirror_contacts", source.id, contacts),
+      mirrorRows(admin, "daftar_mirror_transactions", source.id, transactions),
+    ]);
+
+    if (mirrorBootstrap) {
+      const mirroredAt = new Date().toISOString();
+      const { error: mirrorStateError } = await admin.from("daftar_sync_sources").update({
+        mirror_bootstrapped_at: mirroredAt,
+        mirror_last_full_at: mirroredAt,
+      }).eq("id", source.id);
+      if (mirrorStateError) throw mirrorStateError;
+      source.mirror_bootstrapped_at = mirroredAt;
+    }
 
     const contactMap = new Map(contacts.map((row) => [Number(row.id), row]));
     const newContacts = contacts
@@ -653,6 +704,9 @@ Deno.serve(async (req) => {
       processed_transactions: delta.length,
       last_contact_id: newContactCheckpoint,
       last_transaction_id: newTransactionCheckpoint,
+      mirror_bootstrapped: Boolean(source.mirror_bootstrapped_at),
+      mirror_contacts: contacts.length,
+      mirror_transactions: transactions.length,
     };
 
     const finishedAt = new Date().toISOString();
