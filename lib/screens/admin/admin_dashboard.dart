@@ -21,6 +21,9 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
+  static const BoxConstraints _compactDialogConstraints = BoxConstraints(
+    maxWidth: 420,
+  );
   int _currentIndex = 0;
   final Set<int> _visitedTabs = <int>{0};
   Map<String, dynamic> _stats = {};
@@ -418,8 +421,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final totalRemainingUsd = (_stats['totalRemainingUsd'] ?? 0).toDouble();
     final totalPaymentsUsd = (_stats['totalPaymentsUsd'] ?? 0).toDouble();
 
-    return Column(
-      children: [
+    return RefreshIndicator(
+      onRefresh: _loadStats,
+      child: CustomScrollView(
+        key: const PageStorageKey('admin-dashboard-scroll'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverList(
+            delegate: SliverChildListDelegate([
         // ───── Gradient Header with Stats (fixed) ─────
         Container(
               decoration: BoxDecoration(
@@ -755,48 +764,46 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ),
 
-        // Only this list scrolls; the dashboard header and section title stay fixed.
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: _loadStats,
-            child: filteredRecentActivity.isEmpty
-                ? ListView(
-                    key: const PageStorageKey('dashboard-recent-activity-empty'),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(vertical: 30),
-                    children: [
-                      Icon(
-                        Icons.history_rounded,
-                        size: 32,
-                        color: Colors.grey[300],
-                      ),
-                      const SizedBox(height: 12),
-                      Center(
-                        child: Text(
-                          _recentActivityFilter == 'payment'
-                              ? 'لە ٢٤ کاتژمێری ڕابردوودا هیچ پارەدانەوەیەک نییە'
-                              : 'لە ٢٤ کاتژمێری ڕابردوودا هیچ قەرزێکی تازە نییە',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : ListView.builder(
-                    key: const PageStorageKey('dashboard-recent-activity-list'),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                    itemCount: filteredRecentActivity.length,
-                    itemBuilder: (context, index) =>
-                        _buildActivityCard(filteredRecentActivity[index], index),
+        // One vertical scroll keeps the full dashboard reachable on every phone.
+        if (filteredRecentActivity.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.history_rounded,
+                  size: 32,
+                  color: Colors.grey[300],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _recentActivityFilter == 'payment'
+                      ? 'لە ٢٤ کاتژمێری ڕابردوودا هیچ پارەدانەوەیەک نییە'
+                      : 'لە ٢٤ کاتژمێری ڕابردوودا هیچ قەرزێکی تازە نییە',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 14,
+                    height: 1.5,
                   ),
+                ),
+              ],
+            ),
+          )
+        else
+          ...List<Widget>.generate(
+            filteredRecentActivity.length,
+            (index) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _buildActivityCard(filteredRecentActivity[index], index),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-      ],
+        const SizedBox(height: 14),
+            ]),
+          ),
+        ],
+      ),
     );
   }
 
@@ -813,14 +820,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 40,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 18),
+                margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
                   color: Colors.grey[300],
                   borderRadius: BorderRadius.circular(2),
@@ -830,8 +837,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 'کەشفی حیساب',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
               ListTile(
+                dense: true,
+                visualDensity: VisualDensity.compact,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -844,6 +853,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 onTap: () => Navigator.pop(ctx, 'all'),
               ),
               ListTile(
+                dense: true,
+                visualDensity: VisualDensity.compact,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -941,8 +952,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
         builder: (ctx, setDialogState) => Directionality(
           textDirection: TextDirection.rtl,
           child: AlertDialog(
+            scrollable: true,
+            constraints: _compactDialogConstraints,
             backgroundColor: isDark ? AppDarkColors.card : Colors.white,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+            contentPadding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
+            actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
@@ -1112,8 +1128,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
         builder: (ctx, setDialogState) => Directionality(
           textDirection: TextDirection.rtl,
           child: AlertDialog(
+            scrollable: true,
+            constraints: _compactDialogConstraints,
             backgroundColor: isDark ? AppDarkColors.card : Colors.white,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+            contentPadding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
+            actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
@@ -1333,7 +1354,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }) {
     return Expanded(
       child: Container(
-        height: 82,
+        constraints: const BoxConstraints(minHeight: 82),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.12),
@@ -1360,8 +1381,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 children: [
                   Text(
                     label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.72),
                       fontSize: 10.5,
@@ -1373,8 +1392,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     isCurrency
                         ? AppHelpers.formatCurrency(value)
                         : value.toInt().toString(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w800,
@@ -1389,8 +1406,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         'USD',
                         showConversion: false,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.82),
                         fontWeight: FontWeight.w700,
@@ -1460,8 +1475,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               Expanded(
                 child: Text(
                   label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 10.5,
                     height: 1.25,
@@ -1481,8 +1494,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               'IQD',
               showConversion: false,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             textDirection: TextDirection.ltr,
             style: TextStyle(
               fontSize: 13,
@@ -1497,8 +1508,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               'USD',
               showConversion: false,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             textDirection: TextDirection.ltr,
             style: TextStyle(
               fontSize: 11,
@@ -1540,8 +1549,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(13),
@@ -1570,8 +1579,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               Flexible(
                 child: Text(
                   label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foreground,
                     fontSize: 12,
@@ -1682,8 +1689,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     Flexible(
                       child: Text(
                         customerName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -1720,35 +1725,39 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     if (isByEmployee && creatorName.isNotEmpty) creatorName,
                     AppHelpers.formatDate(date),
                   ].join('  •  '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
                   style: TextStyle(
                     fontSize: 10.5,
+                    height: 1.4,
                     color: isDark
                         ? AppDarkColors.textSecondary
                         : const Color(0xFF98A2B3),
                   ),
                 ),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    AppHelpers.formatCurrencyWithType(
+                      amount,
+                      currency,
+                      showConversion: false,
+                    ),
+                    softWrap: true,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: isPayment
+                          ? accent
+                          : (isDark
+                                ? AppDarkColors.textPrimary
+                                : const Color(0xFF101828)),
+                    ),
+                    textDirection: TextDirection.ltr,
+                  ),
+                ),
               ],
             ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            AppHelpers.formatCurrencyWithType(
-              amount,
-              currency,
-              showConversion: false,
-            ),
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: isPayment
-                  ? accent
-                  : (isDark
-                        ? AppDarkColors.textPrimary
-                        : const Color(0xFF101828)),
-            ),
-            textDirection: TextDirection.ltr,
           ),
           if (!isPayment) ...[
             const SizedBox(width: 4),
