@@ -113,6 +113,12 @@ jobs:
                     supabase/functions/customer-push-events \
                     supabase/functions/record-payment
 
+      - name: Check Daftar sync Edge Functions
+        if: github.ref_name == 'user-source'
+        run: |
+          deno check supabase/functions/daftar-sync/index.ts
+          deno check supabase/functions/daftar-sync-gateway/index.ts
+
       - name: Prepare independent iOS identity
         run: |
           sed -i '' "s/com.karoxghafoor.zhirox/${BUNDLE_ID}/g" ios/Runner.xcodeproj/project.pbxproj
