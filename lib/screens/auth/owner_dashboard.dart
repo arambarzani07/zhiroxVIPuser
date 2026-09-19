@@ -9,6 +9,7 @@ import 'package:zhirox/screens/auth/owner_health_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_infrastructure_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_policy_compliance_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_domain_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_incident_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_subscription_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_security_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_support_center_screen.dart';
@@ -218,6 +219,28 @@ class _OwnerHome extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const OwnerDomainCenterScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.red.withValues(alpha: 0.10),
+                      child: const Icon(
+                        Icons.crisis_alert_rounded,
+                        color: Colors.red,
+                      ),
+                    ),
+                    title: const Text('ڕووداو و دۆخی خزمەتگوزاری'),
+                    subtitle: const Text(
+                      'ڕووداو، کاریگەری، چارەسەرکردن و دۆخی گشتی پلاتفۆرم',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerIncidentCenterScreen(),
                       ),
                     ),
                   ),
