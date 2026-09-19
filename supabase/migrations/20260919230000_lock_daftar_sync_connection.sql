@@ -53,101 +53,10 @@ before update or delete on public.daftar_sync_sources
 for each row execute function public.prevent_daftar_sync_account_28_breakage();
 
 
-create or replace function public.prevent_daftar_sync_vault_breakage()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_unlock boolean := coalesce(current_setting('zhirox.daftar_sync_unlock', true), '') = 'on';
-begin
-  if v_unlock then
-    if tg_op = 'DELETE' then return old; end if;
-    return new;
-  end if;
-
-  if tg_op = 'DELETE' and old.name = 'daftar_sync_account_28_trigger' then
-    raise exception 'daftar_sync_vault_secret_locked' using errcode = '42501';
-  end if;
-
-  if tg_op = 'UPDATE' and old.name = 'daftar_sync_account_28_trigger' then
-    if new.name is distinct from old.name
-       or new.secret is distinct from old.secret
-       or new.key_id is distinct from old.key_id
-       or new.nonce is distinct from old.nonce then
-      raise exception 'daftar_sync_vault_secret_locked' using errcode = '42501';
-    end if;
-  end if;
-
-  if tg_op = 'DELETE' then
-    return old;
-  end if;
-  return new;
-end;
-$;
-
-revoke all on function public.prevent_daftar_sync_vault_breakage()
-  from public, anon, authenticated;
-
-drop trigger if exists zhirox_protect_daftar_sync_vault_secret on vault.secrets;
-create trigger zhirox_protect_daftar_sync_vault_secret
-before update or delete on vault.secrets
-for each row execute function public.prevent_daftar_sync_vault_breakage();
-
-
-create or replace function public.prevent_daftar_sync_cron_breakage()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_unlock boolean := coalesce(current_setting('zhirox.daftar_sync_unlock', true), '') = 'on';
-begin
-  if v_unlock then
-    if tg_op = 'DELETE' then return old; end if;
-    return new;
-  end if;
-
-  if tg_op = 'DELETE'
-     and old.jobname in ('daftar-live-sync-account-28', 'daftar-sync-guardian-account-28') then
-    raise exception 'daftar_sync_cron_locked' using errcode = '42501';
-  end if;
-
-  if tg_op = 'UPDATE' and old.jobname = 'daftar-live-sync-account-28' then
-    if new.jobname is distinct from 'daftar-live-sync-account-28'
-       or new.active is distinct from true
-       or new.schedule is distinct from '* * * * *'
-       or position('/functions/v1/daftar-sync-gateway' in new.command) = 0
-       or position('daftar_sync_account_28_trigger' in new.command) = 0
-       or position('legacy_user_id = 28' in new.command) = 0 then
-      raise exception 'daftar_sync_cron_locked' using errcode = '42501';
-    end if;
-  end if;
-
-  if tg_op = 'UPDATE' and old.jobname = 'daftar-sync-guardian-account-28' then
-    if new.jobname is distinct from 'daftar-sync-guardian-account-28'
-       or new.active is distinct from true
-       or new.schedule is distinct from '* * * * *'
-       or position('guard_daftar_sync_account_28' in new.command) = 0 then
-      raise exception 'daftar_sync_guardian_cron_locked' using errcode = '42501';
-    end if;
-  end if;
-
-  if tg_op = 'DELETE' then return old; end if;
-  return new;
-end;
-$$;
-
-revoke all on function public.prevent_daftar_sync_cron_breakage()
-  from public, anon, authenticated;
-
-drop trigger if exists zhirox_protect_daftar_sync_cron on cron.job;
-create trigger zhirox_protect_daftar_sync_cron
-before update or delete on cron.job
-for each row execute function public.prevent_daftar_sync_cron_breakage();
-
+-- Supabase owns vault.secrets and cron.job, so application migrations cannot
+-- install triggers on those managed tables. The guardian below continuously
+-- verifies the Vault-backed hash and restores the canonical cron definition.
+-- CI separately rejects destructive repository changes to this connection.
 
 create or replace function public.guard_daftar_sync_account_28()
 returns void
