@@ -14,6 +14,7 @@ release_center = Path('lib/screens/auth/update_control_screen.dart').read_text()
 infrastructure = Path('lib/screens/auth/owner_infrastructure_center_screen.dart').read_text()
 policy_compliance = Path('lib/screens/auth/owner_policy_compliance_center_screen.dart').read_text()
 domain_center = Path('lib/screens/auth/owner_domain_center_screen.dart').read_text()
+incident_center = Path('lib/screens/auth/owner_incident_center_screen.dart').read_text()
 domain_function = Path('supabase/functions/owner-domain-check/index.ts').read_text()
 recovery_function = Path('supabase/functions/owner-account-recovery/index.ts').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
@@ -57,6 +58,9 @@ policy_compliance_migration = Path(
 domain_migration = Path(
     'supabase/migrations/20260919080000_owner_domain_center.sql'
 ).read_text()
+incident_migration = Path(
+    'supabase/migrations/20260919093000_owner_incident_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
@@ -72,6 +76,7 @@ required = [
     'OwnerInfrastructureCenterScreen',
     'OwnerPolicyComplianceCenterScreen',
     'OwnerDomainCenterScreen',
+    'OwnerIncidentCenterScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
@@ -111,6 +116,11 @@ required = [
     'getOwnerDomainPage',
     'setOwnerTenantDomain',
     'checkOwnerTenantDomain',
+    'getOwnerIncidentOverview',
+    'getOwnerIncidentsPage',
+    'createOwnerIncident',
+    'updateOwnerIncident',
+    'getPlatformIncidentStatus',
     '_enforceAdminDeviceAuthorization',
     '_startDeviceAuthorizationHeartbeat',
     'getOwnerEntitlementsPage',
@@ -165,6 +175,11 @@ required = [
     'set_system_owner_tenant_domain',
     'get_system_owner_domain_check_target',
     'record_system_owner_domain_check',
+    'get_system_owner_incident_overview',
+    'get_system_owner_incidents_page',
+    'create_system_owner_incident',
+    'update_system_owner_incident',
+    'get_platform_incident_status',
     'system_owner_required',
 ]
 blob = '\n'.join([
@@ -182,6 +197,7 @@ blob = '\n'.join([
     infrastructure,
     policy_compliance,
     domain_center,
+    incident_center,
     domain_function,
     recovery_function,
     service,
@@ -199,6 +215,7 @@ blob = '\n'.join([
     infrastructure_migration,
     policy_compliance_migration,
     domain_migration,
+    incident_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -216,11 +233,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness, release_center, infrastructure, policy_compliance, domain_center):
+for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness, release_center, infrastructure, policy_compliance, domain_center, incident_center):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration, release_migration, infrastructure_migration, policy_compliance_migration, domain_migration):
+for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration, release_migration, infrastructure_migration, policy_compliance_migration, domain_migration, incident_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -328,6 +345,13 @@ assert 'dns.google' in domain_function, 'domain checker must verify DNS'
 assert 'https://' in domain_function, 'domain checker must verify HTTPS reachability'
 assert 'system_owner_required' in domain_function, 'domain checker must enforce system owner authorization'
 assert 'service_role' not in domain_center.lower(), 'domain UI must never expose service credentials'
+assert 'platform_incidents' in incident_migration, 'platform incident storage missing'
+assert 'affected_component' in incident_migration and 'severity' in incident_migration, 'incident classification metadata missing'
+assert 'resolved_at' in incident_migration, 'incident resolution lifecycle missing'
+assert 'owner_platform_audit' in incident_migration, 'incident changes must be audited'
+assert 'public.debts' not in incident_migration and 'public.payments' not in incident_migration, 'incident center must not read market finance content'
+assert 'customer_id' not in incident_center.lower(), 'incident UI must not expose customer data'
+assert 'debt' not in incident_center.lower(), 'incident UI must not expose debt data'
 
 assert "_overview['blocked_tenants']" in readiness, 'readiness internal blocked_tenants key must remain stable'
 assert "item['device_policy_mode']" in readiness, 'readiness internal device policy key must remain stable'
@@ -354,6 +378,7 @@ owner_ui_files = [
     Path('lib/screens/auth/owner_subscription_center_screen.dart'),
     Path('lib/screens/auth/owner_support_center_screen.dart'),
     Path('lib/screens/auth/owner_domain_center_screen.dart'),
+    Path('lib/screens/auth/owner_incident_center_screen.dart'),
     Path('lib/screens/auth/update_control_screen.dart'),
     Path('lib/screens/auth/import_permission_screen.dart'),
 ]
@@ -372,6 +397,7 @@ for forbidden_ui in (
     "'Device Policy'",
     "'Release & Auto Update Center'",
     "'Domain & HTTPS'",
+    "'Incident Center'",
     "'Import کراوە",
 ):
     assert forbidden_ui not in owner_ui_blob, f'English owner UI regressed: {forbidden_ui}'
