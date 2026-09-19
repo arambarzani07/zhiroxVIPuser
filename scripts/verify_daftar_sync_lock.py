@@ -20,8 +20,8 @@ assert '[functions.daftar-sync]\nverify_jwt = false' in config, 'worker deployme
 assert '[functions.daftar-sync-gateway]\nverify_jwt = false' in config, 'gateway deployment auth mode must be pinned'
 
 assert 'prevent_daftar_sync_account_28_breakage' in migration, 'account 28 source must have an immutable connection trigger'
-assert 'prevent_daftar_sync_vault_breakage' in migration, 'Daftar sync Vault secret must be protected'
-assert 'prevent_daftar_sync_cron_breakage' in migration, 'Daftar sync cron jobs must be protected'
+assert "trigger_secret_hash = v_secret_hash" in migration, "guardian must re-bind the source to the Vault secret"
+assert "cron.alter_job(" in migration, "guardian must repair the live cron definition"
 assert 'guard_daftar_sync_account_28' in migration, 'Daftar sync must have a self-healing guardian'
 assert 'daftar-sync-guardian-account-28' in migration, 'guardian cron must be installed'
 assert "daftar-live-sync-account-28" in migration, 'live sync cron identity must be pinned'
@@ -30,5 +30,20 @@ assert "daftar_sync_account_28_trigger" in migration, 'Vault secret name must be
 assert "daftar-live-account-28-v1" in migration, 'source fingerprint must be pinned'
 
 assert 'Verify Daftar Qarz connection lock' in workflow, 'every build must verify the Daftar connection lock'
+
+migration_files = list((ROOT / 'supabase/migrations').glob('*.sql'))
+destructive_sql = '\n'.join(
+    path.read_text(errors='ignore').lower()
+    for path in migration_files
+    if path.name != '20260919230000_lock_daftar_sync_connection.sql'
+)
+for forbidden in (
+    "cron.unschedule('daftar-live-sync-account-28'",
+    'cron.unschedule("daftar-live-sync-account-28"',
+    "delete from public.daftar_sync_sources",
+    "drop table public.daftar_sync_sources",
+    "drop function public.guard_daftar_sync_account_28",
+):
+    assert forbidden not in destructive_sql, f'forbidden Daftar connection mutation detected: {forbidden}'
 
 print('Daftar Qarz connection lock verified')
