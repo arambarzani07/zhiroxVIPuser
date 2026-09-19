@@ -7,5 +7,13 @@
   "theme_color": "#f4f6fa",
   "background_color": "#f4f6fa",
   "lang": "ku",
-  "dir": "rtl"
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "./apple-touch-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
