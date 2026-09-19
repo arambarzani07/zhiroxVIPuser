@@ -79,6 +79,9 @@ jobs:
       - name: Verify customer cumulative payment totals
         run: python3 scripts/verify_customer_payment_totals.py
 
+      - name: Verify admin dashboard recent activity
+        run: python3 scripts/verify_admin_dashboard_activity.py
+
       - name: Verify customer QR web push policy
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_customer_push.py
