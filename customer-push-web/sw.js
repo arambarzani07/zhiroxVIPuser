@@ -37,6 +37,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || 'ZHIROX', {
       body: data.body || '',
+      icon: './apple-touch-icon.png',
+      badge: './apple-touch-icon.png',
       data: { url: portalUrl(data.url) },
     }),
   );
