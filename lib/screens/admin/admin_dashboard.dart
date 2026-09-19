@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/admin/admin_settings_screen.dart';
+import 'package:zhirox/screens/shared/debt_detail_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/services/pdf_service.dart';
@@ -30,6 +31,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   RealtimeChannel? _dashboardRealtimeChannel;
   Timer? _dashboardRealtimeDebounce;
   bool _dashboardRealtimeRefreshPending = false;
+  String _recentActivityFilter = 'debt';
 
   @override
   void initState() {
@@ -397,6 +399,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final recentActivity = _stats['recentActivity'] as List<RecordModel>? ?? [];
+    final debtActivity = recentActivity
+        .where((activity) => activity.getStringValue('event_type') != 'payment')
+        .toList(growable: false);
+    final paymentActivity = recentActivity
+        .where((activity) => activity.getStringValue('event_type') == 'payment')
+        .toList(growable: false);
+    final filteredRecentActivity = _recentActivityFilter == 'payment'
+        ? paymentActivity
+        : debtActivity;
     final totalCustomers = (_stats['totalCustomers'] ?? 0).toDouble();
     final totalDebt = (_stats['totalDebt'] ?? 0).toDouble();
     final totalRemaining = (_stats['totalRemaining'] ?? 0).toDouble();
@@ -668,7 +679,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '${recentActivity.length}',
+                  '${filteredRecentActivity.length}',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -692,12 +703,36 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildRecentActivityFilterButton(
+                  value: 'debt',
+                  label: 'قەرزەکان',
+                  icon: Icons.receipt_long_outlined,
+                  count: debtActivity.length,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildRecentActivityFilterButton(
+                  value: 'payment',
+                  label: 'پارەدانەوەکان',
+                  icon: Icons.payments_outlined,
+                  count: paymentActivity.length,
+                ),
+              ),
+            ],
+          ),
+        ),
 
         // Only this list scrolls; the dashboard header and section title stay fixed.
         Expanded(
           child: RefreshIndicator(
             onRefresh: _loadStats,
-            child: recentActivity.isEmpty
+            child: filteredRecentActivity.isEmpty
                 ? ListView(
                     key: const PageStorageKey('dashboard-recent-activity-empty'),
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -711,7 +746,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       const SizedBox(height: 12),
                       Center(
                         child: Text(
-                          'لە ٢٤ کاتژمێری ڕابردوودا هیچ چالاکیەک نییە',
+                          _recentActivityFilter == 'payment'
+                              ? 'لە ٢٤ کاتژمێری ڕابردوودا هیچ پارەدانەوەیەک نییە'
+                              : 'لە ٢٤ کاتژمێری ڕابردوودا هیچ قەرزێکی تازە نییە',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.grey[500],
@@ -725,9 +762,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     key: const PageStorageKey('dashboard-recent-activity-list'),
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                    itemCount: recentActivity.length,
+                    itemCount: filteredRecentActivity.length,
                     itemBuilder: (context, index) =>
-                        _buildActivityCard(recentActivity[index], index),
+                        _buildActivityCard(filteredRecentActivity[index], index),
                   ),
           ),
         ),
@@ -1343,6 +1380,110 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  Widget _buildRecentActivityFilterButton({
+    required String value,
+    required String label,
+    required IconData icon,
+    required int count,
+  }) {
+    final isSelected = _recentActivityFilter == value;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final foreground = isSelected
+        ? Colors.white
+        : (isDark ? AppDarkColors.textSecondary : const Color(0xFF667085));
+    final background = isSelected
+        ? AppColors.primary
+        : (isDark ? AppDarkColors.card : Colors.white);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(13),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(13),
+        onTap: () {
+          if (_recentActivityFilter == value) return;
+          setState(() => _recentActivityFilter = value);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.primary
+                  : (isDark
+                      ? AppDarkColors.cardBorder
+                      : const Color(0xFFE4E7EC)),
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.16),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: foreground),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                constraints: const BoxConstraints(minWidth: 22),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.18)
+                      : AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : AppColors.primary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openDebtActivity(RecordModel activity) async {
+    final debtId = activity.id.trim();
+    if (debtId.isEmpty || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DebtDetailScreen(debtId: debtId),
+      ),
+    );
+    if (mounted) await _loadStats();
+  }
+
   Widget _buildActivityCard(RecordModel activity, int index) {
     final customer = AppHelpers.expandedRecord(activity, 'customer');
     final createdBy = AppHelpers.expandedRecord(activity, 'created_by');
@@ -1362,19 +1503,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final accent = isPayment ? Colors.green.shade600 : AppColors.primary;
     final activityLabel = isPayment ? 'پارەدانەوە' : 'قەرز';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? AppDarkColors.card : Colors.white,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : const Color(0xFFE9EDF3),
-        ),
-      ),
-      child: Row(
+        onTap: isPayment ? null : () => _openDebtActivity(activity),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isDark ? AppDarkColors.card : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : const Color(0xFFE9EDF3),
+            ),
+          ),
+          child: Row(
         children: [
           Container(
             width: 36,
@@ -1470,7 +1617,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             textDirection: TextDirection.ltr,
           ),
+          if (!isPayment) ...[
+            const SizedBox(width: 4),
+            Icon(
+              Icons.chevron_left_rounded,
+              size: 19,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF98A2B3),
+            ),
+          ],
         ],
+      ),
+        ),
       ),
     );
   }
