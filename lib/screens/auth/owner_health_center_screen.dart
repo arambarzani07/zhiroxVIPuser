@@ -374,6 +374,8 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
         'backup_monitoring_policy_changed': 'گۆڕینی سیاسەتی چاودێری پاشەکەوت',
         'platform_policy_published': 'بڵاوکردنەوەی سیاسەتی پلاتفۆرم',
         'platform_retention_policy_changed': 'گۆڕینی سیاسەتی ماوەی هەڵگرتنی داتا',
+        'platform_incident_created': 'دروستکردنی ڕووداوی پلاتفۆرم',
+        'platform_incident_updated': 'نوێکردنەوەی ڕووداوی پلاتفۆرم',
       }[action] ??
       action;
 
