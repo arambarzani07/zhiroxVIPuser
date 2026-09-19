@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+worker = (ROOT / 'supabase/functions/daftar-sync/index.ts').read_text(errors='ignore')
+gateway = (ROOT / 'supabase/functions/daftar-sync-gateway/index.ts').read_text(errors='ignore')
+config = (ROOT / 'supabase/config.toml').read_text(errors='ignore')
+migration_path = ROOT / 'supabase/migrations/20260919230000_lock_daftar_sync_connection.sql'
+migration = migration_path.read_text(errors='ignore') if migration_path.exists() else ''
+workflow = (ROOT / '.github/workflows/ios-unsigned-ipa.yml').read_text(errors='ignore')
+
+for source in (worker, gateway):
+    assert 'x-daftar-sync-secret' in source, 'Daftar sync must require the dedicated sync secret'
+    assert 'trigger_secret_hash' in source, 'Daftar sync must validate the stored trigger secret hash'
+    assert 'constantTimeEqual' in source, 'Daftar sync secret comparison must stay constant-time'
+    assert 'legacy_user_id' in source, 'Daftar sync must remain scoped to the legacy account'
+    assert 'SUPABASE_SERVICE_ROLE_KEY' in source, 'Daftar sync server access must retain service-role support'
+
+assert '[functions.daftar-sync]\nverify_jwt = false' in config, 'worker deployment auth mode must be pinned'
+assert '[functions.daftar-sync-gateway]\nverify_jwt = false' in config, 'gateway deployment auth mode must be pinned'
+
+assert 'prevent_daftar_sync_account_28_breakage' in migration, 'account 28 source must have an immutable connection trigger'
+assert 'prevent_daftar_sync_vault_breakage' in migration, 'Daftar sync Vault secret must be protected'
+assert 'prevent_daftar_sync_cron_breakage' in migration, 'Daftar sync cron jobs must be protected'
+assert 'guard_daftar_sync_account_28' in migration, 'Daftar sync must have a self-healing guardian'
+assert 'daftar-sync-guardian-account-28' in migration, 'guardian cron must be installed'
+assert "daftar-live-sync-account-28" in migration, 'live sync cron identity must be pinned'
+assert "https://api-daftar-qarz.kasbkar.net/api/v1" in migration, 'legacy API endpoint must be pinned'
+assert "daftar_sync_account_28_trigger" in migration, 'Vault secret name must be pinned'
+assert "daftar-live-account-28-v1" in migration, 'source fingerprint must be pinned'
+
+assert 'Verify Daftar Qarz connection lock' in workflow, 'every build must verify the Daftar connection lock'
+
+print('Daftar Qarz connection lock verified')
