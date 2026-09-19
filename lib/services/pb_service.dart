@@ -872,6 +872,61 @@ class PBService {
     return Map<String, dynamic>.from(raw);
   }
 
+  static Future<Map<String, dynamic>> getOwnerDomainOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_domain_overview');
+    if (raw is! Map) throw Exception('invalid_owner_domain_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerDomainPage({
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_domain_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_domain_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerTenantDomain({
+    required String adminId,
+    required String hostname,
+    required String routingTarget,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_tenant_domain',
+      params: {
+        'p_admin_id': adminId,
+        'p_hostname': hostname,
+        'p_routing_target': routingTarget,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_domain_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> checkOwnerTenantDomain(
+    String adminId,
+  ) async {
+    await ensureInitialized();
+    final response = await client.functions.invoke(
+      'owner-domain-check',
+      body: {'admin_id': adminId},
+    );
+    final data = response.data;
+    if (data is! Map) throw Exception('invalid_owner_domain_check_result');
+    if (data['error'] != null) throw _functionError(data);
+    return Map<String, dynamic>.from(data);
+  }
+
   static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
     int page = 1,
     int perPage = 50,
