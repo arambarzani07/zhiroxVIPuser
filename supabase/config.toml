@@ -16,3 +16,9 @@ verify_jwt = false
 
 [functions.debt-restore-admin]
 verify_jwt = false
+
+[functions.daftar-sync]
+verify_jwt = false
+
+[functions.daftar-sync-gateway]
+verify_jwt = false
