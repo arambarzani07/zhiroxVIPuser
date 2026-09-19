@@ -733,6 +733,14 @@ Deno.serve(async (req) => {
       throw new Error(`cutover_rehearsal_failed:${cutoverRehearsalError.message}`);
     }
 
+    const { data: failoverReadiness, error: failoverReadinessError } = await admin.rpc(
+      "refresh_daftar_failover_readiness",
+      { p_source_id: source.id },
+    );
+    if (failoverReadinessError) {
+      throw new Error(`failover_readiness_failed:${failoverReadinessError.message}`);
+    }
+
     const result = {
       ...counters,
       processed_contacts: newContacts.length,
@@ -744,6 +752,7 @@ Deno.serve(async (req) => {
       mirror_transactions: transactions.length,
       reconciliation,
       cutover_rehearsal: cutoverRehearsal,
+      failover_readiness: failoverReadiness,
     };
 
     const finishedAt = new Date().toISOString();
