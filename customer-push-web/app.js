@@ -112,7 +112,29 @@ async function api(payload) {
   return body;
 }
 
+function persistedPushCredentials() {
+  const endpoint = localStorage.getItem(ENDPOINT_KEY) || '';
+  const deviceSecret = localStorage.getItem(DEVICE_SECRET_KEY) || '';
+  if (!endpoint.startsWith('https://') || !TOKEN_PATTERN.test(deviceSecret)) {
+    return null;
+  }
+  return { endpoint, deviceSecret };
+}
+
+function scrubLinkCredentialsFromLocation() {
+  if (window.location.search || window.location.hash) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+}
+
 function resolveLinkToken() {
+  const persisted = persistedPushCredentials();
+  if (isStandalone() && persisted) {
+    localStorage.removeItem(LINK_TOKEN_KEY);
+    scrubLinkCredentialsFromLocation();
+    return '';
+  }
+
   const currentUrl = new URL(window.location.href);
   const queryToken = currentUrl.searchParams.get('token') || '';
   const fragmentToken = new URLSearchParams(
@@ -152,12 +174,11 @@ function portalCredentials(offset = 0, action = 'portal') {
       ? { action, token: activeToken, offset }
       : { action, token: activeToken };
   }
-  const endpoint = localStorage.getItem(ENDPOINT_KEY) || '';
-  const deviceSecret = localStorage.getItem(DEVICE_SECRET_KEY) || '';
-  if (endpoint.startsWith('https://') && TOKEN_PATTERN.test(deviceSecret)) {
+  const persisted = persistedPushCredentials();
+  if (persisted) {
     return action === 'portal'
-      ? { action, endpoint, device_secret: deviceSecret, offset }
-      : { action, endpoint, device_secret: deviceSecret };
+      ? { action, endpoint: persisted.endpoint, device_secret: persisted.deviceSecret, offset }
+      : { action, endpoint: persisted.endpoint, device_secret: persisted.deviceSecret };
   }
   return null;
 }
@@ -494,7 +515,7 @@ enableButton.addEventListener('click', async () => {
     localStorage.setItem(ENDPOINT_KEY, subscription.endpoint);
     localStorage.removeItem(LINK_TOKEN_KEY);
     activeToken = '';
-    if (window.location.search || window.location.hash) window.history.replaceState(null, '', window.location.pathname);
+    scrubLinkCredentialsFromLocation();
 
     renderNotificationState('active', 'ئاگادارکردنەوە چالاک کرا');
     setStatus('پەیوەستکرا.', 'ok');
