@@ -41,6 +41,8 @@
 - `supabase/functions/_shared/daftar_live_read/types.ts` — operation names, source/result metadata, fallback classifications, stable envelope types.
 - `supabase/functions/_shared/daftar_live_read/policy.ts` — transient/non-transient error classification, stale calculation, response envelope helpers.
 - `supabase/functions/_shared/daftar_live_read/freshness.ts` — live ETag probe, bounded retry, synchronous worker refresh when source changed.
+- `supabase/functions/_shared/daftar_sync_auth.ts` — pure authorization helper shared by the sync worker and its tests; accepts only the dedicated trigger secret or the server service credential.
+- `supabase/functions/_shared/daftar_sync_auth_test.ts` — worker server-to-server authorization regression tests.
 - `supabase/functions/_shared/daftar_live_read/local_read.ts` — whitelisted ZHIROX read operations executed with the caller's JWT.
 - `supabase/functions/_shared/daftar_live_read/runtime.ts` — auth, tenant/source resolution, live/fallback orchestration, telemetry.
 - `supabase/functions/_shared/daftar_live_read/policy_test.ts` — fallback policy tests.
@@ -343,6 +345,8 @@ git commit -m "feat(sync): define live-read fallback policy"
 **Files:**
 - Create: `supabase/functions/_shared/daftar_live_read/freshness.ts`
 - Test: `supabase/functions/_shared/daftar_live_read/freshness_test.ts`
+- Create: `supabase/functions/_shared/daftar_sync_auth.ts`
+- Test: `supabase/functions/_shared/daftar_sync_auth_test.ts`
 - Modify: `supabase/functions/daftar-sync/index.ts`
 
 **Interfaces:**
@@ -486,23 +490,98 @@ if (!internalServiceAuthorized && !dedicatedSecretAuthorized) {
 
 Do not log either credential.
 
-- [ ] **Step 5: Add worker auth regression tests**
+- [ ] **Step 5: Extract and test worker authorization as a pure helper**
 
-Add tests beside the worker that prove:
+Create `supabase/functions/_shared/daftar_sync_auth.ts`:
 
 ```ts
+export async function sha256Hex(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export function constantTimeEqual(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index++) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
+export async function authorizeDaftarSyncRequest(input: {
+  authorizationHeader: string | null;
+  providedSecret: string;
+  serviceCredential: string;
+  expectedSecretHash: string;
+}): Promise<boolean> {
+  const bearer = (input.authorizationHeader ?? "")
+    .replace(/^Bearer\\s+/i, "")
+    .trim();
+
+  const internalServiceAuthorized =
+    bearer.length > 0 &&
+    input.serviceCredential.length > 0 &&
+    constantTimeEqual(
+      await sha256Hex(bearer),
+      await sha256Hex(input.serviceCredential),
+    );
+
+  const dedicatedSecretAuthorized =
+    input.providedSecret.length > 0 &&
+    constantTimeEqual(
+      await sha256Hex(input.providedSecret),
+      input.expectedSecretHash,
+    );
+
+  return internalServiceAuthorized || dedicatedSecretAuthorized;
+}
+```
+
+Create `supabase/functions/_shared/daftar_sync_auth_test.ts`:
+
+```ts
+import { assertEquals } from "jsr:@std/assert@1";
+import {
+  authorizeDaftarSyncRequest,
+  sha256Hex,
+} from "./daftar_sync_auth.ts";
+
 Deno.test("ordinary user bearer cannot invoke daftar-sync internally", async () => {
-  // user bearer only -> 401
+  const allowed = await authorizeDaftarSyncRequest({
+    authorizationHeader: "Bearer user-token",
+    providedSecret: "",
+    serviceCredential: "service-token",
+    expectedSecretHash: await sha256Hex("trigger-secret"),
+  });
+  assertEquals(allowed, false);
 });
 
-Deno.test("service bearer can invoke daftar-sync without x-daftar-sync-secret", async () => {
-  // matching server service credential -> accepted
+Deno.test("service bearer can invoke daftar-sync without trigger secret", async () => {
+  const allowed = await authorizeDaftarSyncRequest({
+    authorizationHeader: "Bearer service-token",
+    providedSecret: "",
+    serviceCredential: "service-token",
+    expectedSecretHash: await sha256Hex("trigger-secret"),
+  });
+  assertEquals(allowed, true);
 });
 
-Deno.test("dedicated sync secret still works for cron/gateway", async () => {
-  // existing path remains accepted
+Deno.test("dedicated trigger secret still authorizes cron and gateway", async () => {
+  const allowed = await authorizeDaftarSyncRequest({
+    authorizationHeader: null,
+    providedSecret: "trigger-secret",
+    serviceCredential: "service-token",
+    expectedSecretHash: await sha256Hex("trigger-secret"),
+  });
+  assertEquals(allowed, true);
 });
 ```
+
+Change `daftar-sync/index.ts` to call `authorizeDaftarSyncRequest(...)` instead of duplicating credential logic.
 
 - [ ] **Step 6: Verify GREEN**
 
@@ -649,24 +728,147 @@ Create a second Supabase client using `SUPABASE_ANON_KEY` plus the original user
 The first implementation must support:
 
 ```ts
+const DEBT_SELECT = `
+  *,
+  customer_expand:profiles!debts_customer_id_fkey(*),
+  debt_creator_expand:profiles!debts_created_by_fkey(*)
+`;
+
+const PAYMENT_SELECT = `
+  *,
+  debt_expand:debts!payments_debt_id_fkey(
+    *,
+    customer_expand:profiles!debts_customer_id_fkey(*),
+    debt_creator_expand:profiles!debts_created_by_fkey(*)
+  ),
+  creator_expand:profiles!payments_created_by_fkey(*)
+`;
+
 switch (operation) {
   case "customer_directory":
-    return userClient.rpc("get_customer_directory_page", mappedParams);
+    return unwrap(await userClient.rpc("get_customer_directory_page", {
+      p_search: stringParam(params, "search", ""),
+      p_limit: intParam(params, "limit", 60, 1, 100),
+      ...directoryCursorParams(params["cursor"]),
+    }));
+
   case "customer_finance_snapshot":
-    return userClient.rpc("get_customer_finance_snapshot", mappedParams);
+    return unwrap(await userClient.rpc("get_customer_finance_snapshot", {
+      p_customer_id: uuidParam(params, "customer_id"),
+    }));
+
   case "customer_timeline":
-    return userClient.rpc("get_customer_financial_timeline_page", mappedParams);
+    return unwrap(await userClient.rpc("get_customer_financial_timeline_page", {
+      p_customer_id: uuidParam(params, "customer_id"),
+      p_limit: intParam(params, "limit", 50, 1, 100),
+      ...timelineCursorParams(params["cursor"]),
+    }));
+
   case "customer_debts_page":
-    return userClient.rpc("get_customer_debts_page", mappedParams);
+    return unwrap(await userClient.rpc("get_customer_debts_page", {
+      p_customer_id: uuidParam(params, "customer_id"),
+      p_status: nullableStringParam(params, "status"),
+      p_page: intParam(params, "page", 1, 1, 1000000),
+      p_limit: intParam(params, "limit", 20, 1, 100),
+    }));
+
+  case "debt_detail": {
+    const debtId = uuidParam(params, "debt_id");
+    return unwrapOne(await userClient
+      .from("debts")
+      .select(DEBT_SELECT)
+      .eq("id", debtId)
+      .single());
+  }
+
+  case "debt_payments": {
+    const debtId = uuidParam(params, "debt_id");
+    return unwrap(await userClient
+      .from("payments")
+      .select(PAYMENT_SELECT)
+      .eq("debt_id", debtId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(0, 499));
+  }
+
+  case "customer_all_debts":
+    return readAllPages(async (from, to) =>
+      unwrap(await userClient
+        .from("debts")
+        .select(DEBT_SELECT)
+        .eq("customer_id", uuidParam(params, "customer_id"))
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to))
+    );
+
   case "admin_dashboard":
-    return userClient.rpc("get_admin_dashboard_snapshot");
-  // debt_detail, debt_payments, customer_all_debts,
-  // admin_all_debts and employee_stats use fixed PostgREST queries
-  // matching PBService's existing fields/order/pagination.
+    return unwrap(await userClient.rpc("get_admin_dashboard_snapshot"));
+
+  case "admin_all_debts": {
+    const requestedAdmin = uuidParam(params, "admin_id");
+    if (requestedAdmin !== viewer.tenantId) {
+      throw new LiveReadError({ kind: "authorization" }, "wrong_tenant");
+    }
+    return readAdminDebts(userClient, requestedAdmin, {
+      from: nullableIsoParam(params, "from"),
+      to: nullableIsoParam(params, "to"),
+    });
+  }
+
+  case "employee_stats": {
+    const employeeId = uuidParam(params, "employee_id");
+    await assertEmployeeVisibleToViewer(userClient, viewer, employeeId);
+    return readEmployeeStats(userClient, employeeId);
+  }
 }
 ```
 
-For fixed PostgREST operations, reproduce the existing PBService select/order/filter semantics exactly; do not expose caller-provided table names, select clauses, or filters.
+Implement the helpers in the same file with fixed behavior:
+
+```ts
+async function readAllPages(
+  page: (from: number, to: number) => Promise<unknown[]>,
+): Promise<unknown[]> {
+  const all: unknown[] = [];
+  const size = 500;
+  for (let offset = 0;; offset += size) {
+    const rows = await page(offset, offset + size - 1);
+    all.push(...rows);
+    if (rows.length < size) return all;
+  }
+}
+
+async function readEmployeeStats(userClient: any, employeeId: string) {
+  const [debts, payments] = await Promise.all([
+    readAllPages((from, to) =>
+      unwrap(userClient.from("debts")
+        .select("amount")
+        .eq("created_by", employeeId)
+        .is("deleted_at", null)
+        .range(from, to))),
+    readAllPages((from, to) =>
+      unwrap(userClient.from("payments")
+        .select("amount")
+        .eq("created_by", employeeId)
+        .range(from, to))),
+  ]);
+  return {
+    total_debts_created: debts.reduce(
+      (sum, row: any) => sum + Number(row.amount ?? 0),
+      0,
+    ),
+    total_payments_collected: payments.reduce(
+      (sum, row: any) => sum + Number(row.amount ?? 0),
+      0,
+    ),
+  };
+}
+```
+
+`readAdminDebts` must first page tenant customer IDs from `profiles` in batches of 500, then query `debts` in customer-ID chunks of 50 with the fixed `DEBT_SELECT`, optional `created_at >= from`, optional `created_at < to`, and page size 500; sort the final array by `created_at DESC, id DESC`. No caller-provided table name, select clause, filter expression, or tenant ID is accepted.
 
 - [ ] **Step 5: Preserve normalized payment allocations**
 
@@ -1296,7 +1498,28 @@ Verify telemetry reports `result_source = live` under healthy Daftar conditions.
 
 - [ ] **Step 7: Prove transient live failure falls back without source-of-truth cutover**
 
-Use a controlled test dependency in the deployed runtime test or a staging invocation that forces a timeout/503 for the live probe while leaving the mirror available.
+Use the deterministic `runtime_test.ts` dependency-injection path; do **not** mutate the production Daftar URL or production failure counters. Run this exact integration test after deployment code is finalized:
+
+```ts
+Deno.test("live timeout serves mirror and never activates primary mode", async () => {
+  const state = { syncMode: "mirror", primaryActivated: false };
+  const response = await runFixture({
+    liveFailure: { kind: "timeout" },
+    mirrorData: { items: [{ id: "normalized-zhirox-id" }] },
+    sourceState: state,
+  });
+
+  assertEquals(response.status, 200);
+  const body = await response.json();
+  assertEquals(body.source, "mirror");
+  assertEquals(body.fallback_reason, "source_timeout");
+  assertEquals(body.data.items[0].id, "normalized-zhirox-id");
+  assertEquals(state.syncMode, "mirror");
+  assertEquals(state.primaryActivated, false);
+});
+```
+
+Then query production state immediately after the test suite to prove no deployment step changed source-of-truth state.
 
 Required response:
 
