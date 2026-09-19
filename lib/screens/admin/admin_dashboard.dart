@@ -408,6 +408,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final filteredRecentActivity = _recentActivityFilter == 'payment'
         ? paymentActivity
         : debtActivity;
+    final debtActivityTotals = _sumRecentActivityByCurrency(debtActivity);
+    final paymentActivityTotals = _sumRecentActivityByCurrency(paymentActivity);
     final totalCustomers = (_stats['totalCustomers'] ?? 0).toDouble();
     final totalDebt = (_stats['totalDebt'] ?? 0).toDouble();
     final totalRemaining = (_stats['totalRemaining'] ?? 0).toDouble();
@@ -722,6 +724,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   label: 'پارەدانەوەکان',
                   icon: Icons.payments_outlined,
                   count: paymentActivity.length,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildRecentActivityTotalCard(
+                  label: 'کۆی قەرزە تازەکان',
+                  icon: Icons.receipt_long_rounded,
+                  totals: debtActivityTotals,
+                  accent: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildRecentActivityTotalCard(
+                  label: 'کۆی پارەدانەوە تازەکان',
+                  icon: Icons.payments_rounded,
+                  totals: paymentActivityTotals,
+                  accent: Colors.green,
                 ),
               ),
             ],
@@ -1376,6 +1403,112 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Map<String, double> _sumRecentActivityByCurrency(
+    Iterable<RecordModel> activities,
+  ) {
+    final totals = <String, double>{'IQD': 0, 'USD': 0};
+    for (final activity in activities) {
+      final rawCurrency = activity.getStringValue('currency').trim().toUpperCase();
+      final currency = rawCurrency == 'USD' ? 'USD' : 'IQD';
+      totals[currency] = (totals[currency] ?? 0) + activity.getDoubleValue('amount');
+    }
+    return totals;
+  }
+
+  Widget _buildRecentActivityTotalCard({
+    required String label,
+    required IconData icon,
+    required Map<String, double> totals,
+    required Color accent,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final iqd = totals['IQD'] ?? 0;
+    final usd = totals['USD'] ?? 0;
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 92),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? AppDarkColors.cardBorder
+              : const Color(0xFFE9EDF3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.09),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 16, color: accent),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    height: 1.25,
+                    fontWeight: FontWeight.w800,
+                    color: isDark
+                        ? AppDarkColors.textPrimary
+                        : const Color(0xFF344054),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Text(
+            AppHelpers.formatCurrencyWithType(
+              iqd,
+              'IQD',
+              showConversion: false,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textDirection: TextDirection.ltr,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: accent,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            AppHelpers.formatCurrencyWithType(
+              usd,
+              'USD',
+              showConversion: false,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textDirection: TextDirection.ltr,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF667085),
+            ),
+          ),
+        ],
       ),
     );
   }
