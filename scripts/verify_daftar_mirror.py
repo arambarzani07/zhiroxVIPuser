@@ -12,7 +12,7 @@ assert 'daftar_mirror_transactions' in migration
 assert 'mirror_bootstrapped_at' in migration
 assert "sync_mode text not null default 'mirror'" in migration
 assert 'get_my_daftar_mirror_status' in migration
-assert 'grant execute on function public.get_my_daftar_mirror_status() to authenticated' in migration
+assert 'grant execute on function public.get_my_daftar_mirror_status()' in migration and 'to authenticated;' in migration
 
 assert 'mirror_bootstrapped_at' in worker
 assert 'mirrorRows(' in worker
