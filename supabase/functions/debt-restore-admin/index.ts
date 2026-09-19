@@ -40,8 +40,8 @@ export default {
     }
 
     const url = Deno.env.get("SUPABASE_URL") ?? "";
-    const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
-      envJsonKey("SUPABASE_SECRET_KEYS");
+    const secret = envJsonKey("SUPABASE_SECRET_KEYS") ??
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !secret) return json({ error: 'server_not_configured' }, 500);
 
     const authHeader = req.headers.get("Authorization") ?? "";
