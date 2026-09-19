@@ -82,6 +82,9 @@ jobs:
       - name: Verify admin dashboard recent activity
         run: python3 scripts/verify_admin_dashboard_activity.py
 
+      - name: Verify debt restore admin
+        run: python3 scripts/verify_debt_restore_admin.py
+
       - name: Verify customer QR web push policy
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_customer_push.py
