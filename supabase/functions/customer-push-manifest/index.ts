@@ -16,6 +16,14 @@ export function manifestResponse(request: Request): Response {
     display: "standalone",
     theme_color: "#f4f6fa",
     background_color: "#f4f6fa",
+    icons: [
+      {
+        src: `${CUSTOMER_PUSH_STATIC_URL}apple-touch-icon.png`,
+        sizes: "1024x1024",
+        type: "image/png",
+        purpose: "any maskable",
+      },
+    ],
     lang: "ku",
     dir: "rtl",
   }), {
