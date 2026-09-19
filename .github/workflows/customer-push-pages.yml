@@ -41,4 +41,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# Fresh run to publish the app-like customer portal.
+# Fresh run to publish persistent customer push activation.
