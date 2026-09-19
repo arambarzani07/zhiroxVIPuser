@@ -22,7 +22,7 @@ assert 'source.mirror_bootstrapped_at' in worker
 assert 'contactsFetch = await fetchRows<LegacyContact>' in worker
 
 assert 'mirror_bootstrapped_at' in gateway
-assert '!source.mirror_bootstrapped_at' in gateway
+assert 'source.mirror_bootstrapped_at && !contactsProbe.changed && !transactionsProbe.changed' in gateway
 assert 'source_not_modified' in gateway
 
 assert 'Verify Daftar raw mirror' in workflow
