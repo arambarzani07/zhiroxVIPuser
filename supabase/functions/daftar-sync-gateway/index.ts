@@ -148,6 +148,7 @@ async function probeEndpoint(
 }
 
 async function markUpToDate(admin: any, sourceId: string) {
+  const startedAt = Date.now();
   const finishedAt = new Date().toISOString();
   let lastError: any = null;
   for (let attempt = 1; attempt <= 4; attempt++) {
@@ -159,6 +160,12 @@ async function markUpToDate(admin: any, sourceId: string) {
         last_success_at: finishedAt,
         last_status: "success",
         last_error: null,
+        consecutive_failures: 0,
+        next_retry_at: null,
+        circuit_open_until: null,
+        last_heartbeat_at: finishedAt,
+        last_duration_ms: Date.now() - startedAt,
+        health_status: "healthy",
         last_result: {
           gateway: true,
           up_to_date: true,
@@ -196,9 +203,10 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  let sourceId = "";
   try {
     const body = await req.json().catch(() => ({}));
-    const sourceId = String(body?.source_id ?? "").trim();
+    sourceId = String(body?.source_id ?? "").trim();
     const providedSecret = req.headers.get("x-daftar-sync-secret") ?? "";
     if (!sourceId || !providedSecret) return json({ error: "unauthorized" }, 401);
 
@@ -234,15 +242,27 @@ Deno.serve(async (req) => {
       });
     }
 
-    const response = await fetch(`${supabaseUrl}/functions/v1/daftar-sync`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-daftar-sync-secret": providedSecret,
-      },
-      body: JSON.stringify({ source_id: source.id }),
-      signal: AbortSignal.timeout(120_000),
-    });
+    let response: Response | null = null;
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        response = await fetch(`${supabaseUrl}/functions/v1/daftar-sync`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-daftar-sync-secret": providedSecret,
+          },
+          body: JSON.stringify({ source_id: source.id }),
+          signal: AbortSignal.timeout(120_000),
+        });
+        if (response.ok || !isTransientHttpStatus(response.status)) break;
+        lastError = new Error(`worker_http_${response.status}`);
+      } catch (error) {
+        lastError = error;
+      }
+      if (attempt < 3) await delay(attempt * attempt * 750 + Math.floor(Math.random() * 250));
+    }
+    if (!response) throw lastError instanceof Error ? lastError : new Error("worker_unreachable");
 
     const responseText = await response.text();
     return new Response(responseText, {
@@ -254,6 +274,17 @@ Deno.serve(async (req) => {
     const message = error instanceof Error
       ? error.message
       : String((error as { message?: unknown } | null)?.message ?? "internal_error");
+    if (sourceId) {
+      const { error: failureError } = await admin.rpc("record_daftar_sync_failure", {
+        p_source_id: sourceId,
+        p_error_code: message.split(":")[0] || "gateway_failed",
+        p_error_detail: message,
+        p_entity_kind: "gateway",
+        p_entity_source_id: null,
+        p_payload: { gateway: true },
+      });
+      if (failureError) console.error("gateway_failure_record_failed", failureError);
+    }
     return json({ error: message }, 500);
   }
 });

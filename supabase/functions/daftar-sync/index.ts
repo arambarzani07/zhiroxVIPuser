@@ -137,13 +137,29 @@ async function fetchRows<T>(
 ): Promise<SourceFetch<T>> {
   const endpoint = new URL(url);
   endpoint.searchParams.set("user_id", String(legacyUserId));
-  const response = await fetch(endpoint, {
-    headers: {
-      Accept: "application/json",
-      ...(etag ? { "If-None-Match": etag } : {}),
-    },
-    signal: AbortSignal.timeout(120_000),
-  });
+  let response: Response | null = null;
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      response = await fetch(endpoint, {
+        headers: {
+          Accept: "application/json",
+          ...(etag ? { "If-None-Match": etag } : {}),
+        },
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (response.ok || response.status === 304) break;
+      if (![408, 425, 429, 500, 502, 503, 504].includes(response.status)) break;
+      lastError = new Error(`source_http_${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < 4) {
+      const jitter = crypto.getRandomValues(new Uint16Array(1))[0] % 300;
+      await new Promise((resolve) => setTimeout(resolve, attempt * attempt * 500 + jitter));
+    }
+  }
+  if (!response) throw lastError instanceof Error ? lastError : new Error("source_unreachable");
   if (response.status === 304) {
     return { rows: null, etag: response.headers.get("etag") ?? etag ?? null, notModified: true };
   }
@@ -344,6 +360,7 @@ Deno.serve(async (req) => {
 
   let source: SyncSource | null = null;
   let runId: string | null = null;
+  const startedAt = Date.now();
   const counters = {
     fetched_contacts: 0,
     fetched_transactions: 0,
@@ -649,6 +666,12 @@ Deno.serve(async (req) => {
       last_status: "success",
       last_error: null,
       last_result: result,
+      consecutive_failures: 0,
+      next_retry_at: null,
+      circuit_open_until: null,
+      last_heartbeat_at: finishedAt,
+      last_duration_ms: Date.now() - startedAt,
+      health_status: "healthy",
       updated_at: finishedAt,
     }).eq("id", source.id);
     if (runId) await admin.from("daftar_sync_runs").update({
@@ -663,13 +686,22 @@ Deno.serve(async (req) => {
       ? error.message
       : String((error as { message?: unknown } | null)?.message ?? "internal_error");
     const finishedAt = new Date().toISOString();
-    if (source) await admin.from("daftar_sync_sources").update({
-      lease_until: null,
-      last_status: "failed",
-      last_error: message,
-      last_result: counters,
-      updated_at: finishedAt,
-    }).eq("id", source.id);
+    if (source) {
+      const parts = message.split(":");
+      const errorCode = parts.shift() || "sync_failed";
+      const sourceEntityId = parts.length > 0 ? parts[0] : null;
+      const { error: failureError } = await admin.rpc("record_daftar_sync_failure", {
+        p_source_id: source.id,
+        p_error_code: errorCode,
+        p_error_detail: message,
+        p_entity_kind: errorCode.includes("contact") || errorCode.includes("customer")
+          ? "customer"
+          : errorCode.includes("payment") ? "payment" : errorCode.includes("debt") ? "debt" : "sync",
+        p_entity_source_id: sourceEntityId,
+        p_payload: { counters, duration_ms: Date.now() - startedAt },
+      });
+      if (failureError) console.error("failure_record_failed", failureError);
+    }
     if (runId) await admin.from("daftar_sync_runs").update({
       status: "failed",
       ...counters,
