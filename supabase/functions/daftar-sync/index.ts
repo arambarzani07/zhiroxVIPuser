@@ -725,6 +725,14 @@ Deno.serve(async (req) => {
       throw new Error(`reconciliation_failed:${reconciliationError.message}`);
     }
 
+    const { data: cutoverRehearsal, error: cutoverRehearsalError } = await admin.rpc(
+      "run_daftar_cutover_rehearsal",
+      { p_source_id: source.id },
+    );
+    if (cutoverRehearsalError) {
+      throw new Error(`cutover_rehearsal_failed:${cutoverRehearsalError.message}`);
+    }
+
     const result = {
       ...counters,
       processed_contacts: newContacts.length,
@@ -735,6 +743,7 @@ Deno.serve(async (req) => {
       mirror_contacts: contacts.length,
       mirror_transactions: transactions.length,
       reconciliation,
+      cutover_rehearsal: cutoverRehearsal,
     };
 
     const finishedAt = new Date().toISOString();
