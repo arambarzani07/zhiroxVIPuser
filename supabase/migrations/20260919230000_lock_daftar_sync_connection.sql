@@ -80,9 +80,12 @@ begin
     end if;
   end if;
 
-  return case when tg_op = 'DELETE' then old else new end;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
 end;
-$$;
+$;
 
 revoke all on function public.prevent_daftar_sync_vault_breakage()
   from public, anon, authenticated;
