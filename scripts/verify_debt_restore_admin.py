@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 edge = (ROOT / 'supabase/functions/debt-restore-admin/index.ts').read_text(errors='ignore')
 config = (ROOT / 'supabase/config.toml').read_text(errors='ignore')
+screen = (ROOT / 'lib/screens/admin/debt_restore_screen.dart').read_text(errors='ignore')
 
 service = 'Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")'
 bundle = 'envJsonKey("SUPABASE_SECRET_KEYS")'
@@ -21,5 +22,9 @@ section = "[functions.debt-restore-admin]\nverify_jwt = false"
 assert section in config, (
     "debt restore admin must disable the platform JWT gate because it performs authenticated user validation internally"
 )
+
+assert "currentSession" in screen, "restore screen must read the active Supabase session before invoking the gateway"
+assert "refreshSession()" in screen, "restore screen must refresh an expired session before invoking the gateway"
+assert "'Authorization': 'Bearer ${session.accessToken}'" in screen, "restore calls must send the authenticated user JWT explicitly"
 
 print("debt restore admin configuration verified")
