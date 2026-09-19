@@ -231,7 +231,7 @@ assert 'QR ـێکی نوێ دروست بکە و دووبارە هەوڵ بدە' 
 assert 'ئەم لینکە بەردەست نییە یان ڕاگیراوە.' in app_js, 'PWA must describe unavailable links as revoked/unavailable'
 assert 'URLSearchParams(' in app_js and "currentUrl.hash" in app_js, 'PWA must recover the QR bearer token from the URL fragment'
 assert "window.location.search || window.location.hash" in app_js, 'PWA must scrub query/fragment credentials after subscription'
-configure_start = app_js.index('function configureNotificationExperience')
+assert 'function persistedPushCredentials()' in app_js, 'installed PWA must recognize its saved push session'\nresolve_start = app_js.index('function resolveLinkToken')\nresolve_end = app_js.index('let activeToken', resolve_start)\nresolve_block = app_js[resolve_start:resolve_end]\nassert 'persistedPushCredentials()' in resolve_block, 'saved device credentials must be checked before reusing the QR token'\nassert resolve_block.index('persistedPushCredentials()') < resolve_block.index("currentUrl.searchParams.get('token')"), 'saved push session must take priority over the permanent QR token on app relaunch'\nassert 'localStorage.removeItem(LINK_TOKEN_KEY)' in resolve_block, 'relaunch must discard stale bearer-token state once a device session exists'\nconfigure_start = app_js.index('function configureNotificationExperience')
 configure_end = app_js.index('async function initialize', configure_start)
 configure_block = app_js[configure_start:configure_end]
 assert configure_block.index('isIos() && !isStandalone()') < configure_block.index('!supportsPush()'), 'iOS Safari must show Add to Home Screen guidance before generic push unsupported state'
