@@ -868,7 +868,228 @@ async function readEmployeeStats(userClient: any, employeeId: string) {
 }
 ```
 
-`readAdminDebts` must first page tenant customer IDs from `profiles` in batches of 500, then query `debts` in customer-ID chunks of 50 with the fixed `DEBT_SELECT`, optional `created_at >= from`, optional `created_at < to`, and page size 500; sort the final array by `created_at DESC, id DESC`. No caller-provided table name, select clause, filter expression, or tenant ID is accepted.
+Define every helper used above in `local_read.ts`; do not leave parser behavior implicit:
+
+```ts
+function uuidParam(params: Record<string, unknown>, key: string): string {
+  const value = String(params[key] ?? "").trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new LiveReadError({ kind: "unsupported" }, `invalid_${key}`);
+  }
+  return value;
+}
+
+function stringParam(
+  params: Record<string, unknown>,
+  key: string,
+  fallback = "",
+): string {
+  return params[key] == null ? fallback : String(params[key]).trim();
+}
+
+function nullableStringParam(
+  params: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value = stringParam(params, key, "");
+  return value.length === 0 ? null : value;
+}
+
+function intParam(
+  params: Record<string, unknown>,
+  key: string,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const parsed = Number.parseInt(String(params[key] ?? fallback), 10);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    throw new LiveReadError({ kind: "unsupported" }, `invalid_${key}`);
+  }
+  return parsed;
+}
+
+function nullableIsoParam(
+  params: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value = nullableStringParam(params, key);
+  if (value == null) return null;
+  if (!Number.isFinite(Date.parse(value))) {
+    throw new LiveReadError({ kind: "unsupported" }, `invalid_${key}`);
+  }
+  return new Date(value).toISOString();
+}
+
+function directoryCursorParams(raw: unknown): Record<string, unknown> {
+  if (raw == null) return {};
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new LiveReadError({ kind: "unsupported" }, "invalid_cursor");
+  }
+  const cursor = raw as Record<string, unknown>;
+  const createdAt = nullableIsoParam(cursor, "created_at");
+  const id = uuidParam(cursor, "id");
+  return {
+    p_cursor_created_at: createdAt,
+    p_cursor_id: id,
+  };
+}
+
+function timelineCursorParams(raw: unknown): Record<string, unknown> {
+  if (raw == null) return {};
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new LiveReadError({ kind: "unsupported" }, "invalid_cursor");
+  }
+  const cursor = raw as Record<string, unknown>;
+  const at = nullableIsoParam(cursor, "at");
+  const kind = intParam(cursor, "kind_rank", 0, 1, 4);
+  const id = uuidParam(cursor, "id");
+  return {
+    p_cursor_at: at,
+    p_cursor_kind: kind,
+    p_cursor_id: id,
+  };
+}
+
+function unwrap<T>(result: {
+  data: T | null;
+  error: { message?: string } | null;
+}): T {
+  if (result.error) {
+    throw new Error(result.error.message ?? "local_read_failed");
+  }
+  if (result.data == null) {
+    throw new Error("local_read_empty");
+  }
+  return result.data;
+}
+
+function unwrapOne<T>(result: {
+  data: T | null;
+  error: { message?: string } | null;
+}): T {
+  return unwrap(result);
+}
+```
+
+Implement `assertEmployeeVisibleToViewer` exactly as a tenant/role check:
+
+```ts
+async function assertEmployeeVisibleToViewer(
+  userClient: any,
+  viewer: { id: string; role: string; tenantId: string },
+  employeeId: string,
+): Promise<void> {
+  if (viewer.role === "customer") {
+    throw new LiveReadError({ kind: "authorization" }, "employee_stats_forbidden");
+  }
+  if (viewer.role === "employee" && viewer.id !== employeeId) {
+    throw new LiveReadError({ kind: "authorization" }, "employee_stats_forbidden");
+  }
+
+  const employee = unwrapOne(await userClient
+    .from("profiles")
+    .select("id, admin_id, role")
+    .eq("id", employeeId)
+    .single());
+
+  if (
+    String((employee as any).role) !== "employee" ||
+    String((employee as any).admin_id) !== viewer.tenantId
+  ) {
+    throw new LiveReadError({ kind: "authorization" }, "employee_stats_forbidden");
+  }
+}
+```
+
+Implement `readAdminDebts` with fixed tenant-scoped paging:
+
+```ts
+async function readAdminDebts(
+  userClient: any,
+  adminId: string,
+  range: { from: string | null; to: string | null },
+): Promise<unknown[]> {
+  const customerIds: string[] = [];
+  const profilePageSize = 500;
+
+  for (let offset = 0;; offset += profilePageSize) {
+    const rows = unwrap(await userClient
+      .from("profiles")
+      .select("id")
+      .eq("admin_id", adminId)
+      .eq("role", "customer")
+      .order("id", { ascending: true })
+      .range(offset, offset + profilePageSize - 1));
+
+    for (const row of rows as any[]) customerIds.push(String(row.id));
+    if ((rows as any[]).length < profilePageSize) break;
+  }
+
+  const all: any[] = [];
+  for (let start = 0; start < customerIds.length; start += 50) {
+    const ids = customerIds.slice(start, start + 50);
+    for (let offset = 0;; offset += 500) {
+      let query = userClient
+        .from("debts")
+        .select(DEBT_SELECT)
+        .in("customer_id", ids)
+        .is("deleted_at", null);
+
+      if (range.from) query = query.gte("created_at", range.from);
+      if (range.to) query = query.lt("created_at", range.to);
+
+      const rows = unwrap(await query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + 499));
+
+      all.push(...(rows as any[]));
+      if ((rows as any[]).length < 500) break;
+    }
+  }
+
+  all.sort((left, right) => {
+    const byTime = String(right.created_at).localeCompare(String(left.created_at));
+    return byTime !== 0
+      ? byTime
+      : String(right.id).localeCompare(String(left.id));
+  });
+  return all;
+}
+```
+
+Fix `readEmployeeStats` so every PostgREST request is awaited before `unwrap`:
+
+```ts
+async function readEmployeeStats(userClient: any, employeeId: string) {
+  const [debts, payments] = await Promise.all([
+    readAllPages(async (from, to) =>
+      unwrap(await userClient.from("debts")
+        .select("amount")
+        .eq("created_by", employeeId)
+        .is("deleted_at", null)
+        .range(from, to))),
+    readAllPages(async (from, to) =>
+      unwrap(await userClient.from("payments")
+        .select("amount")
+        .eq("created_by", employeeId)
+        .range(from, to))),
+  ]);
+  return {
+    total_debts_created: debts.reduce(
+      (sum, row: any) => sum + Number(row.amount ?? 0),
+      0,
+    ),
+    total_payments_collected: payments.reduce(
+      (sum, row: any) => sum + Number(row.amount ?? 0),
+      0,
+    ),
+  };
+}
+```
+
+No caller-provided table name, select clause, filter expression, or tenant ID is accepted.
 
 - [ ] **Step 5: Preserve normalized payment allocations**
 
