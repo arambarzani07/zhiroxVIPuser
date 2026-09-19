@@ -43,11 +43,12 @@ class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
       : const [];
 
   Future<void> _load({bool silent = false}) async {
-    if (!silent && mounted)
+    if (!silent && mounted) {
       setState(() {
         _loading = true;
         _error = null;
       });
+    }
     try {
       await PBService.ensureInitialized();
       final raw = await PBService.client.rpc('get_my_daftar_sync_dashboard');
