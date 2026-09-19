@@ -290,6 +290,16 @@ export type LiveFailure =
   | { kind: "unsupported" }
   | { kind: "integrity" };
 
+export class LiveReadError extends Error {
+  constructor(
+    readonly failure: LiveFailure,
+    message: string,
+  ) {
+    super(message);
+    this.name = "LiveReadError";
+  }
+}
+
 export type LiveReadEnvelope<T> = {
   ok: true;
   source: ReadSource;
@@ -358,9 +368,17 @@ git commit -m "feat(sync): define live-read fallback policy"
 
 - [ ] **Step 1: Write failing freshness tests**
 
-Use dependency injection for `fetch`, delay, and worker invocation:
+Use dependency injection for `fetch`, delay, and worker invocation. Define the fixture in the test file:
 
 ```ts
+const sourceFixture = {
+  id: "11111111-1111-4111-8111-111111111111",
+  legacy_user_id: 28,
+  api_base_url: "https://daftar-source.test/api/v1",
+  contacts_etag: '"contacts-v1"',
+  transactions_etag: '"transactions-v1"',
+};
+
 Deno.test("304 on both probes validates live without worker sync", async () => {
   const calls: string[] = [];
   const result = await ensureDaftarFresh(sourceFixture, {
@@ -625,32 +643,124 @@ git commit -m "feat(sync): validate and normalize live Daftar reads"
 
 - [ ] **Step 1: Write failing runtime authorization tests**
 
-Test these exact behaviors with injected fake clients:
+Define a reusable test dependency builder in `runtime_test.ts`:
+
+```ts
+function runtimeDeps(overrides: Partial<RuntimeDeps> = {}): RuntimeDeps {
+  return {
+    verifyUser: async () => ({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    }),
+    loadViewer: async () => ({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      role: "admin",
+      tenantId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    }),
+    loadSource: async () => ({
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      legacy_user_id: 28,
+      live_read_mode: "live",
+      live_read_fallback_enabled: true,
+      live_read_stale_after_seconds: 300,
+      last_success_at: "2026-09-20T00:00:00Z",
+      mirror_last_full_at: "2026-09-20T00:00:00Z",
+    }),
+    ensureFresh: async () => ({
+      liveStatus: 304,
+      liveLatencyMs: 10,
+      changed: false,
+      validatedAt: "2026-09-20T00:01:00Z",
+    }),
+    localRead: async () => ({ items: [] }),
+    recordEvent: async () => {},
+    now: () => Date.parse("2026-09-20T00:01:00Z"),
+    ...overrides,
+  };
+}
+
+async function responseJson(response: Response) {
+  return await response.json() as Record<string, any>;
+}
+
+function authenticatedReadRequest(
+  operation: string,
+  params: Record<string, unknown>,
+): Request {
+  return new Request("https://example.test", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer valid-user-token",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ operation, params }),
+  });
+}
+```
+
+`runtime.ts` must export the dependency contract used by production and tests:
+
+```ts
+export type RuntimeDeps = {
+  verifyUser: (token: string) => Promise<{ id: string }>;
+  loadViewer: (userId: string) => Promise<{
+    id: string;
+    role: "admin" | "employee" | "customer";
+    tenantId: string;
+  }>;
+  loadSource: (tenantId: string) => Promise<Record<string, any> | null>;
+  ensureFresh: (source: Record<string, any>) => Promise<{
+    liveStatus: number;
+    liveLatencyMs: number;
+    changed: boolean;
+    validatedAt: string;
+  }>;
+  localRead: (
+    operation: DaftarLiveReadOperation,
+    params: Record<string, unknown>,
+    viewer: { id: string; role: string; tenantId: string },
+  ) => Promise<unknown>;
+  recordEvent: (event: Record<string, unknown>) => Promise<void>;
+  now: () => number;
+};
+```
+
+Test these exact behaviors with injected dependencies:
 
 ```ts
 Deno.test("rejects missing bearer", async () => {
   const response = await handleDaftarLiveRead(
     new Request("https://example.test", { method: "POST" }),
-    deps,
+    runtimeDeps(),
   );
   assertEquals(response.status, 401);
 });
 
 Deno.test("rejects a customer reading another customer", async () => {
-  const response = await runAuthorizedRequest({
-    viewer: customerViewer("customer-a"),
-    operation: "customer_finance_snapshot",
-    params: { customer_id: "customer-b" },
+  const req = new Request("https://example.test", {
+    method: "POST",
+    headers: { authorization: "Bearer valid-user-token" },
+    body: JSON.stringify({
+      operation: "customer_finance_snapshot",
+      params: { customer_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+    }),
   });
+  const response = await handleDaftarLiveRead(req, runtimeDeps({
+    loadViewer: async () => ({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      role: "customer",
+      tenantId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    }),
+  }));
   assertEquals(response.status, 403);
 });
 
 Deno.test("rejects unsupported operation without fallback", async () => {
-  const response = await runAuthorizedRequest({
-    viewer: adminViewer,
-    operation: "drop_everything",
-    params: {},
+  const req = new Request("https://example.test", {
+    method: "POST",
+    headers: { authorization: "Bearer valid-user-token" },
+    body: JSON.stringify({ operation: "drop_everything", params: {} }),
   });
+  const response = await handleDaftarLiveRead(req, runtimeDeps());
   assertEquals(response.status, 400);
 });
 ```
@@ -659,32 +769,46 @@ Deno.test("rejects unsupported operation without fallback", async () => {
 
 ```ts
 Deno.test("live validation success returns local normalized DTO as source live", async () => {
-  const response = await runFixture({
-    freshness: { kind: "success", changed: false },
-    localData: { total_remaining_iqd: 125000 },
+  const req = authenticatedReadRequest("customer_finance_snapshot", {
+    customer_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   });
-  assertEquals(response.body.source, "live");
-  assertEquals(response.body.data.total_remaining_iqd, 125000);
-  assertEquals(response.body.fallback_reason, null);
+  const response = await handleDaftarLiveRead(req, runtimeDeps({
+    localRead: async () => ({ total_remaining_iqd: 125000 }),
+  }));
+  const body = await responseJson(response);
+  assertEquals(body.source, "live");
+  assertEquals(body.data.total_remaining_iqd, 125000);
+  assertEquals(body.fallback_reason, null);
 });
 
 Deno.test("timeout falls back to mirror with same DTO shape", async () => {
-  const response = await runFixture({
-    freshness: { kind: "failure", failure: { kind: "timeout" } },
-    localData: { total_remaining_iqd: 125000 },
+  const req = authenticatedReadRequest("customer_finance_snapshot", {
+    customer_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   });
-  assertEquals(response.body.source, "mirror");
-  assertEquals(response.body.data.total_remaining_iqd, 125000);
-  assertEquals(response.body.fallback_reason, "source_timeout");
+  const response = await handleDaftarLiveRead(req, runtimeDeps({
+    ensureFresh: async () => {
+      throw new LiveReadError({ kind: "timeout" }, "source_timeout");
+    },
+    localRead: async () => ({ total_remaining_iqd: 125000 }),
+  }));
+  const body = await responseJson(response);
+  assertEquals(body.source, "mirror");
+  assertEquals(body.data.total_remaining_iqd, 125000);
+  assertEquals(body.fallback_reason, "source_timeout");
 });
 
 Deno.test("401 from Daftar does not fallback", async () => {
-  const response = await runFixture({
-    freshness: { kind: "failure", failure: { kind: "http", status: 401 } },
-    localData: { total_remaining_iqd: 125000 },
+  const req = authenticatedReadRequest("customer_finance_snapshot", {
+    customer_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   });
+  const response = await handleDaftarLiveRead(req, runtimeDeps({
+    ensureFresh: async () => {
+      throw new LiveReadError({ kind: "http", status: 401 }, "source_http_401");
+    },
+  }));
+  const body = await responseJson(response);
   assertEquals(response.status, 502);
-  assertEquals(response.body.error, "source_http_401");
+  assertEquals(body.error, "source_http_401");
 });
 ```
 
@@ -1099,15 +1223,41 @@ Add the explicit test:
 
 ```ts
 Deno.test("one Daftar payment can materialize as multiple ZHIROX allocations", async () => {
-  const data = await localReadFixture("debt_payments", {
-    normalizedPayments: [
-      { id: "p1", amount: 60000 },
-      { id: "p2", amount: 40000 },
-    ],
-  });
+  const fakeClient = paymentQueryClient([
+    { id: "p1", amount: 60000 },
+    { id: "p2", amount: 40000 },
+  ]);
+  const data = await executeLocalRead(
+    fakeClient,
+    "debt_payments",
+    { debt_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" },
+    {
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      role: "admin",
+      tenantId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  ) as Array<{ id: string; amount: number }>;
+
   assertEquals(data.length, 2);
   assertEquals(data.reduce((sum, row) => sum + row.amount, 0), 100000);
 });
+
+function paymentQueryClient(rows: Array<Record<string, unknown>>) {
+  const terminal = {
+    order: () => terminal,
+    range: async () => ({ data: rows, error: null }),
+  };
+  return {
+    from: (table: string) => {
+      assertEquals(table, "payments");
+      return {
+        select: () => ({
+          eq: () => terminal,
+        }),
+      };
+    },
+  };
+}
 ```
 
 - [ ] **Step 6: Implement fallback and telemetry**
