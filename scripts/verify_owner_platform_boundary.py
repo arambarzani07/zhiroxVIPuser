@@ -13,6 +13,8 @@ readiness = Path('lib/screens/auth/owner_readiness_center_screen.dart').read_tex
 release_center = Path('lib/screens/auth/update_control_screen.dart').read_text()
 infrastructure = Path('lib/screens/auth/owner_infrastructure_center_screen.dart').read_text()
 policy_compliance = Path('lib/screens/auth/owner_policy_compliance_center_screen.dart').read_text()
+domain_center = Path('lib/screens/auth/owner_domain_center_screen.dart').read_text()
+domain_function = Path('supabase/functions/owner-domain-check/index.ts').read_text()
 recovery_function = Path('supabase/functions/owner-account-recovery/index.ts').read_text()
 service = Path('lib/services/pb_service.dart').read_text()
 auth_provider = Path('lib/providers/auth_provider.dart').read_text()
@@ -52,6 +54,9 @@ infrastructure_migration = Path(
 policy_compliance_migration = Path(
     'supabase/migrations/20260918235000_owner_policy_compliance_center.sql'
 ).read_text()
+domain_migration = Path(
+    'supabase/migrations/20260919080000_owner_domain_center.sql'
+).read_text()
 
 required = [
     'OwnerHealthCenterScreen',
@@ -66,6 +71,7 @@ required = [
     'UpdateControlScreen',
     'OwnerInfrastructureCenterScreen',
     'OwnerPolicyComplianceCenterScreen',
+    'OwnerDomainCenterScreen',
     'getOwnerHealthOverview',
     'getOwnerPlatformAuditPage',
     'getOwnerSubscriptionOverview',
@@ -101,6 +107,10 @@ required = [
     'getOwnerPolicyPage',
     'publishOwnerPolicyDocument',
     'setOwnerRetentionPolicy',
+    'getOwnerDomainOverview',
+    'getOwnerDomainPage',
+    'setOwnerTenantDomain',
+    'checkOwnerTenantDomain',
     '_enforceAdminDeviceAuthorization',
     '_startDeviceAuthorizationHeartbeat',
     'getOwnerEntitlementsPage',
@@ -150,6 +160,11 @@ required = [
     'set_system_owner_retention_policy',
     'get_platform_policy_state',
     'accept_platform_policy',
+    'get_system_owner_domain_overview',
+    'get_system_owner_domain_page',
+    'set_system_owner_tenant_domain',
+    'get_system_owner_domain_check_target',
+    'record_system_owner_domain_check',
     'system_owner_required',
 ]
 blob = '\n'.join([
@@ -166,6 +181,8 @@ blob = '\n'.join([
     release_center,
     infrastructure,
     policy_compliance,
+    domain_center,
+    domain_function,
     recovery_function,
     service,
     auth_provider,
@@ -181,6 +198,7 @@ blob = '\n'.join([
     release_migration,
     infrastructure_migration,
     policy_compliance_migration,
+    domain_migration,
 ])
 for marker in required:
     assert marker in blob, f'missing owner platform marker: {marker}'
@@ -198,11 +216,11 @@ forbidden = [
     'receipt_image',
     'financial_timeline',
 ]
-for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness, release_center, infrastructure, policy_compliance):
+for screen in (health, subscription, security, support, operations, entitlements, recovery_devices, backup_resilience, readiness, release_center, infrastructure, policy_compliance, domain_center):
     for token in forbidden:
         assert token not in screen, f'owner UI crosses privacy boundary: {token}'
 
-for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration, release_migration, infrastructure_migration, policy_compliance_migration):
+for migration in (health_migration, subscription_migration, security_migration, support_migration, operations_migration, entitlements_migration, recovery_device_migration, backup_resilience_migration, readiness_migration, release_migration, infrastructure_migration, policy_compliance_migration, domain_migration):
     for token in (
         'public.debts',
         'public.payments',
@@ -300,6 +318,17 @@ assert 'body_markdown' in policy_compliance_migration, 'policy text body missing
 assert 'technical_log_days' in policy_compliance_migration, 'technical log retention control missing'
 assert 'audit_log_days' in policy_compliance_migration, 'audit log retention control missing'
 
+assert 'owner_tenant_domains' in domain_migration, 'tenant domain metadata storage missing'
+assert 'dns_status' in domain_migration and 'https_status' in domain_migration, 'domain verification states missing'
+assert 'owner_platform_audit' in domain_migration, 'domain configuration changes must be audited'
+assert 'public.debts' not in domain_migration and 'public.payments' not in domain_migration, 'domain center must not read market finance content'
+assert 'customer_id' not in domain_center.lower(), 'domain UI must not expose customer data'
+assert 'debt' not in domain_center.lower(), 'domain UI must not expose debt data'
+assert 'dns.google' in domain_function, 'domain checker must verify DNS'
+assert 'https://' in domain_function, 'domain checker must verify HTTPS reachability'
+assert 'system_owner_required' in domain_function, 'domain checker must enforce system owner authorization'
+assert 'service_role' not in domain_center.lower(), 'domain UI must never expose service credentials'
+
 assert "_overview['blocked_tenants']" in readiness, 'readiness internal blocked_tenants key must remain stable'
 assert "item['device_policy_mode']" in readiness, 'readiness internal device policy key must remain stable'
 assert "'blocked' => Colors.red" in readiness, 'readiness raw status values must remain stable'
@@ -324,6 +353,7 @@ owner_ui_files = [
     Path('lib/screens/auth/owner_security_center_screen.dart'),
     Path('lib/screens/auth/owner_subscription_center_screen.dart'),
     Path('lib/screens/auth/owner_support_center_screen.dart'),
+    Path('lib/screens/auth/owner_domain_center_screen.dart'),
     Path('lib/screens/auth/update_control_screen.dart'),
     Path('lib/screens/auth/import_permission_screen.dart'),
 ]
@@ -341,6 +371,7 @@ for forbidden_ui in (
     "'Account Recovery'",
     "'Device Policy'",
     "'Release & Auto Update Center'",
+    "'Domain & HTTPS'",
     "'Import کراوە",
 ):
     assert forbidden_ui not in owner_ui_blob, f'English owner UI regressed: {forbidden_ui}'
