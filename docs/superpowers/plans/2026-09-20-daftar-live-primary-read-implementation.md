@@ -309,6 +309,23 @@ export type LiveReadEnvelope<T> = {
   data: T;
 };
 
+export function successEnvelope<T>(input: {
+  source: ReadSource;
+  asOf: string | null;
+  stale: boolean;
+  fallbackReason: string | null;
+  data: T;
+}): LiveReadEnvelope<T> {
+  return {
+    ok: true,
+    source: input.source,
+    as_of: input.asOf,
+    stale: input.stale,
+    fallback_reason: input.fallbackReason,
+    data: input.data,
+  };
+}
+
 export function isFallbackEligible(failure: LiveFailure): boolean {
   if (failure.kind === "timeout" || failure.kind === "network") return true;
   if (failure.kind !== "http") return false;
@@ -845,6 +862,75 @@ if (!source) {
 
 Create a second Supabase client using `SUPABASE_ANON_KEY` plus the original user bearer for local reads, so existing RLS and auth-dependent RPCs still execute as the user.
 
+Define the runtime helpers explicitly:
+
+```ts
+function bearerToken(req: Request): string | null {
+  const raw = req.headers.get("authorization") ?? "";
+  const match = raw.match(/^Bearer\\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "content-type": "application/json",
+      "access-control-allow-origin": "*",
+      "access-control-allow-headers": "authorization, content-type",
+    },
+  });
+}
+
+async function loadViewerProfile(admin: any, userId: string) {
+  const { data, error } = await admin
+    .from("profiles")
+    .select("id, role, admin_id, active, approved")
+    .eq("id", userId)
+    .single();
+  if (error || !data) {
+    throw new LiveReadError({ kind: "authorization" }, "viewer_not_found");
+  }
+  if (data.active === false || data.approved === false) {
+    throw new LiveReadError({ kind: "authorization" }, "viewer_inactive");
+  }
+  const role = String(data.role);
+  if (!["admin", "employee", "customer"].includes(role)) {
+    throw new LiveReadError({ kind: "authorization" }, "viewer_role_forbidden");
+  }
+  const tenantId = role === "admin"
+    ? String(data.id)
+    : String(data.admin_id ?? "");
+  if (!tenantId) {
+    throw new LiveReadError({ kind: "authorization" }, "tenant_not_found");
+  }
+  return {
+    id: String(data.id),
+    role: role as "admin" | "employee" | "customer",
+    tenantId,
+  };
+}
+
+async function loadAccount28Source(admin: any, tenantId: string) {
+  const { data, error } = await admin
+    .from("daftar_sync_sources")
+    .select(
+      "id, admin_id, legacy_user_id, api_base_url, contacts_etag, transactions_etag, " +
+      "live_read_mode, live_read_fallback_enabled, live_read_stale_after_seconds, " +
+      "last_success_at, mirror_last_full_at, sync_mode, enabled",
+    )
+    .eq("admin_id", tenantId)
+    .eq("legacy_user_id", 28)
+    .eq("source_fingerprint", "daftar-live-account-28-v1")
+    .eq("enabled", true)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+```
+
+For customer-scoped operations, reject `params.customer_id` unless the viewer is that customer or the viewer's resolved tenant owns the customer. For debt-scoped operations, rely on the caller-JWT PostgREST query plus an explicit empty-result -> authorization/not-found response; never switch to the service client for the data row.
+
 - [ ] **Step 4: Implement only whitelisted local read operations**
 
 `local_read.ts` must use a `switch` with no arbitrary RPC/table passthrough.
@@ -852,6 +938,12 @@ Create a second Supabase client using `SUPABASE_ANON_KEY` plus the original user
 The first implementation must support:
 
 ```ts
+export async function executeLocalRead(
+  userClient: any,
+  operation: DaftarLiveReadOperation,
+  params: Record<string, unknown>,
+  viewer: { id: string; role: string; tenantId: string },
+): Promise<unknown> {
 const DEBT_SELECT = `
   *,
   customer_expand:profiles!debts_customer_id_fkey(*),
@@ -947,6 +1039,7 @@ switch (operation) {
     await assertEmployeeVisibleToViewer(userClient, viewer, employeeId);
     return readEmployeeStats(userClient, employeeId);
   }
+}
 }
 ```
 
@@ -1282,6 +1375,30 @@ Use `source.last_success_at ?? source.mirror_last_full_at` as mirror `as_of`.
 Telemetry failure must be best-effort and must not turn a successful read into an error.
 
 - [ ] **Step 7: Add the thin HTTP entrypoint and config**
+
+Define service-credential resolution without printing or returning the credential:
+
+```ts
+function envJsonKey(name: string): string | null {
+  const raw = Deno.env.get(name);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const first = parsed.default ?? Object.values(parsed)[0];
+    return typeof first === "string" ? first : null;
+  } catch (_) {
+    return raw;
+  }
+}
+
+function resolveServiceCredential(): string {
+  const value =
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+    envJsonKey("SUPABASE_SECRET_KEYS");
+  if (!value) throw new Error("server_not_configured");
+  return value;
+}
+```
 
 `index.ts` should only construct dependencies and delegate:
 
