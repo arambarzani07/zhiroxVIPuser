@@ -11,4 +11,11 @@ assert "event_type" in dashboard and "_recentActivityFilter" in dashboard, "rece
 assert "DebtDetailScreen(" in dashboard and "debtId:" in dashboard, "debt activity tap must open debt details"
 assert "onTap:" in dashboard, "debt activity card must be tappable"
 
+
+assert "_sumRecentActivityByCurrency" in dashboard, "dashboard must total recent activity by currency"
+assert "'کۆی قەرزە تازەکان'" in dashboard, "dashboard must show the recent debt total"
+assert "'کۆی پارەدانەوە تازەکان'" in dashboard, "dashboard must show the recent payment total"
+assert "debtActivityTotals" in dashboard and "paymentActivityTotals" in dashboard, "dashboard must compute separate debt/payment totals"
+assert "'IQD'" in dashboard and "'USD'" in dashboard, "recent activity totals must keep IQD and USD separate"
+
 print("admin dashboard recent activity verified")
