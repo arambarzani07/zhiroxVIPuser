@@ -18,6 +18,26 @@ class _DebtRestoreScreenState extends State<DebtRestoreScreen> {
   String? _error;
   String? _busyId;
 
+  Future<Map<String, String>> _authenticatedHeaders() async {
+    await PBService.ensureInitialized();
+    var session = PBService.client.auth.currentSession;
+    if (session == null) {
+      throw Exception('authentication_required');
+    }
+
+    try {
+      final refreshed = await PBService.client.auth.refreshSession();
+      session = refreshed.session ?? session;
+    } catch (_) {
+      // If refresh is temporarily unavailable, the current JWT may still be
+      // valid. Send it explicitly and let the server perform final validation.
+    }
+
+    return {
+      'Authorization': 'Bearer ${session.accessToken}',
+    };
+  }
+
   @override
   void initState() {
     super.initState();
@@ -44,9 +64,11 @@ class _DebtRestoreScreenState extends State<DebtRestoreScreen> {
     }
 
     try {
+      final headers = await _authenticatedHeaders();
       final response = await PBService.client.functions.invoke(
         'debt-restore-admin',
         body: const {'action': 'list'},
+        headers: headers,
       );
       final data = response.data;
       if (data is! Map || data['items'] is! List) {
@@ -80,9 +102,11 @@ class _DebtRestoreScreenState extends State<DebtRestoreScreen> {
 
     setState(() => _busyId = id);
     try {
+      final headers = await _authenticatedHeaders();
       final response = await PBService.client.functions.invoke(
         'debt-restore-admin',
         body: {'action': 'restore', 'debt_id': id},
+        headers: headers,
       );
       final data = response.data;
       if (data is! Map || data['restored'] != true) {
