@@ -219,7 +219,7 @@ begin
 
   perform public.qualify_daftar_outage(v_source_id);
 end;
-$;
+$$;
 
 revoke all on function public.guard_daftar_sync_account_28()
   from public, anon, authenticated;
