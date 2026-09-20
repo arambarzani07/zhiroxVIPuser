@@ -852,93 +852,35 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     DateTime? toDate,
   }) async {
     await ensureInitialized();
-    const pageSize = 500;
-    final records = <RecordModel>[];
-
-    // Customer ownership must be resolved independently from the debts query.
-    // PostgREST applies its own server row limit, so the compatibility layer's
-    // in-memory pagination cannot be used for a complete account statement.
-    final profiles = <String, Map<String, dynamic>>{};
-    var profileOffset = 0;
-    while (true) {
-      final profileData = await client
-          .from('profiles')
-          .select()
-          .eq('admin_id', adminId)
-          .order('id')
-          .range(profileOffset, profileOffset + pageSize - 1);
-      final profilePage = profileData
-          .whereType<Map>()
-          .map((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false);
-      for (final row in profilePage) {
-        final id = row['id']?.toString() ?? '';
-        if (id.isNotEmpty) profiles[id] = row;
-      }
-      if (profilePage.length < pageSize) break;
-      profileOffset += pageSize;
+    final params = <String, dynamic>{'admin_id': adminId};
+    if (fromDate != null) {
+      params['from'] = fromDate.toUtc().toIso8601String();
     }
-
-    final customerIds = profiles.keys.toList(growable: false);
-    const customerChunkSize = 50;
-    for (var chunkStart = 0;
-        chunkStart < customerIds.length;
-        chunkStart += customerChunkSize) {
-      final proposedEnd = chunkStart + customerChunkSize;
-      final chunkEnd = proposedEnd < customerIds.length
-          ? proposedEnd
-          : customerIds.length;
-      final chunk = customerIds.sublist(chunkStart, chunkEnd);
-      var debtOffset = 0;
-      while (true) {
-        dynamic query = client
-            .from('debts')
-            .select()
-            .inFilter('customer_id', chunk)
-            .isFilter('deleted_at', null);
-        if (fromDate != null) {
-          query = query.gte(
-            'created_at',
-            fromDate.toUtc().toIso8601String(),
-          );
-        }
-        if (toDate != null) {
-          query = query.lt(
-            'created_at',
-            toDate.toUtc().toIso8601String(),
-          );
-        }
-        final data = await query
-            .order('created_at', ascending: false)
-            .order('id', ascending: false)
-            .range(debtOffset, debtOffset + pageSize - 1);
-        final rows = (data as List)
-            .whereType<Map>()
-            .map((row) => Map<String, dynamic>.from(row))
-            .toList(growable: false);
-
-        for (final row in rows) {
-          final profile = profiles['${row['customer_id']}'];
-          if (profile == null) continue;
-          final json = _debtRecordFromRaw(row).toJson();
-          json['expand'] = <String, dynamic>{
-            'customer': _profileRecord(profile).toJson(),
-          };
-          records.add(RecordModel.fromJson(json));
-        }
-
-        if (rows.length < pageSize) break;
-        debtOffset += pageSize;
-      }
+    if (toDate != null) {
+      params['to'] = toDate.toUtc().toIso8601String();
     }
-
+    final envelope = await DaftarLiveReadService.invokeMap(
+      'admin_all_debts',
+      params,
+    );
+    final rawItems = envelope.data['items'];
+    if (rawItems is! List) {
+      throw const FormatException('invalid admin debt statement');
+    }
+    final records = rawItems
+        .whereType<Map>()
+        .map((row) => _debtRecordFromExpandedRaw(
+              Map<String, dynamic>.from(row),
+            ))
+        .toList(growable: false);
     records.sort((a, b) {
       final aCreated = DateTime.tryParse(a.getStringValue('created'));
       final bCreated = DateTime.tryParse(b.getStringValue('created'));
-      if (aCreated == null && bCreated == null) return 0;
+      if (aCreated == null && bCreated == null) return b.id.compareTo(a.id);
       if (aCreated == null) return 1;
       if (bCreated == null) return -1;
-      return bCreated.compareTo(aCreated);
+      final byCreated = bCreated.compareTo(aCreated);
+      return byCreated != 0 ? byCreated : b.id.compareTo(a.id);
     });
     return records;
   }
@@ -1204,45 +1146,17 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
 
   static Future<Map<String, double>> getEmployeeStats(String employeeId) async {
     await ensureInitialized();
-    final debtTotal = await _sumPagedAmounts(
-      table: 'debts',
-      createdBy: employeeId,
-      excludeDeletedDebts: true,
+    final envelope = await DaftarLiveReadService.invokeMap(
+      'employee_stats',
+      {'employee_id': employeeId},
     );
-    final paymentTotal = await _sumPagedAmounts(
-      table: 'payments',
-      createdBy: employeeId,
-    );
+    final data = envelope.data;
     return {
-      'totalDebtsCreated': debtTotal,
-      'totalPaymentsCollected': paymentTotal,
+      'totalDebtsCreated': _financeDouble(data['total_debts_created']),
+      'totalPaymentsCollected': _financeDouble(
+        data['total_payments_collected'],
+      ),
     };
-  }
-
-  static Future<double> _sumPagedAmounts({
-    required String table,
-    required String createdBy,
-    bool excludeDeletedDebts = false,
-  }) async {
-    const pageSize = 500;
-    var offset = 0;
-    var total = 0.0;
-    while (true) {
-      dynamic query = client
-          .from(table)
-          .select('amount')
-          .eq('created_by', createdBy);
-      if (excludeDeletedDebts) {
-        query = query.isFilter('deleted_at', null);
-      }
-      final raw = await query.order('id').range(offset, offset + pageSize - 1);
-      if (raw is! List) throw FormatException('invalid $table statistics');
-      for (final item in raw) {
-        if (item is Map) total += _financeDouble(item['amount']);
-      }
-      if (raw.length < pageSize) return total;
-      offset += pageSize;
-    }
   }
 
   static Future<Map<String, int>> getDebtCounts({required String adminId}) async {
@@ -1523,9 +1437,8 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
 
   static Future<Map<String, dynamic>> getDashboardStats({String? adminId}) async {
     await ensureInitialized();
-    final raw = await client.rpc('get_admin_dashboard_snapshot');
-    if (raw is! Map) throw const FormatException('invalid dashboard snapshot');
-    final data = Map<String, dynamic>.from(raw);
+    final envelope = await DaftarLiveReadService.invokeMap('admin_dashboard');
+    final data = envelope.data;
     final recentRows = <Map<String, dynamic>>[];
     if (data['recent_activity'] is List) {
       for (final item in data['recent_activity'] as List) {
