@@ -112,6 +112,157 @@ async function probeEndpoint(
   }
 }
 
+type RemoteContactRow = {
+  id: number | string;
+  user_id?: number | string;
+  name?: string | null;
+  phone?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+async function fetchRemoteContactsLive(source: Source): Promise<RemoteContactRow[]> {
+  const endpoint = fixedDaftarUrl(source.api_base_url, "contacts");
+  endpoint.searchParams.set("user_id", String(source.legacy_user_id));
+  const response = await fetch(endpoint, {
+    method: "GET",
+    redirect: "manual",
+    signal: AbortSignal.timeout(15_000),
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`remote_contact_lookup_http_${response.status}`);
+  }
+  const payload = await response.json();
+  if (payload?.success !== true || !Array.isArray(payload?.data)) {
+    throw new Error("remote_contact_lookup_invalid_response");
+  }
+  return (payload.data as RemoteContactRow[]).filter((row) =>
+    Number(row.user_id) === Number(source.legacy_user_id)
+  );
+}
+
+async function findRemoteCustomerLive(
+  source: Source,
+  profile: { name?: unknown; phone?: unknown; created_at?: unknown },
+): Promise<string | null> {
+  const rows = await fetchRemoteContactsLive(source);
+  const phone = normalizeContactPhone(profile.phone);
+  const name = normalizeContactName(profile.name);
+
+  let matches = phone
+    ? rows.filter((row) => normalizeContactPhone(row.phone) === phone)
+    : [];
+
+  if (matches.length === 0 && name) {
+    matches = rows.filter((row) =>
+      normalizeContactName(row.name) === name &&
+      datesAreClose(row.created_at, profile.created_at, 30 * 60_000)
+    );
+  }
+
+  if (matches.length > 1) {
+    throw new Error("ambiguous_remote_multiple_live_customer_matches");
+  }
+  if (matches.length === 0) return null;
+
+  const id = String(matches[0].id ?? "").trim();
+  if (!/^\d+$/.test(id)) throw new Error("invalid_remote_customer_id");
+  return id;
+}
+
+async function loadCustomerForOutbound(
+  admin: any,
+  source: Source,
+  customerId: string,
+) {
+  const { data, error } = await admin.from("profiles")
+    .select("id, name, phone, role, admin_id, created_at, updated_at")
+    .eq("id", customerId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || data.role !== "customer" || data.admin_id !== source.admin_id) {
+    return null;
+  }
+  return data;
+}
+
+async function recoverAmbiguousCustomerCreate(
+  admin: any,
+  source: Source,
+  event: OutboxEvent,
+  request: DaftarWriteRequest,
+): Promise<Record<string, unknown> | null> {
+  if (event.entity_kind !== "customer") return null;
+  const profile = await loadCustomerForOutbound(admin, source, event.entity_id);
+  if (!profile) return null;
+
+  const existing = await findRemoteCustomerLive(source, profile);
+  if (existing) {
+    await recordMapping(admin, source, event, existing);
+    await markEvent(admin, event.id, {
+      status: "sent",
+      remote_id: existing,
+      last_error: "reconciled_after_ambiguous_write:live_lookup",
+      sent_at: new Date().toISOString(),
+    });
+    return {
+      id: event.id,
+      status: "sent",
+      remote_id: existing,
+      reconciliation: "live_lookup",
+    };
+  }
+
+  const originalPhone = String(request.body.phone ?? "").trim();
+  if (!originalPhone) return null;
+
+  const fallbackRequest: DaftarWriteRequest = {
+    ...request,
+    body: {
+      ...request.body,
+      phone: "",
+    },
+  };
+
+  try {
+    const sent = await sendWrite(source, fallbackRequest);
+    await recordMapping(admin, source, event, sent.remoteId);
+    await markEvent(admin, event.id, {
+      status: "sent",
+      remote_id: sent.remoteId,
+      last_error: "sent_with_blank_phone_fallback",
+      sent_at: new Date().toISOString(),
+    });
+    return {
+      id: event.id,
+      status: "sent",
+      remote_id: sent.remoteId,
+      http_status: sent.status,
+      fallback: "blank_phone",
+    };
+  } catch (fallbackError) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const afterFallback = await findRemoteCustomerLive(source, profile);
+    if (afterFallback) {
+      await recordMapping(admin, source, event, afterFallback);
+      await markEvent(admin, event.id, {
+        status: "sent",
+        remote_id: afterFallback,
+        last_error: "reconciled_after_blank_phone_fallback",
+        sent_at: new Date().toISOString(),
+      });
+      return {
+        id: event.id,
+        status: "sent",
+        remote_id: afterFallback,
+        reconciliation: "live_lookup_after_blank_phone",
+      };
+    }
+    throw fallbackError;
+  }
+}
+
 async function remoteLink(
   admin: any,
   source: Source,
@@ -578,6 +729,7 @@ async function processEvent(
     return { id: event.id, status: "not_claimed" };
   }
 
+  let outboundRequest: DaftarWriteRequest | null = null;
   try {
     const built = await buildEventWrite(admin, source, event);
     if ("skip" in built) {
@@ -593,6 +745,7 @@ async function processEvent(
       return { id: event.id, status: "deferred", reason: built.defer };
     }
 
+    outboundRequest = built.request;
     const sent = await sendWrite(source, built.request);
     try {
       await recordMapping(admin, source, event, sent.remoteId);
@@ -616,6 +769,33 @@ async function processEvent(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const ambiguous = message.startsWith("ambiguous_remote_");
+
+    if (ambiguous && outboundRequest && event.entity_kind === "customer") {
+      try {
+        const recovered = await recoverAmbiguousCustomerCreate(
+          admin,
+          source,
+          event,
+          outboundRequest,
+        );
+        if (recovered) return recovered;
+      } catch (recoveryError) {
+        const recoveryMessage = recoveryError instanceof Error
+          ? recoveryError.message
+          : String(recoveryError);
+        await markEvent(admin, event.id, {
+          status: "blocked",
+          last_error: `customer_recovery_failed:${recoveryMessage}`.slice(0, 1000),
+          next_attempt_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+        });
+        return {
+          id: event.id,
+          status: "blocked",
+          error: `customer_recovery_failed:${recoveryMessage}`,
+        };
+      }
+    }
+
     const rejected = message.startsWith("remote_rejected_");
     const nextStatus = ambiguous || rejected ? "blocked" : "failed";
     await markEvent(admin, event.id, {
