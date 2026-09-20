@@ -1437,8 +1437,27 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
 
   static Future<Map<String, dynamic>> getDashboardStats({String? adminId}) async {
     await ensureInitialized();
-    final envelope = await DaftarLiveReadService.invokeMap('admin_dashboard');
-    final data = envelope.data;
+
+    Future<Map<String, dynamic>> loadDirect() async {
+      final raw = await client.rpc('get_admin_dashboard_snapshot');
+      if (raw is! Map) {
+        throw const FormatException('invalid dashboard snapshot');
+      }
+      return Map<String, dynamic>.from(raw);
+    }
+
+    Map<String, dynamic> data;
+    try {
+      data = await loadDirect();
+    } catch (_) {
+      try {
+        await client.auth.refreshSession();
+        data = await loadDirect();
+      } catch (_) {
+        final envelope = await DaftarLiveReadService.invokeMap('admin_dashboard');
+        data = envelope.data;
+      }
+    }
     final recentRows = <Map<String, dynamic>>[];
     if (data['recent_activity'] is List) {
       for (final item in data['recent_activity'] as List) {
