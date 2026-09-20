@@ -34,6 +34,9 @@ assert 'SUPABASE_PUBLISHABLE_KEYS' in entrypoint
 assert 'SUPABASE_SECRET_KEYS' in entrypoint
 assert 'legacy_user_id' in entrypoint
 assert 'live_read_mode' in entrypoint
+assert '.eq("enabled", true)' not in entrypoint
+assert '"zhirox_primary"' in types
+assert 'syncMode === "zhirox_primary"' in runtime
 
 for code in ('authentication', 'authorization', 'integrity', 'unsupported'):
     assert code in policy + types, f'missing non-fallback policy: {code}'
