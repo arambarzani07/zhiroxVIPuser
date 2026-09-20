@@ -763,6 +763,33 @@ async function processEvent(
     }
 
     outboundRequest = built.request;
+
+    // Before retrying a customer create, reconcile against Daftar live state.
+    // This makes retrying an earlier ambiguous 5xx idempotent: if Daftar
+    // committed the previous request but lost the response, we map it instead
+    // of creating a duplicate contact.
+    if (event.entity_kind === "customer") {
+      const profile = await loadCustomerForOutbound(admin, source, event.entity_id);
+      if (profile) {
+        const existingRemoteCustomer = await findRemoteCustomerLive(source, profile);
+        if (existingRemoteCustomer) {
+          await recordMapping(admin, source, event, existingRemoteCustomer);
+          await markEvent(admin, event.id, {
+            status: "sent",
+            remote_id: existingRemoteCustomer,
+            last_error: "reconciled_before_retry:live_lookup",
+            sent_at: new Date().toISOString(),
+          });
+          return {
+            id: event.id,
+            status: "sent",
+            remote_id: existingRemoteCustomer,
+            reconciliation: "live_lookup_before_retry",
+          };
+        }
+      }
+    }
+
     const sent = await sendWrite(source, built.request);
     try {
       await recordMapping(admin, source, event, sent.remoteId);
@@ -800,14 +827,24 @@ async function processEvent(
         const recoveryMessage = recoveryError instanceof Error
           ? recoveryError.message
           : String(recoveryError);
+        const retryableRecovery =
+          recoveryMessage.startsWith("ambiguous_remote_http_") ||
+          recoveryMessage.startsWith("remote_rate_limited") ||
+          recoveryMessage.startsWith("remote_contact_lookup_http_");
+        const nextStatus = retryableRecovery ? "failed" : "blocked";
+        const retryMinutes = Math.min(
+          30,
+          Math.max(2, Math.pow(2, Math.min(Number(event.attempts ?? 0), 4))),
+        );
         await markEvent(admin, event.id, {
-          status: "blocked",
+          status: nextStatus,
           last_error: `customer_recovery_failed:${recoveryMessage}`.slice(0, 1000),
-          next_attempt_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+          next_attempt_at: new Date(Date.now() + retryMinutes * 60_000).toISOString(),
         });
         return {
           id: event.id,
-          status: "blocked",
+          status: nextStatus,
+          retry_in_minutes: retryableRecovery ? retryMinutes : null,
           error: `customer_recovery_failed:${recoveryMessage}`,
         };
       }
