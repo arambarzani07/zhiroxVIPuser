@@ -1011,6 +1011,58 @@ class PBService {
     return Map<String, dynamic>.from(raw);
   }
 
+  static Future<Map<String, dynamic>> getOwnerBrandingOverview() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_system_owner_branding_overview');
+    if (raw is! Map) throw Exception('invalid_owner_branding_overview');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getOwnerBrandingPage({
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_system_owner_branding_page',
+      params: {
+        'p_page': page < 1 ? 1 : page,
+        'p_per_page': perPage < 1 ? 1 : (perPage > 100 ? 100 : perPage),
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_branding_page');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> setOwnerTenantBranding({
+    required String adminId,
+    required bool enabled,
+    required String brandName,
+    required String logoUrl,
+    required String primaryColorHex,
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_system_owner_tenant_branding',
+      params: {
+        'p_admin_id': adminId,
+        'p_enabled': enabled,
+        'p_brand_name': brandName,
+        'p_logo_url': logoUrl,
+        'p_primary_color_hex': primaryColorHex,
+      },
+    );
+    if (raw is! Map) throw Exception('invalid_owner_branding_result');
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static Future<Map<String, dynamic>> getPlatformBrandingState() async {
+    await ensureInitialized();
+    final raw = await client.rpc('get_platform_branding_state');
+    if (raw is! Map) throw Exception('invalid_platform_branding_state');
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<Map<String, dynamic>> getOwnerPlatformAuditPage({
     int page = 1,
     int perPage = 50,
