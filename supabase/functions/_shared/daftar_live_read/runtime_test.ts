@@ -156,3 +156,56 @@ Deno.test("local materialization failure after live validation is an error", asy
   );
   assertEquals(response.status, 500);
 });
+
+
+Deno.test("live timeout serves mirror and never activates primary mode", async () => {
+  const state = { syncMode: "mirror", primaryActivated: false };
+  const response = await handleDaftarLiveRead(
+    authenticatedReadRequest("customer_finance_snapshot", {
+      customer_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    }),
+    runtimeDeps({
+      loadSource: async () => ({
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        legacy_user_id: 28,
+        live_read_mode: "live",
+        live_read_fallback_enabled: true,
+        live_read_stale_after_seconds: 300,
+        last_success_at: "2026-09-20T00:01:00Z",
+        sync_mode: state.syncMode,
+        primary_activated_at: null,
+      }),
+      ensureFresh: async () => {
+        throw new LiveReadError({ kind: "timeout" }, "source_timeout");
+      },
+      localRead: async () => ({ items: [{ id: "normalized-zhirox-id" }] }),
+    }),
+  );
+  const body = await responseJson(response);
+  assertEquals(response.status, 200);
+  assertEquals(body.source, "mirror");
+  assertEquals(body.fallback_reason, "source_timeout");
+  assertEquals(body.data.items[0].id, "normalized-zhirox-id");
+  assertEquals(state.syncMode, "mirror");
+  assertEquals(state.primaryActivated, false);
+});
+
+Deno.test("403 from Daftar does not fallback", async () => {
+  let localReads = 0;
+  const response = await handleDaftarLiveRead(
+    authenticatedReadRequest("admin_dashboard", {}),
+    runtimeDeps({
+      ensureFresh: async () => {
+        throw new LiveReadError({ kind: "http", status: 403 }, "source_http_403");
+      },
+      localRead: async () => {
+        localReads++;
+        return {};
+      },
+    }),
+  );
+  const body = await responseJson(response);
+  assertEquals(response.status, 502);
+  assertEquals(body.error, "source_http_403");
+  assertEquals(localReads, 0);
+});
