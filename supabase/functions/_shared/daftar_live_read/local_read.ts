@@ -224,10 +224,11 @@ export async function executeLocalRead(
       if (requestedAdmin !== viewer.tenantId) {
         throw new LiveReadError({ kind: "authorization" }, "wrong_tenant");
       }
-      return readAdminDebts(userClient, requestedAdmin, {
+      const items = await readAdminDebts(userClient, requestedAdmin, {
         from: nullableIsoParam(params, "from"),
         to: nullableIsoParam(params, "to"),
       });
+      return { items };
     }
     case "employee_stats": {
       const employeeId = uuidParam(params, "employee_id");
