@@ -121,6 +121,10 @@ jobs:
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_daftar_customer_link_backfill.py
 
+      - name: Verify Daftar customer identity integrity
+        if: github.ref_name == 'user-source'
+        run: python3 scripts/verify_daftar_customer_identity_guard.py
+
       - name: Verify Daftar outbound sync
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_daftar_outbound_sync.py
