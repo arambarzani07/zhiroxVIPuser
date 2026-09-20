@@ -84,18 +84,31 @@ class DaftarLiveReadService {
     String operation, [
     Map<String, dynamic> params = const <String, dynamic>{},
   ]) async {
-    final response = await Supabase.instance.client.functions.invoke(
-      'daftar-live-read',
-      body: {
-        'operation': operation,
-        'params': params,
-      },
-    );
+    final client = Supabase.instance.client;
 
-    final raw = response.data;
-    if (raw is! Map) {
-      throw const FormatException('invalid_daftar_live_read_response');
+    Future<DaftarReadResponse<Map<String, dynamic>>> invokeOnce() async {
+      final response = await client.functions.invoke(
+        'daftar-live-read',
+        body: {
+          'operation': operation,
+          'params': params,
+        },
+      );
+
+      final raw = response.data;
+      if (raw is! Map) {
+        throw const FormatException('invalid_daftar_live_read_response');
+      }
+      return parseMapEnvelope(Map<String, dynamic>.from(raw));
     }
-    return parseMapEnvelope(Map<String, dynamic>.from(raw));
+
+    try {
+      return await invokeOnce();
+    } on FunctionsException catch (error) {
+      final status = error.status;
+      if (status != 401) rethrow;
+      await client.auth.refreshSession();
+      return await invokeOnce();
+    }
   }
 }
