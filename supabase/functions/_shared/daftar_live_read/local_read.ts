@@ -198,15 +198,25 @@ export async function executeLocalRead(
     case "debt_detail":
       return unwrapOne(await userClient.from("debts").select(DEBT_SELECT)
         .eq("id", uuidParam(params, "debt_id")).single());
-    case "debt_payments":
-      return unwrap(await userClient.from("payments").select(PAYMENT_SELECT)
-        .eq("debt_id", uuidParam(params, "debt_id"))
-        .order("created_at", { ascending: false }).order("id", { ascending: false }).range(0, 499));
-    case "customer_all_debts":
-      return readAllPages(async (from, to) =>
+    case "debt_payments": {
+      const debtId = uuidParam(params, "debt_id");
+      const items = await readAllPages(async (from, to) =>
+        unwrap(await userClient.from("payments").select(PAYMENT_SELECT)
+          .eq("debt_id", debtId)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to)));
+      return { items };
+    }
+    case "customer_all_debts": {
+      const items = await readAllPages(async (from, to) =>
         unwrap(await userClient.from("debts").select(DEBT_SELECT)
           .eq("customer_id", uuidParam(params, "customer_id")).is("deleted_at", null)
-          .order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to)));
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to)));
+      return { items };
+    }
     case "admin_dashboard":
       return unwrap(await userClient.rpc("get_admin_dashboard_snapshot"));
     case "admin_all_debts": {
