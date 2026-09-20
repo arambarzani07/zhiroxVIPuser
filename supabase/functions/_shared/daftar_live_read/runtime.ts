@@ -1,4 +1,4 @@
-import type { DaftarLiveReadOperation } from "./types.ts";
+import type { DaftarLiveReadOperation, ReadSource } from "./types.ts";
 import {
   isFallbackEligible,
   isMirrorStale,
@@ -176,7 +176,7 @@ export async function handleDaftarLiveRead(
   const stale = isMirrorStale(asOf, staleAfter, deps.now());
 
   const materialize = async (
-    resultSource: "live" | "mirror",
+    resultSource: ReadSource,
     fallbackReason: string | null,
     liveStatus: number | null,
     liveLatencyMs: number | null,
@@ -196,11 +196,16 @@ export async function handleDaftarLiveRead(
         live_status: liveStatus,
         live_latency_ms: liveLatencyMs,
         total_latency_ms: Math.max(0, deps.now() - startedAt),
-        mirror_age_ms: asOf ? Math.max(0, deps.now() - Date.parse(asOf)) : null,
+        mirror_age_ms: resultSource === "mirror" && asOf
+          ? Math.max(0, deps.now() - Date.parse(asOf))
+          : null,
       });
+      const responseAsOf = resultSource === "zhirox_primary"
+        ? new Date(deps.now()).toISOString()
+        : asOf;
       return json(successEnvelope({
         source: resultSource,
-        asOf,
+        asOf: responseAsOf,
         stale: resultSource === "mirror" ? stale : false,
         fallbackReason,
         data,
@@ -209,6 +214,14 @@ export async function handleDaftarLiveRead(
       return json({ error: "local_read_failed" }, 500);
     }
   };
+
+  const syncMode = String(source.sync_mode ?? "mirror");
+  if (syncMode === "zhirox_primary") {
+    return await materialize("zhirox_primary", null, null, null);
+  }
+  if (syncMode !== "mirror" || source.enabled === false) {
+    return json({ error: "daftar_source_not_available" }, 503);
+  }
 
   const liveReadMode = String(source.live_read_mode ?? "off");
   if (liveReadMode === "off") {
