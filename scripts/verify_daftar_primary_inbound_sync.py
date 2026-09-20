@@ -17,8 +17,8 @@ assert "active => true" in migration
 assert "daftar-live-sync-account-28" in migration
 assert "inbound_sync_enabled = true" in migration
 assert "or inbound_sync_enabled = true" in migration.lower()
-assert 'reconcile_daftar_account_28' in migration
-assert 'run_daftar_cutover_rehearsal' in migration
+assert 'reconcile_daftar_account_28' in worker
+assert 'run_daftar_cutover_rehearsal' in worker
 
 assert 'inbound_sync_enabled' in worker
 assert 'sync_mode' in worker
