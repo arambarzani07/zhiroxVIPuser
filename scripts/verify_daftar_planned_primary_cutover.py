@@ -2,8 +2,11 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-migration = (
+base_migration = (
     ROOT / 'supabase/migrations/20260920165000_daftar_planned_primary_cutover.sql'
+).read_text(errors='ignore')
+migration = (
+    ROOT / 'supabase/migrations/20260920174000_daftar_primary_inbound_sync.sql'
 ).read_text(errors='ignore')
 workflow = (ROOT / '.github/workflows/ios-unsigned-ipa.yml').read_text(errors='ignore')
 
@@ -24,7 +27,8 @@ assert 'cutover_rehearsal_mismatches <> 0' in migration
 assert 'not v_source.failover_ready' in migration
 assert "sync_mode = 'zhirox_primary'" in migration
 assert "live_read_mode = 'off'" in migration
-assert 'enabled = false' in migration
+assert 'inbound_sync_enabled = true' in migration
+assert 'enabled = true' in migration
 assert 'primary_activated_at = now()' in migration
 assert 'planned_primary_cutover_while_source_healthy' in migration
 assert "from public, anon, authenticated" in migration
@@ -34,6 +38,7 @@ assert 'to service_role' in migration
 outage_migration = (
     ROOT / 'supabase/migrations/20260920013000_daftar_outage_qualification.sql'
 ).read_text(errors='ignore')
+assert 'activate_zhirox_primary_planned' in base_migration
 assert "raise exception 'daftar_outage_not_confirmed'" in outage_migration
 assert 'activate_zhirox_primary(' in outage_migration
 
