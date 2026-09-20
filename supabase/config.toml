@@ -25,3 +25,6 @@ verify_jwt = false
 
 [functions.daftar-live-read]
 verify_jwt = false
+
+[functions.daftar-outbound-sync]
+verify_jwt = false
