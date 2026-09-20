@@ -3,18 +3,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 worker = (ROOT / 'supabase/functions/daftar-sync/index.ts').read_text(errors='ignore')
+worker_auth = (ROOT / 'supabase/functions/_shared/daftar_sync_auth.ts').read_text(errors='ignore')
 gateway = (ROOT / 'supabase/functions/daftar-sync-gateway/index.ts').read_text(errors='ignore')
 config = (ROOT / 'supabase/config.toml').read_text(errors='ignore')
 migration_path = ROOT / 'supabase/migrations/20260919230000_lock_daftar_sync_connection.sql'
 migration = migration_path.read_text(errors='ignore') if migration_path.exists() else ''
 workflow = (ROOT / '.github/workflows/ios-unsigned-ipa.yml').read_text(errors='ignore')
 
-for source in (worker, gateway):
+for source in (worker + '\n' + worker_auth, gateway):
     assert 'x-daftar-sync-secret' in source, 'Daftar sync must require the dedicated sync secret'
     assert 'trigger_secret_hash' in source, 'Daftar sync must validate the stored trigger secret hash'
     assert 'constantTimeEqual' in source, 'Daftar sync secret comparison must stay constant-time'
     assert 'legacy_user_id' in source, 'Daftar sync must remain scoped to the legacy account'
     assert 'SUPABASE_SERVICE_ROLE_KEY' in source, 'Daftar sync server access must retain service-role support'
+
+assert 'authorizeDaftarSyncRequest' in worker, 'worker must use the shared authorization helper'
+assert 'serviceCredential' in worker_auth, 'shared auth must retain server-to-server service credential support'
 
 assert '[functions.daftar-sync]\nverify_jwt = false' in config, 'worker deployment auth mode must be pinned'
 assert '[functions.daftar-sync-gateway]\nverify_jwt = false' in config, 'gateway deployment auth mode must be pinned'
