@@ -218,8 +218,8 @@ async function recoverAmbiguousCustomerCreate(
     ...request,
     body: {
       user_id: request.body.user_id,
-      name: request.body.name,
-      phone: "",
+      contact_name: request.body.name,
+      contact_phone: "",
     },
   };
 
