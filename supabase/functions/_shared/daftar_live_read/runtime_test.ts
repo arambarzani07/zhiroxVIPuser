@@ -243,3 +243,32 @@ Deno.test("shadow validates live but serves mirror without fallback", async () =
   assertEquals(body.fallback_reason, null);
   assertEquals(body.data.total_customers, 10);
 });
+
+
+Deno.test("shadow live failure never breaks mirror serving", async () => {
+  const response = await handleDaftarLiveRead(
+    authenticatedReadRequest("admin_dashboard", {}),
+    runtimeDeps({
+      loadSource: async () => ({
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        legacy_user_id: 28,
+        live_read_mode: "shadow",
+        live_read_fallback_enabled: true,
+        live_read_stale_after_seconds: 300,
+        last_success_at: "2026-09-20T00:01:00Z",
+      }),
+      ensureFresh: async () => {
+        throw new LiveReadError(
+          { kind: "integrity" },
+          "invalid_source_response",
+        );
+      },
+      localRead: async () => ({ total_customers: 10 }),
+    }),
+  );
+  const body = await responseJson(response);
+  assertEquals(response.status, 200);
+  assertEquals(body.source, "mirror");
+  assertEquals(body.fallback_reason, null);
+  assertEquals(body.data.total_customers, 10);
+});
