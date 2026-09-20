@@ -121,8 +121,14 @@ async function readEmployeeStats(userClient: any, employeeId: string) {
         .range(from, to))),
   ]);
   return {
-    total_debts_created: debts.reduce((sum, row: any) => sum + Number(row.amount ?? 0), 0),
-    total_payments_collected: payments.reduce((sum, row: any) => sum + Number(row.amount ?? 0), 0),
+    total_debts_created: debts.reduce<number>(
+      (sum, row: any) => sum + Number(row.amount ?? 0),
+      0,
+    ),
+    total_payments_collected: payments.reduce<number>(
+      (sum, row: any) => sum + Number(row.amount ?? 0),
+      0,
+    ),
   };
 }
 
