@@ -32,6 +32,22 @@ void main() {
     expect(result.data['items'], isEmpty);
   });
 
+
+  test('parses zhirox primary envelope', () {
+    final result = DaftarLiveReadService.parseMapEnvelope({
+      'ok': true,
+      'source': 'zhirox_primary',
+      'as_of': null,
+      'stale': false,
+      'fallback_reason': null,
+      'data': {'total_remaining_iqd': 125000},
+    });
+
+    expect(result.meta.source, DaftarReadSource.zhiroxPrimary);
+    expect(result.meta.stale, isFalse);
+    expect(result.data['total_remaining_iqd'], 125000);
+  });
+
   test('rejects malformed live-read envelopes', () {
     expect(
       () => DaftarLiveReadService.parseMapEnvelope({
