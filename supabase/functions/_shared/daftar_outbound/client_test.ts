@@ -9,6 +9,8 @@ Deno.test("builds Daftar contact create from fixed write contract", () => {
     userId: 28,
     name: "Test Customer",
     phone: "07500000000",
+    createdAt: "2026-09-20T15:00:00.000Z",
+    updatedAt: "2026-09-20T15:00:00.000Z",
   });
   if (request.path !== "contacts") throw new Error("wrong contacts path");
   if (request.method !== "POST") throw new Error("wrong contacts method");
@@ -16,6 +18,8 @@ Deno.test("builds Daftar contact create from fixed write contract", () => {
   if (body.user_id !== 28) throw new Error("wrong user id");
   if (body.name !== "Test Customer") throw new Error("wrong name");
   if (body.phone !== "07500000000") throw new Error("wrong phone");
+  if (body.created_at !== "2026-09-20T15:00:00.000Z") throw new Error("wrong created_at");
+  if (body.updated_at !== "2026-09-20T15:00:00.000Z") throw new Error("wrong updated_at");
 });
 
 Deno.test("builds Daftar LOAN transaction create", () => {
