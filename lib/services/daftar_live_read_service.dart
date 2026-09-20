@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-enum DaftarReadSource { live, mirror }
+enum DaftarReadSource { live, mirror, zhiroxPrimary }
 
 class DaftarReadMeta {
   const DaftarReadMeta({
@@ -39,6 +39,7 @@ class DaftarLiveReadService {
     final source = switch (sourceRaw) {
       'live' => DaftarReadSource.live,
       'mirror' => DaftarReadSource.mirror,
+      'zhirox_primary' => DaftarReadSource.zhiroxPrimary,
       _ => throw const FormatException('invalid_daftar_live_read_source'),
     };
 
