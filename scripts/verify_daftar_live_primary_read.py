@@ -9,6 +9,7 @@ dart = '\n'.join(
 runtime = (root / 'supabase/functions/_shared/daftar_live_read/runtime.ts').read_text(encoding='utf-8')
 entrypoint = (root / 'supabase/functions/daftar-live-read/index.ts').read_text(encoding='utf-8')
 policy = (root / 'supabase/functions/_shared/daftar_live_read/policy.ts').read_text(encoding='utf-8')
+types = (root / 'supabase/functions/_shared/daftar_live_read/types.ts').read_text(encoding='utf-8')
 freshness = (root / 'supabase/functions/_shared/daftar_live_read/freshness.ts').read_text(encoding='utf-8')
 config = (root / 'supabase/config.toml').read_text(encoding='utf-8')
 
@@ -33,7 +34,7 @@ assert 'legacy_user_id' in entrypoint
 assert 'live_read_mode' in entrypoint
 
 for code in ('authentication', 'authorization', 'integrity', 'unsupported'):
-    assert code in policy, f'missing non-fallback policy: {code}'
+    assert code in policy + types, f'missing non-fallback policy: {code}'
 
 assert 'AbortSignal.timeout(4_000)' in freshness
 assert 'attempt < 2' in freshness
