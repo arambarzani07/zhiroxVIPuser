@@ -11,6 +11,7 @@ entrypoint = (root / 'supabase/functions/daftar-live-read/index.ts').read_text(e
 policy = (root / 'supabase/functions/_shared/daftar_live_read/policy.ts').read_text(encoding='utf-8')
 types = (root / 'supabase/functions/_shared/daftar_live_read/types.ts').read_text(encoding='utf-8')
 freshness = (root / 'supabase/functions/_shared/daftar_live_read/freshness.ts').read_text(encoding='utf-8')
+event_statuses = (root / 'supabase/migrations/20260920171500_daftar_live_read_event_statuses.sql').read_text(encoding='utf-8')
 config = (root / 'supabase/config.toml').read_text(encoding='utf-8')
 
 assert 'api-daftar-qarz.kasbkar.net' not in dart
@@ -37,6 +38,11 @@ assert 'live_read_mode' in entrypoint
 assert '.eq("enabled", true)' not in entrypoint
 assert '"zhirox_primary"' in types
 assert 'syncMode === "zhirox_primary"' in runtime
+assert 'resultSource: ReadSource' in runtime
+assert 'responseSource?: ReadSource' in runtime
+assert '"zhirox_primary"' in runtime
+assert 'shadow_success' in event_statuses
+assert 'shadow_failed' in event_statuses
 
 for code in ('authentication', 'authorization', 'integrity', 'unsupported'):
     assert code in policy + types, f'missing non-fallback policy: {code}'
