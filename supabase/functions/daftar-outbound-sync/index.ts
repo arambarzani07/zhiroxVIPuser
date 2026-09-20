@@ -225,16 +225,20 @@ async function recoverAmbiguousCustomerCreate(
     };
   }
 
+  // Daftar's current POST /contacts contract is exactly:
+  // user_id + name + phone + created_at + updated_at.
+  // Do not include legacy contact_name/contact_phone keys: their presence can
+  // switch the backend onto an incompatible legacy validator.
+  // If the first write returned an ambiguous 5xx, retry once with a blank
+  // phone. Daftar accepts blank phone values and most legacy contacts use it.
   const fallbackRequest: DaftarWriteRequest = {
     ...request,
     body: {
       user_id: request.body.user_id,
-      name: request.body.name,
-      phone: request.body.phone,
-      contact_name: request.body.name,
-      contact_phone: request.body.phone,
-      created_at: request.body.created_at,
-      updated_at: request.body.updated_at,
+      name: String(request.body.name ?? ""),
+      phone: "",
+      created_at: String(request.body.created_at ?? ""),
+      updated_at: String(request.body.updated_at ?? ""),
     },
   };
 
