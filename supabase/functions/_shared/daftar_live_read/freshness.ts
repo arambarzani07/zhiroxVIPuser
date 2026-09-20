@@ -67,7 +67,6 @@ async function probe(
     } catch (error) {
       lastFailure = failureForFetch(error);
       if (attempt === 0) {
-        await deps.sleep(50);
         continue;
       }
       throw lastFailure;
@@ -86,7 +85,6 @@ async function probe(
     );
     if (!retryableStatus(response.status) || attempt === 1) throw failure;
     lastFailure = failure;
-    await deps.sleep(50);
   }
 
   throw lastFailure ??
