@@ -47,6 +47,9 @@ async function probeEndpoint(
         ? { body: JSON.stringify(probeBody ?? {}) }
         : {}),
     });
+    const responseText = method === "OPTIONS"
+      ? ""
+      : (await response.text()).slice(0, 2000);
     return {
       url: url.toString(),
       method,
@@ -55,6 +58,7 @@ async function probeEndpoint(
       cors_allow_methods: response.headers.get("access-control-allow-methods"),
       www_authenticate: response.headers.get("www-authenticate"),
       location: response.headers.get("location"),
+      body: responseText,
     };
   } catch (error) {
     return {
