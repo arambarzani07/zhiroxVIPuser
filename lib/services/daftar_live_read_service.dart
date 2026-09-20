@@ -104,7 +104,7 @@ class DaftarLiveReadService {
 
     try {
       return await invokeOnce();
-    } on FunctionsException catch (error) {
+    } on FunctionException catch (error) {
       final status = error.status;
       if (status != 401) rethrow;
       await client.auth.refreshSession();
