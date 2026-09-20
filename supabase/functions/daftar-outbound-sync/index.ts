@@ -29,7 +29,8 @@ function envJsonKey(name: string): string | null {
 
 async function probeEndpoint(
   url: URL,
-  method: "OPTIONS" | "PATCH" | "DELETE" = "OPTIONS",
+  method: "OPTIONS" | "POST" | "PATCH" | "DELETE" = "OPTIONS",
+  probeBody?: Record<string, unknown>,
 ) {
   try {
     const response = await fetch(url, {
@@ -38,9 +39,13 @@ async function probeEndpoint(
       signal: AbortSignal.timeout(8_000),
       headers: {
         accept: "application/json",
-        ...(method === "PATCH" ? { "content-type": "application/json" } : {}),
+        ...((method === "PATCH" || method === "POST")
+          ? { "content-type": "application/json" }
+          : {}),
       },
-      ...(method === "PATCH" ? { body: "{}" } : {}),
+      ...((method === "PATCH" || method === "POST")
+        ? { body: JSON.stringify(probeBody ?? {}) }
+        : {}),
     });
     return {
       url: url.toString(),
@@ -122,6 +127,20 @@ Deno.serve(async (req) => {
       probeEndpoint(missingContact, "DELETE"),
       probeEndpoint(missingTransaction, "PATCH"),
       probeEndpoint(missingTransaction, "DELETE"),
+      probeEndpoint(rootContacts, "POST", {
+        user_id: 28,
+        name: { invalid: true },
+        phone: { invalid: true },
+      }),
+      probeEndpoint(rootTransactions, "POST", {
+        user_id: 28,
+        contact_id: "invalid",
+        transaction_type: "INVALID",
+        amount: "invalid",
+        currency: "IQD",
+        transaction_date: "invalid",
+        note: { invalid: true },
+      }),
     ]);
     return json({
       ok: true,
