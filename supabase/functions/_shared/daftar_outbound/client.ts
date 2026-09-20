@@ -32,6 +32,39 @@ function nonNegativeAmount(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function pad3(value: number): string {
+  return String(value).padStart(3, "0");
+}
+
+// Daftar Qarz 0.2.7 sends local Iraq wall-clock timestamps rather than
+// ISO-8601 strings with a timezone suffix. Its backend treats these values as
+// Asia/Baghdad time; sending T...Z causes a server-side 5xx on writes.
+export function toDaftarLocalTimestamp(value: string): string {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) throw new Error("invalid_daftar_timestamp");
+  const baghdad = new Date(parsed + 3 * 60 * 60 * 1000);
+  return [
+    baghdad.getUTCFullYear(),
+    "-",
+    pad2(baghdad.getUTCMonth() + 1),
+    "-",
+    pad2(baghdad.getUTCDate()),
+    " ",
+    pad2(baghdad.getUTCHours()),
+    ":",
+    pad2(baghdad.getUTCMinutes()),
+    ":",
+    pad2(baghdad.getUTCSeconds()),
+    ".",
+    pad3(baghdad.getUTCMilliseconds()),
+    "000",
+  ].join("");
+}
+
 export function buildContactCreate(input: ContactCreateInput): DaftarWriteRequest {
   const createdAt = Date.parse(input.createdAt);
   const updatedAt = Date.parse(input.updatedAt);
@@ -44,8 +77,8 @@ export function buildContactCreate(input: ContactCreateInput): DaftarWriteReques
       user_id: positiveInteger(input.userId, "user_id"),
       name: String(input.name ?? "").trim(),
       phone: String(input.phone ?? "").trim(),
-      created_at: new Date(createdAt).toISOString(),
-      updated_at: new Date(updatedAt).toISOString(),
+      created_at: toDaftarLocalTimestamp(new Date(createdAt).toISOString()),
+      updated_at: toDaftarLocalTimestamp(new Date(updatedAt).toISOString()),
     },
   };
 }
@@ -69,7 +102,7 @@ export function buildTransactionCreate(
       transaction_type: input.transactionType,
       amount: nonNegativeAmount(input.amount),
       currency,
-      transaction_date: new Date(parsedDate).toISOString(),
+      transaction_date: toDaftarLocalTimestamp(new Date(parsedDate).toISOString()),
       note: String(input.note ?? ""),
     },
   };
