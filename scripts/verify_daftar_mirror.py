@@ -22,7 +22,12 @@ assert 'source.mirror_bootstrapped_at' in worker
 assert 'contactsFetch = await fetchRows<LegacyContact>' in worker
 
 assert 'mirror_bootstrapped_at' in gateway
-assert 'source.mirror_bootstrapped_at && !contactsProbe.changed && !transactionsProbe.changed' in gateway
+assert 'source.mirror_bootstrapped_at' in gateway
+assert '!contactsProbe.changed' in gateway
+assert '!transactionsProbe.changed' in gateway
+assert 'mustRefreshOfficialTotals' in gateway
+assert 'source.sync_mode === "zhirox_primary"' in gateway
+assert 'source.inbound_sync_enabled === true' in gateway
 assert 'source_not_modified' in gateway
 
 assert 'Verify Daftar raw mirror' in workflow
