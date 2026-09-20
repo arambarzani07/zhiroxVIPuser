@@ -145,6 +145,22 @@ Deno.serve(async (req) => {
         transaction_date: "invalid",
         note: { invalid: true },
       }),
+      probeEndpoint(rootContacts, "POST", {
+        user_id: "invalid",
+        name: "ZHIROX contract probe",
+        phone: "",
+        created_at: "2026-09-20T00:00:00.000Z",
+        updated_at: "2026-09-20T00:00:00.000Z",
+      }),
+      probeEndpoint(rootTransactions, "POST", {
+        user_id: "invalid",
+        contact_id: 1,
+        transaction_type: "LOAN",
+        amount: 1,
+        currency: "IQD",
+        transaction_date: "2026-09-20T00:00:00.000Z",
+        note: "contract probe",
+      }),
     ]);
     return json({
       ok: true,
