@@ -525,7 +525,7 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (error || !sourceRow) return json({ error: "sync_source_not_found" }, 404);
-  const source = sourceRow as Source;
+  const source = sourceRow as unknown as Source;
   if (
     Number(source.legacy_user_id) !== 28 ||
     source.source_fingerprint !== "daftar-live-account-28-v1"
