@@ -444,7 +444,12 @@ Deno.serve(async (req) => {
     runId = run.id;
 
     const mirrorBootstrap = !source.mirror_bootstrapped_at;
-    let [contactsFetch, transactionsFetch] = await Promise.all([
+    let [
+      contactsFetch,
+      transactionsFetch,
+      officialContactTotalsFetch,
+      officialTotalsFetch,
+    ] = await Promise.all([
       fetchRows<LegacyContact>(
         `${source.api_base_url}/contacts`,
         source.legacy_user_id,
@@ -454,6 +459,14 @@ Deno.serve(async (req) => {
         `${source.api_base_url}/transactions`,
         source.legacy_user_id,
         mirrorBootstrap ? null : source.transactions_etag,
+      ),
+      fetchRows<Record<string, unknown>>(
+        `${source.api_base_url}/contacts/totals-by-currency`,
+        source.legacy_user_id,
+      ),
+      fetchRows<Record<string, unknown>>(
+        `${source.api_base_url}/transactions/totals-by-currency`,
+        source.legacy_user_id,
       ),
     ]);
     // A changed transaction may refer to an unchanged contact. Fetch the small
@@ -475,6 +488,20 @@ Deno.serve(async (req) => {
       mirrorRows(admin, "daftar_mirror_contacts", source.id, contacts),
       mirrorRows(admin, "daftar_mirror_transactions", source.id, transactions),
     ]);
+
+    const officialContactTotals = officialContactTotalsFetch.rows ?? [];
+    const officialTotals = officialTotalsFetch.rows ?? [];
+    const { error: officialTotalsError } = await admin.rpc(
+      "replace_daftar_official_totals",
+      {
+        p_source_id: source.id,
+        p_contact_totals: officialContactTotals,
+        p_currency_totals: officialTotals,
+      },
+    );
+    if (officialTotalsError) {
+      throw new Error(`official_totals_replace_failed:${officialTotalsError.message}`);
+    }
 
     if (mirrorBootstrap) {
       const mirroredAt = new Date().toISOString();
