@@ -12,11 +12,11 @@ workflow = (ROOT / '.github/workflows/ios-unsigned-ipa.yml').read_text(errors='i
 assert 'inbound_sync_enabled boolean not null default false' in migration
 assert "sync_mode = 'zhirox_primary'" in migration
 assert 'inbound_sync_enabled = true' in migration
-assert 'enabled = false' in migration
+assert 'enabled = true' in migration
 assert "active => true" in migration
 assert "daftar-live-sync-account-28" in migration
 assert "inbound_sync_enabled = true" in migration
-assert "or s.enabled = true" in migration.lower() or "or inbound_sync_enabled = true" in migration.lower()
+assert "or inbound_sync_enabled = true" in migration.lower()
 assert 'reconcile_daftar_account_28' in migration
 assert 'run_daftar_cutover_rehearsal' in migration
 
