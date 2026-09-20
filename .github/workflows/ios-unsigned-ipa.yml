@@ -129,6 +129,10 @@ jobs:
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_daftar_outbound_sync.py
 
+      - name: Verify Daftar credit-limit gateway
+        if: github.ref_name == 'user-source'
+        run: python3 scripts/verify_daftar_credit_limit_gateway.py
+
       - name: Verify Daftar outage qualification
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_daftar_outage_qualification.py
@@ -207,6 +211,10 @@ jobs:
         run: |
           deno test supabase/functions/_shared/daftar_outbound/client_test.ts
           deno check supabase/functions/daftar-outbound-sync/index.ts
+
+      - name: Check Daftar credit-limit gateway
+        if: github.ref_name == 'user-source'
+        run: deno check supabase/functions/daftar-credit-gateway/index.ts
 
       - name: Prepare independent iOS identity
         run: |
