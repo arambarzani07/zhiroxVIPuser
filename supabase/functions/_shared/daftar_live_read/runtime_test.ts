@@ -209,3 +209,37 @@ Deno.test("403 from Daftar does not fallback", async () => {
   assertEquals(body.error, "source_http_403");
   assertEquals(localReads, 0);
 });
+
+
+Deno.test("shadow validates live but serves mirror without fallback", async () => {
+  let validations = 0;
+  const response = await handleDaftarLiveRead(
+    authenticatedReadRequest("admin_dashboard", {}),
+    runtimeDeps({
+      loadSource: async () => ({
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        legacy_user_id: 28,
+        live_read_mode: "shadow",
+        live_read_fallback_enabled: true,
+        live_read_stale_after_seconds: 300,
+        last_success_at: "2026-09-20T00:01:00Z",
+      }),
+      ensureFresh: async () => {
+        validations++;
+        return {
+          liveStatus: 304,
+          liveLatencyMs: 10,
+          changed: false,
+          validatedAt: "2026-09-20T00:01:00Z",
+        };
+      },
+      localRead: async () => ({ total_customers: 10 }),
+    }),
+  );
+  const body = await responseJson(response);
+  assertEquals(response.status, 200);
+  assertEquals(validations, 1);
+  assertEquals(body.source, "mirror");
+  assertEquals(body.fallback_reason, null);
+  assertEquals(body.data.total_customers, 10);
+});
