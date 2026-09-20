@@ -235,6 +235,7 @@ async function findLegacyTarget(
   const { data, error } = await admin.from("legacy_import_links")
     .select("target_id")
     .eq("admin_id", source.admin_id)
+    .eq("source_fingerprint", source.source_fingerprint)
     .eq("entity_kind", entityKind)
     .eq("source_id", sourceId)
     .limit(20);
@@ -407,6 +408,10 @@ Deno.serve(async (req) => {
     new_zero_events: 0,
     reused_records: 0,
   };
+  let customerIdentityReconciliation: unknown = {
+    skipped: true,
+    reason: "contacts_not_modified",
+  };
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -501,6 +506,22 @@ Deno.serve(async (req) => {
     );
     if (officialTotalsError) {
       throw new Error(`official_totals_replace_failed:${officialTotalsError.message}`);
+    }
+
+    if (!contactsFetch.notModified) {
+      const currentContactIds = contacts.map((row) => String(row.id));
+      const { data: identityReconciliation, error: identityReconciliationError } =
+        await admin.rpc("reconcile_daftar_customer_identity_links", {
+          p_source_id: source.id,
+          p_current_contact_ids: currentContactIds,
+          p_expected_count: officialContactTotals.length,
+        });
+      if (identityReconciliationError) {
+        throw new Error(
+          `customer_identity_reconciliation_failed:${identityReconciliationError.message}`,
+        );
+      }
+      customerIdentityReconciliation = identityReconciliation;
     }
 
     if (mirrorBootstrap) {
@@ -784,6 +805,7 @@ Deno.serve(async (req) => {
       mirror_bootstrapped: Boolean(source.mirror_bootstrapped_at),
       mirror_contacts: contacts.length,
       mirror_transactions: transactions.length,
+      customer_identity_reconciliation: customerIdentityReconciliation,
       reconciliation,
       cutover_rehearsal: cutoverRehearsal,
       failover_readiness: failoverReadiness,
