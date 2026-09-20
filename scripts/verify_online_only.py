@@ -174,9 +174,9 @@ for marker in (
 ):
     if marker not in user_list_source:
         fail(f'customer directory pagination marker missing: {marker}')
-for marker in ('get_customer_directory_page', 'get_customer_debts_page'):
+for marker in ("'customer_directory'", "'customer_debts_page'"):
     if marker not in pb:
-        fail(f'lib/services/pb_service.dart: scalable query marker missing: {marker}')
+        fail(f'lib/services/pb_service.dart: scalable live-read marker missing: {marker}')
 
 
 # Financial Chat realtime/audit markers: business history remains server-backed
@@ -235,11 +235,9 @@ if """onChanged: (_) {
 for marker in (
     'getCustomerFinanceSnapshot',
     'getCustomerFinancialTimelinePage',
-    "'get_customer_finance_snapshot'",
-    "'get_customer_financial_timeline_page'",
-    "'p_cursor_at'",
-    "'p_cursor_kind'",
-    "'p_cursor_id'",
+    "'customer_finance_snapshot'",
+    "'customer_timeline'",
+    "'cursor'",
     'getAllCustomerDebtsLive',
 ):
     if marker not in pb:
