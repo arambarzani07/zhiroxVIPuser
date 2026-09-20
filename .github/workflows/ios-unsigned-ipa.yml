@@ -113,6 +113,10 @@ jobs:
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_daftar_primary_inbound_sync.py
 
+      - name: Verify Daftar exact projection
+        if: github.ref_name == 'user-source'
+        run: python3 scripts/verify_daftar_exact_projection.py
+
       - name: Verify Daftar outbound sync
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_daftar_outbound_sync.py
