@@ -21,6 +21,8 @@ type SyncSource = {
   contacts_etag?: string | null;
   transactions_etag?: string | null;
   mirror_bootstrapped_at?: string | null;
+  sync_mode: "mirror" | "zhirox_primary";
+  inbound_sync_enabled?: boolean | null;
 };
 
 type LegacyContact = {
@@ -727,12 +729,23 @@ Deno.serve(async (req) => {
       throw new Error(`cutover_rehearsal_failed:${cutoverRehearsalError.message}`);
     }
 
-    const { data: failoverReadiness, error: failoverReadinessError } = await admin.rpc(
-      "refresh_daftar_failover_readiness",
-      { p_source_id: source.id },
-    );
-    if (failoverReadinessError) {
-      throw new Error(`failover_readiness_failed:${failoverReadinessError.message}`);
+    const allowInboundSync =
+      source.sync_mode === "zhirox_primary" &&
+      source.inbound_sync_enabled === true;
+
+    let failoverReadiness: unknown = {
+      failover_ready: true,
+      primary_inbound_sync: allowInboundSync,
+    };
+    if (!allowInboundSync) {
+      const { data, error } = await admin.rpc(
+        "refresh_daftar_failover_readiness",
+        { p_source_id: source.id },
+      );
+      if (error) {
+        throw new Error(`failover_readiness_failed:${error.message}`);
+      }
+      failoverReadiness = data;
     }
 
     const result = {
