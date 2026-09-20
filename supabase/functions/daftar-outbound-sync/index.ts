@@ -259,15 +259,8 @@ async function recordMapping(
       allocationSourceId,
       event.entity_id,
     );
-    await assertRemoteIdAvailable(
-    admin,
-    source,
-    event.entity_kind,
-    remoteId,
-    event.entity_id,
-  );
 
-  const { error: linkError } = await admin.from("legacy_import_links").upsert({
+    const { error: linkError } = await admin.from("legacy_import_links").upsert({
       admin_id: source.admin_id,
       source_fingerprint: source.source_fingerprint,
       entity_kind: "payment",
@@ -304,6 +297,14 @@ async function recordMapping(
     if (seenAllocationError) throw seenAllocationError;
     return;
   }
+
+  await assertRemoteIdAvailable(
+    admin,
+    source,
+    event.entity_kind,
+    remoteId,
+    event.entity_id,
+  );
 
   const { error: linkError } = await admin.from("legacy_import_links").upsert({
     admin_id: source.admin_id,
