@@ -146,8 +146,8 @@ jobs:
       - name: Test Daftar live-read runtime security
         if: github.ref_name == 'user-source'
         run: |
-          deno test supabase/functions/_shared/daftar_live_read/runtime_test.ts
-          deno test supabase/functions/_shared/daftar_live_read/local_read_test.ts
+          deno test supabase/functions/_shared/daftar_live_read
+          deno check supabase/functions/daftar-live-read/index.ts
 
       - name: Check Daftar sync Edge Functions
         if: github.ref_name == 'user-source'
