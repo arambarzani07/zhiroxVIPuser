@@ -22,3 +22,6 @@ verify_jwt = false
 
 [functions.daftar-sync-gateway]
 verify_jwt = false
+
+[functions.daftar-live-read]
+verify_jwt = false
