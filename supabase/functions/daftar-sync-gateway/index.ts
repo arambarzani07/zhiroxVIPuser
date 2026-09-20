@@ -13,6 +13,8 @@ type SyncSource = {
   contacts_etag?: string | null;
   transactions_etag?: string | null;
   mirror_bootstrapped_at?: string | null;
+  sync_mode: "mirror" | "zhirox_primary";
+  inbound_sync_enabled?: boolean | null;
 };
 
 function json(body: unknown, status = 200) {
@@ -72,7 +74,7 @@ async function loadSyncSource(admin: any, sourceId: string): Promise<SyncSource 
   for (let attempt = 1; attempt <= 4; attempt++) {
     const { data, error } = await admin
       .from("daftar_sync_sources")
-      .select("id, legacy_user_id, api_base_url, trigger_secret_hash, contacts_etag, transactions_etag, mirror_bootstrapped_at")
+      .select("id, legacy_user_id, api_base_url, trigger_secret_hash, contacts_etag, transactions_etag, mirror_bootstrapped_at, sync_mode, inbound_sync_enabled")
       .eq("id", sourceId)
       .eq("enabled", true)
       .maybeSingle();
@@ -213,6 +215,13 @@ Deno.serve(async (req) => {
 
     const source = await loadSyncSource(admin, sourceId);
     if (!source) return json({ error: "sync_source_not_found" }, 404);
+
+    if (
+      source.sync_mode === "zhirox_primary" &&
+      source.inbound_sync_enabled !== true
+    ) {
+      return json({ error: "primary_inbound_sync_disabled" }, 409);
+    }
 
     const providedHash = await sha256Hex(providedSecret);
     if (!constantTimeEqual(providedHash, source.trigger_secret_hash)) {
