@@ -10,7 +10,7 @@ assert "client.rpc('get_admin_dashboard_snapshot')" in pb
 assert "refreshSession()" in pb
 assert "DaftarLiveReadService.invokeMap('admin_dashboard')" in pb
 assert "refreshSession()" in live
-assert "FunctionsException" in live
+assert "FunctionException" in live
 assert "Verify dashboard primary resilience" in workflow
 
 print('Dashboard primary resilience verified')
