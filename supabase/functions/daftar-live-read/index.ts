@@ -28,6 +28,7 @@ function resolveServiceCredential(): string {
 
 function resolveAnonKey(): string {
   const value = Deno.env.get("SUPABASE_ANON_KEY") ??
+    envJsonKey("SUPABASE_PUBLISHABLE_KEYS") ??
     envJsonKey("SUPABASE_ANON_KEYS");
   if (!value) throw new Error("server_not_configured");
   return value;
