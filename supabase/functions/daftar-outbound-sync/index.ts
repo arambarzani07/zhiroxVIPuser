@@ -31,8 +31,10 @@ type OutboxEvent = {
   entity_kind: "customer" | "debt" | "payment";
   entity_id: string;
   operation: "create";
-  status: "pending" | "failed";
+  status: "pending" | "failed" | "blocked";
   attempts: number;
+  created_at?: string;
+  last_error?: string | null;
 };
 
 function json(body: unknown, status = 200): Response {
@@ -52,6 +54,20 @@ function envJsonKey(name: string): string | null {
   } catch (_) {
     return raw;
   }
+}
+
+function normalizeContactName(value: unknown): string {
+  return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeContactPhone(value: unknown): string {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function datesAreClose(left: unknown, right: unknown, toleranceMs: number): boolean {
+  const a = Date.parse(String(left ?? ""));
+  const b = Date.parse(String(right ?? ""));
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= toleranceMs;
 }
 
 async function probeEndpoint(
@@ -329,6 +345,119 @@ async function recordMapping(
     ignoreDuplicates: true,
   });
   if (seenError) throw seenError;
+}
+
+async function reconcileBlockedCustomerEvents(
+  admin: any,
+  source: Source,
+): Promise<Record<string, unknown>[]> {
+  const { data: blockedRows, error: blockedError } = await admin
+    .from("daftar_outbound_events")
+    .select("id, entity_kind, entity_id, operation, status, attempts, created_at, last_error")
+    .eq("sync_source_id", source.id)
+    .eq("entity_kind", "customer")
+    .eq("status", "blocked")
+    .like("last_error", "ambiguous_remote_%")
+    .order("created_at", { ascending: true })
+    .limit(10);
+  if (blockedError) throw blockedError;
+  if (!blockedRows?.length) return [];
+
+  const { data: mirrorRows, error: mirrorError } = await admin
+    .from("daftar_mirror_contacts")
+    .select("source_id, payload")
+    .eq("sync_source_id", source.id);
+  if (mirrorError) throw mirrorError;
+
+  const mirror = (mirrorRows ?? []) as Array<{
+    source_id: string;
+    payload: Record<string, unknown> | null;
+  }>;
+  const results: Record<string, unknown>[] = [];
+
+  for (const raw of blockedRows) {
+    const event = raw as unknown as OutboxEvent;
+    const { data: profile, error: profileError } = await admin
+      .from("profiles")
+      .select("id, name, phone, role, admin_id, created_at")
+      .eq("id", event.entity_id)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    if (!profile || profile.role !== "customer" || profile.admin_id !== source.admin_id) {
+      continue;
+    }
+
+    const phone = normalizeContactPhone(profile.phone);
+    const name = normalizeContactName(profile.name);
+
+    let strategy = "phone";
+    let candidates = phone
+      ? mirror.filter((row) =>
+        normalizeContactPhone(row.payload?.phone) === phone
+      )
+      : [];
+
+    if (candidates.length === 0 && name) {
+      strategy = "name_recent";
+      candidates = mirror.filter((row) =>
+        normalizeContactName(row.payload?.name) === name &&
+        datesAreClose(row.payload?.created_at, profile.created_at, 15 * 60_000)
+      );
+    }
+
+    if (candidates.length !== 1) {
+      if (candidates.length > 1) {
+        await markEvent(admin, event.id, {
+          last_error: "ambiguous_remote_multiple_mirror_matches",
+        });
+      }
+      results.push({
+        id: event.id,
+        status: "blocked",
+        reconciliation: candidates.length === 0 ? "no_match" : "multiple_matches",
+      });
+      continue;
+    }
+
+    const remoteId = String(candidates[0].source_id ?? "").trim();
+    if (!/^\d+$/.test(remoteId)) {
+      results.push({
+        id: event.id,
+        status: "blocked",
+        reconciliation: "invalid_remote_id",
+      });
+      continue;
+    }
+
+    try {
+      await recordMapping(admin, source, event, remoteId);
+      await markEvent(admin, event.id, {
+        status: "sent",
+        remote_id: remoteId,
+        last_error: `reconciled_after_ambiguous_write:${strategy}`,
+        sent_at: new Date().toISOString(),
+      });
+      results.push({
+        id: event.id,
+        status: "sent",
+        reconciliation: strategy,
+        remote_id: remoteId,
+      });
+    } catch (error) {
+      await markEvent(admin, event.id, {
+        last_error: `ambiguous_reconciliation_failed:${
+          error instanceof Error ? error.message : String(error)
+        }`.slice(0, 1000),
+      });
+      results.push({
+        id: event.id,
+        status: "blocked",
+        reconciliation: "mapping_failed",
+      });
+    }
+  }
+
+  return results;
 }
 
 async function buildEventWrite(
@@ -622,6 +751,8 @@ Deno.serve(async (req) => {
     .eq("status", "processing")
     .lt("updated_at", new Date(Date.now() - 2 * 60_000).toISOString());
 
+  const reconciled = await reconcileBlockedCustomerEvents(admin, source);
+
   const { data: events, error: eventsError } = await admin
     .from("daftar_outbound_events")
     .select("id, entity_kind, entity_id, operation, status, attempts")
@@ -641,6 +772,7 @@ Deno.serve(async (req) => {
     ok: true,
     action: "drain",
     processed: results.length,
+    reconciled,
     results,
   });
 });
