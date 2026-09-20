@@ -1,8 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
+import {
+  authorizeDaftarSyncRequest,
+  sha256Hex,
+} from "../_shared/daftar_sync_auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type, x-daftar-sync-secret",
+  "Access-Control-Allow-Headers": "authorization, content-type, x-daftar-sync-secret",
 };
 
 type SyncSource = {
@@ -99,21 +103,6 @@ function normalizePhone(value: unknown): string {
 function randomPassword(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   return `${Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")}Aa1!`;
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function constantTimeEqual(left: string, right: string): boolean {
-  if (left.length !== right.length) return false;
-  let difference = 0;
-  for (let index = 0; index < left.length; index++) {
-    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  }
-  return difference === 0;
 }
 
 async function stableUuid(namespace: string): Promise<string> {
@@ -421,7 +410,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const sourceId = String(body?.source_id ?? "").trim();
     const providedSecret = req.headers.get("x-daftar-sync-secret") ?? "";
-    if (!sourceId || !providedSecret) return json({ error: "unauthorized" }, 401);
+    if (!sourceId) return json({ error: "unauthorized" }, 401);
 
     const { data: sourceRow, error: sourceError } = await loadSyncSource(admin, sourceId);
     if (sourceError || !sourceRow) {
@@ -433,8 +422,13 @@ Deno.serve(async (req) => {
     }
     source = sourceRow as SyncSource;
 
-    const providedHash = await sha256Hex(providedSecret);
-    if (!constantTimeEqual(providedHash, source.trigger_secret_hash)) return json({ error: "unauthorized" }, 401);
+    const authorized = await authorizeDaftarSyncRequest({
+      authorizationHeader: req.headers.get("authorization"),
+      providedSecret,
+      serviceCredential: secret,
+      expectedSecretHash: source.trigger_secret_hash,
+    });
+    if (!authorized) return json({ error: "unauthorized" }, 401);
 
     const { data: claimed, error: claimError } = await admin.rpc("claim_daftar_sync", { p_source_id: source.id });
     if (claimError) throw claimError;
