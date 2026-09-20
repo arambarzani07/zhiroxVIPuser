@@ -122,7 +122,6 @@ Deno.serve(async (req) => {
           .eq("admin_id", tenantId)
           .eq("legacy_user_id", 28)
           .eq("source_fingerprint", "daftar-live-account-28-v1")
-          .eq("enabled", true)
           .maybeSingle();
         if (error) throw new Error("source_lookup_failed");
         return data;
