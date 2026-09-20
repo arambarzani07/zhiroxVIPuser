@@ -217,7 +217,8 @@ async function recoverAmbiguousCustomerCreate(
   const fallbackRequest: DaftarWriteRequest = {
     ...request,
     body: {
-      ...request.body,
+      user_id: request.body.user_id,
+      name: request.body.name,
       phone: "",
     },
   };
