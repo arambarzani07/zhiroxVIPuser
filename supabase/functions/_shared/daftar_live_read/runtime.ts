@@ -180,6 +180,8 @@ export async function handleDaftarLiveRead(
     fallbackReason: string | null,
     liveStatus: number | null,
     liveLatencyMs: number | null,
+    telemetryStatus?: string,
+    detailCode?: string | null,
   ): Promise<Response> => {
     try {
       const data = await deps.localRead(operation, params, viewer);
@@ -188,8 +190,9 @@ export async function handleDaftarLiveRead(
         viewer_id: viewer.id,
         operation,
         result_source: resultSource,
-        status: fallbackReason ? "fallback" : "success",
+        status: telemetryStatus ?? (fallbackReason ? "fallback" : "success"),
         fallback_reason: fallbackReason,
+        detail_code: detailCode ?? null,
         live_status: liveStatus,
         live_latency_ms: liveLatencyMs,
         total_latency_ms: Math.max(0, deps.now() - startedAt),
@@ -207,8 +210,38 @@ export async function handleDaftarLiveRead(
     }
   };
 
-  if (String(source.live_read_mode ?? "off") === "off") {
+  const liveReadMode = String(source.live_read_mode ?? "off");
+  if (liveReadMode === "off") {
     return await materialize("mirror", null, null, null);
+  }
+
+  if (liveReadMode === "shadow") {
+    try {
+      const fresh = await deps.ensureFresh(source);
+      return await materialize(
+        "mirror",
+        null,
+        fresh.liveStatus,
+        fresh.liveLatencyMs,
+        "shadow_success",
+      );
+    } catch (error) {
+      const detailCode = error instanceof LiveReadError
+        ? error.message
+        : "live_read_failed";
+      const liveStatus = error instanceof LiveReadError &&
+          error.failure.kind === "http"
+        ? error.failure.status
+        : null;
+      return await materialize(
+        "mirror",
+        null,
+        liveStatus,
+        null,
+        "shadow_failed",
+        detailCode,
+      );
+    }
   }
 
   try {
