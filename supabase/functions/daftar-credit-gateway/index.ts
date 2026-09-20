@@ -32,6 +32,12 @@ function normalizePath(req: Request): { path: string; query: string } {
   return { path, query: url.search.replace(/^\?/, '') };
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 function sanitizeOutboundHeaders(req: Request): Headers {
   const headers = new Headers();
   const allowed = ['authorization', 'content-type', 'accept', 'accept-language', 'user-agent', 'if-none-match', 'if-modified-since'];
@@ -67,7 +73,7 @@ async function parseTransactionBody(req: Request, bodyBytes: Uint8Array): Promis
       const clone = new Request(req.url, {
         method: req.method,
         headers: req.headers,
-        body: bodyBytes,
+        body: toArrayBuffer(bodyBytes),
       });
       const form = await clone.formData();
       const out: Record<string, unknown> = {};
@@ -307,7 +313,7 @@ Deno.serve(async (req: Request) => {
     const response = await fetch(targetUrl, {
       method: req.method,
       headers: outboundHeaders,
-      body: ['GET', 'HEAD'].includes(req.method.toUpperCase()) ? undefined : bodyBytes,
+      body: ['GET', 'HEAD'].includes(req.method.toUpperCase()) ? undefined : toArrayBuffer(bodyBytes),
       redirect: 'manual',
     });
 
