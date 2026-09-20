@@ -182,6 +182,7 @@ export async function handleDaftarLiveRead(
     liveLatencyMs: number | null,
     telemetryStatus?: string,
     detailCode?: string | null,
+    responseSource?: ReadSource,
   ): Promise<Response> => {
     try {
       const data = await deps.localRead(operation, params, viewer);
@@ -200,11 +201,12 @@ export async function handleDaftarLiveRead(
           ? Math.max(0, deps.now() - Date.parse(asOf))
           : null,
       });
+      const envelopeSource = responseSource ?? resultSource;
       const responseAsOf = resultSource === "zhirox_primary"
         ? new Date(deps.now()).toISOString()
         : asOf;
       return json(successEnvelope({
-        source: resultSource,
+        source: envelopeSource,
         asOf: responseAsOf,
         stale: resultSource === "mirror" ? stale : false,
         fallbackReason,
@@ -217,7 +219,17 @@ export async function handleDaftarLiveRead(
 
   const syncMode = String(source.sync_mode ?? "mirror");
   if (syncMode === "zhirox_primary") {
-    return await materialize("zhirox_primary", null, null, null);
+    // Keep the response source backward-compatible with already-installed
+    // clients while telemetry records the actual ZHIROX-primary source.
+    return await materialize(
+      "zhirox_primary",
+      null,
+      null,
+      null,
+      undefined,
+      null,
+      "mirror",
+    );
   }
   if (syncMode !== "mirror" || source.enabled === false) {
     return json({ error: "daftar_source_not_available" }, 503);
