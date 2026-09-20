@@ -214,9 +214,6 @@ async function recoverAmbiguousCustomerCreate(
     };
   }
 
-  const originalPhone = String(request.body.phone ?? "").trim();
-  if (!originalPhone) return null;
-
   const fallbackRequest: DaftarWriteRequest = {
     ...request,
     body: {
