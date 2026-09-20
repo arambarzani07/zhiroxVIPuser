@@ -272,3 +272,35 @@ Deno.test("shadow live failure never breaks mirror serving", async () => {
   assertEquals(body.fallback_reason, null);
   assertEquals(body.data.total_customers, 10);
 });
+
+
+Deno.test("primary mode serves local ZHIROX data without live validation", async () => {
+  let validations = 0;
+  const response = await handleDaftarLiveRead(
+    authenticatedReadRequest("admin_dashboard", {}),
+    runtimeDeps({
+      loadSource: async () => ({
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        legacy_user_id: 28,
+        live_read_mode: "off",
+        live_read_fallback_enabled: true,
+        live_read_stale_after_seconds: 300,
+        last_success_at: "2026-09-20T00:01:00Z",
+        sync_mode: "zhirox_primary",
+        enabled: false,
+      }),
+      ensureFresh: async () => {
+        validations++;
+        throw new Error("primary mode must not contact Daftar");
+      },
+      localRead: async () => ({ total_customers: 10 }),
+    }),
+  );
+  const body = await responseJson(response);
+  assertEquals(response.status, 200);
+  assertEquals(validations, 0);
+  assertEquals(body.source, "zhirox_primary");
+  assertEquals(body.fallback_reason, null);
+  assertEquals(body.stale, false);
+  assertEquals(body.data.total_customers, 10);
+});
