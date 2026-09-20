@@ -8,6 +8,8 @@ export type ContactCreateInput = {
   userId: number;
   name: string;
   phone: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type TransactionCreateInput = {
@@ -31,6 +33,10 @@ function nonNegativeAmount(value: number): number {
 }
 
 export function buildContactCreate(input: ContactCreateInput): DaftarWriteRequest {
+  const createdAt = Date.parse(input.createdAt);
+  const updatedAt = Date.parse(input.updatedAt);
+  if (!Number.isFinite(createdAt)) throw new Error("invalid_created_at");
+  if (!Number.isFinite(updatedAt)) throw new Error("invalid_updated_at");
   return {
     method: "POST",
     path: "contacts",
@@ -38,6 +44,8 @@ export function buildContactCreate(input: ContactCreateInput): DaftarWriteReques
       user_id: positiveInteger(input.userId, "user_id"),
       name: String(input.name ?? "").trim(),
       phone: String(input.phone ?? "").trim(),
+      created_at: new Date(createdAt).toISOString(),
+      updated_at: new Date(updatedAt).toISOString(),
     },
   };
 }
