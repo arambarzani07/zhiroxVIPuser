@@ -241,7 +241,16 @@ Deno.serve(async (req) => {
       ),
     ]);
 
-    if (source.mirror_bootstrapped_at && !contactsProbe.changed && !transactionsProbe.changed) {
+    const mustRefreshOfficialTotals =
+      source.sync_mode === "zhirox_primary" &&
+      source.inbound_sync_enabled === true;
+
+    if (
+      source.mirror_bootstrapped_at &&
+      !contactsProbe.changed &&
+      !transactionsProbe.changed &&
+      !mustRefreshOfficialTotals
+    ) {
       await markUpToDate(admin, source.id);
       return json({
         ok: true,
