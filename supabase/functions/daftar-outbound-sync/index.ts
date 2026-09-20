@@ -8,6 +8,8 @@ import {
   type DaftarWriteRequest,
 } from "../_shared/daftar_outbound/client.ts";
 
+const daftarCompatibilityUserAgent = "Dart/3.9 (dart:io)";
+
 const corsHeaders = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers":
@@ -138,7 +140,10 @@ async function fetchRemoteContactsLive(source: Source): Promise<RemoteContactRow
     method: "GET",
     redirect: "manual",
     signal: AbortSignal.timeout(15_000),
-    headers: { accept: "application/json" },
+    headers: {
+      accept: "application/json",
+      "user-agent": daftarCompatibilityUserAgent,
+    },
   });
   if (!response.ok) {
     throw new Error(`remote_contact_lookup_http_${response.status}`);
@@ -335,6 +340,7 @@ async function sendWrite(
       headers: {
         accept: "application/json",
         "content-type": "application/json",
+        "user-agent": daftarCompatibilityUserAgent,
       },
       body: JSON.stringify(request.body),
     });
