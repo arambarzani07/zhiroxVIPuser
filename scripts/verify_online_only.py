@@ -84,8 +84,8 @@ elif 'catch' in ctx_match.group(1):
 
 
 pb = (LIB / 'services/pb_service.dart').read_text(encoding='utf-8')
-if "query.order('id').range(offset, offset + pageSize - 1)" not in pb:
-    fail('Employee totals must page in a deterministic unique order')
+if "'employee_stats'" not in pb:
+    fail('Employee totals must use the authorized Daftar live-read gateway')
 match = re.search(
     r'static\s+Future<double>\s+getCustomerBalance\([^)]*\)\s+async\s*\{(.*?)(?=\n\s*static\s+)',
     pb,
@@ -126,7 +126,7 @@ for marker in ('String? _loadError', 'AppHelpers.backendErrorMessage', 'دووب
 dashboard_service = (LIB / 'services/pb_service.dart').read_text(encoding='utf-8')
 for marker in (
     'getAllApprovedCustomers()',
-    '_sumPagedAmounts(',
+    "'employee_stats'",
     "client.auth.currentUser?.id",
     ".from('notifications')",
     "senderId: senderId",
@@ -135,8 +135,8 @@ for marker in (
         fail(f'lib/services/pb_service.dart: complete-data or overdue de-duplication marker missing: {marker}')
 if "senderId: customerId" in dashboard_service:
     fail('lib/services/pb_service.dart: overdue notification sender must be the authenticated staff user')
-if "client.rpc('get_admin_dashboard_snapshot')" not in dashboard_service:
-    fail('lib/services/pb_service.dart: dashboard must use the bounded snapshot RPC')
+if "'admin_dashboard'" not in dashboard_service:
+    fail('lib/services/pb_service.dart: dashboard must use the bounded Daftar live-read gateway')
 if "pb.collection('payments').getList(filter: paymentFilter" in dashboard_service:
     fail('lib/services/pb_service.dart: dashboard still downloads payment rows for totals')
 
