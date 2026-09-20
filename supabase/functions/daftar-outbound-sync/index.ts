@@ -763,6 +763,15 @@ Deno.serve(async (req) => {
       probeEndpoint(missingTransaction, "PUT", {
         note: "ZHIROX contract probe",
       }),
+      // Current backend shape against non-existent ID 0. This validates a
+      // real PUT path without mutating any production record.
+      probeEndpoint(missingContact, "PUT", {
+        user_id: 28,
+        name: "ZHIROX non-mutating contract probe",
+        phone: "",
+        created_at: "2026-09-20T00:00:00.000Z",
+        updated_at: "2026-09-20T00:00:00.000Z",
+      }),
     ]);
     return json({
       ok: true,
