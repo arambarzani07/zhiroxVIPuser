@@ -27,16 +27,24 @@ function envJsonKey(name: string): string | null {
   }
 }
 
-async function probeEndpoint(url: URL) {
+async function probeEndpoint(
+  url: URL,
+  method: "OPTIONS" | "PATCH" | "DELETE" = "OPTIONS",
+) {
   try {
     const response = await fetch(url, {
-      method: "OPTIONS",
+      method,
       redirect: "manual",
       signal: AbortSignal.timeout(8_000),
-      headers: { accept: "application/json" },
+      headers: {
+        accept: "application/json",
+        ...(method === "PATCH" ? { "content-type": "application/json" } : {}),
+      },
+      ...(method === "PATCH" ? { body: "{}" } : {}),
     });
     return {
       url: url.toString(),
+      method,
       status: response.status,
       allow: response.headers.get("allow"),
       cors_allow_methods: response.headers.get("access-control-allow-methods"),
@@ -95,13 +103,26 @@ Deno.serve(async (req) => {
 
   if (action === "probe") {
     const base = String(source.api_base_url);
-    const targets = [
-      fixedDaftarUrl(base, "contacts"),
-      fixedDaftarUrl(base, "transactions"),
-      new URL("contacts/0", base.endsWith("/") ? base : base + "/"),
-      new URL("transactions/0", base.endsWith("/") ? base : base + "/"),
-    ];
-    const results = await Promise.all(targets.map(probeEndpoint));
+    const rootContacts = fixedDaftarUrl(base, "contacts");
+    const rootTransactions = fixedDaftarUrl(base, "transactions");
+    const missingContact = new URL(
+      "contacts/0",
+      base.endsWith("/") ? base : base + "/",
+    );
+    const missingTransaction = new URL(
+      "transactions/0",
+      base.endsWith("/") ? base : base + "/",
+    );
+    const results = await Promise.all([
+      probeEndpoint(rootContacts),
+      probeEndpoint(rootTransactions),
+      probeEndpoint(missingContact),
+      probeEndpoint(missingTransaction),
+      probeEndpoint(missingContact, "PATCH"),
+      probeEndpoint(missingContact, "DELETE"),
+      probeEndpoint(missingTransaction, "PATCH"),
+      probeEndpoint(missingTransaction, "DELETE"),
+    ]);
     return json({
       ok: true,
       action: "probe",
