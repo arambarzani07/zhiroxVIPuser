@@ -117,9 +117,19 @@ type RemoteContactRow = {
   user_id?: number | string;
   name?: string | null;
   phone?: string | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
+
+function remoteContactName(row: RemoteContactRow): string {
+  return normalizeContactName(row.name ?? row.contact_name);
+}
+
+function remoteContactPhone(row: RemoteContactRow): string {
+  return normalizeContactPhone(row.phone ?? row.contact_phone);
+}
 
 async function fetchRemoteContactsLive(source: Source): Promise<RemoteContactRow[]> {
   const endpoint = fixedDaftarUrl(source.api_base_url, "contacts");
@@ -151,14 +161,15 @@ async function findRemoteCustomerLive(
   const name = normalizeContactName(profile.name);
 
   let matches = phone
-    ? rows.filter((row) => normalizeContactPhone(row.phone) === phone)
+    ? rows.filter((row) => remoteContactPhone(row) === phone)
     : [];
 
   if (matches.length === 0 && name) {
-    matches = rows.filter((row) =>
-      normalizeContactName(row.name) === name &&
+    const named = rows.filter((row) => remoteContactName(row) === name);
+    const recentNamed = named.filter((row) =>
       datesAreClose(row.created_at, profile.created_at, 30 * 60_000)
     );
+    matches = recentNamed.length > 0 ? recentNamed : named;
   }
 
   if (matches.length > 1) {
@@ -218,8 +229,12 @@ async function recoverAmbiguousCustomerCreate(
     ...request,
     body: {
       user_id: request.body.user_id,
+      name: request.body.name,
+      phone: request.body.phone,
       contact_name: request.body.name,
-      contact_phone: "",
+      contact_phone: request.body.phone,
+      created_at: request.body.created_at,
+      updated_at: request.body.updated_at,
     },
   };
 
