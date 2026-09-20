@@ -202,14 +202,24 @@ async function recoverAmbiguousCustomerCreate(
   admin: any,
   source: Source,
   event: OutboxEvent,
-  request: DaftarWriteRequest,
+  _request: DaftarWriteRequest,
 ): Promise<Record<string, unknown> | null> {
   if (event.entity_kind !== "customer") return null;
   const profile = await loadCustomerForOutbound(admin, source, event.entity_id);
   if (!profile) return null;
 
-  const existing = await findRemoteCustomerLive(source, profile);
-  if (existing) {
+  // Daftar can commit a contact insert and still return HTTP 500. A second
+  // POST is therefore unsafe because it can create a duplicate customer.
+  // Re-read the live source a few times, then leave the event blocked for the
+  // inbound mirror/reconciliation path to resolve without another write.
+  const delaysMs = [0, 1500, 3000, 5000];
+  for (const delayMs of delaysMs) {
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    const existing = await findRemoteCustomerLive(source, profile);
+    if (!existing) continue;
+
     await recordMapping(admin, source, event, existing);
     await markEvent(admin, event.id, {
       status: "sent",
@@ -225,59 +235,16 @@ async function recoverAmbiguousCustomerCreate(
     };
   }
 
-  // Daftar's current POST /contacts contract is exactly:
-  // user_id + name + phone + created_at + updated_at.
-  // Do not include legacy contact_name/contact_phone keys: their presence can
-  // switch the backend onto an incompatible legacy validator.
-  // If the first write returned an ambiguous 5xx, retry once with a blank
-  // phone. Daftar accepts blank phone values and most legacy contacts use it.
-  const fallbackRequest: DaftarWriteRequest = {
-    ...request,
-    body: {
-      user_id: request.body.user_id,
-      name: String(request.body.name ?? ""),
-      phone: "",
-      created_at: String(request.body.created_at ?? ""),
-      updated_at: String(request.body.updated_at ?? ""),
-    },
+  await markEvent(admin, event.id, {
+    status: "blocked",
+    last_error: "ambiguous_remote_write_waiting_for_inbound_reconciliation",
+    next_attempt_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+  });
+  return {
+    id: event.id,
+    status: "blocked",
+    error: "ambiguous_remote_write_waiting_for_inbound_reconciliation",
   };
-
-  try {
-    const sent = await sendWrite(source, fallbackRequest);
-    await recordMapping(admin, source, event, sent.remoteId);
-    await markEvent(admin, event.id, {
-      status: "sent",
-      remote_id: sent.remoteId,
-      last_error: "sent_with_blank_phone_fallback",
-      sent_at: new Date().toISOString(),
-    });
-    return {
-      id: event.id,
-      status: "sent",
-      remote_id: sent.remoteId,
-      http_status: sent.status,
-      fallback: "blank_phone",
-    };
-  } catch (fallbackError) {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    const afterFallback = await findRemoteCustomerLive(source, profile);
-    if (afterFallback) {
-      await recordMapping(admin, source, event, afterFallback);
-      await markEvent(admin, event.id, {
-        status: "sent",
-        remote_id: afterFallback,
-        last_error: "reconciled_after_blank_phone_fallback",
-        sent_at: new Date().toISOString(),
-      });
-      return {
-        id: event.id,
-        status: "sent",
-        remote_id: afterFallback,
-        reconciliation: "live_lookup_after_blank_phone",
-      };
-    }
-    throw fallbackError;
-  }
 }
 
 async function remoteLink(
