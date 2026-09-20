@@ -541,7 +541,7 @@ class PBService {
       {
         'search': search.trim(),
         'limit': limit.clamp(1, 100),
-        if (cursor != null) 'cursor': cursor,
+        'cursor': ?cursor,
       },
     );
     final data = envelope.data;
@@ -1145,7 +1145,7 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
           {
             'customer_id': customerId,
             'limit': 100,
-            if (cursor != null) 'cursor': cursor,
+            'cursor': ?cursor,
           },
         );
         final data = envelope.data;
@@ -1451,7 +1451,7 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
       {
         'customer_id': customerId,
         'limit': limit.clamp(1, 100),
-        if (cursor != null) 'cursor': cursor,
+        'cursor': ?cursor,
       },
     );
     final data = envelope.data;
