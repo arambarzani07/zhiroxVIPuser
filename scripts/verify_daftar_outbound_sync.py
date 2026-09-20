@@ -40,6 +40,8 @@ assert 'legacy_import_links' in worker
 assert 'daftar_sync_seen' in worker
 assert 'payment_allocation' in worker
 assert 'customer_mapping_pending' in worker
+assert 'ambiguous_remote_write_waiting_for_inbound_reconciliation' in worker
+assert 'sent_with_blank_phone_fallback' not in worker
 
 assert 'path: "contacts"' in client
 assert 'path: "transactions"' in client
