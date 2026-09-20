@@ -72,7 +72,7 @@ function datesAreClose(left: unknown, right: unknown, toleranceMs: number): bool
 
 async function probeEndpoint(
   url: URL,
-  method: "OPTIONS" | "POST" | "PATCH" | "DELETE" = "OPTIONS",
+  method: "OPTIONS" | "POST" | "PUT" | "PATCH" | "DELETE" = "OPTIONS",
   probeBody?: Record<string, unknown>,
 ) {
   try {
@@ -82,11 +82,11 @@ async function probeEndpoint(
       signal: AbortSignal.timeout(8_000),
       headers: {
         accept: "application/json",
-        ...((method === "PATCH" || method === "POST")
+        ...((method === "PATCH" || method === "PUT" || method === "POST")
           ? { "content-type": "application/json" }
           : {}),
       },
-      ...((method === "PATCH" || method === "POST")
+      ...((method === "PATCH" || method === "PUT" || method === "POST")
         ? { body: JSON.stringify(probeBody ?? {}) }
         : {}),
     });
@@ -687,8 +687,24 @@ Deno.serve(async (req) => {
       probeEndpoint(rootTransactions),
       probeEndpoint(missingContact),
       probeEndpoint(missingTransaction),
+      probeEndpoint(missingContact, "PUT", {
+        user_id: 28,
+        name: { invalid: true },
+        phone: { invalid: true },
+        created_at: { invalid: true },
+        updated_at: { invalid: true },
+      }),
       probeEndpoint(missingContact, "PATCH"),
       probeEndpoint(missingContact, "DELETE"),
+      probeEndpoint(missingTransaction, "PUT", {
+        user_id: 28,
+        contact_id: "invalid",
+        transaction_type: "INVALID",
+        amount: "invalid",
+        currency: { invalid: true },
+        transaction_date: { invalid: true },
+        note: { invalid: true },
+      }),
       probeEndpoint(missingTransaction, "PATCH"),
       probeEndpoint(missingTransaction, "DELETE"),
       probeEndpoint(rootContacts, "POST", {
