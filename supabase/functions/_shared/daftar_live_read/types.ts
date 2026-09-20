@@ -10,7 +10,7 @@ export type DaftarLiveReadOperation =
   | "admin_all_debts"
   | "employee_stats";
 
-export type ReadSource = "live" | "mirror";
+export type ReadSource = "live" | "mirror" | "zhirox_primary";
 
 export type LiveFailure =
   | { kind: "timeout" }
