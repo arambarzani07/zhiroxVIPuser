@@ -737,6 +737,32 @@ Deno.serve(async (req) => {
         transaction_date: "2026-09-20T00:00:00.000Z",
         note: "contract probe",
       }),
+      // Exact shapes used by the recovered 0.2.7 client. The intentionally
+      // invalid user_id guarantees these probes cannot create production data.
+      probeEndpoint(rootContacts, "POST", {
+        user_id: "invalid",
+        contact_name: "ZHIROX contract probe",
+        contact_phone: "",
+      }),
+      probeEndpoint(rootTransactions, "POST", {
+        user_id: "invalid",
+        contact_id: 1,
+        transaction_type: "LOAN",
+        amount_iqd: 1,
+        amount_usd: 0,
+        transaction_date: "2026-09-20T00:00:00.000Z",
+        note: "contract probe",
+      }),
+      // Non-existent IDs make the PUT probes non-mutating while validating
+      // the legacy update routes and request shapes.
+      probeEndpoint(missingContact, "PUT", {
+        user_id: 28,
+        contact_name: "ZHIROX contract probe",
+        contact_phone: "",
+      }),
+      probeEndpoint(missingTransaction, "PUT", {
+        note: "ZHIROX contract probe",
+      }),
     ]);
     return json({
       ok: true,
