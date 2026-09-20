@@ -72,7 +72,7 @@ begin
     where rank = best_rank
   ),
   unique_best as (
-    select source_id, min(target_id) as target_id, count(*) as matches
+    select source_id, min(target_id::text)::uuid as target_id, count(*) as matches
     from best
     group by source_id
   )
