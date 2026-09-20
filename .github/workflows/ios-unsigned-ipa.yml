@@ -105,6 +105,10 @@ jobs:
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_daftar_failover_ready.py
 
+      - name: Verify Daftar planned primary cutover
+        if: github.ref_name == 'user-source'
+        run: python3 scripts/verify_daftar_planned_primary_cutover.py
+
       - name: Verify Daftar outage qualification
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_daftar_outage_qualification.py
