@@ -211,7 +211,35 @@ async function sendWrite(
     );
   }
 
-  return { remoteId: parseCreatedId(payload), status: response.status };
+  let remoteId: string;
+  try {
+    remoteId = parseCreatedId(payload);
+  } catch (error) {
+    throw new Error(
+      `ambiguous_remote_missing_id:${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return { remoteId, status: response.status };
+}
+
+async function assertRemoteIdAvailable(
+  admin: any,
+  source: Source,
+  entityKind: string,
+  sourceId: string,
+  targetId: string | null,
+) {
+  const { data, error } = await admin.from("legacy_import_links")
+    .select("target_id")
+    .eq("admin_id", source.admin_id)
+    .eq("source_fingerprint", source.source_fingerprint)
+    .eq("entity_kind", entityKind)
+    .eq("source_id", sourceId)
+    .maybeSingle();
+  if (error) throw error;
+  if (data && targetId && String(data.target_id) !== targetId) {
+    throw new Error("ambiguous_remote_id_collision");
+  }
 }
 
 async function recordMapping(
@@ -224,7 +252,22 @@ async function recordMapping(
 
   if (event.entity_kind === "payment") {
     const allocationSourceId = `${remoteId}:1`;
-    const { error: linkError } = await admin.from("legacy_import_links").upsert({
+    await assertRemoteIdAvailable(
+      admin,
+      source,
+      "payment",
+      allocationSourceId,
+      event.entity_id,
+    );
+    await assertRemoteIdAvailable(
+    admin,
+    source,
+    event.entity_kind,
+    remoteId,
+    event.entity_id,
+  );
+
+  const { error: linkError } = await admin.from("legacy_import_links").upsert({
       admin_id: source.admin_id,
       source_fingerprint: source.source_fingerprint,
       entity_kind: "payment",
@@ -421,7 +464,13 @@ async function processEvent(
     }
 
     const sent = await sendWrite(source, built.request);
-    await recordMapping(admin, source, event, sent.remoteId);
+    try {
+      await recordMapping(admin, source, event, sent.remoteId);
+    } catch (error) {
+      throw new Error(
+        `ambiguous_mapping_failed:${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     await markEvent(admin, event.id, {
       status: "sent",
       remote_id: sent.remoteId,
@@ -562,6 +611,15 @@ Deno.serve(async (req) => {
   if (source.outbound_write_contract_status !== "verified") {
     return json({ error: "write_contract_unverified" }, 409);
   }
+
+  await admin.from("daftar_outbound_events").update({
+    status: "blocked",
+    last_error: "ambiguous_worker_interruption",
+    updated_at: new Date().toISOString(),
+  })
+    .eq("sync_source_id", source.id)
+    .eq("status", "processing")
+    .lt("updated_at", new Date(Date.now() - 2 * 60_000).toISOString());
 
   const { data: events, error: eventsError } = await admin
     .from("daftar_outbound_events")
