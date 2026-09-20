@@ -144,6 +144,10 @@ jobs:
           python3 scripts/verify_daftar_customer_live_reads.py
           python3 scripts/verify_daftar_admin_live_reads.py
 
+      - name: Verify dashboard primary resilience
+        if: github.ref_name == 'user-source'
+        run: python3 scripts/verify_dashboard_primary_resilience.py
+
       - name: Verify customer QR web push policy
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_customer_push.py
