@@ -30,6 +30,8 @@ for operation in (
 
 assert '[functions.daftar-live-read]\nverify_jwt = false' in config
 assert 'admin.auth.getUser' in entrypoint
+assert 'SUPABASE_PUBLISHABLE_KEYS' in entrypoint
+assert 'SUPABASE_SECRET_KEYS' in entrypoint
 assert 'legacy_user_id' in entrypoint
 assert 'live_read_mode' in entrypoint
 
