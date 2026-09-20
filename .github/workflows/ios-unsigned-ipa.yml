@@ -137,6 +137,12 @@ jobs:
         if: github.ref_name == 'user-source'
         run: deno test supabase/functions/_shared/daftar_live_read/policy_test.ts
 
+      - name: Test Daftar live freshness and worker auth
+        if: github.ref_name == 'user-source'
+        run: |
+          deno test supabase/functions/_shared/daftar_live_read/freshness_test.ts
+          deno test supabase/functions/_shared/daftar_sync_auth_test.ts
+
       - name: Check Daftar sync Edge Functions
         if: github.ref_name == 'user-source'
         run: |
