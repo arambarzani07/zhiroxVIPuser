@@ -121,6 +121,13 @@ jobs:
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_daftar_admin_live_reads.py
 
+      - name: Verify Daftar live-primary reads
+        if: github.ref_name == 'user-source'
+        run: |
+          python3 scripts/verify_daftar_live_primary_read.py
+          python3 scripts/verify_daftar_customer_live_reads.py
+          python3 scripts/verify_daftar_admin_live_reads.py
+
       - name: Verify customer QR web push policy
         if: github.ref_name == 'user-source'
         run: python3 scripts/verify_customer_push.py
@@ -151,11 +158,15 @@ jobs:
           deno test supabase/functions/_shared/daftar_live_read/freshness_test.ts
           deno test supabase/functions/_shared/daftar_sync_auth_test.ts
 
-      - name: Test Daftar live-read runtime security
+      - name: Test Daftar live-read Edge Function
         if: github.ref_name == 'user-source'
         run: |
           deno test supabase/functions/_shared/daftar_live_read
-          deno check supabase/functions/daftar-live-read/index.ts
+          deno test supabase/functions/_shared/daftar_sync_auth_test.ts
+
+      - name: Check Daftar live-read Edge Function
+        if: github.ref_name == 'user-source'
+        run: deno check supabase/functions/daftar-live-read/index.ts
 
       - name: Check Daftar sync Edge Functions
         if: github.ref_name == 'user-source'
