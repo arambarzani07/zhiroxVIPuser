@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/services/dashboard_recent_activity.dart';
+import 'package:zhirox/services/daftar_live_read_service.dart';
 import 'package:zhirox/services/debt_push_enqueue.dart';
 import 'package:zhirox/services/supabase_compat.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -530,60 +531,52 @@ class PBService {
   }
 
   static Future<Map<String, dynamic>> getCustomerDirectoryPage({
-  String search = '',
-  int limit = 60,
-  Map<String, dynamic>? cursor,
-}) async {
-  await ensureInitialized();
-  final params = <String, dynamic>{
-    'p_search': search.trim(),
-    'p_limit': limit.clamp(1, 100),
-  };
-  final cursorCreatedAt = cursor?['created_at']?.toString() ?? '';
-  final cursorId = cursor?['id']?.toString() ?? '';
-  if (cursorCreatedAt.isNotEmpty && cursorId.isNotEmpty) {
-    params['p_cursor_created_at'] = cursorCreatedAt;
-    params['p_cursor_id'] = cursorId;
-  }
-
-  final raw = await client.rpc(
-    'get_customer_directory_page',
-    params: params,
-  );
-  if (raw is! Map) throw Exception('invalid customer directory page');
-  final data = Map<String, dynamic>.from(raw);
-  final users = <RecordModel>[];
-  final inbox = <String, Map<String, dynamic>>{};
-  final items = data['items'];
-  if (items is List) {
-    for (final item in items) {
-      if (item is! Map) continue;
-      final row = Map<String, dynamic>.from(item);
-      final user = _profileRecord(row);
-      users.add(user);
-      inbox[user.id] = {
-        'customer_id': user.id,
-        'remaining': row['remaining'],
-        'open_debt_count': row['open_debt_count'],
-        'last_activity_at': row['last_activity_at'],
-        'last_kind': row['last_kind'],
-        'last_amount': row['last_amount'],
-        'last_preview': row['last_preview'],
-        'last_event_type': row['last_event_type'],
-        'unread': row['unread'] == true,
-      };
+    String search = '',
+    int limit = 60,
+    Map<String, dynamic>? cursor,
+  }) async {
+    await ensureInitialized();
+    final envelope = await DaftarLiveReadService.invokeMap(
+      'customer_directory',
+      {
+        'search': search.trim(),
+        'limit': limit.clamp(1, 100),
+        if (cursor != null) 'cursor': cursor,
+      },
+    );
+    final data = envelope.data;
+    final users = <RecordModel>[];
+    final inbox = <String, Map<String, dynamic>>{};
+    final items = data['items'];
+    if (items is List) {
+      for (final item in items) {
+        if (item is! Map) continue;
+        final row = Map<String, dynamic>.from(item);
+        final user = _profileRecord(row);
+        users.add(user);
+        inbox[user.id] = {
+          'customer_id': user.id,
+          'remaining': row['remaining'],
+          'open_debt_count': row['open_debt_count'],
+          'last_activity_at': row['last_activity_at'],
+          'last_kind': row['last_kind'],
+          'last_amount': row['last_amount'],
+          'last_preview': row['last_preview'],
+          'last_event_type': row['last_event_type'],
+          'unread': row['unread'] == true,
+        };
+      }
     }
+    return {
+      'items': users,
+      'inbox': inbox,
+      'totalItems': int.tryParse('${data['total_count'] ?? 0}') ?? 0,
+      'hasMore': data['has_more'] == true,
+      'nextCursor': data['next_cursor'] is Map
+          ? Map<String, dynamic>.from(data['next_cursor'] as Map)
+          : null,
+    };
   }
-  return {
-    'items': users,
-    'inbox': inbox,
-    'totalItems': int.tryParse('${data['total_count'] ?? 0}') ?? 0,
-    'hasMore': data['has_more'] == true,
-    'nextCursor': data['next_cursor'] is Map
-        ? Map<String, dynamic>.from(data['next_cursor'] as Map)
-        : null,
-  };
-}
 
 /// Loads every approved customer through the server-paginated directory.
 /// This is used by selectors that must not silently hide customers after
@@ -1012,8 +1005,13 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     };
   }
 
-  static Future<RecordModel> getDebt(String id) {
-    return pb.collection('debts').getOne(id, expand: 'customer,created_by');
+  static Future<RecordModel> getDebt(String id) async {
+    await ensureInitialized();
+    final envelope = await DaftarLiveReadService.invokeMap(
+      'debt_detail',
+      {'debt_id': id},
+    );
+    return _debtRecordFromExpandedRaw(envelope.data);
   }
 
   // ==================== Payments ====================
@@ -1415,6 +1413,42 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     });
   }
 
+  static RecordModel _debtRecordFromExpandedRaw(Map<String, dynamic> raw) {
+    final row = Map<String, dynamic>.from(raw);
+    final customerRaw = row.remove('customer_expand');
+    final creatorRaw = row.remove('debt_creator_expand');
+    final json = _debtRecordFromRaw(row).toJson();
+    final expand = <String, dynamic>{};
+    if (customerRaw is Map) {
+      expand['customer'] =
+          _profileRecord(Map<String, dynamic>.from(customerRaw)).toJson();
+    }
+    if (creatorRaw is Map) {
+      expand['created_by'] =
+          _profileRecord(Map<String, dynamic>.from(creatorRaw)).toJson();
+    }
+    if (expand.isNotEmpty) json['expand'] = expand;
+    return RecordModel.fromJson(json);
+  }
+
+  static RecordModel _paymentRecordFromExpandedRaw(Map<String, dynamic> raw) {
+    final row = Map<String, dynamic>.from(raw);
+    final debtRaw = row.remove('debt_expand');
+    final creatorRaw = row.remove('creator_expand');
+    final json = _paymentRecordFromRaw(row).toJson();
+    final expand = <String, dynamic>{};
+    if (debtRaw is Map) {
+      expand['debt'] =
+          _debtRecordFromExpandedRaw(Map<String, dynamic>.from(debtRaw)).toJson();
+    }
+    if (creatorRaw is Map) {
+      expand['created_by'] =
+          _profileRecord(Map<String, dynamic>.from(creatorRaw)).toJson();
+    }
+    if (expand.isNotEmpty) json['expand'] = expand;
+    return RecordModel.fromJson(json);
+  }
+
   static RecordModel _paymentRecordFromRaw(
     Map<String, dynamic> row, {
     Map<String, dynamic>? relatedDebt,
@@ -1475,20 +1509,17 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     String customerId,
   ) async {
     await ensureInitialized();
-    final raw = await client.rpc(
-      'get_customer_finance_snapshot',
-      params: {'p_customer_id': customerId},
+    final envelope = await DaftarLiveReadService.invokeMap(
+      'customer_finance_snapshot',
+      {'customer_id': customerId},
     );
-    if (raw is! Map) throw Exception('invalid finance snapshot');
-    final data = Map<String, dynamic>.from(raw);
+    final data = envelope.data;
     final openRaw = data['open_debts'];
     final openDebts = <RecordModel>[];
     if (openRaw is List) {
       for (final item in openRaw) {
         if (item is Map) {
-          openDebts.add(
-            _debtRecordFromRaw(Map<String, dynamic>.from(item)),
-          );
+          openDebts.add(_debtRecordFromRaw(Map<String, dynamic>.from(item)));
         }
       }
     }
@@ -1508,27 +1539,15 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     Map<String, dynamic>? cursor,
   }) async {
     await ensureInitialized();
-    final params = <String, dynamic>{
-      'p_customer_id': customerId,
-      'p_limit': limit.clamp(1, 100),
-    };
-    if (cursor != null) {
-      final at = cursor['at']?.toString() ?? '';
-      final kind = int.tryParse('${cursor['kind_rank'] ?? ''}');
-      final id = cursor['id']?.toString() ?? '';
-      if (at.isNotEmpty && kind != null && id.isNotEmpty) {
-        params['p_cursor_at'] = at;
-        params['p_cursor_kind'] = kind;
-        params['p_cursor_id'] = id;
-      }
-    }
-
-    final raw = await client.rpc(
-      'get_customer_financial_timeline_page',
-      params: params,
+    final envelope = await DaftarLiveReadService.invokeMap(
+      'customer_timeline',
+      {
+        'customer_id': customerId,
+        'limit': limit.clamp(1, 100),
+        if (cursor != null) 'cursor': cursor,
+      },
     );
-    if (raw is! Map) throw Exception('invalid financial timeline page');
-    final data = Map<String, dynamic>.from(raw);
+    final data = envelope.data;
     final debts = <RecordModel>[];
     final payments = <RecordModel>[];
     final financialEvents = <RecordModel>[];
@@ -1546,27 +1565,20 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
         } else if (kind == 'payment') {
           Map<String, dynamic>? related;
           final relatedRaw = item['related_debt'];
-          if (relatedRaw is Map) {
-            related = Map<String, dynamic>.from(relatedRaw);
-          }
-          payments.add(
-            _paymentRecordFromRaw(record, relatedDebt: related),
-          );
+          if (relatedRaw is Map) related = Map<String, dynamic>.from(relatedRaw);
+          payments.add(_paymentRecordFromRaw(record, relatedDebt: related));
         } else if (kind == 'system') {
           financialEvents.add(_financialEventRecord(record));
         }
       }
     }
-
     final nextRaw = data['next_cursor'];
     return {
       'debts': debts,
       'payments': payments,
       'financialEvents': financialEvents,
       'hasMore': data['has_more'] == true,
-      'nextCursor': nextRaw is Map
-          ? Map<String, dynamic>.from(nextRaw)
-          : null,
+      'nextCursor': nextRaw is Map ? Map<String, dynamic>.from(nextRaw) : null,
       'loadedCount': rawItems is List ? rawItems.length : 0,
     };
   }
@@ -1575,25 +1587,16 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     String customerId,
   ) async {
     await ensureInitialized();
-    const pageSize = 500;
-    var offset = 0;
-    final records = <RecordModel>[];
-    while (true) {
-      final data = await client
-          .from('debts')
-          .select()
-          .eq('customer_id', customerId)
-          .order('created_at', ascending: false)
-          .range(offset, offset + pageSize - 1);
-      final rows = (data as List)
-          .whereType<Map>()
-          .map((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false);
-      records.addAll(rows.map(_debtRecordFromRaw));
-      if (rows.length < pageSize) break;
-      offset += pageSize;
-    }
-    return records;
+    final envelope = await DaftarLiveReadService.invokeMap(
+      'customer_all_debts',
+      {'customer_id': customerId},
+    );
+    final rawItems = envelope.data['items'];
+    if (rawItems is! List) throw const FormatException('invalid customer debts');
+    return rawItems
+        .whereType<Map>()
+        .map((row) => _debtRecordFromExpandedRaw(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
   }
 
   // ==================== Stats ====================
