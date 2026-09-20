@@ -32,8 +32,11 @@ Deno.test("one Daftar payment can materialize as multiple ZHIROX allocations", a
       role: "admin",
       tenantId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     },
-  ) as Array<{ id: string; amount: number }>;
+  ) as { items: Array<{ id: string; amount: number }> };
 
-  assertEquals(data.length, 2);
-  assertEquals(data.reduce((sum, row) => sum + row.amount, 0), 100000);
+  assertEquals(data.items.length, 2);
+  assertEquals(
+    data.items.reduce((sum, row) => sum + row.amount, 0),
+    100000,
+  );
 });
