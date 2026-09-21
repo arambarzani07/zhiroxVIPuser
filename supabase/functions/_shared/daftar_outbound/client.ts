@@ -1,7 +1,12 @@
 export type DaftarWriteRequest = {
-  method: "POST";
-  path: "contacts" | "transactions";
-  body: Record<string, unknown>;
+  method: "POST" | "PUT" | "DELETE";
+  path:
+    | "contacts"
+    | "transactions"
+    | `contacts/${number}`
+    | `transactions/${number}`;
+  body?: Record<string, unknown>;
+  remoteId?: string;
 };
 
 export type ContactCreateInput = {
@@ -22,8 +27,15 @@ export type TransactionCreateInput = {
   note: string;
 };
 
+export type ContactUpdateInput = ContactCreateInput & { remoteId: number };
+export type TransactionUpdateInput = TransactionCreateInput & {
+  remoteId: number;
+};
+
 function positiveInteger(value: number, name: string): number {
-  if (!Number.isInteger(value) || value <= 0) throw new Error(`invalid_${name}`);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`invalid_${name}`);
+  }
   return value;
 }
 
@@ -65,7 +77,9 @@ export function toDaftarLocalTimestamp(value: string): string {
   ].join("");
 }
 
-export function buildContactCreate(input: ContactCreateInput): DaftarWriteRequest {
+export function buildContactCreate(
+  input: ContactCreateInput,
+): DaftarWriteRequest {
   const createdAt = Date.parse(input.createdAt);
   const updatedAt = Date.parse(input.updatedAt);
   if (!Number.isFinite(createdAt)) throw new Error("invalid_created_at");
@@ -102,9 +116,60 @@ export function buildTransactionCreate(
       transaction_type: input.transactionType,
       amount: nonNegativeAmount(input.amount),
       currency,
-      transaction_date: toDaftarLocalTimestamp(new Date(parsedDate).toISOString()),
+      transaction_date: toDaftarLocalTimestamp(
+        new Date(parsedDate).toISOString(),
+      ),
       note: String(input.note ?? ""),
     },
+  };
+}
+
+export function buildContactUpdate(
+  input: ContactUpdateInput,
+): DaftarWriteRequest {
+  const createdAt = Date.parse(input.createdAt);
+  const updatedAt = Date.parse(input.updatedAt);
+  if (!Number.isFinite(createdAt)) throw new Error("invalid_created_at");
+  if (!Number.isFinite(updatedAt)) throw new Error("invalid_updated_at");
+  const remoteId = positiveInteger(input.remoteId, "remote_id");
+  return {
+    method: "PUT",
+    path: `contacts/${remoteId}`,
+    remoteId: String(remoteId),
+    body: {
+      user_id: positiveInteger(input.userId, "user_id"),
+      name: String(input.name ?? "").trim(),
+      phone: String(input.phone ?? "").trim(),
+      created_at: toDaftarLocalTimestamp(new Date(createdAt).toISOString()),
+      updated_at: toDaftarLocalTimestamp(new Date(updatedAt).toISOString()),
+    },
+  };
+}
+
+export function buildTransactionUpdate(
+  input: TransactionUpdateInput,
+): DaftarWriteRequest {
+  const create = buildTransactionCreate(input);
+  const remoteId = positiveInteger(input.remoteId, "remote_id");
+  return {
+    method: "PUT",
+    path: `transactions/${remoteId}`,
+    remoteId: String(remoteId),
+    body: create.body,
+  };
+}
+
+export function buildDaftarDelete(
+  kind: "customer" | "debt" | "payment",
+  remoteIdValue: number,
+): DaftarWriteRequest {
+  const remoteId = positiveInteger(remoteIdValue, "remote_id");
+  return {
+    method: "DELETE",
+    path: kind === "customer"
+      ? `contacts/${remoteId}`
+      : `transactions/${remoteId}`,
+    remoteId: String(remoteId),
   };
 }
 
@@ -124,13 +189,22 @@ export function parseCreatedId(payload: unknown): string {
   throw new Error("daftar_write_missing_id");
 }
 
-export function fixedDaftarUrl(baseUrl: string, path: "contacts" | "transactions"): URL {
+export function fixedDaftarUrl(
+  baseUrl: string,
+  path: DaftarWriteRequest["path"],
+): URL {
   const base = new URL(baseUrl);
-  if (base.protocol !== "https:" || base.hostname !== "api-daftar-qarz.kasbkar.net") {
+  if (
+    base.protocol !== "https:" ||
+    base.hostname !== "api-daftar-qarz.kasbkar.net"
+  ) {
     throw new Error("invalid_daftar_write_host");
   }
   if (!base.pathname.startsWith("/api/v1")) {
     throw new Error("invalid_daftar_write_base");
+  }
+  if (!/^(contacts|transactions)(\/\d+)?$/.test(path)) {
+    throw new Error("invalid_daftar_write_path");
   }
   return new URL(path, baseUrl.endsWith("/") ? baseUrl : baseUrl + "/");
 }

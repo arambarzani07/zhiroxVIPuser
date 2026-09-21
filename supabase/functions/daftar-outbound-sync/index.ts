@@ -2,10 +2,13 @@ import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 import { authorizeDaftarSyncRequest } from "../_shared/daftar_sync_auth.ts";
 import {
   buildContactCreate,
+  buildContactUpdate,
+  buildDaftarDelete,
   buildTransactionCreate,
+  buildTransactionUpdate,
+  type DaftarWriteRequest,
   fixedDaftarUrl,
   parseCreatedId,
-  type DaftarWriteRequest,
 } from "../_shared/daftar_outbound/client.ts";
 
 const daftarCompatibilityUserAgent = "Dart/3.9 (dart:io)";
@@ -32,9 +35,11 @@ type OutboxEvent = {
   id: string;
   entity_kind: "customer" | "debt" | "payment";
   entity_id: string;
-  operation: "create";
+  operation: "create" | "update" | "delete";
   status: "pending" | "failed" | "blocked";
   attempts: number;
+  payload_snapshot?: Record<string, unknown> | null;
+  remote_id_snapshot?: string | null;
   created_at?: string;
   last_error?: string | null;
 };
@@ -66,10 +71,15 @@ function normalizeContactPhone(value: unknown): string {
   return String(value ?? "").replace(/\D/g, "");
 }
 
-function datesAreClose(left: unknown, right: unknown, toleranceMs: number): boolean {
+function datesAreClose(
+  left: unknown,
+  right: unknown,
+  toleranceMs: number,
+): boolean {
   const a = Date.parse(String(left ?? ""));
   const b = Date.parse(String(right ?? ""));
-  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= toleranceMs;
+  return Number.isFinite(a) && Number.isFinite(b) &&
+    Math.abs(a - b) <= toleranceMs;
 }
 
 async function probeEndpoint(
@@ -133,7 +143,9 @@ function remoteContactPhone(row: RemoteContactRow): string {
   return normalizeContactPhone(row.phone ?? row.contact_phone);
 }
 
-async function fetchRemoteContactsLive(source: Source): Promise<RemoteContactRow[]> {
+async function fetchRemoteContactsLive(
+  source: Source,
+): Promise<RemoteContactRow[]> {
   const endpoint = fixedDaftarUrl(source.api_base_url, "contacts");
   endpoint.searchParams.set("user_id", String(source.legacy_user_id));
   const response = await fetch(endpoint, {
@@ -342,11 +354,13 @@ async function sendWrite(
         "content-type": "application/json",
         "user-agent": daftarCompatibilityUserAgent,
       },
-      body: JSON.stringify(request.body),
+      ...(request.body ? { body: JSON.stringify(request.body) } : {}),
     });
   } catch (error) {
     throw new Error(
-      `ambiguous_remote_write:${error instanceof Error ? error.message : String(error)}`,
+      `ambiguous_remote_write:${
+        error instanceof Error ? error.message : String(error)
+      }`,
     );
   }
 
@@ -359,6 +373,14 @@ async function sendWrite(
   }
 
   if (!response.ok) {
+    // DELETE is idempotent. A missing row already represents the requested
+    // final state and must not poison the queue forever.
+    if (request.method === "DELETE" && response.status === 404) {
+      return {
+        remoteId: String(request.remoteId ?? ""),
+        status: response.status,
+      };
+    }
     if (response.status === 429) throw new Error("remote_rate_limited");
     if (response.status >= 500) {
       throw new Error(`ambiguous_remote_http_${response.status}`);
@@ -368,14 +390,19 @@ async function sendWrite(
     );
   }
 
-  let remoteId: string;
-  try {
-    remoteId = parseCreatedId(payload);
-  } catch (error) {
-    throw new Error(
-      `ambiguous_remote_missing_id:${error instanceof Error ? error.message : String(error)}`,
-    );
+  let remoteId = String(request.remoteId ?? "");
+  if (request.method === "POST") {
+    try {
+      remoteId = parseCreatedId(payload);
+    } catch (error) {
+      throw new Error(
+        `ambiguous_remote_missing_id:${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
+  if (!/^\d+$/.test(remoteId)) throw new Error("invalid_remote_id");
   return { remoteId, status: response.status };
 }
 
@@ -417,40 +444,45 @@ async function recordMapping(
       event.entity_id,
     );
 
-    const { error: linkError } = await admin.from("legacy_import_links").upsert({
-      admin_id: source.admin_id,
-      source_fingerprint: source.source_fingerprint,
-      entity_kind: "payment",
-      source_id: allocationSourceId,
-      target_id: event.entity_id,
-    }, {
-      onConflict: "admin_id,source_fingerprint,entity_kind,source_id",
-      ignoreDuplicates: true,
-    });
+    const { error: linkError } = await admin.from("legacy_import_links").upsert(
+      {
+        admin_id: source.admin_id,
+        source_fingerprint: source.source_fingerprint,
+        entity_kind: "payment",
+        source_id: allocationSourceId,
+        target_id: event.entity_id,
+      },
+      {
+        onConflict: "admin_id,source_fingerprint,entity_kind,source_id",
+        ignoreDuplicates: true,
+      },
+    );
     if (linkError) throw linkError;
 
-    const { error: seenPaymentError } = await admin.from("daftar_sync_seen").upsert({
-      sync_source_id: source.id,
-      entity_kind: "payment",
-      source_id: remoteId,
-      target_id: null,
-      payload_hash: null,
-    }, {
-      onConflict: "sync_source_id,entity_kind,source_id",
-      ignoreDuplicates: true,
-    });
+    const { error: seenPaymentError } = await admin.from("daftar_sync_seen")
+      .upsert({
+        sync_source_id: source.id,
+        entity_kind: "payment",
+        source_id: remoteId,
+        target_id: null,
+        payload_hash: null,
+      }, {
+        onConflict: "sync_source_id,entity_kind,source_id",
+        ignoreDuplicates: true,
+      });
     if (seenPaymentError) throw seenPaymentError;
 
-    const { error: seenAllocationError } = await admin.from("daftar_sync_seen").upsert({
-      sync_source_id: source.id,
-      entity_kind: "payment_allocation",
-      source_id: allocationSourceId,
-      target_id: event.entity_id,
-      payload_hash: null,
-    }, {
-      onConflict: "sync_source_id,entity_kind,source_id",
-      ignoreDuplicates: true,
-    });
+    const { error: seenAllocationError } = await admin.from("daftar_sync_seen")
+      .upsert({
+        sync_source_id: source.id,
+        entity_kind: "payment_allocation",
+        source_id: allocationSourceId,
+        target_id: event.entity_id,
+        payload_hash: null,
+      }, {
+        onConflict: "sync_source_id,entity_kind,source_id",
+        ignoreDuplicates: true,
+      });
     if (seenAllocationError) throw seenAllocationError;
     return;
   }
@@ -494,7 +526,9 @@ async function reconcileBlockedCustomerEvents(
 ): Promise<Record<string, unknown>[]> {
   const { data: blockedRows, error: blockedError } = await admin
     .from("daftar_outbound_events")
-    .select("id, entity_kind, entity_id, operation, status, attempts, created_at, last_error")
+    .select(
+      "id, entity_kind, entity_id, operation, status, attempts, created_at, last_error",
+    )
     .eq("sync_source_id", source.id)
     .eq("entity_kind", "customer")
     .eq("status", "blocked")
@@ -524,7 +558,10 @@ async function reconcileBlockedCustomerEvents(
       .eq("id", event.entity_id)
       .maybeSingle();
     if (profileError) throw profileError;
-    if (!profile || profile.role !== "customer" || profile.admin_id !== source.admin_id) {
+    if (
+      !profile || profile.role !== "customer" ||
+      profile.admin_id !== source.admin_id
+    ) {
       continue;
     }
 
@@ -555,7 +592,9 @@ async function reconcileBlockedCustomerEvents(
       results.push({
         id: event.id,
         status: "blocked",
-        reconciliation: candidates.length === 0 ? "no_match" : "multiple_matches",
+        reconciliation: candidates.length === 0
+          ? "no_match"
+          : "multiple_matches",
       });
       continue;
     }
@@ -605,14 +644,31 @@ async function buildEventWrite(
   admin: any,
   source: Source,
   event: OutboxEvent,
-): Promise<{ request: DaftarWriteRequest } | { skip: string } | { defer: string }> {
-  const existingRemoteId = await remoteLink(
+): Promise<
+  { request: DaftarWriteRequest } | { skip: string } | { defer: string }
+> {
+  const existingRemoteId = event.remote_id_snapshot ?? await remoteLink(
     admin,
     source,
     event.entity_kind,
     event.entity_id,
   );
-  if (existingRemoteId) return { skip: existingRemoteId };
+  if (event.operation === "delete") {
+    if (!existingRemoteId) return { skip: "remote_mapping_missing" };
+    return {
+      request: buildDaftarDelete(event.entity_kind, Number(existingRemoteId)),
+    };
+  }
+
+  if (event.operation === "update" && !existingRemoteId) {
+    return { defer: "remote_mapping_pending" };
+  }
+
+  if (event.operation === "create" && existingRemoteId) {
+    return { skip: existingRemoteId };
+  }
+
+  const snapshot = event.payload_snapshot ?? {};
 
   if (event.entity_kind === "customer") {
     const { data, error } = await admin.from("profiles")
@@ -620,19 +676,33 @@ async function buildEventWrite(
       .eq("id", event.entity_id)
       .maybeSingle();
     if (error) throw error;
-    if (!data || data.role !== "customer" || data.admin_id !== source.admin_id) {
+    if (
+      !data || data.role !== "customer" || data.admin_id !== source.admin_id
+    ) {
       return { skip: "entity_missing" };
     }
-    const createdAt = String(data.created_at ?? new Date().toISOString());
+    const effective = Object.keys(snapshot).length > 0 ? snapshot : data;
+    const createdAt = String(
+      effective.created_at ?? data.created_at ?? new Date().toISOString(),
+    );
     const updatedAt = String(data.updated_at ?? data.created_at ?? createdAt);
     return {
-      request: buildContactCreate({
-        userId: Number(source.legacy_user_id),
-        name: String(data.name ?? "").trim(),
-        phone: String(data.phone ?? "").trim(),
-        createdAt,
-        updatedAt,
-      }),
+      request: event.operation === "update"
+        ? buildContactUpdate({
+          remoteId: Number(existingRemoteId),
+          userId: Number(source.legacy_user_id),
+          name: String(effective.name ?? data.name ?? "").trim(),
+          phone: String(effective.phone ?? data.phone ?? "").trim(),
+          createdAt,
+          updatedAt: String(effective.updated_at ?? updatedAt),
+        })
+        : buildContactCreate({
+          userId: Number(source.legacy_user_id),
+          name: String(effective.name ?? data.name ?? "").trim(),
+          phone: String(effective.phone ?? data.phone ?? "").trim(),
+          createdAt,
+          updatedAt: String(effective.updated_at ?? updatedAt),
+        }),
     };
   }
 
@@ -645,30 +715,50 @@ async function buildEventWrite(
       .maybeSingle();
     if (error) throw error;
     if (!data || data.is_deleted === true) return { skip: "entity_missing" };
+    const effective = Object.keys(snapshot).length > 0 ? snapshot : data;
 
     const contactId = await remoteLink(
       admin,
       source,
       "customer",
-      String(data.customer_id),
+      String(effective.customer_id ?? data.customer_id),
     );
     if (!contactId) {
-      await ensureCustomerOutbox(admin, source, String(data.customer_id));
+      await ensureCustomerOutbox(
+        admin,
+        source,
+        String(effective.customer_id ?? data.customer_id),
+      );
       return { defer: "customer_mapping_pending" };
     }
 
     return {
-      request: buildTransactionCreate({
-        userId: Number(source.legacy_user_id),
-        contactId: Number(contactId),
-        transactionType: "LOAN",
-        amount: Number(data.amount ?? 0),
-        currency: String(data.currency ?? "IQD"),
-        transactionDate: String(
-          data.custom_date ?? data.created_at ?? new Date().toISOString(),
-        ),
-        note: String(data.description ?? ""),
-      }),
+      request: event.operation === "update"
+        ? buildTransactionUpdate({
+          remoteId: Number(existingRemoteId),
+          userId: Number(source.legacy_user_id),
+          contactId: Number(contactId),
+          transactionType: "LOAN",
+          amount: Number(effective.amount ?? data.amount ?? 0),
+          currency: String(effective.currency ?? data.currency ?? "IQD"),
+          transactionDate: String(
+            effective.transaction_date ?? data.custom_date ?? data.created_at ??
+              new Date().toISOString(),
+          ),
+          note: String(effective.description ?? data.description ?? ""),
+        })
+        : buildTransactionCreate({
+          userId: Number(source.legacy_user_id),
+          contactId: Number(contactId),
+          transactionType: "LOAN",
+          amount: Number(effective.amount ?? data.amount ?? 0),
+          currency: String(effective.currency ?? data.currency ?? "IQD"),
+          transactionDate: String(
+            effective.transaction_date ?? data.custom_date ?? data.created_at ??
+              new Date().toISOString(),
+          ),
+          note: String(effective.description ?? data.description ?? ""),
+        }),
     };
   }
 
@@ -678,6 +768,7 @@ async function buildEventWrite(
     .maybeSingle();
   if (paymentError) throw paymentError;
   if (!payment) return { skip: "entity_missing" };
+  const effective = Object.keys(snapshot).length > 0 ? snapshot : payment;
 
   const { data: debt, error: debtError } = await admin.from("debts")
     .select("id, customer_id, currency")
@@ -690,23 +781,44 @@ async function buildEventWrite(
     admin,
     source,
     "customer",
-    String(debt.customer_id),
+    String(effective.customer_id ?? debt.customer_id),
   );
   if (!contactId) {
-    await ensureCustomerOutbox(admin, source, String(debt.customer_id));
+    await ensureCustomerOutbox(
+      admin,
+      source,
+      String(effective.customer_id ?? debt.customer_id),
+    );
     return { defer: "customer_mapping_pending" };
   }
 
   return {
-    request: buildTransactionCreate({
-      userId: Number(source.legacy_user_id),
-      contactId: Number(contactId),
-      transactionType: "PAYMENT",
-      amount: Number(payment.amount ?? 0),
-      currency: String(debt.currency ?? "IQD"),
-      transactionDate: String(payment.created_at ?? new Date().toISOString()),
-      note: String(payment.note ?? ""),
-    }),
+    request: event.operation === "update"
+      ? buildTransactionUpdate({
+        remoteId: Number(existingRemoteId),
+        userId: Number(source.legacy_user_id),
+        contactId: Number(contactId),
+        transactionType: "PAYMENT",
+        amount: Number(effective.amount ?? payment.amount ?? 0),
+        currency: String(effective.currency ?? debt.currency ?? "IQD"),
+        transactionDate: String(
+          effective.transaction_date ?? payment.created_at ??
+            new Date().toISOString(),
+        ),
+        note: String(effective.note ?? payment.note ?? ""),
+      })
+      : buildTransactionCreate({
+        userId: Number(source.legacy_user_id),
+        contactId: Number(contactId),
+        transactionType: "PAYMENT",
+        amount: Number(effective.amount ?? payment.amount ?? 0),
+        currency: String(effective.currency ?? debt.currency ?? "IQD"),
+        transactionDate: String(
+          effective.transaction_date ?? payment.created_at ??
+            new Date().toISOString(),
+        ),
+        note: String(effective.note ?? payment.note ?? ""),
+      }),
   };
 }
 
@@ -741,10 +853,17 @@ async function processEvent(
     // This makes retrying an earlier ambiguous 5xx idempotent: if Daftar
     // committed the previous request but lost the response, we map it instead
     // of creating a duplicate contact.
-    if (event.entity_kind === "customer") {
-      const profile = await loadCustomerForOutbound(admin, source, event.entity_id);
+    if (event.operation === "create" && event.entity_kind === "customer") {
+      const profile = await loadCustomerForOutbound(
+        admin,
+        source,
+        event.entity_id,
+      );
       if (profile) {
-        const existingRemoteCustomer = await findRemoteCustomerLive(source, profile);
+        const existingRemoteCustomer = await findRemoteCustomerLive(
+          source,
+          profile,
+        );
         if (existingRemoteCustomer) {
           await recordMapping(admin, source, event, existingRemoteCustomer);
           await markEvent(admin, event.id, {
@@ -765,10 +884,14 @@ async function processEvent(
 
     const sent = await sendWrite(source, built.request);
     try {
-      await recordMapping(admin, source, event, sent.remoteId);
+      if (event.operation === "create") {
+        await recordMapping(admin, source, event, sent.remoteId);
+      }
     } catch (error) {
       throw new Error(
-        `ambiguous_mapping_failed:${error instanceof Error ? error.message : String(error)}`,
+        `ambiguous_mapping_failed:${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
     }
     await markEvent(admin, event.id, {
@@ -787,7 +910,10 @@ async function processEvent(
     const message = error instanceof Error ? error.message : String(error);
     const ambiguous = message.startsWith("ambiguous_remote_");
 
-    if (ambiguous && outboundRequest && event.entity_kind === "customer") {
+    if (
+      ambiguous && outboundRequest && event.operation === "create" &&
+      event.entity_kind === "customer"
+    ) {
       try {
         const recovered = await recoverAmbiguousCustomerCreate(
           admin,
@@ -811,8 +937,12 @@ async function processEvent(
         );
         await markEvent(admin, event.id, {
           status: nextStatus,
-          last_error: `customer_recovery_failed:${recoveryMessage}`.slice(0, 1000),
-          next_attempt_at: new Date(Date.now() + retryMinutes * 60_000).toISOString(),
+          last_error: `customer_recovery_failed:${recoveryMessage}`.slice(
+            0,
+            1000,
+          ),
+          next_attempt_at: new Date(Date.now() + retryMinutes * 60_000)
+            .toISOString(),
         });
         return {
           id: event.id,
@@ -835,13 +965,17 @@ async function processEvent(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const url = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceCredential = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
     envJsonKey("SUPABASE_SECRET_KEYS") ?? "";
-  if (!url || !serviceCredential) return json({ error: "server_not_configured" }, 500);
+  if (!url || !serviceCredential) {
+    return json({ error: "server_not_configured" }, 500);
+  }
 
   const admin = createClient(url, serviceCredential, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -1013,7 +1147,9 @@ Deno.serve(async (req) => {
 
   const { data: events, error: eventsError } = await admin
     .from("daftar_outbound_events")
-    .select("id, entity_kind, entity_id, operation, status, attempts")
+    .select(
+      "id, entity_kind, entity_id, operation, status, attempts, payload_snapshot, remote_id_snapshot, created_at",
+    )
     .eq("sync_source_id", source.id)
     .in("status", ["pending", "failed"])
     .lte("next_attempt_at", new Date().toISOString())
@@ -1021,8 +1157,23 @@ Deno.serve(async (req) => {
     .limit(10);
   if (eventsError) return json({ error: "outbox_read_failed" }, 500);
 
+  const orderedEvents = [...(events ?? [])].sort((left: any, right: any) => {
+    const byCreated = Date.parse(String(left.created_at ?? "")) -
+      Date.parse(String(right.created_at ?? ""));
+    if (byCreated) return byCreated;
+    if (left.operation === "delete" && right.operation === "delete") {
+      const priority: Record<string, number> = {
+        payment: 0,
+        debt: 1,
+        customer: 2,
+      };
+      return (priority[left.entity_kind] ?? 3) -
+        (priority[right.entity_kind] ?? 3);
+    }
+    return 0;
+  });
   const results: Record<string, unknown>[] = [];
-  for (const raw of events ?? []) {
+  for (const raw of orderedEvents) {
     results.push(await processEvent(admin, source, raw as OutboxEvent));
   }
 

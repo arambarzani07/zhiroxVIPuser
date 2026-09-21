@@ -1,6 +1,9 @@
 import {
   buildContactCreate,
+  buildContactUpdate,
+  buildDaftarDelete,
   buildTransactionCreate,
+  buildTransactionUpdate,
   parseCreatedId,
   toDaftarLocalTimestamp,
 } from "./client.ts";
@@ -37,7 +40,9 @@ Deno.test("builds Daftar LOAN transaction create", () => {
     transactionDate: "2026-09-20T15:00:00.000Z",
     note: "test",
   });
-  if (request.path !== "transactions") throw new Error("wrong transactions path");
+  if (request.path !== "transactions") {
+    throw new Error("wrong transactions path");
+  }
   if (request.method !== "POST") throw new Error("wrong transactions method");
   const body = request.body as Record<string, unknown>;
   if (body.transaction_type !== "LOAN") throw new Error("wrong type");
@@ -60,6 +65,45 @@ Deno.test("builds Daftar PAYMENT transaction create", () => {
   });
   const body = request.body as Record<string, unknown>;
   if (body.transaction_type !== "PAYMENT") throw new Error("wrong type");
+});
+
+Deno.test("builds contact and transaction update requests with fixed remote ids", () => {
+  const contact = buildContactUpdate({
+    remoteId: 42,
+    userId: 28,
+    name: "Updated Customer",
+    phone: "07501112233",
+    createdAt: "2026-09-20T15:00:00.000Z",
+    updatedAt: "2026-09-21T15:00:00.000Z",
+  });
+  if (contact.method !== "PUT" || contact.path !== "contacts/42") {
+    throw new Error("wrong contact update request");
+  }
+
+  const transaction = buildTransactionUpdate({
+    remoteId: 84,
+    userId: 28,
+    contactId: 50667,
+    transactionType: "LOAN",
+    amount: 7000,
+    currency: "IQD",
+    transactionDate: "2026-09-21T15:00:00.000Z",
+    note: "updated",
+  });
+  if (transaction.method !== "PUT" || transaction.path !== "transactions/84") {
+    throw new Error("wrong transaction update request");
+  }
+});
+
+Deno.test("builds contact and transaction delete requests", () => {
+  const contact = buildDaftarDelete("customer", 42);
+  const payment = buildDaftarDelete("payment", 84);
+  if (contact.method !== "DELETE" || contact.path !== "contacts/42") {
+    throw new Error("wrong contact delete request");
+  }
+  if (payment.method !== "DELETE" || payment.path !== "transactions/84") {
+    throw new Error("wrong transaction delete request");
+  }
 });
 
 Deno.test("parses created id without accepting malformed success", () => {

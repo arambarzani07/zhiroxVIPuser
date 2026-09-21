@@ -6,7 +6,8 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, x-daftar-sync-secret",
+  "Access-Control-Allow-Headers":
+    "authorization, content-type, x-daftar-sync-secret",
 };
 
 type SyncSource = {
@@ -65,7 +66,9 @@ function envJsonKey(name: string): string | null {
   }
 }
 
-function isTransientDatabaseError(error: { message?: string; code?: string } | null): boolean {
+function isTransientDatabaseError(
+  error: { message?: string; code?: string } | null,
+): boolean {
   if (!error) return false;
   const message = String(error.message ?? "").toLowerCase();
   return message.includes("timeout") ||
@@ -98,22 +101,31 @@ function amount(value: unknown): number {
 
 function normalizePhone(value: unknown): string {
   let digits = String(value ?? "").replace(/\D/g, "");
-  if (digits.startsWith("964") && digits.length === 13) digits = `0${digits.slice(3)}`;
+  if (digits.startsWith("964") && digits.length === 13) {
+    digits = `0${digits.slice(3)}`;
+  }
   return digits;
 }
 
 function randomPassword(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return `${Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")}Aa1!`;
+  return `${
+    Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")
+  }Aa1!`;
 }
 
 async function stableUuid(namespace: string): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(namespace)));
+  const digest = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(namespace)),
+  );
   const bytes = digest.slice(0, 16);
   bytes[6] = (bytes[6] & 0x0f) | 0x50;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${
+    hex.slice(16, 20)
+  }-${hex.slice(20)}`;
 }
 
 type SourceFetch<T> = {
@@ -148,16 +160,28 @@ async function fetchRows<T>(
     }
     if (attempt < 4) {
       const jitter = crypto.getRandomValues(new Uint16Array(1))[0] % 300;
-      await new Promise((resolve) => setTimeout(resolve, attempt * attempt * 500 + jitter));
+      await new Promise((resolve) =>
+        setTimeout(resolve, attempt * attempt * 500 + jitter)
+      );
     }
   }
-  if (!response) throw lastError instanceof Error ? lastError : new Error("source_unreachable");
+  if (!response) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("source_unreachable");
+  }
   if (response.status === 304) {
-    return { rows: null, etag: response.headers.get("etag") ?? etag ?? null, notModified: true };
+    return {
+      rows: null,
+      etag: response.headers.get("etag") ?? etag ?? null,
+      notModified: true,
+    };
   }
   if (!response.ok) throw new Error(`source_http_${response.status}`);
   const payload = await response.json();
-  if (payload?.success !== true || !Array.isArray(payload?.data)) throw new Error("invalid_source_response");
+  if (payload?.success !== true || !Array.isArray(payload?.data)) {
+    throw new Error("invalid_source_response");
+  }
   return {
     rows: payload.data as T[],
     etag: response.headers.get("etag"),
@@ -179,7 +203,11 @@ async function upsertSeen(
     source_id: sourceId,
     target_id: targetId,
     payload_hash: payloadHash,
-  }, { onConflict: "sync_source_id,entity_kind,source_id", ignoreDuplicates: true });
+  }, {
+    onConflict: "sync_source_id,entity_kind,source_id",
+    ignoreDuplicates: false,
+    defaultToNull: false,
+  });
   if (error) throw error;
 }
 
@@ -209,6 +237,71 @@ async function mirrorRows(
   }
 }
 
+async function pruneMirrorRows(
+  admin: any,
+  table: "daftar_mirror_contacts" | "daftar_mirror_transactions",
+  syncSourceId: string,
+  presentIds: Set<string>,
+) {
+  const { data, error } = await admin.from(table)
+    .select("source_id")
+    .eq("sync_source_id", syncSourceId);
+  if (error) throw error;
+  const missing = (data ?? [])
+    .map((row: { source_id: unknown }) => String(row.source_id))
+    .filter((id: string) => !presentIds.has(id));
+  for (let offset = 0; offset < missing.length; offset += 250) {
+    const { error: deleteError } = await admin.from(table)
+      .delete()
+      .eq("sync_source_id", syncSourceId)
+      .in("source_id", missing.slice(offset, offset + 250));
+    if (deleteError) throw deleteError;
+  }
+}
+
+async function confirmMissingSourceIds(
+  admin: any,
+  source: SyncSource,
+  entityKind: "customer" | "debt" | "payment",
+  knownIds: string[],
+  presentIds: Set<string>,
+): Promise<string[]> {
+  const confirmed: string[] = [];
+  for (const sourceId of knownIds) {
+    if (presentIds.has(sourceId)) {
+      const { error } = await admin.from("daftar_inbound_missing_candidates")
+        .delete()
+        .eq("sync_source_id", source.id)
+        .eq("entity_kind", entityKind)
+        .eq("source_id", sourceId);
+      if (error) throw error;
+      continue;
+    }
+
+    const { data: existing, error: readError } = await admin
+      .from("daftar_inbound_missing_candidates")
+      .select("missing_count")
+      .eq("sync_source_id", source.id)
+      .eq("entity_kind", entityKind)
+      .eq("source_id", sourceId)
+      .maybeSingle();
+    if (readError) throw readError;
+    const count = Number(existing?.missing_count ?? 0) + 1;
+    const { error: upsertError } = await admin
+      .from("daftar_inbound_missing_candidates")
+      .upsert({
+        sync_source_id: source.id,
+        entity_kind: entityKind,
+        source_id: sourceId,
+        missing_count: count,
+        last_missing_at: new Date().toISOString(),
+      }, { onConflict: "sync_source_id,entity_kind,source_id" });
+    if (upsertError) throw upsertError;
+    if (count >= 2) confirmed.push(sourceId);
+  }
+  return confirmed;
+}
+
 async function upsertLegacyLink(
   admin: any,
   source: SyncSource,
@@ -222,7 +315,10 @@ async function upsertLegacyLink(
     entity_kind: entityKind,
     source_id: sourceId,
     target_id: targetId,
-  }, { onConflict: "admin_id,source_fingerprint,entity_kind,source_id", ignoreDuplicates: true });
+  }, {
+    onConflict: "admin_id,source_fingerprint,entity_kind,source_id",
+    ignoreDuplicates: true,
+  });
   if (error) throw error;
 }
 
@@ -243,11 +339,15 @@ async function findLegacyTarget(
   const targets: string[] = [
     ...new Set<string>(
       (data ?? [])
-        .map((row: { target_id?: unknown }) => String(row.target_id ?? "").trim())
+        .map((row: { target_id?: unknown }) =>
+          String(row.target_id ?? "").trim()
+        )
         .filter((value: string) => value.length > 0),
     ),
   ];
-  if (targets.length > 1) throw new Error(`${entityKind}_source_id_conflict:${sourceId}`);
+  if (targets.length > 1) {
+    throw new Error(`${entityKind}_source_id_conflict:${sourceId}`);
+  }
   return targets[0] ?? null;
 }
 
@@ -255,33 +355,117 @@ async function ensureCustomer(
   admin: any,
   source: SyncSource,
   contact: LegacyContact,
-): Promise<{ id: string; created: boolean; reused: boolean }> {
+): Promise<
+  { id: string; created: boolean; reused: boolean; updated: boolean }
+> {
   const sourceId = String(contact.id);
   const { data: seen, error: seenError } = await admin.from("daftar_sync_seen")
-    .select("target_id")
+    .select("target_id, payload_hash")
     .eq("sync_source_id", source.id)
     .eq("entity_kind", "customer")
     .eq("source_id", sourceId)
     .maybeSingle();
   if (seenError) throw seenError;
-  if (seen?.target_id) return { id: seen.target_id, created: false, reused: true };
+  const payloadHash = await sha256Hex(JSON.stringify(contact));
+  if (seen?.target_id) {
+    let updated = false;
+    if (seen.payload_hash !== payloadHash) {
+      const phone = normalizePhone(contact.phone);
+      const { data: applied, error: updateError } = await admin.rpc(
+        "apply_daftar_inbound_customer_update",
+        {
+          p_admin_id: source.admin_id,
+          p_target_id: seen.target_id,
+          p_name: String(contact.name ?? "").trim(),
+          p_phone: phone,
+          p_updated_at: contact.updated_at ?? new Date().toISOString(),
+        },
+      );
+      if (updateError || applied !== true) {
+        throw new Error(
+          `customer_update_failed:${sourceId}:${
+            updateError?.message ?? "not_found"
+          }`,
+        );
+      }
+      if (phone) {
+        const { data: authProfile, error: authLookupError } = await admin.auth
+          .admin.getUserById(seen.target_id);
+        if (authLookupError || !authProfile.user) {
+          throw new Error(
+            `customer_auth_lookup_failed:${sourceId}:${
+              authLookupError?.message ?? "not_found"
+            }`,
+          );
+        }
+        const { error: authError } = await admin.auth.admin.updateUserById(
+          seen.target_id,
+          {
+            email: `${phone}@zhirox.local`,
+            user_metadata: {
+              ...(authProfile.user.user_metadata ?? {}),
+              imported: true,
+              legacy_source_id: sourceId,
+              admin_id: source.admin_id,
+              name: String(contact.name ?? "").trim(),
+              phone,
+              role: "customer",
+            },
+          },
+        );
+        if (authError) {
+          throw new Error(
+            `customer_auth_update_failed:${sourceId}:${authError.message}`,
+          );
+        }
+      }
+      await upsertSeen(
+        admin,
+        source.id,
+        "customer",
+        sourceId,
+        seen.target_id,
+        payloadHash,
+      );
+      updated = true;
+    }
+    return { id: seen.target_id, created: false, reused: true, updated };
+  }
 
-  const legacyTarget = await findLegacyTarget(admin, source, "customer", sourceId);
+  const legacyTarget = await findLegacyTarget(
+    admin,
+    source,
+    "customer",
+    sourceId,
+  );
   if (legacyTarget) {
     const { data: profile } = await admin.from("profiles")
       .select("id, role, admin_id")
       .eq("id", legacyTarget)
       .maybeSingle();
-    if (!profile || profile.role !== "customer" || profile.admin_id !== source.admin_id) {
+    if (
+      !profile || profile.role !== "customer" ||
+      profile.admin_id !== source.admin_id
+    ) {
       throw new Error(`customer_target_conflict:${sourceId}`);
     }
-    await upsertSeen(admin, source.id, "customer", sourceId, legacyTarget, await sha256Hex(JSON.stringify(contact)));
+    await upsertSeen(
+      admin,
+      source.id,
+      "customer",
+      sourceId,
+      legacyTarget,
+      payloadHash,
+    );
     await upsertLegacyLink(admin, source, "customer", sourceId, legacyTarget);
-    return { id: legacyTarget, created: false, reused: true };
+    return { id: legacyTarget, created: false, reused: true, updated: false };
   }
 
-  const phone = normalizePhone(contact.phone) || `legacy_${source.admin_id.slice(0, 8)}_${sourceId}`;
-  const { data: existingProfile, error: profileLookupError } = await admin.from("profiles")
+  const phone = normalizePhone(contact.phone) ||
+    `legacy_${source.admin_id.slice(0, 8)}_${sourceId}`;
+  const { data: existingProfile, error: profileLookupError } = await admin.from(
+    "profiles",
+  )
     .select("id, role, admin_id")
     .eq("phone", phone)
     .maybeSingle();
@@ -290,22 +474,30 @@ async function ensureCustomer(
   let customerId: string;
   let created = false;
   if (existingProfile) {
-    if (existingProfile.role !== "customer" || existingProfile.admin_id !== source.admin_id) {
+    if (
+      existingProfile.role !== "customer" ||
+      existingProfile.admin_id !== source.admin_id
+    ) {
       throw new Error(`phone_collision:${sourceId}`);
     }
     customerId = existingProfile.id;
   } else {
-    const { data: createdAuth, error: authError } = await admin.auth.admin.createUser({
-      email: `${phone}@zhirox.local`,
-      password: randomPassword(),
-      email_confirm: true,
-      user_metadata: {
-        imported: true,
-        legacy_source_id: sourceId,
-        admin_id: source.admin_id,
-      },
-    });
-    if (authError || !createdAuth.user) throw new Error(`auth_create_failed:${sourceId}:${authError?.message ?? "unknown"}`);
+    const { data: createdAuth, error: authError } = await admin.auth.admin
+      .createUser({
+        email: `${phone}@zhirox.local`,
+        password: randomPassword(),
+        email_confirm: true,
+        user_metadata: {
+          imported: true,
+          legacy_source_id: sourceId,
+          admin_id: source.admin_id,
+        },
+      });
+    if (authError || !createdAuth.user) {
+      throw new Error(
+        `auth_create_failed:${sourceId}:${authError?.message ?? "unknown"}`,
+      );
+    }
     customerId = createdAuth.user.id;
     created = true;
     const occurredAt = contact.created_at ?? new Date().toISOString();
@@ -329,16 +521,28 @@ async function ensureCustomer(
     });
     if (profileError) {
       await admin.auth.admin.deleteUser(customerId);
-      throw new Error(`profile_create_failed:${sourceId}:${profileError.message}`);
+      throw new Error(
+        `profile_create_failed:${sourceId}:${profileError.message}`,
+      );
     }
   }
 
-  await upsertSeen(admin, source.id, "customer", sourceId, customerId, await sha256Hex(JSON.stringify(contact)));
+  await upsertSeen(
+    admin,
+    source.id,
+    "customer",
+    sourceId,
+    customerId,
+    payloadHash,
+  );
   await upsertLegacyLink(admin, source, "customer", sourceId, customerId);
-  return { id: customerId, created, reused: !created };
+  return { id: customerId, created, reused: !created, updated: false };
 }
 
-async function sourceDebtIds(admin: any, syncSourceId: string): Promise<string[]> {
+async function sourceDebtIds(
+  admin: any,
+  syncSourceId: string,
+): Promise<string[]> {
   const ids: string[] = [];
   for (let from = 0;; from += 1000) {
     const { data, error } = await admin.from("daftar_sync_seen")
@@ -348,7 +552,9 @@ async function sourceDebtIds(admin: any, syncSourceId: string): Promise<string[]
       .not("target_id", "is", null)
       .range(from, from + 999);
     if (error) throw error;
-    ids.push(...(data ?? []).map((row: { target_id: string }) => row.target_id));
+    ids.push(
+      ...(data ?? []).map((row: { target_id: string }) => row.target_id),
+    );
     if ((data ?? []).length < 1000) break;
   }
   return ids;
@@ -378,23 +584,29 @@ async function availableSourceDebts(
   const rows: SourceDebtCandidate[] = ((data ?? []) as SourceDebtCandidate[])
     .filter((row) => linkedIds.has(row.id));
   rows.sort((left: SourceDebtCandidate, right: SourceDebtCandidate) => {
-    const dateDifference = Date.parse(left.custom_date ?? left.created_at) - Date.parse(right.custom_date ?? right.created_at);
+    const dateDifference = Date.parse(left.custom_date ?? left.created_at) -
+      Date.parse(right.custom_date ?? right.created_at);
     return dateDifference || String(left.id).localeCompare(String(right.id));
   });
   return rows;
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const url = Deno.env.get("SUPABASE_URL")!;
   // Prefer the stable built-in service-role key. Rotating secret-key bundles can
   // contain more than one key, and selecting the first JSON value is not stable
   // across warm Edge Function instances.
-  const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? envJsonKey("SUPABASE_SECRET_KEYS");
+  const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+    envJsonKey("SUPABASE_SECRET_KEYS");
   if (!secret) return json({ error: "server_not_configured" }, 500);
-  const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
+  const admin = createClient(url, secret, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   let source: SyncSource | null = null;
   let runId: string | null = null;
@@ -407,6 +619,12 @@ Deno.serve(async (req) => {
     new_payment_allocations: 0,
     new_zero_events: 0,
     reused_records: 0,
+    updated_customers: 0,
+    updated_debts: 0,
+    updated_payments: 0,
+    deleted_customers: 0,
+    deleted_debts: 0,
+    deleted_payments: 0,
   };
   let customerIdentityReconciliation: unknown = {
     skipped: true,
@@ -419,7 +637,10 @@ Deno.serve(async (req) => {
     const providedSecret = req.headers.get("x-daftar-sync-secret") ?? "";
     if (!sourceId) return json({ error: "unauthorized" }, 401);
 
-    const { data: sourceRow, error: sourceError } = await loadSyncSource(admin, sourceId);
+    const { data: sourceRow, error: sourceError } = await loadSyncSource(
+      admin,
+      sourceId,
+    );
     if (sourceError || !sourceRow) {
       return json({
         error: "sync_source_not_found",
@@ -437,9 +658,14 @@ Deno.serve(async (req) => {
     });
     if (!authorized) return json({ error: "unauthorized" }, 401);
 
-    const { data: claimed, error: claimError } = await admin.rpc("claim_daftar_sync", { p_source_id: source.id });
+    const { data: claimed, error: claimError } = await admin.rpc(
+      "claim_daftar_sync",
+      { p_source_id: source.id },
+    );
     if (claimError) throw claimError;
-    if (claimed !== true) return json({ ok: true, skipped: true, reason: "sync_already_running" });
+    if (claimed !== true) {
+      return json({ ok: true, skipped: true, reason: "sync_already_running" });
+    }
 
     const { data: run, error: runError } = await admin.from("daftar_sync_runs")
       .insert({ sync_source_id: source.id, status: "running" })
@@ -448,6 +674,13 @@ Deno.serve(async (req) => {
     if (runError) throw runError;
     runId = run.id;
 
+    const { count: pendingMissingCount, error: pendingMissingError } =
+      await admin
+        .from("daftar_inbound_missing_candidates")
+        .select("source_id", { count: "exact", head: true })
+        .eq("sync_source_id", source.id);
+    if (pendingMissingError) throw pendingMissingError;
+    const forceFullSnapshot = Number(pendingMissingCount ?? 0) > 0;
     const mirrorBootstrap = !source.mirror_bootstrapped_at;
     let [
       contactsFetch,
@@ -458,12 +691,12 @@ Deno.serve(async (req) => {
       fetchRows<LegacyContact>(
         `${source.api_base_url}/contacts`,
         source.legacy_user_id,
-        mirrorBootstrap ? null : source.contacts_etag,
+        mirrorBootstrap || forceFullSnapshot ? null : source.contacts_etag,
       ),
       fetchRows<LegacyTransaction>(
         `${source.api_base_url}/transactions`,
         source.legacy_user_id,
-        mirrorBootstrap ? null : source.transactions_etag,
+        mirrorBootstrap || forceFullSnapshot ? null : source.transactions_etag,
       ),
       fetchRows<Record<string, unknown>>(
         `${source.api_base_url}/contacts/totals-by-currency`,
@@ -484,8 +717,12 @@ Deno.serve(async (req) => {
     }
     const contactsRaw = contactsFetch.rows ?? [];
     const transactionsRaw = transactionsFetch.rows ?? [];
-    const contacts = contactsRaw.filter((row) => Number(row.user_id) === Number(source!.legacy_user_id));
-    const transactions = transactionsRaw.filter((row) => Number(row.user_id) === Number(source!.legacy_user_id));
+    const contacts = contactsRaw.filter((row) =>
+      Number(row.user_id) === Number(source!.legacy_user_id)
+    );
+    const transactions = transactionsRaw.filter((row) =>
+      Number(row.user_id) === Number(source!.legacy_user_id)
+    );
     counters.fetched_contacts = contacts.length;
     counters.fetched_transactions = transactions.length;
 
@@ -493,6 +730,22 @@ Deno.serve(async (req) => {
       mirrorRows(admin, "daftar_mirror_contacts", source.id, contacts),
       mirrorRows(admin, "daftar_mirror_transactions", source.id, transactions),
     ]);
+    if (!contactsFetch.notModified) {
+      await pruneMirrorRows(
+        admin,
+        "daftar_mirror_contacts",
+        source.id,
+        new Set(contacts.map((row) => String(row.id))),
+      );
+    }
+    if (!transactionsFetch.notModified) {
+      await pruneMirrorRows(
+        admin,
+        "daftar_mirror_transactions",
+        source.id,
+        new Set(transactions.map((row) => String(row.id))),
+      );
+    }
 
     const officialContactTotals = officialContactTotalsFetch.rows ?? [];
     const officialTotals = officialTotalsFetch.rows ?? [];
@@ -505,17 +758,21 @@ Deno.serve(async (req) => {
       },
     );
     if (officialTotalsError) {
-      throw new Error(`official_totals_replace_failed:${officialTotalsError.message}`);
+      throw new Error(
+        `official_totals_replace_failed:${officialTotalsError.message}`,
+      );
     }
 
     if (!contactsFetch.notModified) {
       const currentContactIds = contacts.map((row) => String(row.id));
-      const { data: identityReconciliation, error: identityReconciliationError } =
-        await admin.rpc("reconcile_daftar_customer_identity_links", {
-          p_source_id: source.id,
-          p_current_contact_ids: currentContactIds,
-          p_expected_count: officialContactTotals.length,
-        });
+      const {
+        data: identityReconciliation,
+        error: identityReconciliationError,
+      } = await admin.rpc("reconcile_daftar_customer_identity_links", {
+        p_source_id: source.id,
+        p_current_contact_ids: currentContactIds,
+        p_expected_count: officialContactTotals.length,
+      });
       if (identityReconciliationError) {
         throw new Error(
           `customer_identity_reconciliation_failed:${identityReconciliationError.message}`,
@@ -526,7 +783,9 @@ Deno.serve(async (req) => {
 
     if (mirrorBootstrap) {
       const mirroredAt = new Date().toISOString();
-      const { error: mirrorStateError } = await admin.from("daftar_sync_sources").update({
+      const { error: mirrorStateError } = await admin.from(
+        "daftar_sync_sources",
+      ).update({
         mirror_bootstrapped_at: mirroredAt,
         mirror_last_full_at: mirroredAt,
       }).eq("id", source.id);
@@ -539,43 +798,115 @@ Deno.serve(async (req) => {
       .filter((row) => Number(row.id) > Number(source!.last_contact_id))
       .sort((a, b) => Number(a.id) - Number(b.id))
       .slice(0, 250);
-    const delta = transactions
-      .filter((row) => Number(row.id) > Number(source!.last_transaction_id))
+    const { data: seenTransactionRows, error: seenTransactionError } =
+      await admin
+        .from("daftar_sync_seen")
+        .select("entity_kind, source_id, payload_hash")
+        .eq("sync_source_id", source.id)
+        .in("entity_kind", ["debt", "payment"]);
+    if (seenTransactionError) throw seenTransactionError;
+    const seenTransactionHashes = new Map(
+      (seenTransactionRows ?? []).map((row: {
+        entity_kind: unknown;
+        source_id: unknown;
+        payload_hash: unknown;
+      }) => [
+        `${String(row.entity_kind)}:${String(row.source_id)}`,
+        row.payload_hash == null ? null : String(row.payload_hash),
+      ]),
+    );
+    const changedTransactions: LegacyTransaction[] = [];
+    if (!transactionsFetch.notModified) {
+      for (const row of transactions) {
+        const kind = row.transaction_type === "LOAN" ? "debt" : "payment";
+        const hash = await sha256Hex(JSON.stringify(row));
+        const existingHash = seenTransactionHashes.get(`${kind}:${row.id}`);
+        if (existingHash !== hash) {
+          changedTransactions.push(row);
+        }
+      }
+    }
+    const deltaById = new Map<number, LegacyTransaction>();
+    for (const row of transactions) {
+      if (Number(row.id) > Number(source!.last_transaction_id)) {
+        deltaById.set(Number(row.id), row);
+      }
+    }
+    for (const row of changedTransactions) deltaById.set(Number(row.id), row);
+    const delta = [...deltaById.values()]
       .sort((a, b) => Number(a.id) - Number(b.id))
       .slice(0, 500);
+
+    const { data: seenContactRows, error: seenContactError } = await admin
+      .from("daftar_sync_seen")
+      .select("source_id, payload_hash")
+      .eq("sync_source_id", source.id)
+      .eq("entity_kind", "customer");
+    if (seenContactError) throw seenContactError;
+    const seenContactHashes = new Map(
+      (seenContactRows ?? []).map((
+        row: { source_id: unknown; payload_hash: unknown },
+      ) => [
+        String(row.source_id),
+        row.payload_hash == null ? null : String(row.payload_hash),
+      ]),
+    );
+    const changedContactIds = new Set<number>();
+    if (!contactsFetch.notModified) {
+      for (const contact of contacts) {
+        const hash = await sha256Hex(JSON.stringify(contact));
+        if (seenContactHashes.get(String(contact.id)) !== hash) {
+          changedContactIds.add(Number(contact.id));
+        }
+      }
+    }
 
     const requiredContactIds = new Set<number>([
       ...newContacts.map((row) => Number(row.id)),
       ...delta.map((row) => Number(row.contact_id)),
+      ...changedContactIds,
     ]);
     const customerIds = new Map<number, string>();
     for (const contactId of requiredContactIds) {
       const contact = contactMap.get(contactId);
-      if (!contact || !String(contact.name ?? "").trim()) throw new Error(`contact_missing:${contactId}`);
+      if (!contact || !String(contact.name ?? "").trim()) {
+        throw new Error(`contact_missing:${contactId}`);
+      }
       const result = await ensureCustomer(admin, source, contact);
       customerIds.set(contactId, result.id);
       if (result.created) counters.new_customers++;
       if (result.reused) counters.reused_records++;
+      if (result.updated) counters.updated_customers++;
     }
 
-    for (const transaction of delta.filter((row) => row.transaction_type === "LOAN")) {
+    for (
+      const transaction of delta.filter((row) =>
+        row.transaction_type === "LOAN"
+      )
+    ) {
       const sourceTransactionId = String(transaction.id);
       const customerId = customerIds.get(Number(transaction.contact_id));
-      if (!customerId) throw new Error(`customer_mapping_missing:${transaction.contact_id}`);
+      if (!customerId) {
+        throw new Error(`customer_mapping_missing:${transaction.contact_id}`);
+      }
       const transactionAmount = amount(transaction.amount);
-      const occurredAt = transaction.transaction_date ?? transaction.created_at ?? new Date().toISOString();
+      const occurredAt = transaction.transaction_date ??
+        transaction.created_at ?? new Date().toISOString();
       const currency = String(transaction.currency || "IQD");
       const payloadHash = await sha256Hex(JSON.stringify(transaction));
 
       if (transactionAmount === 0) {
         const { data: seenZero } = await admin.from("daftar_sync_seen")
           .select("target_id").eq("sync_source_id", source.id)
-          .eq("entity_kind", "zero_event").eq("source_id", sourceTransactionId).maybeSingle();
+          .eq("entity_kind", "zero_event").eq("source_id", sourceTransactionId)
+          .maybeSingle();
         if (seenZero) {
           counters.reused_records++;
           continue;
         }
-        const eventId = await stableUuid(`${source.admin_id}:zero_event:${sourceTransactionId}`);
+        const eventId = await stableUuid(
+          `${source.admin_id}:zero_event:${sourceTransactionId}`,
+        );
         const { error } = await admin.from("financial_events").upsert({
           id: eventId,
           customer_id: customerId,
@@ -596,20 +927,64 @@ Deno.serve(async (req) => {
           created_at: occurredAt,
         }, { onConflict: "id", ignoreDuplicates: true });
         if (error) throw error;
-        await upsertSeen(admin, source.id, "zero_event", sourceTransactionId, eventId, payloadHash);
+        await upsertSeen(
+          admin,
+          source.id,
+          "zero_event",
+          sourceTransactionId,
+          eventId,
+          payloadHash,
+        );
         counters.new_zero_events++;
         continue;
       }
 
       const { data: seenDebt } = await admin.from("daftar_sync_seen")
-        .select("target_id").eq("sync_source_id", source.id)
-        .eq("entity_kind", "debt").eq("source_id", sourceTransactionId).maybeSingle();
+        .select("target_id, payload_hash").eq("sync_source_id", source.id)
+        .eq("entity_kind", "debt").eq("source_id", sourceTransactionId)
+        .maybeSingle();
       if (seenDebt?.target_id) {
+        if (seenDebt.payload_hash !== payloadHash) {
+          const { data: updated, error: updateError } = await admin.rpc(
+            "apply_daftar_inbound_debt_update",
+            {
+              p_admin_id: source.admin_id,
+              p_target_id: seenDebt.target_id,
+              p_amount: transactionAmount,
+              p_currency: currency,
+              p_description: String(transaction.note ?? ""),
+              p_occurred_at: occurredAt,
+              p_deleted: false,
+            },
+          );
+          if (updateError || updated !== true) {
+            throw new Error(
+              `debt_update_failed:${sourceTransactionId}:${
+                updateError?.message ?? "not_found"
+              }`,
+            );
+          }
+          await upsertSeen(
+            admin,
+            source.id,
+            "debt",
+            sourceTransactionId,
+            seenDebt.target_id,
+            payloadHash,
+          );
+          counters.updated_debts++;
+        }
         counters.reused_records++;
         continue;
       }
-      const legacyTarget = await findLegacyTarget(admin, source, "debt", sourceTransactionId);
-      const debtId = legacyTarget ?? await stableUuid(`${source.admin_id}:debt:${sourceTransactionId}`);
+      const legacyTarget = await findLegacyTarget(
+        admin,
+        source,
+        "debt",
+        sourceTransactionId,
+      );
+      const debtId = legacyTarget ??
+        await stableUuid(`${source.admin_id}:debt:${sourceTransactionId}`);
       if (!legacyTarget) {
         const { error } = await admin.from("debts").upsert({
           id: debtId,
@@ -645,30 +1020,87 @@ Deno.serve(async (req) => {
       } else {
         counters.reused_records++;
       }
-      await upsertSeen(admin, source.id, "debt", sourceTransactionId, debtId, payloadHash);
-      await upsertLegacyLink(admin, source, "debt", sourceTransactionId, debtId);
+      await upsertSeen(
+        admin,
+        source.id,
+        "debt",
+        sourceTransactionId,
+        debtId,
+        payloadHash,
+      );
+      await upsertLegacyLink(
+        admin,
+        source,
+        "debt",
+        sourceTransactionId,
+        debtId,
+      );
     }
 
     const linkedSourceDebtIds = new Set(await sourceDebtIds(admin, source.id));
-    for (const transaction of delta.filter((row) => row.transaction_type === "PAYMENT")) {
+    for (
+      const transaction of delta.filter((row) =>
+        row.transaction_type === "PAYMENT"
+      )
+    ) {
       const sourceTransactionId = String(transaction.id);
       const customerId = customerIds.get(Number(transaction.contact_id));
-      if (!customerId) throw new Error(`customer_mapping_missing:${transaction.contact_id}`);
+      if (!customerId) {
+        throw new Error(`customer_mapping_missing:${transaction.contact_id}`);
+      }
       const transactionAmount = amount(transaction.amount);
-      const occurredAt = transaction.transaction_date ?? transaction.created_at ?? new Date().toISOString();
+      const occurredAt = transaction.transaction_date ??
+        transaction.created_at ?? new Date().toISOString();
       const currency = String(transaction.currency || "IQD");
       const payloadHash = await sha256Hex(JSON.stringify(transaction));
 
       const { data: paymentMarker } = await admin.from("daftar_sync_seen")
-        .select("source_id").eq("sync_source_id", source.id)
-        .eq("entity_kind", "payment").eq("source_id", sourceTransactionId).maybeSingle();
+        .select("source_id, payload_hash").eq("sync_source_id", source.id)
+        .eq("entity_kind", "payment").eq("source_id", sourceTransactionId)
+        .maybeSingle();
       if (paymentMarker) {
-        counters.reused_records++;
-        continue;
+        if (paymentMarker.payload_hash === payloadHash) {
+          counters.reused_records++;
+          continue;
+        }
+        // Outbound-created payments are mapped before the next inbound read
+        // and intentionally start with a null hash. The first source snapshot
+        // confirms that mapping; replacing the local payment here would change
+        // its UUID and break receipts/references for an otherwise identical
+        // write. Later source edits have a non-null previous hash and follow
+        // the transactional remove/reallocate path below.
+        if (paymentMarker.payload_hash == null) {
+          await upsertSeen(
+            admin,
+            source.id,
+            "payment",
+            sourceTransactionId,
+            null,
+            payloadHash,
+          );
+          counters.reused_records++;
+          continue;
+        }
+        const { error: removeError } = await admin.rpc(
+          "remove_daftar_inbound_payment",
+          {
+            p_admin_id: source.admin_id,
+            p_source_id: source.id,
+            p_remote_transaction_id: sourceTransactionId,
+          },
+        );
+        if (removeError) {
+          throw new Error(
+            `payment_update_remove_failed:${sourceTransactionId}:${removeError.message}`,
+          );
+        }
+        counters.updated_payments++;
       }
 
       if (transactionAmount === 0) {
-        const eventId = await stableUuid(`${source.admin_id}:zero_event:${sourceTransactionId}`);
+        const eventId = await stableUuid(
+          `${source.admin_id}:zero_event:${sourceTransactionId}`,
+        );
         const { error } = await admin.from("financial_events").upsert({
           id: eventId,
           customer_id: customerId,
@@ -689,41 +1121,74 @@ Deno.serve(async (req) => {
           created_at: occurredAt,
         }, { onConflict: "id", ignoreDuplicates: true });
         if (error) throw error;
-        await upsertSeen(admin, source.id, "zero_event", sourceTransactionId, eventId, payloadHash);
-        await upsertSeen(admin, source.id, "payment", sourceTransactionId, eventId, payloadHash);
+        await upsertSeen(
+          admin,
+          source.id,
+          "zero_event",
+          sourceTransactionId,
+          eventId,
+          payloadHash,
+        );
+        await upsertSeen(
+          admin,
+          source.id,
+          "payment",
+          sourceTransactionId,
+          eventId,
+          payloadHash,
+        );
         counters.new_zero_events++;
         continue;
       }
 
-      const { data: existingAllocationLinks, error: allocationLinkError } = await admin.from("legacy_import_links")
-        .select("source_id, target_id")
-        .eq("admin_id", source.admin_id)
-        .eq("entity_kind", "payment")
-        .like("source_id", `${sourceTransactionId}:%`);
+      const { data: existingAllocationLinks, error: allocationLinkError } =
+        await admin.from("legacy_import_links")
+          .select("source_id, target_id")
+          .eq("admin_id", source.admin_id)
+          .eq("entity_kind", "payment")
+          .like("source_id", `${sourceTransactionId}:%`);
       if (allocationLinkError) throw allocationLinkError;
-      const allocationIds = (existingAllocationLinks ?? []).map((row: { target_id: string }) => row.target_id);
+      const allocationIds = (existingAllocationLinks ?? []).map((
+        row: { target_id: string },
+      ) => row.target_id);
       let alreadyAllocated = 0;
       if (allocationIds.length > 0) {
         const { data: existingPayments, error } = await admin.from("payments")
           .select("amount").in("id", allocationIds);
         if (error) throw error;
-        alreadyAllocated = (existingPayments ?? []).reduce((sum: number, row: { amount: number }) => sum + amount(row.amount), 0);
+        alreadyAllocated = (existingPayments ?? []).reduce(
+          (sum: number, row: { amount: number }) => sum + amount(row.amount),
+          0,
+        );
       }
-      let remaining = Math.round((transactionAmount - alreadyAllocated) * 100) / 100;
-      let part = (existingAllocationLinks ?? []).reduce((max: number, row: { source_id: string }) => {
-        const parsed = Number(String(row.source_id).split(":").pop());
-        return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
-      }, 0);
-      if (remaining < 0) throw new Error(`payment_allocation_conflict:${sourceTransactionId}`);
+      let remaining = Math.round((transactionAmount - alreadyAllocated) * 100) /
+        100;
+      let part = (existingAllocationLinks ?? []).reduce(
+        (max: number, row: { source_id: string }) => {
+          const parsed = Number(String(row.source_id).split(":").pop());
+          return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
+        },
+        0,
+      );
+      if (remaining < 0) {
+        throw new Error(`payment_allocation_conflict:${sourceTransactionId}`);
+      }
 
-      const debts = await availableSourceDebts(admin, linkedSourceDebtIds, customerId, currency);
+      const debts = await availableSourceDebts(
+        admin,
+        linkedSourceDebtIds,
+        customerId,
+        currency,
+      );
       for (const debt of debts) {
         if (remaining <= 0) break;
         const allocated = Math.min(remaining, amount(debt.remaining));
         if (allocated <= 0) continue;
         part++;
         const allocationSourceId = `${sourceTransactionId}:${part}`;
-        const paymentId = await stableUuid(`${source.admin_id}:payment:${allocationSourceId}`);
+        const paymentId = await stableUuid(
+          `${source.admin_id}:payment:${allocationSourceId}`,
+        );
         const { error } = await admin.rpc("legacy_import_apply_payment", {
           p_admin_id: source.admin_id,
           p_debt_id: debt.id,
@@ -746,39 +1211,227 @@ Deno.serve(async (req) => {
           },
         }).eq("id", paymentId);
         if (snapshotError) throw snapshotError;
-        await upsertSeen(admin, source.id, "payment_allocation", allocationSourceId, paymentId, payloadHash);
-        await upsertLegacyLink(admin, source, "payment", allocationSourceId, paymentId);
+        await upsertSeen(
+          admin,
+          source.id,
+          "payment_allocation",
+          allocationSourceId,
+          paymentId,
+          payloadHash,
+        );
+        await upsertLegacyLink(
+          admin,
+          source,
+          "payment",
+          allocationSourceId,
+          paymentId,
+        );
         counters.new_payment_allocations++;
         remaining = Math.round((remaining - allocated) * 100) / 100;
       }
-      if (remaining > 0) throw new Error(`unallocatable_payment:${sourceTransactionId}:${remaining}`);
-      await upsertSeen(admin, source.id, "payment", sourceTransactionId, null, payloadHash);
+      if (remaining > 0) {
+        throw new Error(
+          `unallocatable_payment:${sourceTransactionId}:${remaining}`,
+        );
+      }
+      await upsertSeen(
+        admin,
+        source.id,
+        "payment",
+        sourceTransactionId,
+        null,
+        payloadHash,
+      );
+    }
+
+    // A source row must be absent from two complete snapshots before deletion
+    // is applied. This prevents one truncated/partial legacy response from
+    // deleting real financial data.
+    if (!transactionsFetch.notModified) {
+      const presentTransactionIds = new Set(
+        transactions.map((row) => String(row.id)),
+      );
+      const { data: debtLinks, error: debtLinksError } = await admin
+        .from("daftar_sync_seen")
+        .select("source_id, target_id, payload_hash")
+        .eq("sync_source_id", source.id)
+        .eq("entity_kind", "debt")
+        .not("target_id", "is", null);
+      if (debtLinksError) throw debtLinksError;
+      const { data: paymentLinks, error: paymentLinksError } = await admin
+        .from("daftar_sync_seen")
+        .select("source_id, payload_hash")
+        .eq("sync_source_id", source.id)
+        .eq("entity_kind", "payment");
+      if (paymentLinksError) throw paymentLinksError;
+
+      const confirmedPayments = await confirmMissingSourceIds(
+        admin,
+        source,
+        "payment",
+        (paymentLinks ?? [])
+          .filter((row: { payload_hash?: unknown }) =>
+            row.payload_hash !== "__deleted__"
+          )
+          .map((row: { source_id: unknown }) => String(row.source_id)),
+        presentTransactionIds,
+      );
+      for (const sourceId of confirmedPayments) {
+        const { error: removeError } = await admin.rpc(
+          "remove_daftar_inbound_payment",
+          {
+            p_admin_id: source.admin_id,
+            p_source_id: source.id,
+            p_remote_transaction_id: sourceId,
+          },
+        );
+        if (removeError) {
+          throw new Error(
+            `payment_delete_failed:${sourceId}:${removeError.message}`,
+          );
+        }
+        await upsertSeen(
+          admin,
+          source.id,
+          "payment",
+          sourceId,
+          null,
+          "__deleted__",
+        );
+        await admin.from("daftar_inbound_missing_candidates").delete()
+          .eq("sync_source_id", source.id).eq("entity_kind", "payment").eq(
+            "source_id",
+            sourceId,
+          );
+        counters.deleted_payments++;
+      }
+
+      const confirmedDebts = await confirmMissingSourceIds(
+        admin,
+        source,
+        "debt",
+        (debtLinks ?? [])
+          .filter((row: { payload_hash?: unknown }) =>
+            row.payload_hash !== "__deleted__"
+          )
+          .map((row: { source_id: unknown }) => String(row.source_id)),
+        presentTransactionIds,
+      );
+      for (const sourceId of confirmedDebts) {
+        const row = (debtLinks ?? []).find((item: { source_id: unknown }) =>
+          String(item.source_id) === sourceId
+        );
+        if (!row?.target_id) continue;
+        const { data: deleted, error: deleteError } = await admin.rpc(
+          "delete_daftar_inbound_debt",
+          { p_admin_id: source.admin_id, p_target_id: row.target_id },
+        );
+        if (deleteError) {
+          throw new Error(
+            `debt_delete_failed:${sourceId}:${deleteError.message}`,
+          );
+        }
+        if (deleted === true) counters.deleted_debts++;
+        await upsertSeen(
+          admin,
+          source.id,
+          "debt",
+          sourceId,
+          row.target_id,
+          "__deleted__",
+        );
+        await admin.from("daftar_inbound_missing_candidates").delete()
+          .eq("sync_source_id", source.id).eq("entity_kind", "debt").eq(
+            "source_id",
+            sourceId,
+          );
+      }
+    }
+
+    if (!contactsFetch.notModified) {
+      const presentContactIds = new Set(contacts.map((row) => String(row.id)));
+      const { data: customerLinks, error: customerLinksError } = await admin
+        .from("daftar_sync_seen")
+        .select("source_id, target_id")
+        .eq("sync_source_id", source.id)
+        .eq("entity_kind", "customer")
+        .not("target_id", "is", null);
+      if (customerLinksError) throw customerLinksError;
+      const confirmedCustomers = await confirmMissingSourceIds(
+        admin,
+        source,
+        "customer",
+        (customerLinks ?? []).map((row: { source_id: unknown }) =>
+          String(row.source_id)
+        ),
+        presentContactIds,
+      );
+      for (const sourceId of confirmedCustomers) {
+        const row = (customerLinks ?? []).find((item: { source_id: unknown }) =>
+          String(item.source_id) === sourceId
+        );
+        if (!row?.target_id) continue;
+        const { data: deleted, error: deleteError } = await admin.rpc(
+          "delete_daftar_inbound_customer",
+          { p_admin_id: source.admin_id, p_target_id: row.target_id },
+        );
+        if (deleteError) {
+          throw new Error(
+            `customer_delete_failed:${sourceId}:${deleteError.message}`,
+          );
+        }
+        if (deleted === true) counters.deleted_customers++;
+        await admin.from("daftar_sync_seen").delete()
+          .eq("sync_source_id", source.id).eq("entity_kind", "customer").eq(
+            "source_id",
+            sourceId,
+          );
+        await admin.from("legacy_import_links").delete()
+          .eq("admin_id", source.admin_id)
+          .eq("source_fingerprint", source.source_fingerprint)
+          .eq("entity_kind", "customer")
+          .eq("source_id", sourceId);
+        await admin.from("daftar_inbound_missing_candidates").delete()
+          .eq("sync_source_id", source.id).eq("entity_kind", "customer").eq(
+            "source_id",
+            sourceId,
+          );
+      }
     }
 
     const newContactCheckpoint = newContacts.length > 0
-      ? Math.max(Number(source.last_contact_id), ...newContacts.map((row) => Number(row.id)))
+      ? Math.max(
+        Number(source.last_contact_id),
+        ...newContacts.map((row) => Number(row.id)),
+      )
       : Number(source.last_contact_id);
     const newTransactionCheckpoint = delta.length > 0
-      ? Math.max(Number(source.last_transaction_id), ...delta.map((row) => Number(row.id)))
+      ? Math.max(
+        Number(source.last_transaction_id),
+        ...delta.map((row) => Number(row.id)),
+      )
       : Number(source.last_transaction_id);
-    const { data: reconciliation, error: reconciliationError } = await admin.rpc(
-      "reconcile_daftar_account_28",
-      { p_source_id: source.id },
-    );
+    const { data: reconciliation, error: reconciliationError } = await admin
+      .rpc(
+        "reconcile_daftar_account_28",
+        { p_source_id: source.id },
+      );
     if (reconciliationError) {
       throw new Error(`reconciliation_failed:${reconciliationError.message}`);
     }
 
-    const { data: cutoverRehearsal, error: cutoverRehearsalError } = await admin.rpc(
-      "run_daftar_cutover_rehearsal",
-      { p_source_id: source.id },
-    );
+    const { data: cutoverRehearsal, error: cutoverRehearsalError } = await admin
+      .rpc(
+        "run_daftar_cutover_rehearsal",
+        { p_source_id: source.id },
+      );
     if (cutoverRehearsalError) {
-      throw new Error(`cutover_rehearsal_failed:${cutoverRehearsalError.message}`);
+      throw new Error(
+        `cutover_rehearsal_failed:${cutoverRehearsalError.message}`,
+      );
     }
 
-    const allowInboundSync =
-      source.sync_mode === "zhirox_primary" &&
+    const allowInboundSync = source.sync_mode === "zhirox_primary" &&
       source.inbound_sync_enabled === true;
 
     let failoverReadiness: unknown = {
@@ -816,7 +1469,8 @@ Deno.serve(async (req) => {
       last_contact_id: newContactCheckpoint,
       last_transaction_id: newTransactionCheckpoint,
       contacts_etag: contactsFetch.etag ?? source.contacts_etag ?? null,
-      transactions_etag: transactionsFetch.etag ?? source.transactions_etag ?? null,
+      transactions_etag: transactionsFetch.etag ?? source.transactions_etag ??
+        null,
       lease_until: null,
       last_success_at: finishedAt,
       last_status: "success",
@@ -830,40 +1484,52 @@ Deno.serve(async (req) => {
       health_status: "healthy",
       updated_at: finishedAt,
     }).eq("id", source.id);
-    if (runId) await admin.from("daftar_sync_runs").update({
-      status: "success",
-      ...counters,
-      completed_at: finishedAt,
-    }).eq("id", runId);
+    if (runId) {
+      await admin.from("daftar_sync_runs").update({
+        status: "success",
+        ...counters,
+        completed_at: finishedAt,
+      }).eq("id", runId);
+    }
     return json({ ok: true, result });
   } catch (error) {
     console.error(error);
-    const message = error instanceof Error
-      ? error.message
-      : String((error as { message?: unknown } | null)?.message ?? "internal_error");
+    const message = error instanceof Error ? error.message : String(
+      (error as { message?: unknown } | null)?.message ?? "internal_error",
+    );
     const finishedAt = new Date().toISOString();
     if (source) {
       const parts = message.split(":");
       const errorCode = parts.shift() || "sync_failed";
       const sourceEntityId = parts.length > 0 ? parts[0] : null;
-      const { error: failureError } = await admin.rpc("record_daftar_sync_failure", {
-        p_source_id: source.id,
-        p_error_code: errorCode,
-        p_error_detail: message,
-        p_entity_kind: errorCode.includes("contact") || errorCode.includes("customer")
-          ? "customer"
-          : errorCode.includes("payment") ? "payment" : errorCode.includes("debt") ? "debt" : "sync",
-        p_entity_source_id: sourceEntityId,
-        p_payload: { counters, duration_ms: Date.now() - startedAt },
-      });
+      const { error: failureError } = await admin.rpc(
+        "record_daftar_sync_failure",
+        {
+          p_source_id: source.id,
+          p_error_code: errorCode,
+          p_error_detail: message,
+          p_entity_kind:
+            errorCode.includes("contact") || errorCode.includes("customer")
+              ? "customer"
+              : errorCode.includes("payment")
+              ? "payment"
+              : errorCode.includes("debt")
+              ? "debt"
+              : "sync",
+          p_entity_source_id: sourceEntityId,
+          p_payload: { counters, duration_ms: Date.now() - startedAt },
+        },
+      );
       if (failureError) console.error("failure_record_failed", failureError);
     }
-    if (runId) await admin.from("daftar_sync_runs").update({
-      status: "failed",
-      ...counters,
-      error_message: message,
-      completed_at: finishedAt,
-    }).eq("id", runId);
+    if (runId) {
+      await admin.from("daftar_sync_runs").update({
+        status: "failed",
+        ...counters,
+        error_message: message,
+        completed_at: finishedAt,
+      }).eq("id", runId);
+    }
     return json({ error: message }, 500);
   }
 });
