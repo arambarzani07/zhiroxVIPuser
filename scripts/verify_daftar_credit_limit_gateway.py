@@ -8,6 +8,8 @@ config = (root / 'supabase/config.toml').read_text()
 
 required_fn = [
     "const LEGACY_USER_ID = 28",
+    "const LEGACY_USER_ALIASES = new Set",
+    "EU7q9piahzZ11LNJYu8AhlEUYGd2",
     "const SOURCE_FINGERPRINT = 'daftar-live-account-28-v1'",
     "credit_limit_exceeded",
     "current_balance_unavailable",
