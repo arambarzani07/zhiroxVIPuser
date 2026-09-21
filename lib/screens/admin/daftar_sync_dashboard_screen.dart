@@ -78,7 +78,9 @@ class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Sync دەستی پێکرد؛ دۆخەکە خۆکارانە نوێ دەبێتەوە.'),
+          content: Text(
+            'هاوتاکردنی هەردوو ئاراستە دەستی پێکرد؛ دۆخەکە خۆکارانە نوێ دەبێتەوە.',
+          ),
         ),
       );
       await Future<void>.delayed(const Duration(seconds: 3));
@@ -136,7 +138,20 @@ class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
     final health = source['health_status']?.toString() ?? '';
     final status = source['last_status']?.toString() ?? '';
     final result = _map(source['last_result']);
+    final outboundQueue = _map(_data['outbound_queue']);
+    final bidirectionalReady = _data['bidirectional_ready'] == true;
     final openErrors = (_data['open_dead_letters'] as num?)?.toInt() ?? 0;
+    final outboundWaiting =
+        ((outboundQueue['pending'] as num?)?.toInt() ?? 0) +
+        ((outboundQueue['processing'] as num?)?.toInt() ?? 0);
+    final outboundErrors =
+        ((outboundQueue['failed'] as num?)?.toInt() ?? 0) +
+        ((outboundQueue['blocked'] as num?)?.toInt() ?? 0);
+    final reconciliationGaps =
+        ((source['reconciliation_missing_contacts'] as num?)?.toInt() ?? 0) +
+        ((source['reconciliation_missing_transactions'] as num?)?.toInt() ??
+            0) +
+        ((_data['inbound_missing_candidates'] as num?)?.toInt() ?? 0);
 
     return Scaffold(
       appBar: AppBar(
@@ -196,9 +211,13 @@ class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'پەیوەندی: ${_statusLabel(health)}',
+                                    bidirectionalReady
+                                        ? 'پەیوەندی دوولایەنە: چالاک'
+                                        : 'پەیوەندی دوولایەنە: پێویستی بە پشکنینە',
                                     style: TextStyle(
-                                      color: _statusColor(health),
+                                      color: bidirectionalReady
+                                          ? Colors.green
+                                          : Colors.orange,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -215,9 +234,52 @@ class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
                                       ),
                                     )
                                   : const Icon(Icons.sync),
-                              label: const Text('Sync ئێستا'),
+                              label: const Text('هاوتاکردن'),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: (bidirectionalReady
+                                    ? Colors.green
+                                    : Colors.orange)
+                                .withValues(alpha: .08),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                bidirectionalReady
+                                    ? Icons.compare_arrows_rounded
+                                    : Icons.sync_problem_rounded,
+                                size: 20,
+                                color: bidirectionalReady
+                                    ? Colors.green
+                                    : Colors.orange,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  bidirectionalReady
+                                      ? 'دروستکردن، دەستکاری و سڕینەوە لە هەردوو ئەپەکە هاوتا دەکرێت.'
+                                      : 'پەیوەندی هەیە، بەڵام یەکێک لە queue، هاوتایی داتا یان Sync پێویستی بە پشکنین هەیە.',
+                                  style: TextStyle(
+                                    color: bidirectionalReady
+                                        ? Colors.green.shade800
+                                        : Colors.orange.shade900,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         if (source['last_error'] != null) ...[
                           const SizedBox(height: 12),
@@ -287,6 +349,34 @@ class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
                         value: '$openErrors',
                         icon: Icons.report_gmailerrorred_rounded,
                         color: openErrors == 0 ? Colors.green : Colors.red,
+                      ),
+                      _MetricCard(
+                        label: 'گۆڕانکاریی چاوەڕوان',
+                        value: '$outboundWaiting',
+                        icon: Icons.outbox_rounded,
+                        color: outboundWaiting == 0
+                            ? Colors.green
+                            : Colors.blue,
+                      ),
+                      _MetricCard(
+                        label: 'هەڵەی ناردن',
+                        value: '$outboundErrors',
+                        icon: Icons.sync_problem_rounded,
+                        color: outboundErrors == 0 ? Colors.green : Colors.red,
+                      ),
+                      _MetricCard(
+                        label: 'جیاوازیی داتا',
+                        value: '$reconciliationGaps',
+                        icon: Icons.difference_rounded,
+                        color: reconciliationGaps == 0
+                            ? Colors.green
+                            : Colors.orange,
+                      ),
+                      _MetricCard(
+                        label: 'دوا ناردن بۆ Daftar',
+                        value: _date(outboundQueue['last_sent_at']),
+                        icon: Icons.send_rounded,
+                        color: Colors.teal,
                       ),
                     ],
                   ),
