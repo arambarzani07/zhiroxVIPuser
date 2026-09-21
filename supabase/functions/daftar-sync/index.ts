@@ -73,8 +73,29 @@ function isTransientDatabaseError(
   const message = String(error.message ?? "").toLowerCase();
   return message.includes("timeout") ||
     message.includes("gateway") ||
+    message.includes("database error") ||
+    message.includes("connection") ||
     message.includes("temporarily unavailable") ||
     String(error.code ?? "").startsWith("5");
+}
+
+async function retryTransientSupabase(
+  operation: () => Promise<any>,
+  maxAttempts = 4,
+): Promise<any> {
+  let result: any = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    result = await operation();
+    if (!result?.error) return result;
+    if (!isTransientDatabaseError(result.error) || attempt === maxAttempts) {
+      return result;
+    }
+    const jitter = crypto.getRandomValues(new Uint16Array(1))[0] % 200;
+    await new Promise((resolve) =>
+      setTimeout(resolve, attempt * attempt * 250 + jitter)
+    );
+  }
+  return result;
 }
 
 async function loadSyncSource(admin: any, sourceId: string) {
@@ -389,8 +410,10 @@ async function ensureCustomer(
         );
       }
       if (phone) {
-        const { data: authProfile, error: authLookupError } = await admin.auth
-          .admin.getUserById(seen.target_id);
+        const { data: authProfile, error: authLookupError } =
+          await retryTransientSupabase(() =>
+            admin.auth.admin.getUserById(seen.target_id)
+          );
         if (authLookupError || !authProfile.user) {
           console.warn(
             "customer_auth_sync_skipped",
@@ -398,20 +421,22 @@ async function ensureCustomer(
             authLookupError?.message ?? "not_found",
           );
         } else {
-          const { error: authError } = await admin.auth.admin.updateUserById(
-            seen.target_id,
-            {
-              email: `${phone}@zhirox.local`,
-              user_metadata: {
-                ...(authProfile.user.user_metadata ?? {}),
-                imported: true,
-                legacy_source_id: sourceId,
-                admin_id: source.admin_id,
-                name: String(contact.name ?? "").trim(),
-                phone,
-                role: "customer",
+          const { error: authError } = await retryTransientSupabase(() =>
+            admin.auth.admin.updateUserById(
+              seen.target_id,
+              {
+                email: `${phone}@zhirox.local`,
+                user_metadata: {
+                  ...(authProfile.user.user_metadata ?? {}),
+                  imported: true,
+                  legacy_source_id: sourceId,
+                  admin_id: source.admin_id,
+                  name: String(contact.name ?? "").trim(),
+                  phone,
+                  role: "customer",
+                },
               },
-            },
+            )
           );
           if (authError) {
             console.warn(
