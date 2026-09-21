@@ -178,6 +178,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const accountScopedGetPaths = new Set([
+    '/api/v1/users', '/api/v1/users/',
     '/api/v1/contacts', '/api/v1/contacts/',
     '/api/v1/contacts/totals-by-currency',
     '/api/v1/transactions', '/api/v1/transactions/',
@@ -427,7 +428,7 @@ Deno.serve(async (req: Request) => {
       const value = response.headers.get(name);
       if (value) headers.set(name, value);
     }
-    headers.set('x-zhirox-daftar-gateway', 'v6');
+    headers.set('x-zhirox-daftar-gateway', 'v7');
 
     if (req.method.toUpperCase() === 'GET' && (path === '/api/v1/users' || path === '/api/v1/users/')) {
       try {
@@ -436,12 +437,12 @@ Deno.serve(async (req: Request) => {
           const data = ((payload as Record<string, unknown>).data as Record<string, unknown>[])
             .filter((row) => String(row?.user_id ?? '') === String(LEGACY_USER_ID));
           return jsonResponse({ ...(payload as Record<string, unknown>), data }, response.status, {
-            'x-zhirox-daftar-gateway': 'v6',
+            'x-zhirox-daftar-gateway': 'v7',
           });
         }
-        return jsonResponse(payload, response.status, { 'x-zhirox-daftar-gateway': 'v6' });
+        return jsonResponse(payload, response.status, { 'x-zhirox-daftar-gateway': 'v7' });
       } catch (_) {
-        return jsonResponse({ error: 'invalid_users_response' }, 502, { 'x-zhirox-daftar-gateway': 'v6' });
+        return jsonResponse({ error: 'invalid_users_response' }, 502, { 'x-zhirox-daftar-gateway': 'v7' });
       }
     }
 
