@@ -78,5 +78,11 @@ assert 'existingHash !== undefined && existingHash !== hash' in inbound
 assert '.slice(0, 5)' in inbound
 assert 'const hasMoreTransactions = deltaById.size > delta.length' in inbound
 assert 'transactions_etag: hasMoreTransactions' in inbound
+assert 'const reappearedTransactions: LegacyTransaction[] = []' in inbound
+assert '.eq("payload_hash", "__deleted__")' in inbound
+assert 'const transactionMirrorCandidates = mirrorBootstrap' in inbound
+assert 'changedAt >= lastSuccessMs - 120_000' in inbound
+assert 'transactionCandidateIds.slice(offset, offset + 200)' in inbound
+assert 'const deletedTransactionIds = [...deletedMarkerIds]' in inbound
 
 print('Daftar bidirectional create/update/delete sync verified')

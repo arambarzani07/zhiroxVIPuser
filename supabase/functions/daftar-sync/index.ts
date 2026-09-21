@@ -22,6 +22,7 @@ type SyncSource = {
   contacts_etag?: string | null;
   transactions_etag?: string | null;
   mirror_bootstrapped_at?: string | null;
+  last_success_at?: string | null;
   sync_mode: "mirror" | "zhirox_primary";
   inbound_sync_enabled?: boolean | null;
 };
@@ -754,9 +755,55 @@ Deno.serve(async (req) => {
     counters.fetched_contacts = contacts.length;
     counters.fetched_transactions = transactions.length;
 
+    const lastSuccessMs = Date.parse(source.last_success_at ?? "");
+    const changedSinceLastSuccess = (row: {
+      created_at?: string | null;
+      updated_at?: string | null;
+    }): boolean => {
+      if (!Number.isFinite(lastSuccessMs)) return true;
+      const changedAt = Date.parse(row.updated_at ?? row.created_at ?? "");
+      return Number.isFinite(changedAt) && changedAt >= lastSuccessMs - 120_000;
+    };
+    const { data: deletedMarkerRows, error: deletedMarkerError } = await admin
+      .from("daftar_sync_seen")
+      .select("source_id")
+      .eq("sync_source_id", source.id)
+      .in("entity_kind", ["debt", "payment"])
+      .eq("payload_hash", "__deleted__")
+      .limit(100);
+    if (deletedMarkerError) throw deletedMarkerError;
+    const deletedMarkerIds = new Set(
+      (deletedMarkerRows ?? []).map((row: { source_id: unknown }) =>
+        String(row.source_id)
+      ),
+    );
+    const contactMirrorCandidates = mirrorBootstrap
+      ? contacts
+      : contacts.filter((row) =>
+        Number(row.id) > Number(source!.last_contact_id) ||
+        changedSinceLastSuccess(row)
+      );
+    const transactionMirrorCandidates = mirrorBootstrap
+      ? transactions
+      : transactions.filter((row) =>
+        Number(row.id) > Number(source!.last_transaction_id) ||
+        deletedMarkerIds.has(String(row.id)) ||
+        changedSinceLastSuccess(row)
+      );
+
     await Promise.all([
-      mirrorRows(admin, "daftar_mirror_contacts", source.id, contacts),
-      mirrorRows(admin, "daftar_mirror_transactions", source.id, transactions),
+      mirrorRows(
+        admin,
+        "daftar_mirror_contacts",
+        source.id,
+        contactMirrorCandidates,
+      ),
+      mirrorRows(
+        admin,
+        "daftar_mirror_transactions",
+        source.id,
+        transactionMirrorCandidates,
+      ),
     ]);
     if (!contactsFetch.notModified) {
       await pruneMirrorRows(
@@ -826,15 +873,30 @@ Deno.serve(async (req) => {
       .filter((row) => Number(row.id) > Number(source!.last_contact_id))
       .sort((a, b) => Number(a.id) - Number(b.id))
       .slice(0, 250);
-    const { data: seenTransactionRows, error: seenTransactionError } =
-      await admin
+    const seenTransactionRows: Array<{
+      entity_kind: unknown;
+      source_id: unknown;
+      payload_hash: unknown;
+    }> = [];
+    const transactionCandidateIds = [
+      ...new Set(transactionMirrorCandidates.map((row) => String(row.id))),
+    ];
+    for (
+      let offset = 0;
+      offset < transactionCandidateIds.length;
+      offset += 200
+    ) {
+      const { data, error } = await admin
         .from("daftar_sync_seen")
         .select("entity_kind, source_id, payload_hash")
         .eq("sync_source_id", source.id)
-        .in("entity_kind", ["debt", "payment"]);
-    if (seenTransactionError) throw seenTransactionError;
+        .in("entity_kind", ["debt", "payment"])
+        .in("source_id", transactionCandidateIds.slice(offset, offset + 200));
+      if (error) throw error;
+      seenTransactionRows.push(...(data ?? []));
+    }
     const seenTransactionHashes = new Map(
-      (seenTransactionRows ?? []).map((row: {
+      seenTransactionRows.map((row: {
         entity_kind: unknown;
         source_id: unknown;
         payload_hash: unknown;
@@ -843,9 +905,33 @@ Deno.serve(async (req) => {
         row.payload_hash == null ? null : String(row.payload_hash),
       ]),
     );
+    // A transaction can reappear in Daftar after it was previously confirmed
+    // deleted. A full 15k-row rehash can exceed the Edge runtime, so recover
+    // only deleted markers that are present in the durable mirror again.
+    const deletedTransactionIds = [...deletedMarkerIds].slice(0, 20);
+    const reappearedTransactions: LegacyTransaction[] = [];
+    if (deletedTransactionIds.length > 0) {
+      const { data: mirroredRows, error: mirroredRowsError } = await admin
+        .from("daftar_mirror_transactions")
+        .select("payload")
+        .eq("sync_source_id", source.id)
+        .in("source_id", deletedTransactionIds)
+        .limit(5);
+      if (mirroredRowsError) throw mirroredRowsError;
+      for (const mirrored of mirroredRows ?? []) {
+        const row = mirrored.payload as LegacyTransaction;
+        if (
+          Number(row?.user_id) === Number(source.legacy_user_id) &&
+          (row?.transaction_type === "LOAN" ||
+            row?.transaction_type === "PAYMENT")
+        ) {
+          reappearedTransactions.push(row);
+        }
+      }
+    }
     const changedTransactions: LegacyTransaction[] = [];
     if (!transactionsFetch.notModified) {
-      for (const row of transactions) {
+      for (const row of transactionMirrorCandidates) {
         const kind = row.transaction_type === "LOAN" ? "debt" : "payment";
         const hash = await sha256Hex(JSON.stringify(row));
         const existingHash = seenTransactionHashes.get(`${kind}:${row.id}`);
@@ -865,7 +951,10 @@ Deno.serve(async (req) => {
       }
     }
     for (const row of changedTransactions) deltaById.set(Number(row.id), row);
-    const delta = [...deltaById.values()]
+    for (const row of reappearedTransactions) {
+      deltaById.set(Number(row.id), row);
+    }
+    let delta = [...deltaById.values()]
       .sort((a, b) => Number(a.id) - Number(b.id))
       // Keep one invocation below the Edge runtime wall-clock limit. The
       // checkpoint advances monotonically, so later cron runs drain the rest.
@@ -902,10 +991,15 @@ Deno.serve(async (req) => {
       ...changedContactIds,
     ]);
     const customerIds = new Map<number, string>();
+    const orphanContactIds = new Set<number>();
     for (const contactId of requiredContactIds) {
       const contact = contactMap.get(contactId);
       if (!contact || !String(contact.name ?? "").trim()) {
-        throw new Error(`contact_missing:${contactId}`);
+        // Some legacy accounts retain transactions after their contact was
+        // deleted. Keep an existing deletion tombstone authoritative and let
+        // the rest of the account sync instead of failing the whole run.
+        orphanContactIds.add(contactId);
+        continue;
       }
       const result = await ensureCustomer(admin, source, contact);
       customerIds.set(contactId, result.id);
@@ -913,6 +1007,9 @@ Deno.serve(async (req) => {
       if (result.reused) counters.reused_records++;
       if (result.updated) counters.updated_customers++;
     }
+    delta = delta.filter((row) =>
+      !orphanContactIds.has(Number(row.contact_id))
+    );
 
     for (
       const transaction of delta.filter((row) =>
