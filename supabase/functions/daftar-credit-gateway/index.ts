@@ -123,9 +123,17 @@ function extractTransactions(payload: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function computeBalance(rows: Record<string, unknown>[]): number {
+function computeBalance(
+  rows: Record<string, unknown>[],
+  contactId: string,
+  currency: string,
+): number {
   let balance = 0;
   for (const row of rows) {
+    const rowContactId = String(firstValue(row, ['contact_id', 'contactId', 'contact']) ?? '').trim();
+    if (rowContactId !== contactId) continue;
+    const rowCurrency = String(firstValue(row, ['currency']) ?? 'IQD').trim().toUpperCase();
+    if (rowCurrency !== currency) continue;
     const rawType = firstValue(row, ['transaction_type', 'type', 'transactionType']);
     const type = String(rawType ?? '').trim().toUpperCase();
     const amount = Math.abs(toNumber(firstValue(row, ['amount', 'net_amount', 'value'])) ?? 0);
@@ -133,7 +141,13 @@ function computeBalance(rows: Record<string, unknown>[]): number {
     if (type === 'LOAN' || type === 'DEBT') balance += amount;
     else if (type === 'PAYMENT' || type === 'PAID') balance -= amount;
   }
-  return balance;
+  return Math.max(0, Math.round(balance * 100) / 100);
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const data = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 function jsonResponse(payload: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
@@ -144,10 +158,37 @@ function jsonResponse(payload: unknown, status = 200, extraHeaders: Record<strin
 }
 
 Deno.serve(async (req: Request) => {
-  const { path, query } = normalizePath(req);
+  const userAgent = req.headers.get('user-agent') ?? '';
+  if (!/^Dart\/3\./i.test(userAgent)) {
+    return jsonResponse({ error: 'unsupported_client', message: 'This gateway is reserved for Daftar Qarz 0.2.7.' }, 403);
+  }
+
+  const normalized = normalizePath(req);
+  const path = normalized.path;
+  let query = normalized.query;
 
   if (!path.startsWith(API_PREFIX)) {
     return jsonResponse({ error: 'invalid_path', message: 'Invalid Daftar API path.' }, 404);
+  }
+
+  const params = new URLSearchParams(query);
+  const requestedUserId = params.get('user_id');
+  if (requestedUserId && requestedUserId !== String(LEGACY_USER_ID)) {
+    return jsonResponse({ error: 'wrong_account', message: 'ئەم وەشانە تەنها بۆ هەژماری دیاریکراوی Daftar Qarz ڕێکخراوە.' }, 403);
+  }
+
+  const accountScopedGetPaths = new Set([
+    '/api/v1/contacts', '/api/v1/contacts/',
+    '/api/v1/contacts/totals-by-currency',
+    '/api/v1/transactions', '/api/v1/transactions/',
+    '/api/v1/transactions/by-contact',
+    '/api/v1/transactions/totals-by-currency',
+    '/api/v1/search/contacts',
+    '/api/v1/search/transactions',
+  ]);
+  if (req.method.toUpperCase() === 'GET' && accountScopedGetPaths.has(path) && !params.has('user_id')) {
+    params.set('user_id', String(LEGACY_USER_ID));
+    query = params.toString();
   }
 
   const targetUrl = OLD_BASE + path + (query ? '?' + query : '');
@@ -155,21 +196,66 @@ Deno.serve(async (req: Request) => {
     ? new Uint8Array()
     : new Uint8Array(await req.arrayBuffer());
 
-  const isTransactionWrite =
+  const isTransactionCreate =
     path === '/api/v1/transactions/' || path === '/api/v1/transactions';
+  const isTransactionItemWrite =
+    /^\/api\/v1\/transactions\/\d+\/?$/.test(path);
 
   const outboundHeaders = sanitizeOutboundHeaders(req);
 
-  if (isTransactionWrite && ['POST', 'PUT', 'PATCH'].includes(req.method.toUpperCase())) {
+  if (isTransactionItemWrite && ['PUT', 'PATCH'].includes(req.method.toUpperCase())) {
+    const editBody = await parseTransactionBody(req, bodyBytes);
+    const financialKeys = [
+      'amount', 'net_amount', 'value', 'amount_iqd', 'amount_usd',
+      'currency', 'transaction_type', 'type', 'transactionType',
+      'contact_id', 'contactId', 'contact',
+    ];
+    if (financialKeys.some((key) => editBody[key] !== undefined)) {
+      return jsonResponse({
+        error: 'financial_transaction_edit_blocked',
+        message: 'دەستکاری بڕ/دراو/جۆری مامەلە لە Daftar بۆ پاراستنی سنووری قەرز ڕاگیرا؛ تەنها تێبینی دەستکاری بکە.',
+      }, 422);
+    }
+  }
+
+  if (isTransactionCreate && req.method.toUpperCase() === 'POST') {
     const body = await parseTransactionBody(req, bodyBytes);
     const txType = String(firstValue(body, ['transaction_type', 'type', 'transactionType']) ?? '').trim().toUpperCase();
     const userId = String(firstValue(body, ['user_id', 'userId', 'user_id_']) ?? LEGACY_USER_ID).trim();
     const contactId = String(firstValue(body, ['contact_id', 'contactId', 'contact']) ?? '').trim();
-    const amount = toNumber(firstValue(body, ['amount', 'net_amount', 'value']));
-    const currency = String(firstValue(body, ['currency']) ?? '').trim().toUpperCase();
+    let amount = toNumber(firstValue(body, ['amount', 'net_amount', 'value']));
+    let currency = String(firstValue(body, ['currency']) ?? '').trim().toUpperCase();
+
+    // Recovered Daftar Qarz 0.2.7 writes can use amount_iqd / amount_usd
+    // instead of the newer amount + currency shape.
+    if (amount === null) {
+      const amountIqd = toNumber(firstValue(body, ['amount_iqd', 'amountIQD'])) ?? 0;
+      const amountUsd = toNumber(firstValue(body, ['amount_usd', 'amountUSD'])) ?? 0;
+      if (amountIqd > 0 && amountUsd > 0) {
+        return jsonResponse({
+          error: 'ambiguous_transaction_amount',
+          message: 'بڕی مامەلە بە دوو دراو دیاریکراوە؛ مامەلە تۆمار نەکرا.',
+        }, 422);
+      }
+      if (amountIqd > 0) {
+        amount = amountIqd;
+        currency = 'IQD';
+      } else if (amountUsd > 0) {
+        amount = amountUsd;
+        currency = 'USD';
+      }
+    }
+    if (!currency && amount !== null) currency = 'IQD';
 
     if (userId !== String(LEGACY_USER_ID)) {
       return jsonResponse({ error: 'wrong_account', message: 'ئەم وەشانە تەنها بۆ هەژماری دیاریکراوی Daftar Qarz ڕێکخراوە.' }, 403);
+    }
+
+    if (!['LOAN', 'DEBT', 'PAYMENT', 'PAID'].includes(txType)) {
+      return jsonResponse({
+        error: 'unknown_transaction_type',
+        message: 'جۆری مامەلە ناسراو نییە؛ مامەلە تۆمار نەکرا.',
+      }, 422);
     }
 
     if (txType === 'LOAN' || txType === 'DEBT') {
@@ -243,14 +329,30 @@ Deno.serve(async (req: Request) => {
       const debtLimit = toNumber(profile.debt_limit) ?? 0;
 
       if (debtLimit > 0) {
-        const balanceUrl = OLD_BASE + '/api/v1/transactions/by-contact?user_id=' +
-          encodeURIComponent(String(LEGACY_USER_ID)) + '&contact_id=' + encodeURIComponent(contactId);
+        if (currency !== 'IQD') {
+          await logDecision('error', {
+            target_customer_id: targetCustomerId,
+            debt_limit: debtLimit,
+            http_status: 422,
+            detail: 'credit_limit_currency_not_supported:' + (currency || 'unknown'),
+          });
+          return jsonResponse({
+            error: 'credit_limit_currency_not_supported',
+            message: 'سنووری قەرز ئێستا بە IQD کار دەکات؛ قەرزی بە دراوی تر پێش تۆمارکردن ڕاگیرا.',
+          }, 422);
+        }
+
+        // Use the already verified Daftar endpoint used by the production inbound sync,
+        // then filter this customer's IQD rows locally. This avoids relying on an
+        // unverified by-contact route and makes the pre-write balance authoritative.
+        const balanceUrl = OLD_BASE + '/api/v1/transactions?user_id=' +
+          encodeURIComponent(String(LEGACY_USER_ID));
 
         let currentBalance: number;
         try {
           const balanceResponse = await fetch(balanceUrl, {
             method: 'GET',
-            headers: outboundHeaders,
+            headers: { Accept: 'application/json' },
             redirect: 'manual',
           });
           if (!balanceResponse.ok) {
@@ -263,8 +365,11 @@ Deno.serve(async (req: Request) => {
             return jsonResponse({ error: 'current_balance_unavailable', message: 'نەتوانرا قەرزی ئێستای کڕیار لە Daftar پشتڕاست بکرێتەوە؛ مامەلە تۆمار نەکرا.' }, 503);
           }
           const payload = await balanceResponse.json();
+          if (!payload || typeof payload !== 'object' || (payload as Record<string, unknown>).success !== true) {
+            throw new Error('invalid_transactions_response');
+          }
           const rows = extractTransactions(payload);
-          currentBalance = computeBalance(rows);
+          currentBalance = computeBalance(rows, contactId, currency);
         } catch (e) {
           await logDecision('error', {
             target_customer_id: targetCustomerId,
@@ -322,7 +427,23 @@ Deno.serve(async (req: Request) => {
       const value = response.headers.get(name);
       if (value) headers.set(name, value);
     }
-    headers.set('x-zhirox-daftar-gateway', 'v1');
+    headers.set('x-zhirox-daftar-gateway', 'v6');
+
+    if (req.method.toUpperCase() === 'GET' && (path === '/api/v1/users' || path === '/api/v1/users/')) {
+      try {
+        const payload = await response.json();
+        if (payload && typeof payload === 'object' && Array.isArray((payload as Record<string, unknown>).data)) {
+          const data = ((payload as Record<string, unknown>).data as Record<string, unknown>[])
+            .filter((row) => String(row?.user_id ?? '') === String(LEGACY_USER_ID));
+          return jsonResponse({ ...(payload as Record<string, unknown>), data }, response.status, {
+            'x-zhirox-daftar-gateway': 'v6',
+          });
+        }
+        return jsonResponse(payload, response.status, { 'x-zhirox-daftar-gateway': 'v6' });
+      } catch (_) {
+        return jsonResponse({ error: 'invalid_users_response' }, 502, { 'x-zhirox-daftar-gateway': 'v6' });
+      }
+    }
 
     return new Response(response.body, {
       status: response.status,
