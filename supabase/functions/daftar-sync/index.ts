@@ -842,7 +842,9 @@ Deno.serve(async (req) => {
     for (const row of changedTransactions) deltaById.set(Number(row.id), row);
     const delta = [...deltaById.values()]
       .sort((a, b) => Number(a.id) - Number(b.id))
-      .slice(0, 500);
+      // Keep one invocation below the Edge runtime wall-clock limit. The
+      // checkpoint advances monotonically, so later cron runs drain the rest.
+      .slice(0, 25);
 
     const { data: seenContactRows, error: seenContactError } = await admin
       .from("daftar_sync_seen")
