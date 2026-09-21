@@ -36,6 +36,10 @@ assert "daftar-live-account-28-v1" in migration, 'source fingerprint must be pin
 assert 'Verify Daftar Qarz connection lock' in workflow, 'every build must verify the Daftar connection lock'
 
 migration_files = list((ROOT / 'supabase/migrations').glob('*.sql'))
+lease_migration = (
+    ROOT / 'supabase/migrations/20260921101500_extend_daftar_sync_lease.sql'
+).read_text(errors='ignore')
+assert "interval '10 minutes'" in lease_migration, 'full sync lease must prevent overlapping cron runs'
 destructive_sql = '\n'.join(
     path.read_text(errors='ignore').lower()
     for path in migration_files
