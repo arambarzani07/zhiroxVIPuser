@@ -72,5 +72,7 @@ for marker in (
 assert "set_config('zhirox.daftar_inbound', 'on', true)" in migration
 assert 'if (count >= 2) confirmed.push(sourceId)' in inbound
 assert 'request.method === "DELETE" && response.status === 404' in outbound
+assert 'customer_auth_sync_skipped' in inbound
+assert 'customer_auth_lookup_failed' not in inbound
 
 print('Daftar bidirectional create/update/delete sync verified')

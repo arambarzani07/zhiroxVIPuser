@@ -392,31 +392,34 @@ async function ensureCustomer(
         const { data: authProfile, error: authLookupError } = await admin.auth
           .admin.getUserById(seen.target_id);
         if (authLookupError || !authProfile.user) {
-          throw new Error(
-            `customer_auth_lookup_failed:${sourceId}:${
-              authLookupError?.message ?? "not_found"
-            }`,
+          console.warn(
+            "customer_auth_sync_skipped",
+            sourceId,
+            authLookupError?.message ?? "not_found",
           );
-        }
-        const { error: authError } = await admin.auth.admin.updateUserById(
-          seen.target_id,
-          {
-            email: `${phone}@zhirox.local`,
-            user_metadata: {
-              ...(authProfile.user.user_metadata ?? {}),
-              imported: true,
-              legacy_source_id: sourceId,
-              admin_id: source.admin_id,
-              name: String(contact.name ?? "").trim(),
-              phone,
-              role: "customer",
+        } else {
+          const { error: authError } = await admin.auth.admin.updateUserById(
+            seen.target_id,
+            {
+              email: `${phone}@zhirox.local`,
+              user_metadata: {
+                ...(authProfile.user.user_metadata ?? {}),
+                imported: true,
+                legacy_source_id: sourceId,
+                admin_id: source.admin_id,
+                name: String(contact.name ?? "").trim(),
+                phone,
+                role: "customer",
+              },
             },
-          },
-        );
-        if (authError) {
-          throw new Error(
-            `customer_auth_update_failed:${sourceId}:${authError.message}`,
           );
+          if (authError) {
+            console.warn(
+              "customer_auth_sync_skipped",
+              sourceId,
+              authError.message,
+            );
+          }
         }
       }
       await upsertSeen(
