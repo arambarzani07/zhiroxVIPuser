@@ -824,7 +824,11 @@ Deno.serve(async (req) => {
         const kind = row.transaction_type === "LOAN" ? "debt" : "payment";
         const hash = await sha256Hex(JSON.stringify(row));
         const existingHash = seenTransactionHashes.get(`${kind}:${row.id}`);
-        if (existingHash !== hash) {
+        // A missing marker for a row at or below the durable checkpoint is
+        // historical baseline data, not a newly changed transaction. New
+        // rows are selected separately by last_transaction_id. This prevents
+        // enabling change detection from turning into an unintended backfill.
+        if (existingHash !== undefined && existingHash !== hash) {
           changedTransactions.push(row);
         }
       }
