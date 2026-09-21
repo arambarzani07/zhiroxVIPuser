@@ -845,6 +845,7 @@ Deno.serve(async (req) => {
       // Keep one invocation below the Edge runtime wall-clock limit. The
       // checkpoint advances monotonically, so later cron runs drain the rest.
       .slice(0, 25);
+    const hasMoreTransactions = deltaById.size > delta.length;
 
     const { data: seenContactRows, error: seenContactError } = await admin
       .from("daftar_sync_seen")
@@ -1478,8 +1479,9 @@ Deno.serve(async (req) => {
       last_contact_id: newContactCheckpoint,
       last_transaction_id: newTransactionCheckpoint,
       contacts_etag: contactsFetch.etag ?? source.contacts_etag ?? null,
-      transactions_etag: transactionsFetch.etag ?? source.transactions_etag ??
-        null,
+      transactions_etag: hasMoreTransactions
+        ? null
+        : transactionsFetch.etag ?? source.transactions_etag ?? null,
       lease_until: null,
       last_success_at: finishedAt,
       last_status: "success",
