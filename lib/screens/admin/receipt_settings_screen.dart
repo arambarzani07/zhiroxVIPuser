@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:pocketbase/pocketbase.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/official_receipt_service.dart';
+import 'package:zhirox/services/payment_receipt_service.dart';
 import 'package:zhirox/services/receipt_settings_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -18,13 +20,13 @@ class ReceiptSettingsScreen extends StatefulWidget {
 class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
+  final _paymentTitleController = TextEditingController();
   final _addressController = TextEditingController();
   final _phoneController = TextEditingController();
   final _secondaryPhoneController = TextEditingController();
   final _registrationController = TextEditingController();
   final _footerController = TextEditingController();
   final _colorController = TextEditingController();
-  final _prefixController = TextEditingController();
   final _discountController = TextEditingController();
   final _customFieldsController = TextEditingController();
 
@@ -60,13 +62,13 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
   @override
   void dispose() {
     _titleController.dispose();
+    _paymentTitleController.dispose();
     _addressController.dispose();
     _phoneController.dispose();
     _secondaryPhoneController.dispose();
     _registrationController.dispose();
     _footerController.dispose();
     _colorController.dispose();
-    _prefixController.dispose();
     _discountController.dispose();
     _customFieldsController.dispose();
     super.dispose();
@@ -96,13 +98,13 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       if (!mounted) return;
       setState(() {
         _titleController.text = settings.receiptTitle;
+        _paymentTitleController.text = settings.paymentTitle;
         _addressController.text = settings.address;
         _phoneController.text = settings.phone;
         _secondaryPhoneController.text = settings.secondaryPhone;
         _registrationController.text = settings.registrationNo;
         _footerController.text = settings.footerNote;
         _colorController.text = settings.primaryColor;
-        _prefixController.text = settings.receiptPrefix;
         _discountController.text = settings.discountPercent.toStringAsFixed(2);
         _customFieldsController.text = settings.customFields
             .map((field) => '${field['label'] ?? ''}=${field['value'] ?? ''}')
@@ -160,6 +162,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
     return MarketReceiptSettings(
       adminId: auth.userId,
       receiptTitle: _titleController.text.trim(),
+      paymentTitle: _paymentTitleController.text.trim(),
       address: _addressController.text.trim(),
       phone: _phoneController.text.trim(),
       secondaryPhone: _secondaryPhoneController.text.trim(),
@@ -180,7 +183,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       headerAlignment: _headerAlignment,
       showQr: _showQr,
       showBarcode: _showBarcode,
-      receiptPrefix: _prefixController.text.trim().toUpperCase(),
+      receiptPrefix: 'INV',
       vatPercent: 0,
       discountPercent: double.tryParse(_discountController.text.trim()) ?? 0,
       defaultPaymentMethod: _defaultPaymentMethod,
@@ -270,22 +273,49 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
     }
   }
 
-  Future<void> _showPreview() async {
+  Future<void> _showPreview({bool payment = false}) async {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthProvider>();
     final settings = _draftSettings();
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Live Preview ـی پسوولە')),
+          appBar: AppBar(title: Text(payment
+              ? 'پێشبینینی پسوولەی پارەدانەوە'
+              : 'پێشبینینی پسوولەی قەرز')),
           body: PdfPreview(
             pdfFileName: 'ZHIROX_Receipt_Preview.pdf',
-            build: (_) => OfficialReceiptService.buildSettingsPreview(
-              marketName: auth.marketName,
-              adminName: auth.userName,
-              fallbackPhone: auth.user?.getStringValue('phone') ?? '',
-              settings: settings,
-            ),
+            build: (_) => payment
+                ? PaymentReceiptService.buildPaymentReceiptBytes(
+                    payment: RecordModel.fromJson({
+                      'id': 'preview-payment',
+                      'collectionId': '',
+                      'collectionName': 'payments',
+                      'amount': 25000,
+                      'payment_method': 'cash',
+                      'note': 'نموونەی پارەدانەوە',
+                      'created': DateTime.now().toIso8601String(),
+                    }),
+                    debt: RecordModel.fromJson({
+                      'id': 'preview-debt',
+                      'collectionId': '',
+                      'collectionName': 'debts',
+                      'remaining': 75000,
+                      'description': 'نموونەی قەرز',
+                      'currency': 'IQD',
+                    }),
+                    marketName: auth.marketName,
+                    adminName: auth.userName,
+                    fallbackPhone: auth.user?.getStringValue('phone') ?? '',
+                    settings: settings,
+                    preview: true,
+                  )
+                : OfficialReceiptService.buildSettingsPreview(
+                    marketName: auth.marketName,
+                    adminName: auth.userName,
+                    fallbackPhone: auth.user?.getStringValue('phone') ?? '',
+                    settings: settings,
+                  ),
           ),
         ),
       ),
@@ -366,12 +396,12 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       backgroundColor:
           isDark ? AppDarkColors.background : const Color(0xFFF5F7FA),
       appBar: AppBar(
-        title: const Text('ڕێکخستنی پسوولەی فەرمی'),
+        title: const Text('ڕێکخستنی پسوولەکان'),
         actions: [
           if (!_loading && auth.userRole == 'admin')
             IconButton(
-              tooltip: 'Live Preview',
-              onPressed: _showPreview,
+              tooltip: 'پێشبینینی پسوولەی قەرز',
+              onPressed: () => _showPreview(),
               icon: const Icon(Icons.preview_outlined),
             ),
           if (!_loading && auth.userRole == 'admin')
@@ -463,15 +493,42 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
+                      _section('جۆرەکانی پسوولە', Icons.receipt_long_outlined, [
+                        const ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.request_quote_outlined),
+                          title: Text('پسوولەی قەرز'),
+                          subtitle: Text('بۆ هەر قەرزێک؛ چاپ، PDF و وێنە'),
+                        ),
+                        const Divider(),
+                        const ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.payments_outlined),
+                          title: Text('پسوولەی پارەدانەوە'),
+                          subtitle: Text('بۆ هەر پارەدانەوەیەک؛ چاپ، PDF و وێنە'),
+                        ),
+                        const Text('زانیاری مارکێت، براندینگ و چاپ بۆ هەردوو جۆرەکە بەکاردێن. شێوازی هەر یەکەیان لە خوارەوە جیاواز دیاری بکە.'),
+                      ]),
                       _section('زانیاری فەرمی', Icons.receipt_long_outlined, [
                         TextFormField(
                           controller: _titleController,
                           decoration: _decoration(
-                            'ناونیشانی پسوولە',
+                            'ناونیشانی پسوولەی قەرز',
                             Icons.receipt_outlined,
                           ),
                           validator: (value) => value == null || value.trim().isEmpty
                               ? 'ناونیشانی پسوولە بنووسە'
+                              : null,
+                        ),
+                        _gap(),
+                        TextFormField(
+                          controller: _paymentTitleController,
+                          decoration: _decoration(
+                            'ناونیشانی پسوولەی پارەدانەوە',
+                            Icons.payments_outlined,
+                          ),
+                          validator: (value) => value == null || value.trim().isEmpty
+                              ? 'ناونیشانی پسوولەی پارەدانەوە بنووسە'
                               : null,
                         ),
                         _gap(),
@@ -589,7 +646,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           },
                         ),
                       ]),
-                      _section('Template و قەبارەی چاپ', Icons.dashboard_customize_outlined, [
+                      _section('شێوازی پسوولە و قەبارەی چاپ', Icons.dashboard_customize_outlined, [
                         DropdownButtonFormField<String>(
                           initialValue: _templateStyle,
                           decoration: _decoration('Template ـی گشتی', Icons.style_outlined),
@@ -661,23 +718,14 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         ),
                       ]),
                       _section('ژمارە، QR و Barcode', Icons.qr_code_2_outlined, [
-                        TextFormField(
-                          controller: _prefixController,
-                          textDirection: TextDirection.ltr,
-                          textCapitalization: TextCapitalization.characters,
-                          decoration: _decoration(
-                            'Prefix ـی ژمارەی پسوولە',
-                            Icons.confirmation_number_outlined,
-                            hint: 'INV',
-                          ),
-                          validator: (value) {
-                            final clean = value?.trim() ?? '';
-                            if (!RegExp(r'^[A-Za-z0-9_-]{1,12}$').hasMatch(clean)) {
-                              return '١ تا ١٢ پیت/ژمارە؛ وەک INV';
-                            }
-                            return null;
-                          },
+                        const ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.lock_outline),
+                          title: Text('ژمارەی یەکتای پسوولە'),
+                          subtitle: Text('سیستەم خۆکارانە دیاری دەکات؛ ناتوانرێت دەستکاری بکرێت.'),
                         ),
+                        const Divider(),
+                        const Text('لە خوارەوەی هەر پسوولەیەک دەقی جێگیری ژیرۆکس بە فۆنتی بچووک و تۆخ چاپ دەکرێت.'),
                         SwitchListTile(
                           value: _showQr,
                           onChanged: (value) => setState(() => _showQr = value),
@@ -764,9 +812,18 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                       SizedBox(
                         height: 52,
                         child: OutlinedButton.icon(
-                          onPressed: _showPreview,
+                          onPressed: () => _showPreview(),
                           icon: const Icon(Icons.preview_outlined),
-                          label: const Text('Live Preview ـی پسوولە'),
+                          label: const Text('پێشبینینی پسوولەی قەرز'),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showPreview(payment: true),
+                          icon: const Icon(Icons.payments_outlined),
+                          label: const Text('پێشبینینی پسوولەی پارەدانەوە'),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -775,7 +832,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         child: ElevatedButton.icon(
                           onPressed: _saving ? null : _save,
                           icon: const Icon(Icons.save_outlined),
-                          label: const Text('پاشەکەوتکردنی Template ـی فەرمی'),
+                          label: const Text('پاشەکەوتکردنی ڕێکخستنەکان'),
                         ),
                       ),
                       const SizedBox(height: 20),

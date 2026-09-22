@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/official_receipt_service.dart';
 import 'package:zhirox/services/pb_service.dart';
-import 'package:zhirox/services/pdf_service.dart';
 import 'package:zhirox/services/receipt_settings_service.dart';
 import 'package:zhirox/utils/helpers.dart';
 
@@ -163,23 +162,7 @@ class FinancialDocumentActions {
       );
       if (action == null || !context.mounted) return;
 
-      try {
-        await _runOfficialAction(context, debt, action);
-      } catch (_) {
-        if (action == 'print') {
-          if (!context.mounted) return;
-          final identity = await _identity(context);
-          if (!context.mounted) return;
-          await PdfService.generateInvoice(
-            debt: debt,
-            marketName: identity.marketName,
-            adminName: identity.adminName,
-            adminPhone: identity.adminPhone,
-          );
-          return;
-        }
-        rethrow;
-      }
+      await _runOfficialAction(context, debt, action);
     } catch (e) {
       if (!context.mounted) return;
       AppHelpers.showSnackBar(

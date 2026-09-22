@@ -260,21 +260,22 @@ class OfficialReceiptService {
     required MarketReceiptSettings settings,
   }) async {
     final baseData = _dataFromDebt(debt);
-    if (settings.adminId.isEmpty) return (settings: settings, data: baseData);
-    try {
-      final version = await ReceiptDocumentService.ensure(
+    if (settings.adminId.isEmpty) {
+      throw StateError('Market identity is required to issue a receipt.');
+    }
+    final version = await ReceiptDocumentService.ensure(
         adminId: settings.adminId,
         sourceType: 'debt',
         sourceId: debt.id,
         currentSettings: settings,
       );
-      return (
-        settings: version.settings,
-        data: baseData.copyWith(receiptNumber: version.receiptNumber),
-      );
-    } catch (_) {
-      return (settings: settings, data: baseData);
+    if (version.receiptNumber.trim().isEmpty) {
+      throw StateError('Receipt number could not be issued.');
     }
+    return (
+      settings: version.settings,
+      data: baseData.copyWith(receiptNumber: version.receiptNumber),
+    );
   }
 
   static Future<Uint8List> buildDebtReceiptBytes({
@@ -358,7 +359,8 @@ class OfficialReceiptService {
       fallbackPhone: fallbackPhone,
       settings: settings,
     );
-    final number = _dataFromDebt(debt).receiptNumber;
+    final number = (await _resolveVersion(debt: debt, settings: settings))
+        .data.receiptNumber;
     await Printing.layoutPdf(
       onLayout: (_) async => bytes,
       name: 'Receipt_$number',
@@ -855,12 +857,12 @@ class OfficialReceiptService {
           pw.SizedBox(height: 3),
           pw.Center(
             child: pw.Text(
-              'ZHIROX • ${data.receiptNumber}',
-              textDirection: pw.TextDirection.ltr,
+              _r('ئەم پسوولەیە لە سیستەمی ژیرۆکسەوە دەرچووە'),
+              textAlign: pw.TextAlign.center,
               style: pw.TextStyle(
-                font: font,
-                fontSize: baseFontSize * 0.65,
-                color: PdfColors.grey600,
+                font: bold,
+                fontSize: baseFontSize * 0.72,
+                color: PdfColors.black,
               ),
             ),
           ),

@@ -6,6 +6,7 @@ import 'package:zhirox/services/pb_service.dart';
 class MarketReceiptSettings {
   final String adminId;
   final String receiptTitle;
+  final String paymentTitle;
   final String address;
   final String phone;
   final String secondaryPhone;
@@ -38,6 +39,7 @@ class MarketReceiptSettings {
   const MarketReceiptSettings({
     required this.adminId,
     required this.receiptTitle,
+    required this.paymentTitle,
     required this.address,
     required this.phone,
     required this.secondaryPhone,
@@ -76,6 +78,7 @@ class MarketReceiptSettings {
     return MarketReceiptSettings(
       adminId: adminId,
       receiptTitle: 'پسوولەی فەرمی',
+      paymentTitle: 'پسوولەی پارەدانەوە',
       address: '',
       phone: phone,
       secondaryPhone: '',
@@ -161,6 +164,7 @@ class MarketReceiptSettings {
     return MarketReceiptSettings(
       adminId: text('admin_id', fallbackAdminId),
       receiptTitle: text('receipt_title', 'پسوولەی فەرمی'),
+      paymentTitle: text('payment_title', 'پسوولەی پارەدانەوە'),
       address: text('address'),
       phone: text('phone', fallbackPhone),
       secondaryPhone: text('secondary_phone'),
@@ -217,6 +221,7 @@ class MarketReceiptSettings {
 
   MarketReceiptSettings copyWith({
     String? receiptTitle,
+    String? paymentTitle,
     String? address,
     String? phone,
     String? secondaryPhone,
@@ -249,6 +254,7 @@ class MarketReceiptSettings {
     return MarketReceiptSettings(
       adminId: adminId,
       receiptTitle: receiptTitle ?? this.receiptTitle,
+      paymentTitle: paymentTitle ?? this.paymentTitle,
       address: address ?? this.address,
       phone: phone ?? this.phone,
       secondaryPhone: secondaryPhone ?? this.secondaryPhone,
@@ -284,6 +290,7 @@ class MarketReceiptSettings {
   Map<String, dynamic> toMap() => {
         'admin_id': adminId,
         'receipt_title': receiptTitle.trim(),
+        'payment_title': paymentTitle.trim(),
         'address': address.trim(),
         'phone': phone.trim(),
         'secondary_phone': secondaryPhone.trim(),

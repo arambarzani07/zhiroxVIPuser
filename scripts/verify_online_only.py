@@ -367,12 +367,14 @@ for marker in (
     'generateDebtInvoice(',
     'receiptUrl(',
     'openReceiptViewer(',
-    'PdfService.generateInvoice(',
+    '_runOfficialAction(context, debt, action)',
     'InteractiveViewer(',
     'PBService.pb.getFileUrl(',
 ):
     if marker not in document_actions:
         fail(f'lib/screens/shared/financial_document_actions.dart: shared document marker missing: {marker}')
+if 'PdfService.generateInvoice(' in document_actions:
+    fail('Receipts must not fall back to an unnumbered invoice.')
 for source_name, source in (
     ('lib/screens/shared/user_profile_screen.dart', profile),
     ('lib/screens/shared/debt_detail_screen.dart', debt_detail_source),

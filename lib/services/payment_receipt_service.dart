@@ -116,40 +116,26 @@ class PaymentReceiptService {
     return 'cash';
   }
 
-  static String _fallbackNumber(String id) {
-    final shortId = id.length > 6 ? id.substring(id.length - 6) : id;
-    return 'PAY-${shortId.toUpperCase()}';
-  }
-
   static Future<_ResolvedPaymentReceipt> _resolve({
     required RecordModel payment,
     required MarketReceiptSettings settings,
   }) async {
     if (settings.adminId.isEmpty) {
-      return _ResolvedPaymentReceipt(
-        settings: settings,
-        receiptNumber: _fallbackNumber(payment.id),
-      );
+      throw StateError('Market identity is required to issue a receipt.');
     }
-    try {
-      final version = await ReceiptDocumentService.ensure(
+    final version = await ReceiptDocumentService.ensure(
         adminId: settings.adminId,
         sourceType: 'payment',
         sourceId: payment.id,
         currentSettings: settings,
       );
-      return _ResolvedPaymentReceipt(
-        settings: version.settings,
-        receiptNumber: version.receiptNumber.trim().isEmpty
-            ? _fallbackNumber(payment.id)
-            : version.receiptNumber.trim(),
-      );
-    } catch (_) {
-      return _ResolvedPaymentReceipt(
-        settings: settings,
-        receiptNumber: _fallbackNumber(payment.id),
-      );
+    if (version.receiptNumber.trim().isEmpty) {
+      throw StateError('Receipt number could not be issued.');
     }
+    return _ResolvedPaymentReceipt(
+      settings: version.settings,
+      receiptNumber: version.receiptNumber.trim(),
+    );
   }
 
   static String _money(RecordModel debt, double storedAmount) {
@@ -208,8 +194,14 @@ class PaymentReceiptService {
     required String adminName,
     required String fallbackPhone,
     required MarketReceiptSettings settings,
+    bool preview = false,
   }) async {
-    final resolved = await _resolve(payment: payment, settings: settings);
+    final resolved = preview
+        ? _ResolvedPaymentReceipt(
+            settings: settings,
+            receiptNumber: 'INV-نموونە-000001',
+          )
+        : await _resolve(payment: payment, settings: settings);
     final active = resolved.settings;
     final fontData = await rootBundle.load('assets/fonts/NotoKufiArabic.ttf');
     final boldData = await rootBundle.load('assets/fonts/NotoKufiArabic-Bold.ttf');
@@ -324,7 +316,9 @@ class PaymentReceiptService {
           ),
           pw.SizedBox(height: 2),
           pw.Text(
-            _r(_label('title', language)),
+            _r(active.paymentTitle.trim().isEmpty
+                ? _label('title', language)
+                : active.paymentTitle.trim()),
             textAlign: pw.TextAlign.center,
             style: pw.TextStyle(
               font: bold,
@@ -525,12 +519,12 @@ class PaymentReceiptService {
           pw.SizedBox(height: 3),
           pw.Center(
             child: pw.Text(
-              'ZHIROX • ${resolved.receiptNumber}',
-              textDirection: pw.TextDirection.ltr,
+              _r('ئەم پسوولەیە لە سیستەمی ژیرۆکسەوە دەرچووە'),
+              textAlign: pw.TextAlign.center,
               style: pw.TextStyle(
-                font: font,
-                fontSize: baseFontSize * 0.65,
-                color: PdfColors.grey600,
+                font: bold,
+                fontSize: baseFontSize * 0.72,
+                color: PdfColors.black,
               ),
             ),
           ),
