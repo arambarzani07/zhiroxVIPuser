@@ -385,20 +385,29 @@ class PaymentReceiptService {
           header(),
           pw.SizedBox(height: isThermal ? 7 : 14),
           infoLine(_label('receipt_no', language), resolved.receiptNumber, ltr: true),
-          infoLine(_label('date', language), created),
-          infoLine(
-            _label('customer', language),
-            customerName.isEmpty ? 'نەناسراو' : customerName,
-          ),
-          if (active.showCustomerPhone && customerPhone.isNotEmpty)
-            infoLine(_label('customer_phone', language), customerPhone, ltr: true),
-          if (active.showAdminName && adminName.trim().isNotEmpty)
-            infoLine(_label('manager', language), adminName.trim()),
-          if (description.isNotEmpty)
-            infoLine(_label('debt', language), description),
-          infoLine(_label('method', language), method),
-          for (final field in active.customFields)
-            infoLine(field['label'] ?? '', field['value'] ?? ''),
+          for (final key in active.paymentFieldOrder)
+            ...(switch (key) {
+              'date' => [infoLine(_label('date', language), created)],
+              'customer' => [infoLine(
+                  _label('customer', language),
+                  customerName.isEmpty ? 'نەناسراو' : customerName,
+                )],
+              'customer_phone' => active.showCustomerPhone && customerPhone.isNotEmpty
+                  ? [infoLine(_label('customer_phone', language), customerPhone, ltr: true)]
+                  : <pw.Widget>[],
+              'admin' => active.showAdminName && adminName.trim().isNotEmpty
+                  ? [infoLine(_label('manager', language), adminName.trim())]
+                  : <pw.Widget>[],
+              'debt' => description.isNotEmpty
+                  ? [infoLine(_label('debt', language), description)]
+                  : <pw.Widget>[],
+              'method' => [infoLine(_label('method', language), method)],
+              'custom' => [
+                  for (final field in active.customFields)
+                    infoLine(field['label'] ?? '', field['value'] ?? ''),
+                ],
+              _ => <pw.Widget>[],
+            }),
           pw.SizedBox(height: isThermal ? 6 : 10),
           pw.Container(
             width: double.infinity,

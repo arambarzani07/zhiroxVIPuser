@@ -652,26 +652,30 @@ class OfficialReceiptService {
             data.receiptNumber,
             ltr: true,
           ),
-          infoLine(_label('date', language), data.created),
-          infoLine(
-            _label('customer', language),
-            data.customerName.isEmpty ? 'نەناسراو' : data.customerName,
-          ),
-          if (settings.showCustomerPhone && data.customerPhone.isNotEmpty)
-            infoLine(
-              _label('customer_phone', language),
-              data.customerPhone,
-              ltr: true,
-            ),
-          infoLine(_label('due', language), data.dueDate),
-          if (settings.showAdminName && adminName.trim().isNotEmpty)
-            infoLine(_label('admin', language), adminName.trim()),
-          infoLine(
-            _label('payment_method', language),
-            _paymentMethod(settings.defaultPaymentMethod, language),
-          ),
-          for (final field in settings.customFields)
-            infoLine(field['label'] ?? '', field['value'] ?? ''),
+          for (final key in settings.debtFieldOrder)
+            ...(switch (key) {
+              'date' => [infoLine(_label('date', language), data.created)],
+              'customer' => [infoLine(
+                  _label('customer', language),
+                  data.customerName.isEmpty ? 'نەناسراو' : data.customerName,
+                )],
+              'customer_phone' => settings.showCustomerPhone && data.customerPhone.isNotEmpty
+                  ? [infoLine(_label('customer_phone', language), data.customerPhone, ltr: true)]
+                  : <pw.Widget>[],
+              'due' => [infoLine(_label('due', language), data.dueDate)],
+              'admin' => settings.showAdminName && adminName.trim().isNotEmpty
+                  ? [infoLine(_label('admin', language), adminName.trim())]
+                  : <pw.Widget>[],
+              'method' => [infoLine(
+                  _label('payment_method', language),
+                  _paymentMethod(settings.defaultPaymentMethod, language),
+                )],
+              'custom' => [
+                  for (final field in settings.customFields)
+                    infoLine(field['label'] ?? '', field['value'] ?? ''),
+                ],
+              _ => <pw.Widget>[],
+            }),
           pw.SizedBox(height: isThermal ? 5 : 9),
           if (itemRows.isNotEmpty)
             pw.TableHelper.fromTextArray(

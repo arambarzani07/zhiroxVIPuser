@@ -50,6 +50,8 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
   String _defaultPaymentMethod = 'debt';
   double _marginMm = 8;
   String _languageMode = 'ku';
+  List<String> _debtFieldOrder = [...MarketReceiptSettings.defaultDebtFieldOrder];
+  List<String> _paymentFieldOrder = [...MarketReceiptSettings.defaultPaymentFieldOrder];
   int _templateVersion = 1;
   String? _uploadingKind;
 
@@ -126,6 +128,8 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
         _defaultPaymentMethod = settings.defaultPaymentMethod;
         _marginMm = settings.marginMm;
         _languageMode = settings.languageMode;
+        _debtFieldOrder = [...settings.debtFieldOrder];
+        _paymentFieldOrder = [...settings.paymentFieldOrder];
         _templateVersion = settings.templateVersion;
         _loading = false;
       });
@@ -188,6 +192,8 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       discountPercent: double.tryParse(_discountController.text.trim()) ?? 0,
       defaultPaymentMethod: _defaultPaymentMethod,
       customFields: _parseCustomFields(),
+      debtFieldOrder: _debtFieldOrder,
+      paymentFieldOrder: _paymentFieldOrder,
       marginMm: _marginMm,
       languageMode: _languageMode,
       templateVersion: _templateVersion,
@@ -366,6 +372,42 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
   }
 
   Widget _gap() => const SizedBox(height: 12);
+
+  Widget _fieldOrderEditor({required bool payment}) {
+    final fields = payment ? _paymentFieldOrder : _debtFieldOrder;
+    const labels = {
+      'date': 'بەروار',
+      'customer': 'ناوی کڕیار',
+      'customer_phone': 'مۆبایلی کڕیار',
+      'due': 'بەرواری گەڕاندنەوە',
+      'admin': 'ناوی بەڕێوەبەر',
+      'debt': 'بابەتی قەرز',
+      'method': 'جۆری پارەدان',
+      'custom': 'خانە تایبەتەکان',
+    };
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
+      itemCount: fields.length,
+      itemBuilder: (context, index) => ListTile(
+        key: ValueKey('${payment ? 'payment' : 'debt'}-${fields[index]}'),
+        contentPadding: EdgeInsets.zero,
+        title: Text(labels[fields[index]] ?? fields[index]),
+        trailing: ReorderableDragStartListener(
+          index: index,
+          child: const Icon(Icons.drag_handle_rounded),
+        ),
+      ),
+      onReorder: (oldIndex, newIndex) {
+        setState(() {
+          if (newIndex > oldIndex) newIndex--;
+          final item = fields.removeAt(oldIndex);
+          fields.insert(newIndex, item);
+        });
+      },
+    );
+  }
 
   Widget _assetButton({
     required String kind,
@@ -716,6 +758,15 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           divisions: 30,
                           onChanged: (value) => setState(() => _marginMm = value),
                         ),
+                      ]),
+                      _section('ڕیزبەندی زانیارییەکانی پسوولە', Icons.drag_indicator, [
+                        const Text('بەشەکان ڕابکێشە بۆ گۆڕینی ڕیز. ژمارەی یەکتا هەمیشە لە سەرەوە و دەقی ژیرۆکس هەمیشە لە خوارەوە دەمێننەوە.'),
+                        const SizedBox(height: 12),
+                        const Text('پسوولەی قەرز', style: TextStyle(fontWeight: FontWeight.bold)),
+                        _fieldOrderEditor(payment: false),
+                        const Divider(),
+                        const Text('پسوولەی پارەدانەوە', style: TextStyle(fontWeight: FontWeight.bold)),
+                        _fieldOrderEditor(payment: true),
                       ]),
                       _section('ژمارە، QR و Barcode', Icons.qr_code_2_outlined, [
                         const ListTile(

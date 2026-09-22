@@ -32,6 +32,8 @@ class MarketReceiptSettings {
   final double discountPercent;
   final String defaultPaymentMethod;
   final List<Map<String, String>> customFields;
+  final List<String> debtFieldOrder;
+  final List<String> paymentFieldOrder;
   final double marginMm;
   final String languageMode;
   final int templateVersion;
@@ -65,6 +67,8 @@ class MarketReceiptSettings {
     required this.discountPercent,
     required this.defaultPaymentMethod,
     required this.customFields,
+    required this.debtFieldOrder,
+    required this.paymentFieldOrder,
     required this.marginMm,
     required this.languageMode,
     required this.templateVersion,
@@ -104,6 +108,8 @@ class MarketReceiptSettings {
       discountPercent: 0,
       defaultPaymentMethod: 'debt',
       customFields: const [],
+      debtFieldOrder: defaultDebtFieldOrder,
+      paymentFieldOrder: defaultPaymentFieldOrder,
       marginMm: 8,
       languageMode: 'ku',
       templateVersion: 1,
@@ -151,6 +157,14 @@ class MarketReceiptSettings {
           .toList(growable: false);
     }
 
+    List<String> fieldOrder(String key, List<String> defaults) {
+      final raw = row[key];
+      final selected = raw is List
+          ? raw.whereType<String>().where(defaults.contains).toSet().toList()
+          : <String>[];
+      return [...selected, ...defaults.where((field) => !selected.contains(field))];
+    }
+
     final paper = text('paper_size', 'a4');
     final safePaper = const {'a4', 'thermal80', 'thermal58'}.contains(paper)
         ? paper
@@ -191,6 +205,9 @@ class MarketReceiptSettings {
           number('discount_percent', 0).clamp(0, 100).toDouble(),
       defaultPaymentMethod: text('default_payment_method', 'debt'),
       customFields: customFields(),
+      debtFieldOrder: fieldOrder('debt_field_order', defaultDebtFieldOrder),
+      paymentFieldOrder:
+          fieldOrder('payment_field_order', defaultPaymentFieldOrder),
       marginMm: number('margin_mm', 8).clamp(0, 30).toDouble(),
       languageMode: safeLanguage,
       templateVersion: integer('template_version', 1),
@@ -218,6 +235,13 @@ class MarketReceiptSettings {
         return debtTemplate;
     }
   }
+
+  static const defaultDebtFieldOrder = [
+    'date', 'customer', 'customer_phone', 'due', 'admin', 'method', 'custom',
+  ];
+  static const defaultPaymentFieldOrder = [
+    'date', 'customer', 'customer_phone', 'admin', 'debt', 'method', 'custom',
+  ];
 
   MarketReceiptSettings copyWith({
     String? receiptTitle,
@@ -247,6 +271,8 @@ class MarketReceiptSettings {
     double? discountPercent,
     String? defaultPaymentMethod,
     List<Map<String, String>>? customFields,
+    List<String>? debtFieldOrder,
+    List<String>? paymentFieldOrder,
     double? marginMm,
     String? languageMode,
     int? templateVersion,
@@ -281,6 +307,8 @@ class MarketReceiptSettings {
       defaultPaymentMethod:
           defaultPaymentMethod ?? this.defaultPaymentMethod,
       customFields: customFields ?? this.customFields,
+      debtFieldOrder: debtFieldOrder ?? this.debtFieldOrder,
+      paymentFieldOrder: paymentFieldOrder ?? this.paymentFieldOrder,
       marginMm: marginMm ?? this.marginMm,
       languageMode: languageMode ?? this.languageMode,
       templateVersion: templateVersion ?? this.templateVersion,
@@ -316,6 +344,8 @@ class MarketReceiptSettings {
         'discount_percent': discountPercent,
         'default_payment_method': defaultPaymentMethod,
         'custom_fields': customFields,
+        'debt_field_order': debtFieldOrder,
+        'payment_field_order': paymentFieldOrder,
         'margin_mm': marginMm,
         'language_mode': languageMode,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
