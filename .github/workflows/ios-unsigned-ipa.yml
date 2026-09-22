@@ -79,6 +79,9 @@ jobs:
       - name: Verify customer cumulative payment totals
         run: python3 scripts/verify_customer_payment_totals.py
 
+      - name: Verify Receipt Studio governance
+        run: python3 scripts/verify_receipt_studio_governance.py
+
       - name: Verify admin dashboard recent activity
         run: python3 scripts/verify_admin_dashboard_activity.py
 

@@ -861,7 +861,7 @@ class OfficialReceiptService {
           pw.SizedBox(height: 3),
           pw.Center(
             child: pw.Text(
-              _r('ئەم پسوولەیە لە سیستەمی ژیرۆکسەوە دەرچووە'),
+              _r(ReceiptBranding.lockedAttribution),
               textAlign: pw.TextAlign.center,
               style: pw.TextStyle(
                 font: bold,

@@ -27,6 +27,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
   final _registrationController = TextEditingController();
   final _footerController = TextEditingController();
   final _colorController = TextEditingController();
+  final _prefixController = TextEditingController();
   final _discountController = TextEditingController();
   final _customFieldsController = TextEditingController();
 
@@ -71,6 +72,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
     _registrationController.dispose();
     _footerController.dispose();
     _colorController.dispose();
+    _prefixController.dispose();
     _discountController.dispose();
     _customFieldsController.dispose();
     super.dispose();
@@ -107,6 +109,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
         _registrationController.text = settings.registrationNo;
         _footerController.text = settings.footerNote;
         _colorController.text = settings.primaryColor;
+        _prefixController.text = settings.receiptPrefix;
         _discountController.text = settings.discountPercent.toStringAsFixed(2);
         _customFieldsController.text = settings.customFields
             .map((field) => '${field['label'] ?? ''}=${field['value'] ?? ''}')
@@ -187,7 +190,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       headerAlignment: _headerAlignment,
       showQr: _showQr,
       showBarcode: _showBarcode,
-      receiptPrefix: 'INV',
+      receiptPrefix: _prefixController.text.trim().toUpperCase(),
       vatPercent: 0,
       discountPercent: double.tryParse(_discountController.text.trim()) ?? 0,
       defaultPaymentMethod: _defaultPaymentMethod,
@@ -328,6 +331,143 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
     );
   }
 
+  Future<void> _showVersionHistory() async {
+    final auth = context.read<AuthProvider>();
+    if (auth.userRole != 'admin') return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(sheetContext).height * 0.72,
+            child: FutureBuilder<List<ReceiptTemplateVersion>>(
+              future: ReceiptSettingsService.versions(adminId: auth.userId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return const Center(
+                    child: Text('نەتوانرا مێژووی Template باربکرێت.'),
+                  );
+                }
+                final versions = snapshot.data ?? const [];
+                return Column(
+                  children: [
+                    const ListTile(
+                      leading: Icon(Icons.history_rounded),
+                      title: Text(
+                        'مێژووی Template',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: Text(
+                        'گەڕاندنەوە هەمیشە وەشانێکی نوێ دروست دەکات؛ پسوولە کۆنەکان ناگۆڕێن.',
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: versions.isEmpty
+                          ? const Center(child: Text('هێشتا وەشانێک نییە.'))
+                          : ListView.separated(
+                              itemCount: versions.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final version = versions[index];
+                                final date = version.createdAt?.toLocal();
+                                final stamp = date == null
+                                    ? ''
+                                    : '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}  ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+                                final current =
+                                    version.versionNo == _templateVersion;
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    child: Text('${version.versionNo}'),
+                                  ),
+                                  title: Text('Template v${version.versionNo}'),
+                                  subtitle: Text(stamp),
+                                  trailing: current
+                                      ? const Chip(label: Text('چالاک'))
+                                      : TextButton(
+                                          onPressed: () async {
+                                            final confirmed =
+                                                await showDialog<bool>(
+                                              context: sheetContext,
+                                              builder: (dialogContext) =>
+                                                  AlertDialog(
+                                                title: const Text(
+                                                    'گەڕاندنەوەی Template'),
+                                                content: Text(
+                                                  'دڵنیایت دەتەوێت v${version.versionNo} وەک وەشانێکی نوێ چالاک بکەیت؟',
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            dialogContext,
+                                                            false),
+                                                    child: const Text('نەخێر'),
+                                                  ),
+                                                  FilledButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            dialogContext,
+                                                            true),
+                                                    child: const Text('بەڵێ'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirmed != true ||
+                                                !sheetContext.mounted) {
+                                              return;
+                                            }
+                                            try {
+                                              await ReceiptSettingsService
+                                                  .restore(version);
+                                              if (!mounted ||
+                                                  !sheetContext.mounted) {
+                                                return;
+                                              }
+                                              Navigator.pop(sheetContext);
+                                              await _load();
+                                              if (!mounted) return;
+                                              AppHelpers.showSnackBar(
+                                                this.context,
+                                                'Template ـەکە وەک وەشانێکی نوێ گەڕێندرایەوە ✅',
+                                              );
+                                            } catch (error) {
+                                              if (!mounted) return;
+                                              AppHelpers.showSnackBar(
+                                                this.context,
+                                                AppHelpers.backendErrorMessage(
+                                                  error,
+                                                  fallback:
+                                                      'گەڕاندنەوە سەرکەوتوو نەبوو.',
+                                                ),
+                                                isError: true,
+                                              );
+                                            }
+                                          },
+                                          child: const Text('گەڕاندنەوە'),
+                                        ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   InputDecoration _decoration(String label, IconData icon, {String? hint}) {
     return InputDecoration(
       labelText: label,
@@ -439,6 +579,12 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       appBar: AppBar(
         title: const Text('ڕێکخستنی پسوولەکان'),
         actions: [
+          if (!_loading && auth.userRole == 'admin')
+            IconButton(
+              tooltip: 'مێژووی Template',
+              onPressed: _showVersionHistory,
+              icon: const Icon(Icons.history_rounded),
+            ),
           if (!_loading && auth.userRole == 'admin')
             IconButton(
               tooltip: 'پێشبینینی پسوولەی قەرز',
@@ -775,7 +921,31 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           subtitle: Text('سیستەم خۆکارانە دیاری دەکات؛ ناتوانرێت دەستکاری بکرێت.'),
                         ),
                         const Divider(),
-                        const Text('لە خوارەوەی هەر پسوولەیەک دەقی جێگیری ژیرۆکس بە فۆنتی بچووک و تۆخ چاپ دەکرێت.'),
+                        TextFormField(
+                          controller: _prefixController,
+                          textDirection: TextDirection.ltr,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: _decoration(
+                            'Prefix ـی ژمارەی داهاتوو',
+                            Icons.pin_outlined,
+                            hint: 'INV',
+                          ).copyWith(
+                            helperText:
+                                'تەنها بۆ پسوولە نوێکان؛ ژمارە کۆنەکان ناگۆڕێن.',
+                          ),
+                          validator: (value) {
+                            final clean = value?.trim() ?? '';
+                            if (!RegExp(r'^[A-Za-z0-9_-]{1,12}$')
+                                .hasMatch(clean)) {
+                              return '١–١٢ پیت/ژمارە؛ تەنها _ و - ڕێگەپێدراون';
+                            }
+                            return null;
+                          },
+                        ),
+                        _gap(),
+                        const Text(
+                          '${ReceiptBranding.lockedAttribution} — ئەم دەقە قوفڵکراوە و لە PDF، وێنە و چاپ هەمیشە دەمێنێتەوە.',
+                        ),
                         SwitchListTile(
                           value: _showQr,
                           onChanged: (value) => setState(() => _showQr = value),

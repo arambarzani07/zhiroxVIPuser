@@ -3,6 +3,46 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/services/pb_service.dart';
 
+abstract final class ReceiptBranding {
+  static const lockedAttribution =
+      'ئەم پسوولەیە لە سیستەمی بەڕێوەبردنی قەرز (ژیرۆکس) دەرچووە';
+}
+
+class ReceiptTemplateVersion {
+  final int versionNo;
+  final String changeKind;
+  final int? restoredFromVersion;
+  final DateTime? createdAt;
+  final MarketReceiptSettings settings;
+
+  const ReceiptTemplateVersion({
+    required this.versionNo,
+    required this.changeKind,
+    required this.restoredFromVersion,
+    required this.createdAt,
+    required this.settings,
+  });
+
+  factory ReceiptTemplateVersion.fromMap(Map<String, dynamic> row) {
+    final adminId = row['admin_id']?.toString() ?? '';
+    final raw = row['settings_snapshot'];
+    final snapshot = raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : <String, dynamic>{};
+    return ReceiptTemplateVersion(
+      versionNo: (row['version_no'] as num?)?.toInt() ?? 1,
+      changeKind: row['change_kind']?.toString() ?? 'save',
+      restoredFromVersion:
+          (row['restored_from_version'] as num?)?.toInt(),
+      createdAt: DateTime.tryParse(row['created_at']?.toString() ?? ''),
+      settings: MarketReceiptSettings.fromSnapshot(
+        snapshot,
+        adminId: adminId,
+      ),
+    );
+  }
+}
+
 class MarketReceiptSettings {
   final String adminId;
   final String receiptTitle;
@@ -414,6 +454,35 @@ class ReceiptSettingsService {
       fallbackAdminId: settings.adminId,
       fallbackPhone: settings.phone,
     );
+  }
+
+  static Future<List<ReceiptTemplateVersion>> versions({
+    required String adminId,
+    int limit = 30,
+  }) async {
+    if (adminId.trim().isEmpty) return const [];
+    final safeLimit = limit < 1 ? 1 : (limit > 100 ? 100 : limit);
+    await PBService.ensureInitialized();
+    final rows = await PBService.client
+        .from('receipt_template_versions')
+        .select()
+        .eq('admin_id', adminId)
+        .order('version_no', ascending: false)
+        .limit(safeLimit);
+    return (rows as List)
+        .whereType<Map>()
+        .map((row) => ReceiptTemplateVersion.fromMap(
+              Map<String, dynamic>.from(row),
+            ))
+        .toList(growable: false);
+  }
+
+  /// Restores forward: the selected snapshot is saved as a new version.
+  /// Issued receipt documents and their immutable snapshots are never changed.
+  static Future<MarketReceiptSettings> restore(
+    ReceiptTemplateVersion version,
+  ) {
+    return save(version.settings);
   }
 
   static Future<String> uploadBrandAsset({
