@@ -399,9 +399,8 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
           child: const Icon(Icons.drag_handle_rounded),
         ),
       ),
-      onReorder: (oldIndex, newIndex) {
+      onReorderItem: (oldIndex, newIndex) {
         setState(() {
-          if (newIndex > oldIndex) newIndex--;
           final item = fields.removeAt(oldIndex);
           fields.insert(newIndex, item);
         });
