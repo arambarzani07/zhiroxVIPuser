@@ -29,6 +29,7 @@ class RollbackSafetyTests(unittest.TestCase):
             args=SimpleNamespace(repo=".",output=str(out),tag="user-r9-abcdef0",commit="a"*40,
                 build="9",ipa=str(ipa),manifest=str(manifest))
             build(args); validate(out,"user-r9-abcdef0","a"*40)
+            self.assertFalse((out/"repo").exists())
             (out/ipa.name).write_bytes(b"tampered")
             with self.assertRaises(SystemExit): validate(out,"user-r9-abcdef0","a"*40)
     def test_migration_barrier_blocks_rollback(self):

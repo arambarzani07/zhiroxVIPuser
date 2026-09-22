@@ -56,6 +56,9 @@ def build(args):
     shutil.copy2(ipa, out / ipa.name); shutil.copy2(manifest, out / manifest.name)
     archive = out / "edge-functions.tar.gz"
     with tarfile.open(archive, "w:gz", format=tarfile.PAX_FORMAT) as tar: tar.add(source, arcname="repo")
+    # Only upload immutable files. Keeping the staging directory here makes
+    # shell globs pass a directory to `gh release create`, which GitHub rejects.
+    shutil.rmtree(source)
     files = {ipa.name: sha(out / ipa.name), manifest.name: sha(out / manifest.name), archive.name: sha(archive)}
     meta = {
         "schema": SCHEMA, "rollback_ready": True, "edition": "user",
