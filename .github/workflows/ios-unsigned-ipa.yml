@@ -390,10 +390,14 @@ jobs:
             --title "ZHIROX User rollback ${GITHUB_RUN_NUMBER}" \
             --notes "Validated immutable rollback-ready release." --target "$GITHUB_SHA"
           gh release download user-latest -p rollback-index.json -D previous-index || true
-          existing=()
-          if [ -f previous-index/rollback-index.json ]; then existing=(--existing previous-index/rollback-index.json); fi
-          python3 scripts/rollback/release_bundle.py index \
-            --metadata rollback-bundle/release-metadata.json "${existing[@]}" --output rollback-index.json
+          if [ -f previous-index/rollback-index.json ]; then
+            python3 scripts/rollback/release_bundle.py index \
+              --metadata rollback-bundle/release-metadata.json \
+              --existing previous-index/rollback-index.json --output rollback-index.json
+          else
+            python3 scripts/rollback/release_bundle.py index \
+              --metadata rollback-bundle/release-metadata.json --output rollback-index.json
+          fi
           python3 scripts/rollback/release_bundle.py active-release \
             --metadata rollback-bundle/release-metadata.json --output active-release.json \
             --kind normal_release --actor "$GITHUB_ACTOR" --run-id "$GITHUB_RUN_ID"
