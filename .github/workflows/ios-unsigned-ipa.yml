@@ -294,15 +294,9 @@ jobs:
           notes = subprocess.check_output(
               ['git', 'log', '-1', '--pretty=%s'], text=True
           ).strip()
-          download_tag = os.environ['UPDATE_TAG']
-          if os.environ['UPDATE_EDITION'] == 'user':
-              download_tag = (
-                  f"user-r{os.environ['GITHUB_RUN_NUMBER']}-"
-                  f"{os.environ['GITHUB_SHA'][:7]}"
-              )
           download_url = (
               f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/"
-              f"{download_tag}/{os.environ['IPA_FILE']}"
+              f"{os.environ['UPDATE_TAG']}/{os.environ['IPA_FILE']}"
           )
           manifest = {
               'schema': 1,
@@ -402,9 +396,9 @@ jobs:
             --metadata rollback-bundle/release-metadata.json --output active-release.json \
             --kind normal_release --actor "$GITHUB_ACTOR" --run-id "$GITHUB_RUN_ID"
           if gh release view user-latest >/dev/null 2>&1; then
-            gh release upload user-latest "$UPDATE_MANIFEST" active-release.json rollback-index.json --clobber
+            gh release upload user-latest "$IPA_FILE" "$UPDATE_MANIFEST" active-release.json rollback-index.json --clobber
           else
-            gh release create user-latest "$UPDATE_MANIFEST" active-release.json rollback-index.json \
+            gh release create user-latest "$IPA_FILE" "$UPDATE_MANIFEST" active-release.json rollback-index.json \
               --title "$UPDATE_TITLE" \
               --notes "Active user manifest and retained rollback index." --target "$GITHUB_SHA"
           fi

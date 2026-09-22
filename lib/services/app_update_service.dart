@@ -163,10 +163,13 @@ class AppUpdateService {
       '^/$_repository/releases/download/user-r[0-9]+-[0-9a-f]{7}/'
       '${RegExp.escape(expectedFileName)}\$',
     );
+    final compatibleUserPath =
+        '/$_repository/releases/download/user-latest/$expectedFileName';
     final expectedOwnerPath =
         '/$_repository/releases/download/owner-latest/$expectedFileName';
     final validPath = edition == 'user'
-        ? immutableUserPath.hasMatch(downloadUri.path)
+        ? immutableUserPath.hasMatch(downloadUri.path) ||
+            downloadUri.path == compatibleUserPath
         : downloadUri.path == expectedOwnerPath;
     if (!validPath) {
       throw const FormatException('invalid_update_download_identity');
