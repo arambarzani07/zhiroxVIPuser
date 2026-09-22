@@ -294,9 +294,15 @@ jobs:
           notes = subprocess.check_output(
               ['git', 'log', '-1', '--pretty=%s'], text=True
           ).strip()
+          download_tag = os.environ['UPDATE_TAG']
+          if os.environ['UPDATE_EDITION'] == 'user':
+              download_tag = (
+                  f"user-r{os.environ['GITHUB_RUN_NUMBER']}-"
+                  f"{os.environ['GITHUB_SHA'][:7]}"
+              )
           download_url = (
               f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/"
-              f"{os.environ['UPDATE_TAG']}/{os.environ['IPA_FILE']}"
+              f"{download_tag}/{os.environ['IPA_FILE']}"
           )
           manifest = {
               'schema': 1,
@@ -328,6 +334,7 @@ jobs:
           retention-days: 7
 
       - name: Publish permanent IPA download
+        if: github.ref_name == 'owner-source'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -361,3 +368,45 @@ jobs:
 
           echo "GitHub release publish failed after 4 attempts." >&2
           exit 1
+
+      - name: Capture immutable rollback-ready user release
+        if: github.ref_name == 'user-source'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          immutable_tag="user-r${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          python3 scripts/rollback/release_bundle.py validate-policy --repo .
+          python3 scripts/rollback/release_bundle.py build --repo . --output rollback-bundle \
+            --tag "$immutable_tag" --commit "$GITHUB_SHA" --build "$GITHUB_RUN_NUMBER" \
+            --ipa "$IPA_FILE" --manifest "$UPDATE_MANIFEST"
+          python3 scripts/rollback/release_bundle.py validate --bundle rollback-bundle \
+            --tag "$immutable_tag" --commit "$GITHUB_SHA"
+          if gh release view "$immutable_tag" >/dev/null 2>&1; then
+            echo "Immutable rollback tag already exists; refusing rewrite." >&2; exit 1
+          fi
+          gh release create "$immutable_tag" rollback-bundle/* \
+            --title "ZHIROX User rollback ${GITHUB_RUN_NUMBER}" \
+            --notes "Validated immutable rollback-ready release." --target "$GITHUB_SHA"
+          gh release download user-latest -p rollback-index.json -D previous-index || true
+          existing=()
+          if [ -f previous-index/rollback-index.json ]; then existing=(--existing previous-index/rollback-index.json); fi
+          python3 scripts/rollback/release_bundle.py index \
+            --metadata rollback-bundle/release-metadata.json "${existing[@]}" --output rollback-index.json
+          python3 scripts/rollback/release_bundle.py active-release \
+            --metadata rollback-bundle/release-metadata.json --output active-release.json \
+            --kind normal_release --actor "$GITHUB_ACTOR" --run-id "$GITHUB_RUN_ID"
+          if gh release view user-latest >/dev/null 2>&1; then
+            gh release upload user-latest "$UPDATE_MANIFEST" active-release.json rollback-index.json --clobber
+          else
+            gh release create user-latest "$UPDATE_MANIFEST" active-release.json rollback-index.json \
+              --title "$UPDATE_TITLE" \
+              --notes "Active user manifest and retained rollback index." --target "$GITHUB_SHA"
+          fi
+
+      - name: Verify rollback release contracts
+        if: github.ref_name == 'user-source'
+        run: |
+          python3 -m unittest -v scripts.rollback.test_release_bundle
+          python3 scripts/rollback/verify_workflows.py

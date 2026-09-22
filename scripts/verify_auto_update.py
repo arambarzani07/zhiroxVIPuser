@@ -35,5 +35,10 @@ require('find Payload -type d -name _CodeSignature -prune -exec rm -rf {}' in wo
 require('/usr/bin/zip -qry "$IPA_FILE" Payload' in workflow, 'IPA packaging must use a signer-friendly ZIP')
 require('unzip -t "$IPA_FILE"' in workflow, 'IPA workflow must validate archive integrity')
 require("'$ipaFileStem-${info.latestBuild}.ipa'" in service, 'update service must validate the unique IPA filename')
+require('rollback-index.json' in workflow, 'workflow must retain rollback targets')
+require('active-release.json' in workflow, 'workflow must publish active release identity')
+require('release-metadata.json' in workflow, 'workflow must capture immutable release metadata')
+require('isRollback' in service, 'update service must recognize rollback manifests')
+require('immutableUserPath' in service, 'user downloads must use immutable release tags')
 
 print('Auto Update Center verification passed.')

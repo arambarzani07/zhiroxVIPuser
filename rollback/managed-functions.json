@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "functions": [
+    {"name":"account-admin","path":"supabase/functions/account-admin","verify_jwt":true,"absent_policy":"block"},
+    {"name":"customer-push","path":"supabase/functions/customer-push","verify_jwt":false,"absent_policy":"block"},
+    {"name":"customer-push-admin","path":"supabase/functions/customer-push-admin","verify_jwt":true,"absent_policy":"block"},
+    {"name":"customer-push-events","path":"supabase/functions/customer-push-events","verify_jwt":true,"absent_policy":"block"},
+    {"name":"customer-push-link","path":"supabase/functions/customer-push-link","verify_jwt":true,"absent_policy":"block"},
+    {"name":"customer-push-manifest","path":"supabase/functions/customer-push-manifest","verify_jwt":false,"absent_policy":"block"},
+    {"name":"customer-push-worker","path":"supabase/functions/customer-push-worker","verify_jwt":false,"absent_policy":"block"},
+    {"name":"customer-read-link","path":"supabase/functions/customer-read-link","verify_jwt":false,"absent_policy":"block"},
+    {"name":"daftar-credit-gateway","path":"supabase/functions/daftar-credit-gateway","verify_jwt":false,"absent_policy":"block"},
+    {"name":"daftar-live-read","path":"supabase/functions/daftar-live-read","verify_jwt":false,"absent_policy":"block"},
+    {"name":"daftar-outbound-sync","path":"supabase/functions/daftar-outbound-sync","verify_jwt":false,"absent_policy":"block"},
+    {"name":"daftar-sync","path":"supabase/functions/daftar-sync","verify_jwt":false,"absent_policy":"block"},
+    {"name":"daftar-sync-gateway","path":"supabase/functions/daftar-sync-gateway","verify_jwt":false,"absent_policy":"block"},
+    {"name":"debt-restore-admin","path":"supabase/functions/debt-restore-admin","verify_jwt":false,"absent_policy":"block"},
+    {"name":"delete-account","path":"supabase/functions/delete-account","verify_jwt":true,"absent_policy":"block"},
+    {"name":"fib-subscription-payment","path":"supabase/functions/fib-subscription-payment","verify_jwt":false,"absent_policy":"block"},
+    {"name":"intelligence-ai","path":"supabase/functions/intelligence-ai","verify_jwt":true,"absent_policy":"block"},
+    {"name":"legacy-import","path":"supabase/functions/legacy-import","verify_jwt":true,"absent_policy":"block"},
+    {"name":"record-payment","path":"supabase/functions/record-payment","verify_jwt":true,"absent_policy":"block"},
+    {"name":"update-account","path":"supabase/functions/update-account","verify_jwt":true,"absent_policy":"block"}
+  ]
+}

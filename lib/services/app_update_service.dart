@@ -13,6 +13,7 @@ class AppUpdateInfo {
     required this.notes,
     required this.mandatory,
     required this.sha256,
+    this.isRollback = false,
     this.publishedAt,
     this.commit,
   });
@@ -24,6 +25,7 @@ class AppUpdateInfo {
   final String notes;
   final bool mandatory;
   final String sha256;
+  final bool isRollback;
   final DateTime? publishedAt;
   final String? commit;
 
@@ -36,6 +38,7 @@ class AppUpdateInfo {
       notes: json['notes']?.toString().trim() ?? '',
       mandatory: json['mandatory'] == true,
       sha256: json['sha256']?.toString().trim().toLowerCase() ?? '',
+      isRollback: json['rollback'] == true,
       publishedAt: DateTime.tryParse(json['published_at']?.toString() ?? ''),
       commit: json['commit']?.toString().trim(),
     );
@@ -50,6 +53,7 @@ class AppUpdateInfo {
       notes: notes ?? this.notes,
       mandatory: mandatory ?? this.mandatory,
       sha256: sha256,
+      isRollback: isRollback,
       publishedAt: publishedAt,
       commit: commit,
     );
@@ -155,9 +159,16 @@ class AppUpdateService {
     // Every build has a unique filename. This prevents Safari and sideloading
     // tools from serving an older IPA cached under a permanent filename.
     final expectedFileName = '$ipaFileStem-${info.latestBuild}.ipa';
-    final expectedPath =
-        '/$_repository/releases/download/$releaseTag/$expectedFileName';
-    if (downloadUri.path != expectedPath) {
+    final immutableUserPath = RegExp(
+      '^/$_repository/releases/download/user-r[0-9]+-[0-9a-f]{7}/'
+      '${RegExp.escape(expectedFileName)}\$',
+    );
+    final expectedOwnerPath =
+        '/$_repository/releases/download/owner-latest/$expectedFileName';
+    final validPath = edition == 'user'
+        ? immutableUserPath.hasMatch(downloadUri.path)
+        : downloadUri.path == expectedOwnerPath;
+    if (!validPath) {
       throw const FormatException('invalid_update_download_identity');
     }
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(info.sha256)) {
@@ -181,14 +192,15 @@ class AppUpdateService {
         final minimumBuild =
             int.tryParse(row['minimum_build']?.toString() ?? '') ?? 0;
         final forceByMinimum = minimumBuild > 0 && currentBuild < minimumBuild;
-        final effectiveMandatory = row['mandatory'] == true || forceByMinimum;
+        final effectiveMandatory =
+            info.isRollback || row['mandatory'] == true || forceByMinimum;
 
         info = info.copyWith(
           mandatory: effectiveMandatory,
           notes: overrideNotes.isEmpty ? info.notes : overrideNotes,
         );
 
-        if (!effectiveMandatory &&
+        if (!info.isRollback && !effectiveMandatory &&
             !_includedInRollout(rolloutPercent.clamp(0, 100))) {
           return null;
         }
@@ -197,6 +209,10 @@ class AppUpdateService {
       // GitHub update discovery remains available if rollout policy is offline.
     }
 
+    if (info.isRollback) {
+      if (edition != 'user' || info.latestBuild >= currentBuild) return null;
+      return info.copyWith(mandatory: true);
+    }
     if (info.latestBuild <= currentBuild) return null;
     return info;
   }

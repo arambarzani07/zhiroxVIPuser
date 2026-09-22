@@ -209,7 +209,9 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Auto Update Center',
+                        info.isRollback
+                            ? 'گەڕاندنەوەی وەشان'
+                            : 'Auto Update Center',
                         style: TextStyle(
                           color: primaryText,
                           fontSize: 15.5,
@@ -218,7 +220,9 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        'IPA ـی نوێ بۆ ZHIROX ${info.edition == 'owner' ? 'Owner' : 'User'} بەردەستە',
+                        info.isRollback
+                            ? 'وەشانی نوێ ناسازگارە؛ گەڕانەوە بۆ وەشانی پارێزراو پێویستە.'
+                            : 'IPA ـی نوێ بۆ ZHIROX ${info.edition == 'owner' ? 'Owner' : 'User'} بەردەستە',
                         style: TextStyle(
                           color: secondaryText,
                           fontSize: 11.5,
@@ -271,7 +275,7 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                   Expanded(
                     child: _buildVersionCell(
                       context,
-                      'نوێ',
+                      info.isRollback ? 'وەشانی پارێزراو' : 'نوێ',
                       'v${info.version}+${info.latestBuild}',
                     ),
                   ),
@@ -333,7 +337,11 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
                           )
                         : const Icon(Icons.open_in_browser_rounded, size: 18),
                     label: Text(
-                      _opening ? 'دەکرێتەوە...' : 'دابەزاندنی IPA',
+                      _opening
+                          ? 'دەکرێتەوە...'
+                          : info.isRollback
+                              ? 'گەڕانەوە بۆ وەشانی پێشوو'
+                              : 'دابەزاندنی IPA',
                     ),
                   ),
                 ),
