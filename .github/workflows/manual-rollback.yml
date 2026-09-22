@@ -1,0 +1,172 @@
+name: Manual Production Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_tag:
+        description: Immutable user release tag
+        required: true
+        type: string
+      mode:
+        description: Dry run or protected production rollback
+        required: true
+        default: dry-run
+        type: choice
+        options: [dry-run, production]
+      confirmation:
+        description: Type ROLLBACK followed by the target tag
+        required: true
+        type: string
+      reason:
+        description: Operator reason (minimum 12 characters)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: user-production-rollback
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      ROLLBACK_TARGET: ${{ inputs.target_tag }}
+      ROLLBACK_CONFIRMATION: ${{ inputs.confirmation }}
+      ROLLBACK_REASON: ${{ inputs.reason }}
+    outputs:
+      active_tag: ${{ steps.state.outputs.active_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: user-source
+      - name: Download active state and target bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p state target
+          gh release download user-latest -p active-release.json -p rollback-index.json -D state
+          gh release download "$ROLLBACK_TARGET" -D target
+      - name: Validate authorization, integrity, and compatibility
+        id: state
+        run: |
+          set -euo pipefail
+          active_tag="$(python3 -c 'import json;print(json.load(open("state/active-release.json"))["tag"])')"
+          current_migration="$(find supabase/migrations -name '*.sql' -printf '%f\n' | sort | tail -1 | cut -d_ -f1)"
+          python3 scripts/rollback/release_bundle.py authorize \
+            --target "$ROLLBACK_TARGET" --confirmation "$ROLLBACK_CONFIRMATION" \
+            --reason "$ROLLBACK_REASON" --active "$active_tag" --index state/rollback-index.json
+          python3 scripts/rollback/release_bundle.py validate --bundle target --tag "$ROLLBACK_TARGET"
+          python3 scripts/rollback/release_bundle.py compatible \
+            --metadata target/release-metadata.json --current-migration "$current_migration" \
+            --barriers rollback/rollback-barriers.json
+          echo "active_tag=$active_tag" >> "$GITHUB_OUTPUT"
+      - name: Dry-run summary
+        run: |
+          echo "## Rollback validation" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: ${{ inputs.mode }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Active: ${{ steps.state.outputs.active_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Target: $ROLLBACK_TARGET" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Database: forward-only; no migration or data mutation" >> "$GITHUB_STEP_SUMMARY"
+
+  production:
+    if: inputs.mode == 'production'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production-rollback
+    env:
+      ROLLBACK_TARGET: ${{ inputs.target_tag }}
+      ROLLBACK_CONFIRMATION: ${{ inputs.confirmation }}
+      ROLLBACK_REASON: ${{ inputs.reason }}
+      SOURCE_TAG: ${{ needs.validate.outputs.active_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: user-source
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Re-read active state and target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p state target extracted
+          gh release download user-latest -p active-release.json -p rollback-index.json -D state
+          gh release download "$ROLLBACK_TARGET" -D target
+          active_tag="$(python3 -c 'import json;print(json.load(open("state/active-release.json"))["tag"])')"
+          python3 scripts/rollback/release_bundle.py authorize \
+            --target "$ROLLBACK_TARGET" --confirmation "$ROLLBACK_CONFIRMATION" \
+            --reason "$ROLLBACK_REASON" --active "$active_tag" --index state/rollback-index.json
+          python3 scripts/rollback/release_bundle.py validate --bundle target --tag "$ROLLBACK_TARGET"
+          tar -xzf target/edge-functions.tar.gz -C extracted
+          cp state/active-release.json rollback-source-release.json
+      - name: Deploy bundled Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd extracted/repo
+          python3 - <<'PY' > /tmp/functions.tsv
+          import json
+          for row in json.load(open('rollback/managed-functions.json'))['functions']:
+              print(f'{row["name"]}\t{str(row["verify_jwt"]).lower()}')
+          PY
+          while IFS=$'\t' read -r name verify; do
+            extra=(); if [ "$verify" = false ]; then extra=(--no-verify-jwt); fi
+            supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF" "${extra[@]}"
+          done < /tmp/functions.tsv
+      - name: Promote app manifest last
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          manifest="$(python3 -c 'import json;print(json.load(open("target/release-metadata.json"))["manifest"])')"
+          cp "target/$manifest" user-update.json
+          python3 - <<'PY'
+          import json, os
+          path='user-update.json'
+          value=json.load(open(path))
+          value['rollback']=True
+          value['mandatory']=True
+          value['rollback_source_tag']=os.environ['SOURCE_TAG']
+          value['notes']='گەڕانەوەی پارێزراو: ' + os.environ['ROLLBACK_REASON']
+          json.dump(value,open(path,'w'),ensure_ascii=False,indent=2)
+          PY
+          python3 scripts/rollback/release_bundle.py active-release \
+            --metadata target/release-metadata.json --output active-release.json \
+            --kind manual_rollback --source-tag "$SOURCE_TAG" \
+            --actor "$GITHUB_ACTOR" --reason "$ROLLBACK_REASON" --run-id "$GITHUB_RUN_ID"
+          gh release upload user-latest user-update.json active-release.json --clobber
+      - name: Verify promotion and preserve audit evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p verification
+          gh release download user-latest -p user-update.json -p active-release.json -D verification --clobber
+          python3 - <<'PY'
+          import json, os
+          active=json.load(open('verification/active-release.json'))
+          assert active['tag'] == os.environ['ROLLBACK_TARGET']
+          assert active['promotion_kind'] == 'manual_rollback'
+          json.dump({'target':os.environ['ROLLBACK_TARGET'],'source':os.environ['SOURCE_TAG'],
+            'actor':os.environ['GITHUB_ACTOR'],'reason':os.environ['ROLLBACK_REASON'],'run_id':os.environ['GITHUB_RUN_ID'],
+            'database_mutated':False},open('rollback-audit.json','w'),indent=2)
+          PY
+          echo "Reverse rollback target: $SOURCE_TAG" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rollback-audit-${{ github.run_id }}
+          path: |
+            rollback-audit.json
+            rollback-source-release.json
+          if-no-files-found: warn
+          retention-days: 90
