@@ -373,7 +373,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                           ? const Center(child: Text('هێشتا وەشانێک نییە.'))
                           : ListView.separated(
                               itemCount: versions.length,
-                              separatorBuilder: (_, __) =>
+                              separatorBuilder: (context, index) =>
                                   const Divider(height: 1),
                               itemBuilder: (context, index) {
                                 final version = versions[index];
