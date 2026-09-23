@@ -84,5 +84,23 @@ assert 'const transactionMirrorCandidates = mirrorBootstrap' in inbound
 assert 'changedAt >= lastSuccessMs - 120_000' in inbound
 assert 'transactionCandidateIds.slice(offset, offset + 200)' in inbound
 assert 'const deletedTransactionIds = [...deletedMarkerIds]' in inbound
+assert 'reconcileAmbiguousTransactionDelete' in outbound
+assert 'fetchRemoteTransactionsLive' in outbound
+assert 'reconciled_after_ambiguous_delete:live_absence' in outbound
+assert 'retryableAmbiguousDelete' in outbound
+
+never_break = (
+    ROOT / 'supabase/migrations/20260923140000_never_break_bidirectional_daftar_sync.sql'
+).read_text(errors='ignore')
+for marker in (
+    "new.enabled is distinct from true",
+    "new.inbound_sync_enabled is distinct from true",
+    "new.outbound_sync_enabled is distinct from true",
+    "new.outbound_write_contract_status is distinct from 'verified'",
+    "tombstone.entity_kind = 'debt'",
+    "tombstone.entity_kind = 'payment'",
+    "tombstone.payload_hash = '__deleted__'",
+):
+    assert marker in never_break, marker
 
 print('Daftar bidirectional create/update/delete sync verified')
