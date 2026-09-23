@@ -223,12 +223,17 @@ async function finalizeRemoteTransactionDelete(
     .maybeSingle();
   if (seenReadError) throw seenReadError;
 
+  const tombstoneHash =
+    event.payload_snapshot?.rejection_reason === "credit_limit_exceeded"
+      ? "__credit_limit_rejected__"
+      : "__deleted__";
+
   const { error: tombstoneError } = await admin.from("daftar_sync_seen").upsert({
     sync_source_id: source.id,
     entity_kind: event.entity_kind,
     source_id: remoteId,
     target_id: existingSeen?.target_id ?? null,
-    payload_hash: "__deleted__",
+    payload_hash: tombstoneHash,
   }, {
     onConflict: "sync_source_id,entity_kind,source_id",
   });
