@@ -2655,12 +2655,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.black.withValues(alpha: 0.12)
             : Colors.white.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(7),
         border: BorderDirectional(
           start: BorderSide(color: accent, width: 2.5),
         ),
@@ -2668,8 +2668,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.reply_rounded, size: 13, color: accent),
-          const SizedBox(width: 5),
+          Icon(Icons.reply_rounded, size: 12, color: accent),
+          const SizedBox(width: 3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2677,19 +2677,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 Text(
                   'پەیوەست بە قەرز',
                   style: TextStyle(
-                    fontSize: 9.5,
+                    fontSize: 8.5,
                     fontWeight: FontWeight.w700,
                     color: accent,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   description.isEmpty ? amountText : '$description • $amountText',
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textDirection: TextDirection.rtl,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 9.5,
                     color: isDark
                         ? AppDarkColors.textSecondary
                         : const Color(0xFF667085),
@@ -2763,20 +2763,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withValues(alpha: 0.055)
             : Colors.white.withValues(alpha: 0.62),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(7),
         border: Border(
-          right: BorderSide(color: accent.withValues(alpha: 0.72), width: 3),
+          right: BorderSide(color: accent.withValues(alpha: 0.72), width: 2.5),
         ),
       ),
       child: Row(
         children: [
-          Icon(Icons.reply_rounded, size: 14, color: accent),
-          const SizedBox(width: 6),
+          Icon(Icons.reply_rounded, size: 12, color: accent),
+          const SizedBox(width: 3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2784,7 +2784,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 9.5,
+                    fontSize: 8.5,
                     fontWeight: FontWeight.w700,
                     color: accent,
                   ),
@@ -2795,7 +2795,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.w600,
                     color: isDark
                         ? AppDarkColors.textSecondary
@@ -2821,9 +2821,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         receiptPath: receiptPath,
       );
     return ClipRRect(
-      borderRadius: BorderRadius.circular(11),
+      borderRadius: BorderRadius.circular(9),
       child: Container(
-        height: 88,
+        height: 64,
         decoration: BoxDecoration(
           color: isDark
               ? Colors.white.withValues(alpha: 0.04)
@@ -2840,9 +2840,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 if (progress == null) return child;
                 return const Center(
                   child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 1.8),
                   ),
                 );
               },
@@ -2850,12 +2850,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.broken_image_outlined, size: 17, color: accent),
-                    const SizedBox(width: 5),
+                    Icon(Icons.broken_image_outlined, size: 15, color: accent),
+                    const SizedBox(width: 3),
                     Text(
                       'وێنەی وەسڵ بەردەست نییە',
                       style: TextStyle(
-                        fontSize: 9.5,
+                        fontSize: 8.5,
                         fontWeight: FontWeight.w600,
                         color: accent,
                       ),
@@ -2865,24 +2865,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ),
             PositionedDirectional(
-              end: 7,
-              bottom: 7,
+              end: 5,
+              bottom: 5,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.58),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(7),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.receipt_long_outlined, size: 12, color: Colors.white),
-                    SizedBox(width: 4),
+                    Icon(Icons.receipt_long_outlined, size: 11, color: Colors.white),
+                    SizedBox(width: 3),
                     Text(
                       'وەسڵ',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 9,
+                        fontSize: 8.5,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
