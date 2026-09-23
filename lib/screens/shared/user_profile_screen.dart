@@ -1659,15 +1659,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     Widget buildHeader() {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+        padding: const EdgeInsets.fromLTRB(10, 7, 10, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
               decoration: BoxDecoration(
                 color: isDark ? AppDarkColors.card : Colors.white,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(15),
                 border: Border.all(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.06)
@@ -1679,19 +1679,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   Row(
                     children: [
                       Container(
-                        width: 38,
-                        height: 38,
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
                           Icons.forum_outlined,
                           color: AppColors.primary,
-                          size: 20,
+                          size: 17,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1699,14 +1699,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             Text(
                               'چاتی دارایی',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w800,
                                 color: isDark
                                     ? AppDarkColors.textPrimary
                                     : const Color(0xFF111827),
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 1),
                             Text(
                               _financialTimelineHasMore && !hasFilters
                                   ? '${allTimelineItems.length}+ مامەڵەی نوێ بارکراوە • مێژووی کۆنتر هەیە'
@@ -1714,7 +1714,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 10.5,
+                                fontSize: 9.75,
                                 color: isDark
                                     ? AppDarkColors.textSecondary
                                     : const Color(0xFF98A2B3),
@@ -1728,12 +1728,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         onPressed: _financialRefreshInFlight
                             ? null
                             : () => _refreshFinancialData(showError: true),
-                        icon: const Icon(Icons.refresh_rounded, size: 20),
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
                         color: AppColors.primary,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       _buildChatSummaryValue(
@@ -1742,14 +1742,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         color: Colors.orange,
                         isDark: isDark,
                       ),
-                      const SizedBox(width: 7),
+                      const SizedBox(width: 5),
                       _buildChatSummaryValue(
                         label: 'دراوە',
                         value: totalsComplete ? totalPaid : double.nan,
                         color: Colors.green,
                         isDark: isDark,
                       ),
-                      const SizedBox(width: 7),
+                      const SizedBox(width: 5),
                       _buildChatSummaryValue(
                         label: 'ماوە',
                         value: totalsComplete ? totalRemaining : double.nan,
@@ -1760,7 +1760,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   _buildFinancialChatTools(
                     totalDebt: totalDebt,
                     totalRemaining: totalRemaining,
@@ -1769,7 +1769,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 9),
+            const SizedBox(height: 6),
             if (totalsComplete)
               _buildDebtHealthStrip(
                 label: health.$1,
@@ -1779,7 +1779,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               )
             else
               _buildCurrencySummaryWarning(compact: true),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             if (!hasFilters && _financialTimelineHasMore) ...[
               OutlinedButton.icon(
                 onPressed: _financialHistoryLoading
@@ -1798,7 +1798,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       : 'مامەڵە کۆنەکان باربکە',
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 7),
             ],
             if (waitingForFullFilterHistory)
               _buildFinancialHistoryLoadingState(isDark)
@@ -1853,10 +1853,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
         decoration: BoxDecoration(
           color: color.withValues(alpha: isDark ? 0.10 : 0.07),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           children: [
@@ -1866,11 +1866,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 color: isDark
                     ? AppDarkColors.textSecondary
                     : const Color(0xFF667085),
-                fontSize: 10,
+                fontSize: 9.5,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Text(
               value.isNaN ? '—' : AppHelpers.formatCurrency(value),
               maxLines: 1,
@@ -1878,7 +1878,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               textDirection: TextDirection.ltr,
               style: TextStyle(
                 color: color,
-                fontSize: 11.5,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w800,
               ),
             ),
