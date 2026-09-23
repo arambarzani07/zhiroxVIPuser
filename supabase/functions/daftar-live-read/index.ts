@@ -120,8 +120,8 @@ Deno.serve(async (req) => {
               "last_success_at, mirror_last_full_at, sync_mode, enabled, source_fingerprint",
           )
           .eq("admin_id", tenantId)
-          .eq("legacy_user_id", 28)
-          .eq("source_fingerprint", "daftar-live-account-28-v1")
+          .eq("enabled", true)
+          .eq("sync_mode", "zhirox_primary")
           .maybeSingle();
         if (error) throw new Error("source_lookup_failed");
         return data;
