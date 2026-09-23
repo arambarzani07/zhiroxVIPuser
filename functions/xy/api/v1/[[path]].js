@@ -22,7 +22,7 @@ export async function onRequest(context) {
   const request = context.request;
   const url = new URL(request.url);
 
-  const prefix = "/xx";
+  const prefix = "/xy";
   const originalPath = url.pathname.startsWith(prefix)
     ? url.pathname.slice(prefix.length)
     : url.pathname;
