@@ -1820,7 +1820,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         (context, index) {
           if (index == 0) return buildHeader();
           if (index == renderEntries.length + 1) {
-            return const SizedBox(height: 8);
+            return const SizedBox(height: 5);
           }
 
           final entry = renderEntries[index - 1];
@@ -1835,7 +1835,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           runningBalances[_timelineLedgerKey(entry.item!)],
                     );
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             child: child,
           );
         },
@@ -1909,7 +1909,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Widget _buildChatDaySeparator(DateTime date) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Expanded(
@@ -1920,11 +1920,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
               AppHelpers.formatDate(date.toIso8601String()),
               style: TextStyle(
-                fontSize: 10.5,
+                fontSize: 9.75,
                 fontWeight: FontWeight.w600,
                 color: isDark
                     ? AppDarkColors.textSecondary
@@ -1974,33 +1974,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     return Center(
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 18),
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(
           color: isDark
               ? Colors.white.withValues(alpha: 0.055)
               : const Color(0xFFF2F4F7),
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(11),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 15,
+              size: 13,
               color: isDark
                   ? AppDarkColors.textSecondary
                   : const Color(0xFF667085),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 5),
             Flexible(
               child: Text(
                 actor.isEmpty ? message : '$message • $actor',
-                maxLines: 2,
+                maxLines: 1,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 10.5,
+                  fontSize: 9.75,
                   fontWeight: FontWeight.w600,
                   color: isDark
                       ? AppDarkColors.textSecondary
@@ -2008,11 +2008,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 5),
             Text(
               DateFormat('HH:mm').format(item.date),
               style: TextStyle(
-                fontSize: 9.5,
+                fontSize: 9,
                 color: isDark
                     ? AppDarkColors.textSecondary
                     : const Color(0xFF98A2B3),
