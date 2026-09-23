@@ -1314,19 +1314,58 @@ Deno.serve(async (req) => {
 
   const reconciled = await reconcileBlockedCustomerEvents(admin, source);
 
-  const { data: events, error: eventsError } = await admin
+  const dueAt = new Date().toISOString();
+  const selectColumns =
+    "id, entity_kind, entity_id, operation, status, attempts, payload_snapshot, remote_id_snapshot, created_at";
+
+  // Credit-limit rollback writes are financial safety actions. Fetch them
+  // separately so a busy ordinary outbox can never delay restoring/removing
+  // an over-limit Daftar transaction.
+  const { data: rollbackEvents, error: rollbackEventsError } = await admin
     .from("daftar_outbound_events")
-    .select(
-      "id, entity_kind, entity_id, operation, status, attempts, payload_snapshot, remote_id_snapshot, created_at",
-    )
+    .select(selectColumns)
     .eq("sync_source_id", source.id)
     .in("status", ["pending", "failed"])
-    .lte("next_attempt_at", new Date().toISOString())
+    .lte("next_attempt_at", dueAt)
+    .contains("payload_snapshot", {
+      source: "daftar_official_app_inbound_guard",
+      rejection_reason: "credit_limit_exceeded",
+    })
     .order("created_at", { ascending: true })
     .limit(10);
-  if (eventsError) return json({ error: "outbox_read_failed" }, 500);
+  if (rollbackEventsError) {
+    return json({ error: "credit_rollback_outbox_read_failed" }, 500);
+  }
 
-  const orderedEvents = [...(events ?? [])].sort((left: any, right: any) => {
+  const priorityIds = new Set(
+    (rollbackEvents ?? []).map((event: any) => String(event.id)),
+  );
+  const remainingSlots = Math.max(0, 10 - priorityIds.size);
+  let normalEvents: any[] = [];
+
+  if (remainingSlots > 0) {
+    const { data, error: eventsError } = await admin
+      .from("daftar_outbound_events")
+      .select(selectColumns)
+      .eq("sync_source_id", source.id)
+      .in("status", ["pending", "failed"])
+      .lte("next_attempt_at", dueAt)
+      .order("created_at", { ascending: true })
+      .limit(20);
+    if (eventsError) return json({ error: "outbox_read_failed" }, 500);
+    normalEvents = (data ?? [])
+      .filter((event: any) => !priorityIds.has(String(event.id)))
+      .slice(0, remainingSlots);
+  }
+
+  const orderedEvents = [
+    ...(rollbackEvents ?? []),
+    ...normalEvents,
+  ].sort((left: any, right: any) => {
+    const leftRollback = isCreditLimitRollback(left as OutboxEvent);
+    const rightRollback = isCreditLimitRollback(right as OutboxEvent);
+    if (leftRollback !== rightRollback) return leftRollback ? -1 : 1;
+
     const byCreated = Date.parse(String(left.created_at ?? "")) -
       Date.parse(String(right.created_at ?? ""));
     if (byCreated) return byCreated;
