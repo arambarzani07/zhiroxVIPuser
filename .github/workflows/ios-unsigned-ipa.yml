@@ -110,6 +110,9 @@ jobs:
       - name: Verify financial-event tenant isolation
         run: python3 scripts/verify_financial_event_tenant_isolation.py
 
+      - name: Verify Daftar multi-tenant runtime
+        run: python3 scripts/verify_daftar_multitenant_runtime.py
+
       - name: Verify Auto Update Center
         run: python3 scripts/verify_auto_update.py
 
