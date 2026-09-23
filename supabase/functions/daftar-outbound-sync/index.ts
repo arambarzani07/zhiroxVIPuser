@@ -169,6 +169,83 @@ async function fetchRemoteContactsLive(
   );
 }
 
+type RemoteTransactionRow = {
+  id: number | string;
+  user_id?: number | string;
+};
+
+async function fetchRemoteTransactionsLive(
+  source: Source,
+): Promise<RemoteTransactionRow[]> {
+  const endpoint = fixedDaftarUrl(source.api_base_url, "transactions");
+  endpoint.searchParams.set("user_id", String(source.legacy_user_id));
+  const response = await fetch(endpoint, {
+    method: "GET",
+    redirect: "manual",
+    signal: AbortSignal.timeout(20_000),
+    headers: {
+      accept: "application/json",
+      "user-agent": daftarCompatibilityUserAgent,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`remote_transaction_lookup_http_${response.status}`);
+  }
+  const payload = await response.json();
+  if (payload?.success !== true || !Array.isArray(payload?.data)) {
+    throw new Error("remote_transaction_lookup_invalid_response");
+  }
+  return (payload.data as RemoteTransactionRow[]).filter((row) =>
+    Number(row.user_id) === Number(source.legacy_user_id)
+  );
+}
+
+async function reconcileAmbiguousTransactionDelete(
+  admin: any,
+  source: Source,
+  event: OutboxEvent,
+  request: DaftarWriteRequest,
+): Promise<Record<string, unknown> | null> {
+  if (
+    request.method !== "DELETE" ||
+    (event.entity_kind !== "debt" && event.entity_kind !== "payment")
+  ) {
+    return null;
+  }
+
+  const remoteId = String(request.remoteId ?? "").trim();
+  if (!/^\d+$/.test(remoteId)) return null;
+
+  const rows = await fetchRemoteTransactionsLive(source);
+  const stillExists = rows.some((row) => String(row.id) === remoteId);
+  if (stillExists) return null;
+
+  const { error: tombstoneError } = await admin.from("daftar_sync_seen").upsert({
+    sync_source_id: source.id,
+    entity_kind: event.entity_kind,
+    source_id: remoteId,
+    target_id: null,
+    payload_hash: "__deleted__",
+  }, {
+    onConflict: "sync_source_id,entity_kind,source_id",
+  });
+  if (tombstoneError) throw tombstoneError;
+
+  await markEvent(admin, event.id, {
+    status: "sent",
+    remote_id: remoteId,
+    last_error: "reconciled_after_ambiguous_delete:live_absence",
+    sent_at: new Date().toISOString(),
+  });
+
+  return {
+    id: event.id,
+    status: "sent",
+    remote_id: remoteId,
+    reconciliation: "live_absence",
+  };
+}
+
 async function findRemoteCustomerLive(
   source: Source,
   profile: { name?: unknown; phone?: unknown; created_at?: unknown },
@@ -950,6 +1027,28 @@ async function processEvent(
           retry_in_minutes: retryableRecovery ? retryMinutes : null,
           error: `customer_recovery_failed:${recoveryMessage}`,
         };
+      }
+    }
+
+    if (
+      ambiguous && outboundRequest?.method === "DELETE" &&
+      (event.entity_kind === "debt" || event.entity_kind === "payment")
+    ) {
+      try {
+        const recoveredDelete = await reconcileAmbiguousTransactionDelete(
+          admin,
+          source,
+          event,
+          outboundRequest,
+        );
+        if (recoveredDelete) return recoveredDelete;
+      } catch (verificationError) {
+        const verificationMessage = verificationError instanceof Error
+          ? verificationError.message
+          : String(verificationError);
+        // Verification failure must never convert an uncertain DELETE into
+        // success. Fall through to the idempotent retry path below.
+        message = `${message};delete_verification_failed:${verificationMessage}`;
       }
     }
 
