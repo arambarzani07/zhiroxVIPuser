@@ -74,37 +74,10 @@ export async function onRequest(context) {
   // transport-level error. For credit-limit rejection only, keep the financial
   // block in the canonical gateway but return success=false to the original app
   // so it can show the message without creating an optimistic local transaction.
-  if (
-    upstream.status === 422 &&
-    (upstream.headers.get("content-type") || "").includes("application/json")
-  ) {
-    const bodyText = await upstream.text();
-    try {
-      const payload = JSON.parse(bodyText);
-      if (payload?.error === "credit_limit_exceeded") {
-        responseHeaders.set("x-zhirox-daftar-compat", "credit-limit-message-v2");
-        return Response.json(
-          {
-            success: false,
-            error: "credit_limit_exceeded",
-            message:
-              "ئەم مامەڵەیە تۆمار نەکرا، چونکە لە سنووری قەرزی دیاری‌کراو زیاترە.",
-            data: null,
-            debt_limit: payload.debt_limit ?? null,
-            current_balance: payload.current_balance ?? null,
-            remaining_capacity: payload.remaining_capacity ?? null
-          },
-          { status: 200, headers: responseHeaders },
-        );
-      }
-    } catch (_) {}
+  // Preserve the canonical credit-limit rejection as an HTTP error.
+  // The patched Daftar Qarz client no longer swallows this error into its
+  // optimistic-success UI path.
 
-    return new Response(bodyText, {
-      status: upstream.status,
-      statusText: upstream.statusText,
-      headers: responseHeaders,
-    });
-  }
 
   return new Response(upstream.body, {
     status: upstream.status,
