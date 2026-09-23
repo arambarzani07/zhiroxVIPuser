@@ -70,11 +70,10 @@ export async function onRequest(context) {
   }
   responseHeaders.set("x-zhirox-daftar-proxy", "pages-v1");
 
-  // Daftar Qarz 0.2.7 treats HTTP 422 validation JSON as if it were a
-  // transaction payload, which renders a fake \"0.0 USD\" row. Keep the
-  // canonical Zhirox gateway on 422, but translate this one legacy-client
-  // business rejection into its Dio error path so the backend message is
-  // surfaced instead of being parsed as a transaction.
+  // Daftar Qarz 0.2.7 handles a normal API envelope more safely than a
+  // transport-level error. For credit-limit rejection only, keep the financial
+  // block in the canonical gateway but return success=false to the original app
+  // so it can show the message without creating an optimistic local transaction.
   if (
     upstream.status === 422 &&
     (upstream.headers.get("content-type") || "").includes("application/json")
@@ -83,11 +82,20 @@ export async function onRequest(context) {
     try {
       const payload = JSON.parse(bodyText);
       if (payload?.error === "credit_limit_exceeded") {
-        responseHeaders.set("x-zhirox-daftar-compat", "credit-limit-error-v1");
-        return new Response(bodyText, {
-          status: 500,
-          headers: responseHeaders,
-        });
+        responseHeaders.set("x-zhirox-daftar-compat", "credit-limit-message-v2");
+        return Response.json(
+          {
+            success: false,
+            error: "credit_limit_exceeded",
+            message:
+              "ئەم مامەڵەیە تۆمار نەکرا، چونکە لە سنووری قەرزی دیاری‌کراو زیاترە.",
+            data: null,
+            debt_limit: payload.debt_limit ?? null,
+            current_balance: payload.current_balance ?? null,
+            remaining_capacity: payload.remaining_capacity ?? null
+          },
+          { status: 200, headers: responseHeaders },
+        );
       }
     } catch (_) {}
 
