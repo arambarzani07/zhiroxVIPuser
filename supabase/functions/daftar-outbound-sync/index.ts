@@ -44,6 +44,14 @@ type OutboxEvent = {
   last_error?: string | null;
 };
 
+function isCreditLimitRollback(event: OutboxEvent): boolean {
+  const snapshot = event.payload_snapshot ?? {};
+  return event.entity_kind === "debt" &&
+    (event.operation === "delete" || event.operation === "update") &&
+    snapshot.source === "daftar_official_app_inbound_guard" &&
+    snapshot.rejection_reason === "credit_limit_exceeded";
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -1053,16 +1061,23 @@ async function processEvent(
     }
 
     const rejected = message.startsWith("remote_rejected_");
-    // DELETE is idempotent. If the remote server returns an ambiguous 5xx or
-    // the connection drops, retrying the same DELETE cannot create a duplicate.
-    // A later 404 is treated as success by sendWrite(), proving the requested
-    // final state (row absent) has already been reached.
+    // DELETE is idempotent. Credit-limit rollback UPDATE is also idempotent:
+    // it repeatedly restores the same known-good debt snapshot. Therefore an
+    // ambiguous network/5xx outcome must be retried instead of becoming a
+    // permanent blocked event.
     const retryableAmbiguousDelete =
       ambiguous && outboundRequest?.method === "DELETE";
-    const nextStatus = retryableAmbiguousDelete
+    const retryableAmbiguousCreditRollback =
+      ambiguous && isCreditLimitRollback(event) &&
+      (outboundRequest?.method === "PUT" ||
+        outboundRequest?.method === "PATCH" ||
+        outboundRequest?.method === "DELETE");
+    const retryableAmbiguous =
+      retryableAmbiguousDelete || retryableAmbiguousCreditRollback;
+    const nextStatus = retryableAmbiguous
       ? "failed"
       : (ambiguous || rejected ? "blocked" : "failed");
-    const retryMinutes = retryableAmbiguousDelete
+    const retryMinutes = retryableAmbiguous
       ? Math.min(
         30,
         Math.max(1, Math.pow(2, Math.min(Number(event.attempts ?? 0), 4))),
@@ -1076,7 +1091,7 @@ async function processEvent(
     return {
       id: event.id,
       status: nextStatus,
-      retry_in_minutes: retryableAmbiguousDelete ? retryMinutes : null,
+      retry_in_minutes: retryableAmbiguous ? retryMinutes : null,
       error: message,
     };
   }
@@ -1252,6 +1267,42 @@ Deno.serve(async (req) => {
     return json({ error: "write_contract_unverified" }, 409);
   }
 
+  const staleCutoff = new Date(Date.now() - 2 * 60_000).toISOString();
+
+  // Credit-limit rollback writes are idempotent and must never be stranded by
+  // a worker interruption. Put stale processing rows back into the retry path.
+  await admin.from("daftar_outbound_events").update({
+    status: "failed",
+    last_error: "ambiguous_worker_interruption_retryable_credit_rollback",
+    next_attempt_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  })
+    .eq("sync_source_id", source.id)
+    .eq("status", "processing")
+    .contains("payload_snapshot", {
+      source: "daftar_official_app_inbound_guard",
+      rejection_reason: "credit_limit_exceeded",
+    })
+    .lt("updated_at", staleCutoff);
+
+  // If an older worker already stranded an ambiguous credit-limit rollback as
+  // blocked, recover only ambiguity/interruption cases; real remote 4xx
+  // rejections remain blocked for investigation.
+  await admin.from("daftar_outbound_events").update({
+    status: "failed",
+    next_attempt_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  })
+    .eq("sync_source_id", source.id)
+    .eq("status", "blocked")
+    .contains("payload_snapshot", {
+      source: "daftar_official_app_inbound_guard",
+      rejection_reason: "credit_limit_exceeded",
+    })
+    .or(
+      "last_error.like.ambiguous_remote_%,last_error.eq.ambiguous_worker_interruption",
+    );
+
   await admin.from("daftar_outbound_events").update({
     status: "blocked",
     last_error: "ambiguous_worker_interruption",
@@ -1259,7 +1310,7 @@ Deno.serve(async (req) => {
   })
     .eq("sync_source_id", source.id)
     .eq("status", "processing")
-    .lt("updated_at", new Date(Date.now() - 2 * 60_000).toISOString());
+    .lt("updated_at", staleCutoff);
 
   const reconciled = await reconcileBlockedCustomerEvents(admin, source);
 
