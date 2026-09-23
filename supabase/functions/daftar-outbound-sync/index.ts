@@ -208,6 +208,43 @@ async function fetchRemoteTransactionsLive(
   );
 }
 
+async function finalizeRemoteTransactionDelete(
+  admin: any,
+  source: Source,
+  event: OutboxEvent,
+  remoteId: string,
+) {
+  const { data: existingSeen, error: seenReadError } = await admin
+    .from("daftar_sync_seen")
+    .select("target_id")
+    .eq("sync_source_id", source.id)
+    .eq("entity_kind", event.entity_kind)
+    .eq("source_id", remoteId)
+    .maybeSingle();
+  if (seenReadError) throw seenReadError;
+
+  const { error: tombstoneError } = await admin.from("daftar_sync_seen").upsert({
+    sync_source_id: source.id,
+    entity_kind: event.entity_kind,
+    source_id: remoteId,
+    target_id: existingSeen?.target_id ?? null,
+    payload_hash: "__deleted__",
+  }, {
+    onConflict: "sync_source_id,entity_kind,source_id",
+  });
+  if (tombstoneError) throw tombstoneError;
+
+  // Mirror tables are cache/read-model state, not the financial ledger.
+  // Once live Daftar absence is confirmed, remove the stale cached row
+  // immediately instead of waiting for the next full inbound snapshot.
+  const { error: mirrorDeleteError } = await admin
+    .from("daftar_mirror_transactions")
+    .delete()
+    .eq("sync_source_id", source.id)
+    .eq("source_id", remoteId);
+  if (mirrorDeleteError) throw mirrorDeleteError;
+}
+
 async function reconcileAmbiguousTransactionDelete(
   admin: any,
   source: Source,
@@ -228,16 +265,7 @@ async function reconcileAmbiguousTransactionDelete(
   const stillExists = rows.some((row) => String(row.id) === remoteId);
   if (stillExists) return null;
 
-  const { error: tombstoneError } = await admin.from("daftar_sync_seen").upsert({
-    sync_source_id: source.id,
-    entity_kind: event.entity_kind,
-    source_id: remoteId,
-    target_id: null,
-    payload_hash: "__deleted__",
-  }, {
-    onConflict: "sync_source_id,entity_kind,source_id",
-  });
-  if (tombstoneError) throw tombstoneError;
+  await finalizeRemoteTransactionDelete(admin, source, event, remoteId);
 
   await markEvent(admin, event.id, {
     status: "sent",
@@ -971,6 +999,16 @@ async function processEvent(
     try {
       if (event.operation === "create") {
         await recordMapping(admin, source, event, sent.remoteId);
+      } else if (
+        event.operation === "delete" &&
+        (event.entity_kind === "debt" || event.entity_kind === "payment")
+      ) {
+        await finalizeRemoteTransactionDelete(
+          admin,
+          source,
+          event,
+          sent.remoteId,
+        );
       }
     } catch (error) {
       throw new Error(
