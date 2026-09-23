@@ -8,6 +8,8 @@ gateway = (ROOT / 'supabase/functions/daftar-sync-gateway/index.ts').read_text(e
 config = (ROOT / 'supabase/config.toml').read_text(errors='ignore')
 migration_path = ROOT / 'supabase/migrations/20260919230000_lock_daftar_sync_connection.sql'
 migration = migration_path.read_text(errors='ignore') if migration_path.exists() else ''
+never_break_path = ROOT / 'supabase/migrations/20260923140000_never_break_bidirectional_daftar_sync.sql'
+never_break = never_break_path.read_text(errors='ignore') if never_break_path.exists() else ''
 workflow = (ROOT / '.github/workflows/ios-unsigned-ipa.yml').read_text(errors='ignore')
 
 for source in (worker + '\n' + worker_auth, gateway):
@@ -32,6 +34,17 @@ assert "daftar-live-sync-account-28" in migration, 'live sync cron identity must
 assert "https://api-daftar-qarz.kasbkar.net/api/v1" in migration, 'legacy API endpoint must be pinned'
 assert "daftar_sync_account_28_trigger" in migration, 'Vault secret name must be pinned'
 assert "daftar-live-account-28-v1" in migration, 'source fingerprint must be pinned'
+
+assert never_break, 'permanent bidirectional sync migration must exist'
+for marker in (
+    "new.enabled is distinct from true",
+    "new.inbound_sync_enabled is distinct from true",
+    "new.outbound_sync_enabled is distinct from true",
+    "new.outbound_write_contract_status is distinct from 'verified'",
+    "daftar_bidirectional_sync_must_remain_enabled",
+    "daftar_outbound_write_contract_must_remain_verified",
+):
+    assert marker in never_break, f'never-break migration missing invariant: {marker}'
 
 assert 'Verify Daftar Qarz connection lock' in workflow, 'every build must verify the Daftar connection lock'
 
