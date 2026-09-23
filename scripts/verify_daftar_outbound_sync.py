@@ -59,6 +59,11 @@ assert 'buildTransactionUpdate' in worker
 assert 'buildDaftarDelete' in worker
 assert 'event.operation === "delete"' in worker
 assert 'event.operation === "update"' in worker
+assert 'reconcileAmbiguousTransactionDelete' in worker
+assert 'fetchRemoteTransactionsLive' in worker
+assert 'reconciled_after_ambiguous_delete:live_absence' in worker
+assert 'retryableAmbiguousDelete' in worker
+assert 'request.method === "DELETE" && response.status === 404' in worker
 
 assert 'path: "contacts"' in client
 assert 'path: "transactions"' in client
