@@ -521,7 +521,7 @@ Deno.serve(async (req: Request) => {
           });
           return jsonResponse({
             error: 'credit_limit_exceeded',
-            message: 'سنووری قەرزی ئەم کڕیارە تێدەپەڕێت؛ مامەلە تۆمار نەکرا.',
+            message: 'ئەم مامەڵەیە تۆمار نەکرا، چونکە لە سنووری قەرزی دیاری‌کراو زیاترە.',
             debt_limit: debtLimit,
             current_balance: currentBalance,
             requested_amount: amount,
