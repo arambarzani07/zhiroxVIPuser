@@ -704,6 +704,7 @@ class _UserListScreenState extends State<UserListScreen> {
         (auth.userRole == 'admin' || auth.userRole == 'employee');
 
     return Container(
+      key: ValueKey<String>('user-card-${user.id}'),
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
