@@ -70,6 +70,34 @@ export async function onRequest(context) {
   }
   responseHeaders.set("x-zhirox-daftar-proxy", "pages-v1");
 
+  // Daftar Qarz 0.2.7 treats HTTP 422 validation JSON as if it were a
+  // transaction payload, which renders a fake \"0.0 USD\" row. Keep the
+  // canonical Zhirox gateway on 422, but translate this one legacy-client
+  // business rejection into its Dio error path so the backend message is
+  // surfaced instead of being parsed as a transaction.
+  if (
+    upstream.status === 422 &&
+    (upstream.headers.get("content-type") || "").includes("application/json")
+  ) {
+    const bodyText = await upstream.text();
+    try {
+      const payload = JSON.parse(bodyText);
+      if (payload?.error === "credit_limit_exceeded") {
+        responseHeaders.set("x-zhirox-daftar-compat", "credit-limit-error-v1");
+        return new Response(bodyText, {
+          status: 500,
+          headers: responseHeaders,
+        });
+      }
+    } catch (_) {}
+
+    return new Response(bodyText, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: responseHeaders,
+    });
+  }
+
   return new Response(upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
