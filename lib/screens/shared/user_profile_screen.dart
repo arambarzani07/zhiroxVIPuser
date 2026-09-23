@@ -2356,35 +2356,35 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         alignment: isPayment ? Alignment.centerLeft : Alignment.centerRight,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.sizeOf(context).width * 0.80,
+            maxWidth: MediaQuery.sizeOf(context).width * 0.78,
             minWidth: 180,
           ),
           child: Material(
             color: background,
             borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(17),
-              topRight: const Radius.circular(17),
-              bottomLeft: Radius.circular(isPayment ? 5 : 17),
-              bottomRight: Radius.circular(isPayment ? 17 : 5),
+              topLeft: const Radius.circular(15),
+              topRight: const Radius.circular(15),
+              bottomLeft: Radius.circular(isPayment ? 4 : 15),
+              bottomRight: Radius.circular(isPayment ? 15 : 4),
             ),
             child: InkWell(
               onTap: () => _showFinancialTransactionActions(item),
               onLongPress: () => _showFinancialTransactionActions(item),
               borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(17),
-                topRight: const Radius.circular(17),
-                bottomLeft: Radius.circular(isPayment ? 5 : 17),
-                bottomRight: Radius.circular(isPayment ? 17 : 5),
+                topLeft: const Radius.circular(15),
+                topRight: const Radius.circular(15),
+                bottomLeft: Radius.circular(isPayment ? 4 : 15),
+                bottomRight: Radius.circular(isPayment ? 15 : 4),
               ),
               child: Container(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 9),
+                padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
                 decoration: BoxDecoration(
                   border: Border.all(color: color.withValues(alpha: 0.16)),
                   borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(17),
-                    topRight: const Radius.circular(17),
-                    bottomLeft: Radius.circular(isPayment ? 5 : 17),
-                    bottomRight: Radius.circular(isPayment ? 17 : 5),
+                    topLeft: const Radius.circular(15),
+                    topRight: const Radius.circular(15),
+                    bottomLeft: Radius.circular(isPayment ? 4 : 15),
+                    bottomRight: Radius.circular(isPayment ? 15 : 4),
                   ),
                 ),
                 child: Column(
@@ -2393,8 +2393,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     Row(
                       children: [
                         Container(
-                          width: 28,
-                          height: 28,
+                          width: 24,
+                          height: 24,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: color.withValues(alpha: 0.12),
@@ -2404,11 +2404,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             isPayment
                                 ? Icons.south_west_rounded
                                 : Icons.north_east_rounded,
-                            size: 15,
+                            size: 13,
                             color: color,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             isPayment ? 'پارە وەرگرتنەوە' : 'قەرز',
@@ -2416,7 +2416,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               color: isDark
                                   ? AppDarkColors.textPrimary
                                   : const Color(0xFF1D2939),
-                              fontSize: 12,
+                              fontSize: 11,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -2424,8 +2424,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         if (!isPayment && status.isNotEmpty)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 2,
+                              horizontal: 6,
+                              vertical: 1,
                             ),
                             decoration: BoxDecoration(
                               color: color.withValues(alpha: 0.10),
@@ -2435,37 +2435,37 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               AppHelpers.statusName(status),
                               style: TextStyle(
                                 color: color,
-                                fontSize: 9,
+                                fontSize: 8.5,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
                       ],
                     ),
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 4),
                     Text(
                       '${isPayment ? '−' : '+'} $formattedAmount',
                       textDirection: TextDirection.ltr,
                       textAlign: isPayment ? TextAlign.left : TextAlign.right,
                       style: TextStyle(
                         color: color,
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.w900,
                         height: 1.1,
                       ),
                     ),
                     if (description.isNotEmpty) ...[
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
                         description,
-                        maxLines: 3,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: isDark
                               ? AppDarkColors.textSecondary
                               : const Color(0xFF475467),
-                          fontSize: 11.5,
-                          height: 1.45,
+                          fontSize: 10.5,
+                          height: 1.30,
                         ),
                       ),
                     ],
@@ -2478,15 +2478,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       _buildPaymentDebtReference(relatedDebt, color, isDark),
                     ],
                     if (!isPayment && receiptPath.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 5),
                       _buildReceiptPreview(record, receiptPath, color, isDark),
                     ],
                     if (overdueLabel != null) ...[
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 5),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 5,
+                          horizontal: 7,
+                          vertical: 3,
                         ),
                         decoration: BoxDecoration(
                           color: Colors.red.withValues(alpha: isDark ? 0.14 : 0.08),
@@ -2517,11 +2517,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     ],
                     if (balanceAfter != null) ...[
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 5),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 6,
+                          horizontal: 8,
+                          vertical: 4,
                         ),
                         decoration: BoxDecoration(
                           color: isDark
@@ -2558,7 +2558,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     ],
                     if (canQuickPay) ...[
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 2),
                       Align(
                         alignment: AlignmentDirectional.centerEnd,
                         child: TextButton.icon(
@@ -2575,8 +2575,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             foregroundColor: Colors.green.shade700,
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                              horizontal: 7,
+                              vertical: 2,
                             ),
                             textStyle: const TextStyle(
                               fontSize: 10,
@@ -2586,7 +2586,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         if (receiptPath.isNotEmpty) ...[
@@ -2655,12 +2655,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.black.withValues(alpha: 0.12)
             : Colors.white.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(9),
         border: BorderDirectional(
           start: BorderSide(color: accent, width: 2.5),
         ),
@@ -2668,8 +2668,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.reply_rounded, size: 14, color: accent),
-          const SizedBox(width: 6),
+          Icon(Icons.reply_rounded, size: 13, color: accent),
+          const SizedBox(width: 5),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
