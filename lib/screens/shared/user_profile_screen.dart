@@ -1900,15 +1900,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     Widget buildHeader() {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+        padding: const EdgeInsets.fromLTRB(10, 7, 10, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
               decoration: BoxDecoration(
                 color: isDark ? AppDarkColors.card : Colors.white,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(15),
                 border: Border.all(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.06)
@@ -1920,19 +1920,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   Row(
                     children: [
                       Container(
-                        width: 38,
-                        height: 38,
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
                           Icons.forum_outlined,
                           color: AppColors.primary,
-                          size: 20,
+                          size: 17,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1940,14 +1940,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             Text(
                               'چاتی دارایی',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w800,
                                 color: isDark
                                     ? AppDarkColors.textPrimary
                                     : const Color(0xFF111827),
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 1),
                             Text(
                               _financialTimelineHasMore && !hasFilters
                                   ? '${allTimelineItems.length}+ مامەڵەی نوێ بارکراوە • مێژووی کۆنتر هەیە'
@@ -1955,7 +1955,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 10.5,
+                                fontSize: 9.75,
                                 color: isDark
                                     ? AppDarkColors.textSecondary
                                     : const Color(0xFF98A2B3),
@@ -1969,12 +1969,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         onPressed: _financialRefreshInFlight
                             ? null
                             : () => _refreshFinancialData(showError: true),
-                        icon: const Icon(Icons.refresh_rounded, size: 20),
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
                         color: AppColors.primary,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   _buildCompactFinancialOverview(
                     totalDebt: totalDebt,
                     totalPaid: totalPaid,
@@ -1984,7 +1984,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     healthColor: health.$2,
                     isDark: isDark,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   _buildFinancialChatTools(
                     totalDebt: totalDebt,
                     totalRemaining: totalRemaining,
@@ -1992,15 +1992,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                   if (rangeSummary != null &&
                       !waitingForFullFilterHistory) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 7),
                     _buildFinancialRangeSummary(rangeSummary, isDark),
                   ],
                 ],
               ),
             ),
-            const SizedBox(height: 9),
+            const SizedBox(height: 6),
             if (!totalsComplete) _buildCurrencySummaryWarning(compact: true),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             if (!hasFilters && _financialTimelineHasMore) ...[
               OutlinedButton.icon(
                 onPressed: _financialHistoryLoading
@@ -2019,7 +2019,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       : 'مامەڵە کۆنەکان باربکە',
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 7),
             ],
             if (waitingForFullFilterHistory)
               _buildFinancialHistoryLoadingState(isDark)
@@ -2080,12 +2080,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         : Colors.red.shade700;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withValues(alpha: 0.035)
             : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.06)
@@ -2103,21 +2103,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     Text(
                       'ماوەی هەژمار',
                       style: TextStyle(
-                        fontSize: 10.5,
+                        fontSize: 9.75,
                         fontWeight: FontWeight.w600,
                         color: isDark
                             ? AppDarkColors.textSecondary
                             : const Color(0xFF667085),
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Text(
                       totalsComplete
                           ? AppHelpers.formatCurrency(totalRemaining)
                           : '—',
                       textDirection: TextDirection.ltr,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         height: 1.15,
                         fontWeight: FontWeight.w900,
                         color: remainingColor,
@@ -2128,10 +2128,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
               if (totalsComplete)
                 Container(
-                  constraints: const BoxConstraints(maxWidth: 170),
+                  constraints: const BoxConstraints(maxWidth: 155),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 5,
+                    horizontal: 8,
+                    vertical: 3,
                   ),
                   decoration: BoxDecoration(
                     color: healthColor.withValues(alpha: isDark ? 0.12 : 0.08),
@@ -2142,17 +2142,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     children: [
                       Icon(
                         Icons.shield_outlined,
-                        size: 13,
+                        size: 12,
                         color: healthColor,
                       ),
-                      const SizedBox(width: 5),
+                      const SizedBox(width: 4),
                       Flexible(
                         child: Text(
                           healthLabel,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 9.5,
+                            fontSize: 9,
                             fontWeight: FontWeight.w700,
                             color: healthColor,
                           ),
@@ -2163,14 +2163,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 6),
           Divider(
             height: 1,
             color: isDark
                 ? Colors.white.withValues(alpha: 0.06)
                 : const Color(0xFFE4E7EC),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 5),
           Row(
             children: [
               Expanded(
@@ -2210,16 +2210,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return Row(
       children: [
         Container(
-          width: 7,
-          height: 7,
+          width: 6,
+          height: 6,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 5),
         Expanded(
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 9.5,
+              fontSize: 9,
               fontWeight: FontWeight.w600,
               color: isDark
                   ? AppDarkColors.textSecondary
@@ -2227,7 +2227,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 5),
         Flexible(
           child: Text(
             value,
@@ -2235,7 +2235,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             overflow: TextOverflow.ellipsis,
             textDirection: TextDirection.ltr,
             style: TextStyle(
-              fontSize: 10.5,
+              fontSize: 9.75,
               fontWeight: FontWeight.w800,
               color: color,
             ),
@@ -2254,10 +2254,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         summary.closingBalance > 0 ? Colors.red : Colors.green;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
+      padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
       decoration: BoxDecoration(
         color: AppColors.primary.withValues(alpha: isDark ? 0.08 : 0.045),
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(11),
         border: Border.all(
           color: AppColors.primary.withValues(alpha: 0.16),
         ),
@@ -2269,15 +2269,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             children: [
               const Icon(
                 Icons.date_range_rounded,
-                size: 16,
+                size: 14,
                 color: AppColors.primary,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               const Expanded(
                 child: Text(
                   'پوختەی مەودای هەڵبژێردراو',
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.w800,
                     color: AppColors.primary,
                   ),
@@ -2286,7 +2286,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               Text(
                 '${summary.transactionCount} مامەڵە',
                 style: TextStyle(
-                  fontSize: 9.5,
+                  fontSize: 9,
                   fontWeight: FontWeight.w700,
                   color: isDark
                       ? AppDarkColors.textSecondary
@@ -2295,7 +2295,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 5),
           Row(
             children: [
               _buildChatSummaryValue(
@@ -2304,7 +2304,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 color: AppColors.primary,
                 isDark: isDark,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               _buildChatSummaryValue(
                 label: 'باڵانسی کۆتایی',
                 value: summary.closingBalance,
@@ -2313,7 +2313,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Row(
             children: [
               _buildChatSummaryValue(
@@ -2322,14 +2322,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 color: Colors.orange,
                 isDark: isDark,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               _buildChatSummaryValue(
                 label: 'پارە وەرگرتنەوە',
                 value: summary.paymentTotal,
                 color: Colors.green,
                 isDark: isDark,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               _buildChatSummaryValue(
                 label: 'گۆڕانی خالص',
                 value: summary.net,
@@ -2338,12 +2338,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             '${summary.debtCount} قەرز • ${summary.paymentCount} پارە وەرگرتنەوە',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 9.5,
+              fontSize: 9,
               fontWeight: FontWeight.w600,
               color: isDark
                   ? AppDarkColors.textSecondary
@@ -2363,10 +2363,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
         decoration: BoxDecoration(
           color: color.withValues(alpha: isDark ? 0.10 : 0.07),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           children: [
@@ -2376,11 +2376,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 color: isDark
                     ? AppDarkColors.textSecondary
                     : const Color(0xFF667085),
-                fontSize: 10,
+                fontSize: 9.5,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Text(
               value.isNaN ? '—' : AppHelpers.formatCurrency(value),
               maxLines: 1,
@@ -2388,7 +2388,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               textDirection: TextDirection.ltr,
               style: TextStyle(
                 color: color,
-                fontSize: 11.5,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w800,
               ),
             ),
