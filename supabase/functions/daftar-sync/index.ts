@@ -620,6 +620,83 @@ async function availableSourceDebts(
   return rows;
 }
 
+async function currentOutstandingBalance(
+  admin: any,
+  customerId: string,
+  currency: string,
+): Promise<number> {
+  const { data, error } = await admin.from("debts")
+    .select("remaining")
+    .eq("customer_id", customerId)
+    .eq("currency", currency)
+    .eq("is_deleted", false)
+    .gt("remaining", 0)
+    .limit(5000);
+  if (error) throw error;
+
+  const total = (data ?? []).reduce(
+    (sum: number, row: { remaining?: unknown }) => sum + amount(row.remaining),
+    0,
+  );
+  return Math.round(total * 100) / 100;
+}
+
+async function enqueueCreditLimitRollback(
+  admin: any,
+  source: SyncSource,
+  input: {
+    sourceTransactionId: string;
+    customerId: string;
+    debtLimit: number;
+    currentBalance: number;
+    requestedAmount: number;
+    projectedBalance: number;
+    currency: string;
+  },
+) {
+  const syntheticEntityId = await stableUuid(
+    `${source.admin_id}:credit_limit_rejected:${input.sourceTransactionId}`,
+  );
+  const now = new Date().toISOString();
+  const { error } = await admin.from("daftar_outbound_events").upsert({
+    sync_source_id: source.id,
+    entity_kind: "debt",
+    entity_id: syntheticEntityId,
+    operation: "delete",
+    idempotency_key:
+      `daftar:credit-limit:${source.id}:${input.sourceTransactionId}:rollback`,
+    status: "pending",
+    remote_id_snapshot: input.sourceTransactionId,
+    payload_snapshot: {
+      source: "daftar_official_app_inbound_guard",
+      rejection_reason: "credit_limit_exceeded",
+      message:
+        "ئەم مامەڵەیە تۆمار نەکرا، چونکە لە سنووری قەرزی دیاری‌کراو زیاترە.",
+      customer_id: input.customerId,
+      debt_limit: input.debtLimit,
+      current_balance: input.currentBalance,
+      requested_amount: input.requestedAmount,
+      projected_balance: input.projectedBalance,
+      currency: input.currency,
+    },
+    next_attempt_at: now,
+    updated_at: now,
+  }, {
+    onConflict: "idempotency_key",
+    ignoreDuplicates: true,
+  });
+  if (error) throw error;
+
+  await upsertSeen(
+    admin,
+    source.id,
+    "debt",
+    input.sourceTransactionId,
+    null,
+    "__credit_limit_rejected__",
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -654,6 +731,7 @@ Deno.serve(async (req) => {
     deleted_customers: 0,
     deleted_debts: 0,
     deleted_payments: 0,
+    credit_limit_rollbacks: 0,
   };
   let customerIdentityReconciliation: unknown = {
     skipped: true,
@@ -1115,6 +1193,62 @@ Deno.serve(async (req) => {
         "debt",
         sourceTransactionId,
       );
+
+      // The official App Store build writes directly to the legacy Daftar API,
+      // so Zhirox cannot reject that POST before it reaches Daftar. In
+      // zhirox_primary mode we enforce the Zhirox credit limit at the first
+      // inbound observation of a genuinely new LOAN. Over-limit rows are not
+      // imported into Zhirox; instead an idempotent outbound DELETE is queued
+      // to roll the remote write back.
+      if (!legacyTarget && source.sync_mode === "zhirox_primary") {
+        const { data: creditProfile, error: creditProfileError } = await admin
+          .from("profiles")
+          .select("debt_limit")
+          .eq("id", customerId)
+          .maybeSingle();
+        if (creditProfileError || !creditProfile) {
+          throw new Error(
+            `credit_limit_lookup_failed:${sourceTransactionId}:${
+              creditProfileError?.message ?? "profile_missing"
+            }`,
+          );
+        }
+
+        const debtLimit = Number(creditProfile.debt_limit ?? 0);
+        if (!Number.isFinite(debtLimit) || debtLimit < 0) {
+          throw new Error(
+            `invalid_credit_limit:${sourceTransactionId}:${creditProfile.debt_limit}`,
+          );
+        }
+
+        if (debtLimit > 0) {
+          const normalizedCurrency = currency.trim().toUpperCase();
+          const currentBalance = normalizedCurrency === "IQD"
+            ? await currentOutstandingBalance(admin, customerId, "IQD")
+            : debtLimit;
+          const projectedBalance = normalizedCurrency === "IQD"
+            ? Math.round((currentBalance + transactionAmount) * 100) / 100
+            : debtLimit + transactionAmount;
+
+          if (
+            normalizedCurrency !== "IQD" ||
+            projectedBalance > debtLimit
+          ) {
+            await enqueueCreditLimitRollback(admin, source, {
+              sourceTransactionId,
+              customerId,
+              debtLimit,
+              currentBalance,
+              requestedAmount: transactionAmount,
+              projectedBalance,
+              currency: normalizedCurrency || currency,
+            });
+            counters.credit_limit_rollbacks++;
+            continue;
+          }
+        }
+      }
+
       const debtId = legacyTarget ??
         await stableUuid(`${source.admin_id}:debt:${sourceTransactionId}`);
       if (!legacyTarget) {
