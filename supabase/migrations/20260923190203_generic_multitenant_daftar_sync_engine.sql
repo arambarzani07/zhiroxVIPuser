@@ -223,6 +223,9 @@ declare
   v_secret text;
   v_valid integer := 0;
   v_invalid integer := 0;
+  v_dispatch_job_id bigint;
+  v_reconcile_job_id bigint;
+  v_guard_job_id bigint;
 begin
   perform set_config('zhirox.daftar_sync_guardian', 'on', true);
 
@@ -257,6 +260,60 @@ begin
 
     perform public.qualify_daftar_outage(r.id);
   end loop;
+
+  select jobid into v_dispatch_job_id
+  from cron.job
+  where jobname = 'daftar-sync-multitenant-dispatch'
+  limit 1;
+
+  if v_dispatch_job_id is null then
+    perform cron.schedule(
+      'daftar-sync-multitenant-dispatch',
+      '* * * * *',
+      'select private.dispatch_daftar_sync_sources();'
+    );
+  else
+    perform cron.alter_job(
+      job_id => v_dispatch_job_id,
+      schedule => '* * * * *',
+      command => 'select private.dispatch_daftar_sync_sources();',
+      active => true
+    );
+  end if;
+
+  select jobid into v_reconcile_job_id
+  from cron.job
+  where jobname = 'daftar-sync-multitenant-reconcile'
+  limit 1;
+
+  if v_reconcile_job_id is null then
+    perform cron.schedule(
+      'daftar-sync-multitenant-reconcile',
+      '17 * * * *',
+      'select private.reconcile_daftar_sync_sources();'
+    );
+  else
+    perform cron.alter_job(
+      job_id => v_reconcile_job_id,
+      schedule => '17 * * * *',
+      command => 'select private.reconcile_daftar_sync_sources();',
+      active => true
+    );
+  end if;
+
+  select jobid into v_guard_job_id
+  from cron.job
+  where jobname = 'daftar-sync-multitenant-guardian'
+  limit 1;
+
+  if v_guard_job_id is not null then
+    perform cron.alter_job(
+      job_id => v_guard_job_id,
+      schedule => '* * * * *',
+      command => 'select private.guard_daftar_sync_sources();',
+      active => true
+    );
+  end if;
 
   return jsonb_build_object(
     'valid_sources', v_valid,
