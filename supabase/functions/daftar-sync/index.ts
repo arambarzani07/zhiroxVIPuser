@@ -911,16 +911,25 @@ Deno.serve(async (req) => {
     };
     const { data: deletedMarkerRows, error: deletedMarkerError } = await admin
       .from("daftar_sync_seen")
-      .select("source_id")
+      .select("source_id, payload_hash")
       .eq("sync_source_id", source.id)
       .in("entity_kind", ["debt", "payment"])
-      .eq("payload_hash", "__deleted__")
-      .limit(100);
+      .in("payload_hash", ["__deleted__", "__credit_limit_rejected__"])
+      .limit(1000);
     if (deletedMarkerError) throw deletedMarkerError;
     const deletedMarkerIds = new Set(
-      (deletedMarkerRows ?? []).map((row: { source_id: unknown }) =>
-        String(row.source_id)
-      ),
+      (deletedMarkerRows ?? [])
+        .filter((row: { payload_hash?: unknown }) =>
+          row.payload_hash === "__deleted__"
+        )
+        .map((row: { source_id: unknown }) => String(row.source_id)),
+    );
+    const creditRejectedIds = new Set(
+      (deletedMarkerRows ?? [])
+        .filter((row: { payload_hash?: unknown }) =>
+          row.payload_hash === "__credit_limit_rejected__"
+        )
+        .map((row: { source_id: unknown }) => String(row.source_id)),
     );
     const contactMirrorCandidates = mirrorBootstrap
       ? contacts
@@ -928,13 +937,14 @@ Deno.serve(async (req) => {
         Number(row.id) > Number(source!.last_contact_id) ||
         changedSinceLastSuccess(row)
       );
-    const transactionMirrorCandidates = mirrorBootstrap
+    const transactionMirrorCandidates = (mirrorBootstrap
       ? transactions
       : transactions.filter((row) =>
         Number(row.id) > Number(source!.last_transaction_id) ||
         deletedMarkerIds.has(String(row.id)) ||
         changedSinceLastSuccess(row)
-      );
+      ))
+      .filter((row) => !creditRejectedIds.has(String(row.id)));
 
     await Promise.all([
       mirrorRows(
@@ -963,7 +973,11 @@ Deno.serve(async (req) => {
         admin,
         "daftar_mirror_transactions",
         source.id,
-        new Set(transactions.map((row) => String(row.id))),
+        new Set(
+          transactions
+            .filter((row) => !creditRejectedIds.has(String(row.id)))
+            .map((row) => String(row.id)),
+        ),
       );
     }
 
@@ -1091,6 +1105,7 @@ Deno.serve(async (req) => {
     }
     const deltaById = new Map<number, LegacyTransaction>();
     for (const row of transactions) {
+      if (creditRejectedIds.has(String(row.id))) continue;
       if (Number(row.id) > Number(source!.last_transaction_id)) {
         deltaById.set(Number(row.id), row);
       }
@@ -1713,7 +1728,8 @@ Deno.serve(async (req) => {
         "payment",
         (paymentLinks ?? [])
           .filter((row: { payload_hash?: unknown }) =>
-            row.payload_hash !== "__deleted__"
+            row.payload_hash !== "__deleted__" &&
+            row.payload_hash !== "__credit_limit_rejected__"
           )
           .map((row: { source_id: unknown }) => String(row.source_id)),
         presentTransactionIds,
@@ -1754,7 +1770,8 @@ Deno.serve(async (req) => {
         "debt",
         (debtLinks ?? [])
           .filter((row: { payload_hash?: unknown }) =>
-            row.payload_hash !== "__deleted__"
+            row.payload_hash !== "__deleted__" &&
+            row.payload_hash !== "__credit_limit_rejected__"
           )
           .map((row: { source_id: unknown }) => String(row.source_id)),
         presentTransactionIds,
