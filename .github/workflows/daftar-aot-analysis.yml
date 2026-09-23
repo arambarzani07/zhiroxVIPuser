@@ -1,0 +1,86 @@
+name: Daftar AOT Analysis
+
+on:
+  push:
+    branches:
+      - tooling/daftar-aot-analysis
+    paths:
+      - .github/workflows/daftar-aot-analysis.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download exact Daftar Qarz 0.2.7 arm64 XAPK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          curl --fail --location --retry 3 --retry-delay 2             "https://d.apkpure.net/b/XAPK/com.void.daftarQarz?version=latest"             -o work/daftar.xapk
+          echo "f0fe64653267ad19770bd3e3e9374b2bf3a36a152c61bab930cd5a4395283564  work/daftar.xapk" | sha256sum -c -
+
+      - name: Extract arm64 Flutter AOT binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/xapk work/arm64
+          unzip -q work/daftar.xapk -d work/xapk
+          unzip -q work/xapk/config.arm64_v8a.apk -d work/arm64
+          test -f work/arm64/lib/arm64-v8a/libapp.so
+          sha256sum work/arm64/lib/arm64-v8a/libapp.so > work/libapp.sha256
+          file work/arm64/lib/arm64-v8a/libapp.so | tee work/libapp.file.txt
+
+      - name: Download DAE analyzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-delay 2             "https://github.com/ejfkdev/dae/releases/download/v0.1.2/dae-Linux-x64"             -o work/dae
+          chmod +x work/dae
+          work/dae --version | tee work/dae-version.txt
+
+      - name: Analyze Dart AOT snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf work/dae-out
+          work/dae work/arm64/lib/arm64-v8a/libapp.so work/dae-out | tee work/dae-run.txt
+
+      - name: Extract Daftar transaction targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "=== functions ==="
+            grep -Ei "addTransaction|addQuickLoanAndPayment|LoanController|LoanProvider|addPersonLoan|receiver_money|sender_money|loan_detail_person|snackBarMessage"               work/dae-out/text/functions.txt || true
+            echo
+            echo "=== strings ==="
+            grep -Ei "transactions|LOAN|PAYMENT|snack|error|success|message|loan|payment"               work/dae-out/text/strings.txt | head -n 1000 || true
+          } > work/targets.txt
+
+          mkdir -p work/selected-asm
+          while IFS= read -r f; do
+            cp "$f" work/selected-asm/ 2>/dev/null || true
+          done < <(grep -rilE "addTransaction|addQuickLoanAndPayment|LoanController|LoanProvider|addPersonLoan" work/dae-out/asm || true)
+
+      - name: Upload analysis artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: daftar-aot-analysis
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            work/dae-out/text/
+            work/selected-asm/
+            work/targets.txt
+            work/dae-version.txt
+            work/dae-run.txt
+            work/libapp.sha256
+            work/libapp.file.txt
