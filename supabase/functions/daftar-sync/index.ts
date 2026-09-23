@@ -731,8 +731,8 @@ Deno.serve(async (req) => {
     deleted_customers: 0,
     deleted_debts: 0,
     deleted_payments: 0,
-    credit_limit_rollbacks: 0,
   };
+  let creditLimitRollbacks = 0;
   let customerIdentityReconciliation: unknown = {
     skipped: true,
     reason: "contacts_not_modified",
@@ -1243,7 +1243,7 @@ Deno.serve(async (req) => {
               projectedBalance,
               currency: normalizedCurrency || currency,
             });
-            counters.credit_limit_rollbacks++;
+            creditLimitRollbacks++;
             continue;
           }
         }
@@ -1717,6 +1717,7 @@ Deno.serve(async (req) => {
 
     const result = {
       ...counters,
+      credit_limit_rollbacks: creditLimitRollbacks,
       processed_contacts: newContacts.length,
       processed_transactions: delta.length,
       last_contact_id: newContactCheckpoint,
@@ -1784,7 +1785,10 @@ Deno.serve(async (req) => {
               ? "debt"
               : "sync",
           p_entity_source_id: sourceEntityId,
-          p_payload: { counters, duration_ms: Date.now() - startedAt },
+          p_payload: {
+            counters: { ...counters, credit_limit_rollbacks: creditLimitRollbacks },
+            duration_ms: Date.now() - startedAt,
+          },
         },
       );
       if (failureError) console.error("failure_record_failed", failureError);
