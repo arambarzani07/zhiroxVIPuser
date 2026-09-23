@@ -697,6 +697,73 @@ async function enqueueCreditLimitRollback(
   );
 }
 
+async function enqueueCreditLimitUpdateRollback(
+  admin: any,
+  source: SyncSource,
+  input: {
+    sourceTransactionId: string;
+    targetDebtId: string;
+    customerId: string;
+    payloadHash: string;
+    debtLimit: number;
+    currentBalance: number;
+    requestedAmount: number;
+    projectedBalance: number;
+    previous: {
+      amount: number;
+      currency: string;
+      description: string;
+      transactionDate: string;
+    };
+  },
+) {
+  const now = new Date().toISOString();
+  const { error } = await admin.from("daftar_outbound_events").upsert({
+    sync_source_id: source.id,
+    entity_kind: "debt",
+    entity_id: input.targetDebtId,
+    operation: "update",
+    idempotency_key:
+      `daftar:credit-limit:${source.id}:${input.sourceTransactionId}:restore:${input.payloadHash}`,
+    status: "pending",
+    remote_id_snapshot: input.sourceTransactionId,
+    payload_snapshot: {
+      customer_id: input.customerId,
+      amount: input.previous.amount,
+      currency: input.previous.currency,
+      description: input.previous.description,
+      transaction_date: input.previous.transactionDate,
+      source: "daftar_official_app_inbound_guard",
+      rejection_reason: "credit_limit_exceeded",
+      message:
+        "ئەم مامەڵەیە تۆمار نەکرا، چونکە لە سنووری قەرزی دیاری‌کراو زیاترە.",
+      debt_limit: input.debtLimit,
+      current_balance: input.currentBalance,
+      requested_amount: input.requestedAmount,
+      projected_balance: input.projectedBalance,
+    },
+    next_attempt_at: now,
+    updated_at: now,
+  }, {
+    onConflict: "idempotency_key",
+    ignoreDuplicates: true,
+  });
+  if (error) throw error;
+
+  // Record the rejected remote payload hash so the same edit is not re-queued
+  // every minute while the outbound restore is still pending. Once Daftar is
+  // restored, the old payload becomes a new change and the normal inbound path
+  // converges the marker back to the authoritative Zhirox state.
+  await upsertSeen(
+    admin,
+    source.id,
+    "debt",
+    input.sourceTransactionId,
+    input.targetDebtId,
+    input.payloadHash,
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1155,6 +1222,115 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (seenDebt?.target_id) {
         if (seenDebt.payload_hash !== payloadHash) {
+          if (source.sync_mode === "zhirox_primary") {
+            const { data: existingDebt, error: existingDebtError } = await admin
+              .from("debts")
+              .select(
+                "id, customer_id, amount, remaining, currency, description, custom_date, created_at",
+              )
+              .eq("id", seenDebt.target_id)
+              .maybeSingle();
+            if (existingDebtError || !existingDebt) {
+              throw new Error(
+                `debt_restore_snapshot_failed:${sourceTransactionId}:${
+                  existingDebtError?.message ?? "debt_missing"
+                }`,
+              );
+            }
+            if (String(existingDebt.customer_id) !== customerId) {
+              throw new Error(
+                `debt_customer_mismatch:${sourceTransactionId}`,
+              );
+            }
+
+            const { data: creditProfile, error: creditProfileError } =
+              await admin.from("profiles")
+                .select("debt_limit")
+                .eq("id", customerId)
+                .maybeSingle();
+            if (creditProfileError || !creditProfile) {
+              throw new Error(
+                `credit_limit_lookup_failed:${sourceTransactionId}:${
+                  creditProfileError?.message ?? "profile_missing"
+                }`,
+              );
+            }
+
+            const debtLimit = Number(creditProfile.debt_limit ?? 0);
+            if (!Number.isFinite(debtLimit) || debtLimit < 0) {
+              throw new Error(
+                `invalid_credit_limit:${sourceTransactionId}:${creditProfile.debt_limit}`,
+              );
+            }
+
+            if (debtLimit > 0) {
+              const normalizedCurrency = currency.trim().toUpperCase();
+              const { data: paymentRows, error: paymentRowsError } = await admin
+                .from("payments")
+                .select("amount")
+                .eq("debt_id", seenDebt.target_id)
+                .limit(5000);
+              if (paymentRowsError) throw paymentRowsError;
+
+              const paidAmount = Math.round(
+                (paymentRows ?? []).reduce(
+                  (sum: number, row: { amount?: unknown }) =>
+                    sum + amount(row.amount),
+                  0,
+                ) * 100,
+              ) / 100;
+              const newRemaining = Math.max(
+                0,
+                Math.round((transactionAmount - paidAmount) * 100) / 100,
+              );
+              const currentBalance = await currentOutstandingBalance(
+                admin,
+                customerId,
+                "IQD",
+              );
+              const oldCurrency = String(existingDebt.currency ?? "IQD")
+                .trim().toUpperCase();
+              const oldLimitRemaining = oldCurrency === "IQD"
+                ? amount(existingDebt.remaining)
+                : 0;
+              const projectedBalance = normalizedCurrency === "IQD"
+                ? Math.max(
+                  0,
+                  Math.round(
+                    (currentBalance - oldLimitRemaining + newRemaining) * 100,
+                  ) / 100,
+                )
+                : debtLimit + transactionAmount;
+
+              if (
+                normalizedCurrency !== "IQD" ||
+                projectedBalance > debtLimit
+              ) {
+                await enqueueCreditLimitUpdateRollback(admin, source, {
+                  sourceTransactionId,
+                  targetDebtId: String(seenDebt.target_id),
+                  customerId,
+                  payloadHash,
+                  debtLimit,
+                  currentBalance,
+                  requestedAmount: transactionAmount,
+                  projectedBalance,
+                  previous: {
+                    amount: amount(existingDebt.amount),
+                    currency: oldCurrency,
+                    description: String(existingDebt.description ?? ""),
+                    transactionDate: String(
+                      existingDebt.custom_date ?? existingDebt.created_at ??
+                        occurredAt,
+                    ),
+                  },
+                });
+                creditLimitRollbacks++;
+                continue;
+              }
+            }
+          }
+
           const { data: updated, error: updateError } = await admin.rpc(
             "apply_daftar_inbound_debt_update",
             {
