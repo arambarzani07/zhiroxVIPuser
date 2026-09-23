@@ -107,6 +107,9 @@ jobs:
       - name: Verify FIB payment security
         run: python3 scripts/verify_fib_payment_security.py
 
+      - name: Verify financial-event tenant isolation
+        run: python3 scripts/verify_financial_event_tenant_isolation.py
+
       - name: Verify Auto Update Center
         run: python3 scripts/verify_auto_update.py
 
