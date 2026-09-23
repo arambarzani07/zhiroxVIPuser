@@ -35,7 +35,11 @@ assert 'SUPABASE_PUBLISHABLE_KEYS' in entrypoint
 assert 'SUPABASE_SECRET_KEYS' in entrypoint
 assert 'legacy_user_id' in entrypoint
 assert 'live_read_mode' in entrypoint
-assert '.eq("enabled", true)' not in entrypoint
+assert '.eq("admin_id", tenantId)' in entrypoint
+assert '.eq("enabled", true)' in entrypoint
+assert '.eq("sync_mode", "zhirox_primary")' in entrypoint
+assert '.eq("legacy_user_id", 28)' not in entrypoint
+assert '.eq("source_fingerprint", "daftar-live-account-28-v1")' not in entrypoint
 assert '"zhirox_primary"' in types
 assert 'syncMode === "zhirox_primary"' in runtime
 assert 'resultSource: ReadSource' in runtime
