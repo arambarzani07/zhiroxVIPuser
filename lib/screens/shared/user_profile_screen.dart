@@ -2918,24 +2918,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         return Container(
           decoration: BoxDecoration(
             color: isDark ? AppDarkColors.card : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
           ),
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 38,
-                height: 4,
+                width: 34,
+                height: 3,
                 decoration: BoxDecoration(
                   color: const Color(0xFFD0D5DD),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 7),
               ListTile(
                 dense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                 leading: CircleAvatar(
                   backgroundColor: (item.isPayment ? Colors.green : Colors.orange)
                       .withValues(alpha: 0.10),
@@ -2944,12 +2944,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ? Icons.south_west_rounded
                         : Icons.north_east_rounded,
                     color: item.isPayment ? Colors.green.shade700 : Colors.orange.shade800,
-                    size: 19,
+                    size: 17,
                   ),
                 ),
                 title: Text(
                   item.isPayment ? 'پارە وەرگرتنەوە' : 'قەرز',
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
                 ),
                 subtitle: Text(
                   AppHelpers.formatStoredFinancialAmount(
@@ -2961,28 +2961,35 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   textDirection: TextDirection.ltr,
                 ),
               ),
-              const Divider(height: 12),
+              const Divider(height: 8),
               ListTile(
-                leading: const Icon(Icons.open_in_new_rounded),
-                title: const Text('وردەکاری مامەڵە'),
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                leading: const Icon(Icons.open_in_new_rounded, size: 19),
+                title: const Text('وردەکاری مامەڵە', style: TextStyle(fontSize: 13)),
                 onTap: () => Navigator.pop(sheetContext, 'details'),
               ),
               if (auth.userRole != 'customer')
                 ListTile(
-                  leading: const Icon(Icons.reply_rounded),
-                  title: const Text('وەک وەڵام / پەیوەستکردن'),
-                  subtitle: const Text('مامەڵەی نوێ بە ئەم مامەڵەیەوە ببەستە'),
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  leading: const Icon(Icons.reply_rounded, size: 19),
+                  title: const Text('وەک وەڵام / پەیوەستکردن', style: TextStyle(fontSize: 13)),
+                  subtitle: const Text('مامەڵەی نوێ بە ئەم مامەڵەیەوە ببەستە', style: TextStyle(fontSize: 11)),
                   onTap: () => Navigator.pop(sheetContext, 'reference'),
                 ),
               if (auth.userRole != 'customer' &&
                   debt != null &&
                   debt.getDoubleValue('remaining') > 0)
                 ListTile(
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
                   leading: Icon(
                     Icons.done_all_rounded,
+                    size: 19,
                     color: Colors.green.shade700,
                   ),
-                  title: const Text('پارە وەرگرتنەوەی تەواوی ماوە'),
+                  title: const Text('پارە وەرگرتنەوەی تەواوی ماوە', style: TextStyle(fontSize: 13)),
                   subtitle: Text(
                     AppHelpers.formatStoredFinancialAmount(
                       debt.getDoubleValue('remaining'),
@@ -2996,15 +3003,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
               if (receiptPath.isNotEmpty)
                 ListTile(
-                  leading: const Icon(Icons.image_outlined),
-                  title: const Text('بینینی وەسڵ'),
-                  subtitle: const Text('گەورەکردن و جوڵاندنی وێنە'),
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  leading: const Icon(Icons.image_outlined, size: 19),
+                  title: const Text('بینینی وەسڵ', style: TextStyle(fontSize: 13)),
+                  subtitle: const Text('گەورەکردن و جوڵاندنی وێنە', style: TextStyle(fontSize: 11)),
                   onTap: () => Navigator.pop(sheetContext, 'receipt'),
                 ),
               if (debt != null)
                 ListTile(
-                  leading: const Icon(Icons.print_outlined),
-                  title: const Text('چاپکردنی وەسڵ'),
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  leading: const Icon(Icons.print_outlined, size: 19),
+                  title: const Text('چاپکردنی وەسڵ', style: TextStyle(fontSize: 13)),
                   onTap: () => Navigator.pop(sheetContext, 'invoice'),
                 ),
               ListTile(
