@@ -1,0 +1,28 @@
+name: Fetch DAE Tool
+
+on:
+  push:
+    branches:
+      - analysis/daftar-aot-client
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download dae
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://github.com/ejfkdev/dae/releases/latest/download/dae-Linux-x64" \
+            -o dae
+          chmod +x dae
+          ./dae --version
+          sha256sum dae
+      - name: Upload dae
+        uses: actions/upload-artifact@v4
+        with:
+          name: dae-linux-x64
+          path: dae
+          if-no-files-found: error
