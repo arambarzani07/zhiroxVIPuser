@@ -1,0 +1,143 @@
+name: Daftar r2flutter Analysis
+
+on:
+  push:
+    branches:
+      - tooling/daftar-aot-analysis
+    paths:
+      - .github/workflows/daftar-r2flutter-analysis.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install radare2 6.2.2
+        uses: radareorg/github-actions@v3
+        with:
+          version: 6.2.2
+          from-git: false
+
+      - name: Download exact Daftar Qarz 0.2.7 arm64 XAPK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/xapk work/arm64
+          curl --fail --location --retry 3 --retry-delay 2             "https://d.apkpure.net/b/XAPK/com.void.daftarQarz?version=latest"             -o work/daftar.xapk
+          echo "f0fe64653267ad19770bd3e3e9374b2bf3a36a152c61bab930cd5a4395283564  work/daftar.xapk" | sha256sum -c -
+          unzip -q work/daftar.xapk -d work/xapk
+          unzip -q work/xapk/config.arm64_v8a.apk -d work/arm64
+          test -f work/arm64/lib/arm64-v8a/libapp.so
+          test -f work/arm64/lib/arm64-v8a/libflutter.so
+
+      - name: Download r2flutter 0.3.6 prebuilt
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-delay 2             "https://github.com/radareorg/r2flutter/releases/download/0.3.6/r2flutter-linux-x86_64.tar.gz"             -o work/r2flutter.tar.gz
+          echo "eb1297c96cf6743e184bf891d40b95650aacf68ecee15c88bec3138e0839d94b  work/r2flutter.tar.gz" | sha256sum -c -
+          mkdir -p work/r2flutter
+          tar -xzf work/r2flutter.tar.gz -C work/r2flutter
+          find work/r2flutter -type f -name r2flutter -exec chmod +x {} \;
+          R2F="$(find work/r2flutter -type f -name r2flutter | head -n1)"
+          test -n "$R2F"
+          echo "R2F=$R2F" >> "$GITHUB_ENV"
+          "$R2F" -V | tee work/r2flutter-version.txt
+
+      - name: Dump Dart metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="work/arm64/lib/arm64-v8a/libapp.so"
+          "$R2F" -jH "$APP" > work/header.json
+          "$R2F" -jf "$APP" > work/functions.json
+          "$R2F" -jzz "$APP" > work/strings.json
+          "$R2F" -jxzz "$APP" > work/xrefs.json || true
+          "$R2F" -q -f "$APP" > work/functions.txt
+          "$R2F" -q -zz "$APP" > work/strings.txt
+
+      - name: Extract transaction targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, re
+          from pathlib import Path
+          needles = [
+              'addTransaction','addQuickLoanAndPayment','addPersonLoan',
+              'LoanController','LoanProvider','snackBarMessage',
+              'transactions','LOAN','PAYMENT','loan.controller',
+              'loan_provider','add_quick_loan_payment'
+          ]
+          out=[]
+          for name in ['functions.json','strings.json','xrefs.json']:
+              p=Path('work')/name
+              if not p.exists():
+                  continue
+              text=p.read_text(errors='replace')
+              out.append(f'===== {name} =====')
+              try:
+                  obj=json.loads(text)
+                  pretty=json.dumps(obj,ensure_ascii=False,indent=2)
+              except Exception:
+                  pretty=text
+              lines=pretty.splitlines()
+              for i,line in enumerate(lines):
+                  if any(n.lower() in line.lower() for n in needles):
+                      lo=max(0,i-8); hi=min(len(lines),i+15)
+                      out.extend(lines[lo:hi])
+                      out.append('---')
+          Path('work/targets.txt').write_text('\n'.join(out),encoding='utf-8')
+          PY
+          cat work/targets.txt
+
+      - name: Build focused radare2 analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="work/arm64/lib/arm64-v8a/libapp.so"
+          "$R2F" -R "$APP" > work/r2flutter.r2
+          {
+            echo 'e scr.color=false'
+            echo 'e asm.bytes=true'
+            echo 'e asm.lines=false'
+            echo 'e anal.hasnext=true'
+            cat work/r2flutter.r2
+            echo 'aaa'
+            echo 'afl~addTransaction'
+            echo 'afl~addQuickLoanAndPayment'
+            echo 'afl~addPersonLoan'
+            echo 'afl~LoanController'
+            echo 'afl~LoanProvider'
+            echo 'izz~addTransaction'
+            echo 'izz~addQuickLoanAndPayment'
+            echo 'izz~addPersonLoan'
+            echo 'izz~/transactions/'
+          } > work/focused.r2
+          r2 -q -i work/focused.r2 "$APP" > work/focused.txt 2>&1 || true
+          cat work/focused.txt
+
+      - name: Upload r2flutter analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: daftar-r2flutter-analysis
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            work/header.json
+            work/functions.json
+            work/strings.json
+            work/xrefs.json
+            work/functions.txt
+            work/strings.txt
+            work/targets.txt
+            work/focused.txt
+            work/r2flutter-version.txt
+            work/r2flutter.r2
