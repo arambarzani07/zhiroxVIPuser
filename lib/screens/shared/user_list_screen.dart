@@ -202,6 +202,22 @@ class _UserListScreenState extends State<UserListScreen> {
     unawaited(_loadUsers(search: _searchController.text.trim()));
   }
 
+  List<RecordModel> _dedupeUsersById(Iterable<RecordModel> users) {
+    final byId = <String, RecordModel>{};
+    final idless = <RecordModel>[];
+    for (final user in users) {
+      final id = user.id.trim();
+      if (id.isEmpty) {
+        idless.add(user);
+        continue;
+      }
+      // Keep the latest copy of the same backend row while preserving the
+      // original insertion position in Dart's linked map.
+      byId[id] = user;
+    }
+    return <RecordModel>[...byId.values, ...idless];
+  }
+
   Future<void> _loadUsers({String? search, bool loadMore = false}) async {
     if (!mounted) return;
     if (loadMore && (_isLoadingMore || !_hasMoreUsers)) return;
@@ -248,9 +264,9 @@ class _UserListScreenState extends State<UserListScreen> {
         _hasMoreUsers = hasMoreUsers;
         _nextUserCursor = nextUserCursor;
         if (loadMore) {
-          _users.addAll(users);
+          _users = _dedupeUsersById(<RecordModel>[..._users, ...users]);
         } else {
-          _users = users;
+          _users = _dedupeUsersById(users);
           _customerInbox.clear();
           _balances.clear();
           _balanceErrors.clear();
