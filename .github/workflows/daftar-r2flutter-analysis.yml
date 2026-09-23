@@ -98,30 +98,19 @@ jobs:
           PY
           cat work/targets.txt
 
-      - name: Build focused radare2 analysis
+      - name: Build focused target report
         shell: bash
         run: |
           set -euo pipefail
           APP="work/arm64/lib/arm64-v8a/libapp.so"
           "$R2F" -R "$APP" > work/r2flutter.r2
           {
-            echo 'e scr.color=false'
-            echo 'e asm.bytes=true'
-            echo 'e asm.lines=false'
-            echo 'e anal.hasnext=true'
-            cat work/r2flutter.r2
-            echo 'aaa'
-            echo 'afl~addTransaction'
-            echo 'afl~addQuickLoanAndPayment'
-            echo 'afl~addPersonLoan'
-            echo 'afl~LoanController'
-            echo 'afl~LoanProvider'
-            echo 'izz~addTransaction'
-            echo 'izz~addQuickLoanAndPayment'
-            echo 'izz~addPersonLoan'
-            echo 'izz~/transactions/'
-          } > work/focused.r2
-          r2 -q -i work/focused.r2 "$APP" > work/focused.txt 2>&1 || true
+            echo "=== recovered functions ==="
+            grep -Ei "addTransaction|addQuickLoanAndPayment|addPersonLoan|LoanController|LoanProvider" work/functions.txt || true
+            echo
+            echo "=== recovered strings ==="
+            grep -Ei "addTransaction|addQuickLoanAndPayment|addPersonLoan|transactions|credit|loan|payment|snack" work/strings.txt | head -n 1000 || true
+          } > work/focused.txt
           cat work/focused.txt
 
       - name: Upload r2flutter analysis
