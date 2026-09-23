@@ -1,0 +1,67 @@
+name: Analyze Daftar Qarz AOT
+
+on:
+  push:
+    branches:
+      - analysis/daftar-aot-client
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download Daftar Qarz XAPK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 --retry-delay 2 \
+            -A "Mozilla/5.0" \
+            "https://d.apkpure.com/b/XAPK/com.void.daftarQarz?version=latest" \
+            -o daftar.xapk
+          sha256sum daftar.xapk
+          file daftar.xapk
+          unzip -l daftar.xapk | head -80
+
+      - name: Extract arm64 libapp
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p xapk arm64
+          unzip -q daftar.xapk -d xapk
+          ARM_APK="$(find xapk -maxdepth 1 -type f \( -name '*arm64*.apk' -o -name 'config.arm64_v8a.apk' \) | head -1)"
+          test -n "$ARM_APK"
+          unzip -q "$ARM_APK" -d arm64
+          test -f arm64/lib/arm64-v8a/libapp.so
+          test -f arm64/lib/arm64-v8a/libflutter.so
+          sha256sum arm64/lib/arm64-v8a/libapp.so
+          strings arm64/lib/arm64-v8a/libflutter.so | grep -E '^[0-9]+\.[0-9]+\.[0-9]+ \((stable|beta|dev)\)' | head -5 || true
+
+      - name: Download dae
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://github.com/ejfkdev/dae/releases/latest/download/dae-Linux-x64" \
+            -o dae
+          chmod +x dae
+          ./dae --version
+
+      - name: Analyze Dart AOT
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ./dae arm64/lib/arm64-v8a/libapp.so dae-out
+          echo "=== TARGET FUNCTIONS ==="
+          grep -Ein 'daftr_qarz|LoanController|LoanProvider|addTransaction|sender_money_widget|receiver_money_widget|add_quick_loan_payment|loan_detail_person_screen' dae-out/text/functions.txt | head -400 || true
+          echo "=== TARGET ASM FILES ==="
+          find dae-out/asm -type f | grep -Ei 'daftr_qarz|LoanController|LoanProvider|transaction|sender_money|receiver_money|loan' | head -200 || true
+          echo "=== ADD TRANSACTION REFERENCES ==="
+          grep -Rin -E 'addTransaction|LoanProvider|LoanController|transactions/' dae-out/asm | head -600 || true
+
+      - name: Upload AOT analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: daftar-aot-analysis
+          path: dae-out
+          if-no-files-found: error
