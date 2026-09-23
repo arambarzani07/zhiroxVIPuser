@@ -1133,7 +1133,6 @@ async function processEvent(
     const retryableAmbiguousCreditRollback =
       ambiguous && isCreditLimitRollback(event) &&
       (outboundRequest?.method === "PUT" ||
-        outboundRequest?.method === "PATCH" ||
         outboundRequest?.method === "DELETE");
     const retryableAmbiguous =
       retryableAmbiguousDelete || retryableAmbiguousCreditRollback;
