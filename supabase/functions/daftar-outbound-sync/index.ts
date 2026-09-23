@@ -984,7 +984,7 @@ async function processEvent(
       http_status: sent.status,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    let message = error instanceof Error ? error.message : String(error);
     const ambiguous = message.startsWith("ambiguous_remote_");
 
     if (
