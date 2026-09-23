@@ -82,6 +82,20 @@ class _UserListScreenState extends State<UserListScreen> {
 
   bool get _isEmployee => widget.role == 'employee';
 
+  List<RecordModel> _dedupeUsersById(Iterable<RecordModel> users) {
+    final byId = <String, RecordModel>{};
+    final idless = <RecordModel>[];
+    for (final user in users) {
+      final id = user.id.trim();
+      if (id.isEmpty) {
+        idless.add(user);
+        continue;
+      }
+      byId[id] = user;
+    }
+    return <RecordModel>[...byId.values, ...idless];
+  }
+
   Future<void> _loadUsers({String? search}) async {
     if (!mounted) return;
     final generation = ++_loadGeneration;
@@ -98,13 +112,19 @@ class _UserListScreenState extends State<UserListScreen> {
         adminId: adminId.isNotEmpty ? adminId : null,
       );
       if (!mounted || generation != _loadGeneration) return;
+      final uniqueUsers = _dedupeUsersById(users);
       setState(() {
-        _users = users;
+        _users = uniqueUsers;
         _isLoading = false;
       });
 
-      if (widget.role == 'customer' && users.isNotEmpty) {
-        unawaited(_loadCustomerInboxInBackground(users, generation: generation));
+      if (widget.role == 'customer' && uniqueUsers.isNotEmpty) {
+        unawaited(
+          _loadCustomerInboxInBackground(
+            uniqueUsers,
+            generation: generation,
+          ),
+        );
       }
     } catch (error) {
       if (!mounted || generation != _loadGeneration) return;
