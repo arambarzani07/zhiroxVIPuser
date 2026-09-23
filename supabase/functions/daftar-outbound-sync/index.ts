@@ -26,6 +26,7 @@ type Source = {
   source_fingerprint: string;
   api_base_url: string;
   trigger_secret_hash: string;
+  enabled: boolean;
   sync_mode: string;
   outbound_sync_enabled: boolean;
   outbound_write_contract_status: string;
@@ -50,6 +51,25 @@ function isCreditLimitRollback(event: OutboxEvent): boolean {
     (event.operation === "delete" || event.operation === "update") &&
     snapshot.source === "daftar_official_app_inbound_guard" &&
     snapshot.rejection_reason === "credit_limit_exceeded";
+}
+
+function isOfficialDaftarSource(source: Source): boolean {
+  if (!source.enabled) return false;
+  if (!Number.isInteger(Number(source.legacy_user_id)) ||
+      Number(source.legacy_user_id) <= 0) {
+    return false;
+  }
+  if (!String(source.source_fingerprint ?? "").trim()) return false;
+
+  try {
+    const url = new URL(String(source.api_base_url));
+    const normalizedPath = url.pathname.replace(/\/+$/, "");
+    return url.protocol === "https:" &&
+      url.hostname === "api-daftar-qarz.kasbkar.net" &&
+      normalizedPath === "/api/v1";
+  } catch (_) {
+    return false;
+  }
 }
 
 function json(body: unknown, status = 200): Response {
@@ -1165,17 +1185,14 @@ Deno.serve(async (req) => {
   const { data: sourceRow, error } = await admin.from("daftar_sync_sources")
     .select(
       "id, admin_id, legacy_user_id, source_fingerprint, api_base_url, trigger_secret_hash, " +
-        "sync_mode, outbound_sync_enabled, outbound_write_contract_status",
+        "enabled, sync_mode, outbound_sync_enabled, outbound_write_contract_status",
     )
     .eq("id", sourceId)
     .maybeSingle();
 
   if (error || !sourceRow) return json({ error: "sync_source_not_found" }, 404);
   const source = sourceRow as unknown as Source;
-  if (
-    Number(source.legacy_user_id) !== 28 ||
-    source.source_fingerprint !== "daftar-live-account-28-v1"
-  ) {
+  if (!isOfficialDaftarSource(source)) {
     return json({ error: "sync_source_not_allowed" }, 403);
   }
 
