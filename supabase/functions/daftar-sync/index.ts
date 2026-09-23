@@ -641,6 +641,28 @@ async function currentOutstandingBalance(
   return Math.round(total * 100) / 100;
 }
 
+async function hasActiveCreditLimitRollback(
+  admin: any,
+  sourceId: string,
+  sourceTransactionId: string,
+  operation: "delete" | "update",
+): Promise<boolean> {
+  const { data, error } = await admin.from("daftar_outbound_events")
+    .select("id")
+    .eq("sync_source_id", sourceId)
+    .eq("entity_kind", "debt")
+    .eq("operation", operation)
+    .eq("remote_id_snapshot", sourceTransactionId)
+    .in("status", ["pending", "processing", "failed", "blocked"])
+    .like(
+      "idempotency_key",
+      `daftar:credit-limit:${sourceId}:${sourceTransactionId}:%`,
+    )
+    .limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 async function enqueueCreditLimitRollback(
   admin: any,
   source: SyncSource,
@@ -654,38 +676,44 @@ async function enqueueCreditLimitRollback(
     currency: string;
   },
 ) {
-  const syntheticEntityId = await stableUuid(
-    `${source.admin_id}:credit_limit_rejected:${input.sourceTransactionId}`,
+  const hasActive = await hasActiveCreditLimitRollback(
+    admin,
+    source.id,
+    input.sourceTransactionId,
+    "delete",
   );
-  const now = new Date().toISOString();
-  const { error } = await admin.from("daftar_outbound_events").upsert({
-    sync_source_id: source.id,
-    entity_kind: "debt",
-    entity_id: syntheticEntityId,
-    operation: "delete",
-    idempotency_key:
-      `daftar:credit-limit:${source.id}:${input.sourceTransactionId}:rollback`,
-    status: "pending",
-    remote_id_snapshot: input.sourceTransactionId,
-    payload_snapshot: {
-      source: "daftar_official_app_inbound_guard",
-      rejection_reason: "credit_limit_exceeded",
-      message:
-        "ئەم مامەڵەیە تۆمار نەکرا، چونکە لە سنووری قەرزی دیاری‌کراو زیاترە.",
-      customer_id: input.customerId,
-      debt_limit: input.debtLimit,
-      current_balance: input.currentBalance,
-      requested_amount: input.requestedAmount,
-      projected_balance: input.projectedBalance,
-      currency: input.currency,
-    },
-    next_attempt_at: now,
-    updated_at: now,
-  }, {
-    onConflict: "idempotency_key",
-    ignoreDuplicates: true,
-  });
-  if (error) throw error;
+
+  if (!hasActive) {
+    const syntheticEntityId = await stableUuid(
+      `${source.admin_id}:credit_limit_rejected:${input.sourceTransactionId}`,
+    );
+    const now = new Date().toISOString();
+    const { error } = await admin.from("daftar_outbound_events").insert({
+      sync_source_id: source.id,
+      entity_kind: "debt",
+      entity_id: syntheticEntityId,
+      operation: "delete",
+      idempotency_key:
+        `daftar:credit-limit:${source.id}:${input.sourceTransactionId}:rollback:${crypto.randomUUID()}`,
+      status: "pending",
+      remote_id_snapshot: input.sourceTransactionId,
+      payload_snapshot: {
+        source: "daftar_official_app_inbound_guard",
+        rejection_reason: "credit_limit_exceeded",
+        message:
+          "ئەم مامەڵەیە تۆمار نەکرا، چونکە لە سنووری قەرزی دیاری‌کراو زیاترە.",
+        customer_id: input.customerId,
+        debt_limit: input.debtLimit,
+        current_balance: input.currentBalance,
+        requested_amount: input.requestedAmount,
+        projected_balance: input.projectedBalance,
+        currency: input.currency,
+      },
+      next_attempt_at: now,
+      updated_at: now,
+    });
+    if (error) throw error;
+  }
 
   await upsertSeen(
     admin,
@@ -717,43 +745,48 @@ async function enqueueCreditLimitUpdateRollback(
     };
   },
 ) {
-  const now = new Date().toISOString();
-  const { error } = await admin.from("daftar_outbound_events").upsert({
-    sync_source_id: source.id,
-    entity_kind: "debt",
-    entity_id: input.targetDebtId,
-    operation: "update",
-    idempotency_key:
-      `daftar:credit-limit:${source.id}:${input.sourceTransactionId}:restore:${input.payloadHash}`,
-    status: "pending",
-    remote_id_snapshot: input.sourceTransactionId,
-    payload_snapshot: {
-      customer_id: input.customerId,
-      amount: input.previous.amount,
-      currency: input.previous.currency,
-      description: input.previous.description,
-      transaction_date: input.previous.transactionDate,
-      source: "daftar_official_app_inbound_guard",
-      rejection_reason: "credit_limit_exceeded",
-      message:
-        "ئەم مامەڵەیە تۆمار نەکرا، چونکە لە سنووری قەرزی دیاری‌کراو زیاترە.",
-      debt_limit: input.debtLimit,
-      current_balance: input.currentBalance,
-      requested_amount: input.requestedAmount,
-      projected_balance: input.projectedBalance,
-    },
-    next_attempt_at: now,
-    updated_at: now,
-  }, {
-    onConflict: "idempotency_key",
-    ignoreDuplicates: true,
-  });
-  if (error) throw error;
+  const hasActive = await hasActiveCreditLimitRollback(
+    admin,
+    source.id,
+    input.sourceTransactionId,
+    "update",
+  );
 
-  // Record the rejected remote payload hash so the same edit is not re-queued
-  // every minute while the outbound restore is still pending. Once Daftar is
-  // restored, the old payload becomes a new change and the normal inbound path
-  // converges the marker back to the authoritative Zhirox state.
+  if (!hasActive) {
+    const now = new Date().toISOString();
+    const { error } = await admin.from("daftar_outbound_events").insert({
+      sync_source_id: source.id,
+      entity_kind: "debt",
+      entity_id: input.targetDebtId,
+      operation: "update",
+      idempotency_key:
+        `daftar:credit-limit:${source.id}:${input.sourceTransactionId}:restore:${input.payloadHash}:${crypto.randomUUID()}`,
+      status: "pending",
+      remote_id_snapshot: input.sourceTransactionId,
+      payload_snapshot: {
+        customer_id: input.customerId,
+        amount: input.previous.amount,
+        currency: input.previous.currency,
+        description: input.previous.description,
+        transaction_date: input.previous.transactionDate,
+        source: "daftar_official_app_inbound_guard",
+        rejection_reason: "credit_limit_exceeded",
+        message:
+          "ئەم مامەڵەیە تۆمار نەکرا، چونکە لە سنووری قەرزی دیاری‌کراو زیاترە.",
+        debt_limit: input.debtLimit,
+        current_balance: input.currentBalance,
+        requested_amount: input.requestedAmount,
+        projected_balance: input.projectedBalance,
+      },
+      next_attempt_at: now,
+      updated_at: now,
+    });
+    if (error) throw error;
+  }
+
+  // Keep the rejected remote hash while an active restore exists. If a
+  // previously-sent restore later reappears remotely, the absence of an active
+  // event allows a fresh rollback generation to be queued automatically.
   await upsertSeen(
     admin,
     source.id,
