@@ -1681,7 +1681,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         typeChip('debt', 'قەرز', Icons.north_east_rounded),
                         typeChip(
                           'payment',
-                          'پارەدانەوە',
+                          'پارە وەرگرتنەوە',
                           Icons.south_west_rounded,
                         ),
                         typeChip('system', 'گۆڕانکاری', Icons.history_rounded),
@@ -2186,7 +2186,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: _buildCompactMetric(
-                  label: 'پارەدانەوە',
+                  label: 'پارە وەرگرتنەوە',
                   value: totalsComplete
                       ? AppHelpers.formatCurrency(totalPaid)
                       : '—',
@@ -2317,14 +2317,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           Row(
             children: [
               _buildChatSummaryValue(
-                label: 'قەرزی نوێ',
+                label: 'قەرز پێدان',
                 value: summary.debtTotal,
                 color: Colors.orange,
                 isDark: isDark,
               ),
               const SizedBox(width: 6),
               _buildChatSummaryValue(
-                label: 'پارەدانەوە',
+                label: 'پارە وەرگرتنەوە',
                 value: summary.paymentTotal,
                 color: Colors.green,
                 isDark: isDark,
@@ -2340,7 +2340,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            '${summary.debtCount} قەرز • ${summary.paymentCount} پارەدانەوە',
+            '${summary.debtCount} قەرز • ${summary.paymentCount} پارە وەرگرتنەوە',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 9.5,
