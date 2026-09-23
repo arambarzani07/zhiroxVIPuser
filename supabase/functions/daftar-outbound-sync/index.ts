@@ -954,13 +954,32 @@ async function processEvent(
     }
 
     const rejected = message.startsWith("remote_rejected_");
-    const nextStatus = ambiguous || rejected ? "blocked" : "failed";
+    // DELETE is idempotent. If the remote server returns an ambiguous 5xx or
+    // the connection drops, retrying the same DELETE cannot create a duplicate.
+    // A later 404 is treated as success by sendWrite(), proving the requested
+    // final state (row absent) has already been reached.
+    const retryableAmbiguousDelete =
+      ambiguous && outboundRequest?.method === "DELETE";
+    const nextStatus = retryableAmbiguousDelete
+      ? "failed"
+      : (ambiguous || rejected ? "blocked" : "failed");
+    const retryMinutes = retryableAmbiguousDelete
+      ? Math.min(
+        30,
+        Math.max(1, Math.pow(2, Math.min(Number(event.attempts ?? 0), 4))),
+      )
+      : 5;
     await markEvent(admin, event.id, {
       status: nextStatus,
       last_error: message.slice(0, 1000),
-      next_attempt_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+      next_attempt_at: new Date(Date.now() + retryMinutes * 60_000).toISOString(),
     });
-    return { id: event.id, status: nextStatus, error: message };
+    return {
+      id: event.id,
+      status: nextStatus,
+      retry_in_minutes: retryableAmbiguousDelete ? retryMinutes : null,
+      error: message,
+    };
   }
 }
 
