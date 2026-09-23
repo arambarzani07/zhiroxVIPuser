@@ -1446,7 +1446,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Widget typeChip(String value, String label, IconData icon) {
       final selected = _financialTypeFilter == value;
       return Padding(
-        padding: const EdgeInsetsDirectional.only(end: 7),
+        padding: const EdgeInsetsDirectional.only(end: 5),
         child: ChoiceChip(
           selected: selected,
           onSelected: (_) {
@@ -1455,7 +1455,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           },
           avatar: Icon(
             icon,
-            size: 15,
+            size: 14,
             color: selected
                 ? AppColors.primary
                 : (isDark
@@ -1465,7 +1465,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           label: Text(
             label,
             style: TextStyle(
-              fontSize: 10.5,
+              fontSize: 10,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
@@ -1492,14 +1492,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           active.end.month == resolved.end.month &&
           active.end.day == resolved.end.day;
       return Padding(
-        padding: const EdgeInsetsDirectional.only(end: 7),
+        padding: const EdgeInsetsDirectional.only(end: 5),
         child: ChoiceChip(
           selected: selected,
           onSelected: (_) => _applyFinancialQuickRange(preset),
           label: Text(
             label,
             style: TextStyle(
-              fontSize: 10.25,
+              fontSize: 9.75,
               fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
             ),
           ),
@@ -1520,7 +1520,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         color: isDark
             ? Colors.white.withValues(alpha: 0.025)
             : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.06)
@@ -1534,32 +1534,32 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             children: [
               Expanded(
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(13),
+                  borderRadius: BorderRadius.circular(10),
                   onTap: () => setState(
                     () => _financialFiltersExpanded = !expanded,
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 11,
-                      vertical: 10,
+                      horizontal: 10,
+                      vertical: 7,
                     ),
                     child: Row(
                       children: [
                         const Icon(
                           Icons.tune_rounded,
-                          size: 18,
+                          size: 16,
                           color: AppColors.primary,
                         ),
-                        const SizedBox(width: 7),
+                        const SizedBox(width: 5),
                         const Text(
                           'گەڕان و فلتەر',
                           style: TextStyle(
-                            fontSize: 11.5,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                         if (activeFilterCount > 0) ...[
-                          const SizedBox(width: 7),
+                          const SizedBox(width: 5),
                           Container(
                             constraints: const BoxConstraints(minWidth: 22),
                             padding: const EdgeInsets.symmetric(
@@ -1598,19 +1598,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
               Container(
                 width: 1,
-                height: 28,
+                height: 24,
                 color: isDark
                     ? Colors.white.withValues(alpha: 0.07)
                     : const Color(0xFFE4E7EC),
               ),
               TextButton.icon(
                 onPressed: _generateFilteredFinancialChatStatement,
-                icon: const Icon(Icons.ios_share_rounded, size: 16),
+                icon: const Icon(Icons.ios_share_rounded, size: 15),
                 label: const Text('کەشف'),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   textStyle: const TextStyle(
-                    fontSize: 10.5,
+                    fontSize: 10,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -1621,7 +1621,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           AnimatedCrossFade(
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 2, 10, 10),
+              padding: const EdgeInsets.fromLTRB(9, 1, 9, 7),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1631,7 +1631,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ? Colors.white.withValues(alpha: 0.06)
                         : const Color(0xFFE4E7EC),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 5),
                   TextField(
                     controller: _financialSearchController,
                     onChanged: (_) {
@@ -1641,7 +1641,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     textInputAction: TextInputAction.search,
                     decoration: InputDecoration(
                       hintText: 'گەڕان لە مامەڵە، بڕ یان تێبینی...',
-                      prefixIcon: const Icon(Icons.search_rounded, size: 19),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 17),
                       suffixIcon: _financialSearchController.text.isEmpty
                           ? null
                           : IconButton(
@@ -1651,7 +1651,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 _financialSearchController.clear();
                                 setState(() {});
                               },
-                              icon: const Icon(Icons.close_rounded, size: 18),
+                              icon: const Icon(Icons.close_rounded, size: 16),
                             ),
                       isDense: true,
                       filled: true,
@@ -1659,11 +1659,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ? Colors.white.withValues(alpha: 0.04)
                           : Colors.white,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(
                           color: isDark
                               ? Colors.white.withValues(alpha: 0.07)
@@ -1672,7 +1672,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
@@ -1688,7 +1688,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 5),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
@@ -1706,47 +1706,47 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: _pickFinancialDateRange,
-                          icon: const Icon(Icons.date_range_outlined, size: 17),
+                          icon: const Icon(Icons.date_range_outlined, size: 15),
                           label: Text(
                             dateLabel,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(40),
+                            minimumSize: const Size.fromHeight(36),
                             textStyle: const TextStyle(
-                              fontSize: 10.5,
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
                             ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(11),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                           ),
                         ),
                       ),
                       if (activeFilterCount > 0) ...[
-                        const SizedBox(width: 7),
+                        const SizedBox(width: 5),
                         OutlinedButton.icon(
                           onPressed: _clearFinancialFilters,
                           icon: const Icon(
                             Icons.filter_alt_off_outlined,
-                            size: 17,
+                            size: 15,
                           ),
                           label: const Text('پاککردنەوە'),
                           style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(0, 40),
+                            minimumSize: const Size(0, 36),
                             textStyle: const TextStyle(
-                              fontSize: 10.5,
+                              fontSize: 10,
                               fontWeight: FontWeight.w700,
                             ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(11),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                           ),
                         ),
@@ -2541,7 +2541,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
         decoration: BoxDecoration(
           color: isDark ? AppDarkColors.card : Colors.white,
           border: Border(
@@ -2554,8 +2554,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
-              blurRadius: 18,
-              offset: const Offset(0, -4),
+              blurRadius: 12,
+              offset: const Offset(0, -3),
             ),
           ],
         ),
@@ -2565,10 +2565,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             if (replyTarget != null) ...[
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
+                padding: const EdgeInsets.fromLTRB(8, 5, 5, 5),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: isDark ? 0.12 : 0.07),
-                  borderRadius: BorderRadius.circular(11),
+                  borderRadius: BorderRadius.circular(9),
                   border: Border(
                     right: BorderSide(
                       color: AppColors.primary.withValues(alpha: 0.65),
@@ -2578,8 +2578,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.reply_rounded, size: 17, color: AppColors.primary),
-                    const SizedBox(width: 7),
+                    const Icon(Icons.reply_rounded, size: 15, color: AppColors.primary),
+                    const SizedBox(width: 5),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2587,7 +2587,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           const Text(
                             'پەیوەست بە مامەڵەی پێشوو',
                             style: TextStyle(
-                              fontSize: 9.5,
+                              fontSize: 9,
                               fontWeight: FontWeight.w700,
                               color: AppColors.primary,
                             ),
@@ -2597,7 +2597,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 10.5,
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
                               color: isDark
                                   ? AppDarkColors.textSecondary
@@ -2611,39 +2611,39 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       tooltip: 'لابردنی پەیوەندی',
                       visualDensity: VisualDensity.compact,
                       onPressed: () => setState(() => _financialReplyTarget = null),
-                      icon: const Icon(Icons.close_rounded, size: 18),
+                      icon: const Icon(Icons.close_rounded, size: 16),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 5),
             ],
             Row(
               children: [
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: _openAddDebtFromChat,
-                    icon: const Icon(Icons.add_rounded, size: 19),
+                    icon: const Icon(Icons.add_rounded, size: 17),
                     label: const Text('قەرز زیاد بکە'),
                     style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(46),
+                      minimumSize: const Size.fromHeight(40),
                       backgroundColor: AppColors.primary,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(13),
+                        borderRadius: BorderRadius.circular(11),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 9),
+                const SizedBox(width: 7),
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: hasOutstandingDebt
                         ? () => _showFinancialPaymentSheet(auth)
                         : null,
-                    icon: const Icon(Icons.payments_outlined, size: 18),
+                    icon: const Icon(Icons.payments_outlined, size: 16),
                     label: const Text('پارە وەرگرتنەوە'),
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(46),
+                      minimumSize: const Size.fromHeight(40),
                       foregroundColor: Colors.green.shade700,
                       side: BorderSide(
                         color: hasOutstandingDebt
@@ -2651,7 +2651,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             : const Color(0xFFD0D5DD),
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(13),
+                        borderRadius: BorderRadius.circular(11),
                       ),
                     ),
                   ),
