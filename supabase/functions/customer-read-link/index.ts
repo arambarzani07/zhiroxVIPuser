@@ -24,8 +24,21 @@ Deno.serve(async(req)=>{
  if(authError||!auth.user) return reply({error:'authentication_required'},401);
  if(typeof body.customer_id!=='string'||!/^[0-9a-f-]{36}$/i.test(body.customer_id)) return reply({error:'invalid_input'},400);
  const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');
- const {error}=await db.rpc('manage_customer_read_link',{p_actor:auth.user.id,p_customer:body.customer_id,p_hash:body.action==='create'?await hash(token):null});
+ if(body.action==='create'){
+   const {error}=await db.rpc('manage_customer_push_link',{
+     p_actor:auth.user.id,
+     p_customer:body.customer_id,
+     p_token_hash:await hash(token),
+     p_expires_at:null
+   });
+   if(error) return reply({error:'forbidden'},403);
+   return reply({url:'https://push.zhirox.com/?token='+token,expires_days:null});
+ }
+ const {error}=await db.rpc('revoke_customer_push_subscriptions_service',{
+   p_actor:auth.user.id,
+   p_customer:body.customer_id
+ });
  if(error) return reply({error:'forbidden'},403);
- return reply(body.action==='create'?{url:'https://zhirox-customer-view.arambarzani.chatgpt.site/#'+token,expires_days:90}:{revoked:true});
+ return reply({revoked:true});
  }catch{return reply({error:'request_failed'},400);}
 });
