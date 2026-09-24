@@ -41,4 +41,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# Refresh GitHub Pages from the latest validated user-source customer portal (non-blank PDF render refresh).
+# Refresh GitHub Pages from the latest validated user-source customer portal (page-by-page A4 PDF refresh).
