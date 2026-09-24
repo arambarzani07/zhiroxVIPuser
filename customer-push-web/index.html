@@ -86,6 +86,16 @@
           </div>
           <strong id="primaryRemaining">0 IQD</strong>
           <span id="primaryCurrency" class="balance-caption">IQD</span>
+          <div class="balance-breakdown">
+            <div>
+              <span>قەرزی مامەڵەکان</span>
+              <b id="grossRemaining">0 IQD</b>
+            </div>
+            <div>
+              <span>پارەدانەوەی گشتی</span>
+              <b id="generalPaid">0 IQD</b>
+            </div>
+          </div>
         </article>
 
         <div id="summaryMetrics" class="summary-grid"></div>
@@ -109,6 +119,18 @@
             </div>
           </article>
         </div>
+
+        <section class="panel payment-timeline-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">پلانی دانەوە</p>
+              <h2>بەروار و قسطەکان</h2>
+            </div>
+            <button id="openDueTransactions" class="text-action" type="button">مامەڵەکان</button>
+          </div>
+          <div id="scheduleStats" class="schedule-stat-grid"></div>
+          <div id="paymentTimeline" class="payment-timeline" aria-live="polite"></div>
+        </section>
 
         <section class="panel quick-actions-panel">
           <div class="section-heading">
