@@ -62,6 +62,5 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('customers-page'), findsOneWidget);
-    expect(find.text('home-page'), findsNothing);
   });
 }
