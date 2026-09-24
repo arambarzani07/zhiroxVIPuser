@@ -19,7 +19,12 @@ const accountBadgeEl = document.getElementById('accountBadge');
 const headerRefreshButton = document.getElementById('headerRefresh');
 const primaryRemainingEl = document.getElementById('primaryRemaining');
 const primaryCurrencyEl = document.getElementById('primaryCurrency');
+const grossRemainingEl = document.getElementById('grossRemaining');
+const generalPaidEl = document.getElementById('generalPaid');
 const summaryMetricsEl = document.getElementById('summaryMetrics');
+const scheduleStatsEl = document.getElementById('scheduleStats');
+const paymentTimelineEl = document.getElementById('paymentTimeline');
+const openDueTransactionsButton = document.getElementById('openDueTransactions');
 const dueInsightCardEl = document.getElementById('dueInsightCard');
 const dueInsightTitleEl = document.getElementById('dueInsightTitle');
 const dueInsightMetaEl = document.getElementById('dueInsightMeta');
@@ -291,6 +296,118 @@ function metric(label, value, currency) {
   addText(card, 'span', label);
   addText(card, 'strong', money(value, currency));
   return card;
+}
+
+function renderBalanceBreakdown(data) {
+  const gross = data?.gross_remaining_iqd != null
+    ? number(data.gross_remaining_iqd)
+    : number(data?.effective_remaining_iqd) + number(data?.general_paid_iqd);
+  const generalPaid = number(data?.general_paid_iqd);
+  if (grossRemainingEl) grossRemainingEl.textContent = money(gross, 'IQD');
+  if (generalPaidEl) generalPaidEl.textContent = money(generalPaid, 'IQD');
+}
+
+function scheduleStat(label, value, tone = '') {
+  const card = document.createElement('div');
+  card.className = `schedule-stat${tone ? ` is-${tone}` : ''}`;
+  addText(card, 'span', label);
+  addText(card, 'strong', String(value));
+  return card;
+}
+
+function timelineItem({ tone = '', title, meta, amount = '', tag = '' }) {
+  const item = document.createElement('article');
+  item.className = `payment-timeline-item${tone ? ` is-${tone}` : ''}`;
+
+  const rail = document.createElement('span');
+  rail.className = 'timeline-rail';
+  item.appendChild(rail);
+
+  const copy = document.createElement('div');
+  copy.className = 'timeline-copy';
+  addText(copy, 'strong', title);
+  if (meta) addText(copy, 'small', meta);
+  item.appendChild(copy);
+
+  const side = document.createElement('div');
+  side.className = 'timeline-side';
+  if (amount) addText(side, 'b', amount);
+  if (tag) addText(side, 'span', tag);
+  item.appendChild(side);
+  return item;
+}
+
+function renderPaymentTimeline(data) {
+  if (!scheduleStatsEl || !paymentTimelineEl) return;
+  const due = data?.due_summary && typeof data.due_summary === 'object'
+    ? data.due_summary
+    : {};
+  const openCount = number(due.open_schedule_count);
+  const overdueCount = number(due.overdue_count);
+  const dueTodayCount = number(due.due_today_count);
+  const dueNext7 = number(due.due_next_7_days);
+  const oldestOverdue = due.oldest_overdue && typeof due.oldest_overdue === 'object'
+    ? due.oldest_overdue
+    : null;
+  const nextDue = due.next_due && typeof due.next_due === 'object'
+    ? due.next_due
+    : null;
+
+  scheduleStatsEl.replaceChildren(
+    scheduleStat('دانەوەی کراوە', openCount),
+    scheduleStat('دواکەوتوو', overdueCount, overdueCount > 0 ? 'danger' : 'ok'),
+    scheduleStat('٧ ڕۆژی داهاتوو', dueNext7, dueNext7 > 0 ? 'warning' : ''),
+  );
+
+  paymentTimelineEl.replaceChildren();
+
+  if (overdueCount > 0) {
+    const overdueAmount = oldestOverdue?.amount != null
+      ? money(oldestOverdue.amount, oldestOverdue.currency)
+      : '';
+    const overdueMeta = oldestOverdue
+      ? `${number(oldestOverdue.days_overdue)} ڕۆژ دواکەوتوو • ${formatShortDate(oldestOverdue.due_date)}`
+      : `${overdueCount} دانە پێویستی بە دانەوە هەیە`;
+    paymentTimelineEl.appendChild(timelineItem({
+      tone: 'danger',
+      title: overdueCount === 1 ? 'دانەوەی دواکەوتوو' : `${overdueCount} دانەوەی دواکەوتوو`,
+      meta: overdueMeta,
+      amount: overdueAmount,
+      tag: 'دواکەوتوو',
+    }));
+  }
+
+  if (dueTodayCount > 0) {
+    paymentTimelineEl.appendChild(timelineItem({
+      tone: 'warning',
+      title: dueTodayCount === 1 ? 'دانەوەی ئەمڕۆ' : `${dueTodayCount} دانەوەی ئەمڕۆ`,
+      meta: 'بەرواری دانەوە گەیشتووە',
+      tag: 'ئەمڕۆ',
+    }));
+  }
+
+  if (nextDue && number(nextDue.days_until_due) > 0) {
+    const days = number(nextDue.days_until_due);
+    const installment = nextDue.kind === 'installment'
+      ? `قسط${nextDue.installment_no ? `ی ${nextDue.installment_no}` : ''}`
+      : 'قەرز';
+    paymentTimelineEl.appendChild(timelineItem({
+      tone: days <= 3 ? 'warning' : 'ok',
+      title: 'نزیکترین دانەوە',
+      meta: `${installment} • ${formatShortDate(nextDue.due_date)}`,
+      amount: money(nextDue.amount, nextDue.currency),
+      tag: days === 1 ? 'سبەی' : `${days} ڕۆژ`,
+    }));
+  }
+
+  if (paymentTimelineEl.children.length === 0) {
+    paymentTimelineEl.appendChild(timelineItem({
+      tone: 'ok',
+      title: 'هیچ دانەوەیەکی نزیک نییە',
+      meta: 'لە ئێستادا هیچ قەرز یان قسطێکی دواکەوتوو نییە.',
+      tag: 'باشە',
+    }));
+  }
 }
 
 function renderSummaryMetrics(data) {
@@ -1059,8 +1176,10 @@ async function loadPortal(offset = 0, append = false) {
   portalAppEl.hidden = false;
   currentPortalData = data;
   renderPrimaryBalance(data);
+  renderBalanceBreakdown(data);
   renderSummaryMetrics(data);
   renderAccountInsights(data);
+  renderPaymentTimeline(data);
   renderAccountDetails(data);
   renderRows(data.rows, append);
   if (!append) renderRecentRows(data.rows);
@@ -1198,6 +1317,14 @@ if (receiptPrintButton) {
   receiptPrintButton.addEventListener('click', () => {
     document.body.classList.add('printing-receipt');
     window.setTimeout(() => window.print(), 80);
+  });
+}
+
+if (openDueTransactionsButton) {
+  openDueTransactionsButton.addEventListener('click', () => {
+    transactionFilter = 'overdue';
+    renderFilteredTransactions();
+    setActiveView('transactions');
   });
 }
 
