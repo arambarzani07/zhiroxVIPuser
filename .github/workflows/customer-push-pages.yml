@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows:
-      - Customer Push Portal Validation
+      - Customer Push Portal Pages
     types:
       - completed
     branches:
