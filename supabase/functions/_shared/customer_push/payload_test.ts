@@ -36,7 +36,7 @@ Deno.test("payment notification uses supermarket name as title", () => {
     {
       title: "ZHIROX Market",
       body:
-        "💰 پارەدانەوە تۆمارکرا • بڕی دراو: 25,000 د.ع • ماوە: 100,000 د.ع",
+        "💰 پارەدانەوە تۆمارکرا • بڕی دراو: 25,000 د.ع • ماوە: 100,000 د.ع • کلیک بکە بۆ پسووڵە/کەشفی حیساب",
     },
   );
 });
@@ -51,12 +51,55 @@ Deno.test("due reminder preserves reminder wording and supermarket title", () =>
       occurred_at: "2026-09-17T00:00:00Z",
       due_date: "2026-09-16",
       overdue: true,
+      days_overdue: 7,
     }),
     {
       title: "کانی چنار",
       body:
-        "⚠️ قەرزەکەت دوا کەوتووە • بڕی دواخراو: 50,000 د.ع • کۆی ماوە: 75,000 د.ع",
+        "⚠️ قەرزەکەت 7 ڕۆژ دوا کەوتووە • بڕی دواخراو: 50,000 د.ع • کۆی ماوە: 75,000 د.ع",
     },
+  );
+});
+
+Deno.test("fully settled payment uses a distinct cheerful notification", () => {
+  assertEquals(
+    formatPushBody("payment_created", {
+      amount: 25000,
+      currency: "IQD",
+      remaining_iqd: 0,
+      market_name: "کانی چنار",
+      occurred_at: "2026-09-24T00:00:00Z",
+    }),
+    {
+      title: "کانی چنار",
+      body:
+        "✅ قەرزەکانت بە تەواوی دراونەتەوە 🎉 • بڕی وەرگیراو: 25,000 د.ع • کلیک بکە بۆ پسووڵە",
+    },
+  );
+});
+
+Deno.test("installment and monthly statement notifications have dedicated copy", () => {
+  assertEquals(
+    formatPushBody("installment_reminder", {
+      amount: 50000,
+      currency: "IQD",
+      installment_no: 2,
+      market_name: "کانی چنار",
+      occurred_at: "2026-09-24T00:00:00Z",
+      overdue: false,
+    }).body,
+    "📅 بیرخستنەوەی قسطی 2 • بڕ: 50,000 د.ع",
+  );
+  assertEquals(
+    formatPushBody("monthly_statement", {
+      market_name: "کانی چنار",
+      occurred_at: "2026-09-24T00:00:00Z",
+      period: "2026-08",
+      total_debt: 100000,
+      total_paid: 40000,
+      remaining_iqd: 60000,
+    }).body,
+    "📄 کەشفی حیسابی مانگی 2026-08 ئامادەیە • کۆی قەرزی نوێ: 100,000 د.ع • پارەدان: 40,000 د.ع • ماوە: 60,000 د.ع",
   );
 });
 
