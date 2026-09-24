@@ -232,6 +232,46 @@
       </section>
     </div>
 
+    <dialog id="receiptDialog" class="receipt-dialog">
+      <form method="dialog" class="receipt-sheet">
+        <button class="dialog-close" value="cancel" aria-label="داخستن">×</button>
+        <div class="digital-receipt-head">
+          <div class="receipt-brand-mark" aria-hidden="true">Z</div>
+          <div>
+            <p class="eyebrow">پسووڵەی دیجیتاڵ</p>
+            <h2 id="receiptMarketName">ZHIROX</h2>
+            <p id="receiptNumber" class="receipt-number">—</p>
+          </div>
+        </div>
+        <div class="receipt-meta-grid">
+          <div><span>کڕیار</span><strong id="receiptCustomerName">—</strong></div>
+          <div><span>بەروار</span><strong id="receiptDate">—</strong></div>
+          <div><span>جۆر</span><strong id="receiptType">—</strong></div>
+          <div><span>دۆخ</span><strong id="receiptStatus">ڕەسمی</strong></div>
+        </div>
+        <div class="receipt-amount-card">
+          <span id="receiptAmountLabel">بڕ</span>
+          <strong id="receiptAmount">—</strong>
+          <small id="receiptRemaining"></small>
+        </div>
+        <div id="receiptDueRow" class="receipt-line" hidden>
+          <span>بەرواری دانەوە</span><strong id="receiptDueDate">—</strong>
+        </div>
+        <div id="receiptNoteRow" class="receipt-line receipt-note-row" hidden>
+          <span>تێبینی</span><strong id="receiptNote">—</strong>
+        </div>
+        <div id="receiptItemsSection" class="receipt-items-section" hidden>
+          <div class="receipt-section-title">وردەکارییەکان</div>
+          <div id="receiptItems" class="receipt-items"></div>
+        </div>
+        <p id="receiptFooter" class="receipt-footer"></p>
+        <div class="receipt-actions">
+          <button id="receiptPrint" class="secondary-action" type="button">Print / Save PDF</button>
+          <button class="primary-action" value="default">داخستن</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="iosHelpDialog" class="help-dialog">
       <form method="dialog">
         <button class="dialog-close" value="cancel" aria-label="داخستن">×</button>
