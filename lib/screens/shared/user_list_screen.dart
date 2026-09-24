@@ -837,7 +837,6 @@ class _UserListScreenState extends State<UserListScreen> {
 
     final card = Container(
       key: ValueKey<String>('user-card-${user.id}'),
-      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: isDark ? AppDarkColors.card : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1019,83 +1018,14 @@ class _UserListScreenState extends State<UserListScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                if (canManageCustomer)
-                  PopupMenuButton<String>(
-                    tooltip: 'کردارەکان',
-                    padding: EdgeInsets.zero,
-                    onSelected: (value) {
-                      if (value == 'debt') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => AddDebtScreen(customerId: user.id),
-                          ),
-                        ).then((_) => _loadUsers());
-                      } else if (value == 'payment') {
-                        unawaited(
-                          _markFinancialChatReadBestEffort(
-                            user.id,
-                            DateTime.tryParse(
-                              inbox?['last_activity_at']?.toString() ?? '',
-                            ),
-                          ),
-                        );
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(
-                              userId: user.id,
-                              openFinancialChat: true,
-                            ),
-                          ),
-                        ).then((_) => _loadUsers());
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem<String>(
-                        value: 'debt',
-                        child: Row(
-                          children: [
-                            Icon(Icons.add_card_rounded, size: 20),
-                            SizedBox(width: 10),
-                            Text('قەرز زیاد بکە'),
-                          ],
-                        ),
-                      ),
-                      if (balance > 0)
-                        const PopupMenuItem<String>(
-                          value: 'payment',
-                          child: Row(
-                            children: [
-                              Icon(Icons.payments_outlined, size: 20),
-                              SizedBox(width: 10),
-                              Text('پارەدانەوە'),
-                            ],
-                          ),
-                        ),
-                    ],
-                    icon: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.more_horiz_rounded,
-                        color: accentColor,
-                        size: 22,
-                      ),
-                    ),
-                  )
-                else
+                if (!canManageCustomer) ...[
+                  const SizedBox(width: 8),
                   Icon(
                     Icons.chevron_left_rounded,
                     color: isDark ? Colors.grey[600] : Colors.grey[350],
                     size: 22,
                   ),
+                ],
               ],
             ),
           ),
@@ -1103,8 +1033,15 @@ class _UserListScreenState extends State<UserListScreen> {
       ),
     );
   
-    if (!canManageCustomer) return card;
-    return _CustomerQuickSwipe(
+    if (!canManageCustomer) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: card,
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: _CustomerQuickSwipe(
       actions: [
         _CustomerQuickAction(
           icon: Icons.add_card_rounded,
@@ -1132,6 +1069,7 @@ class _UserListScreenState extends State<UserListScreen> {
         ),
       ],
       child: card,
+      ),
     );
 }
 
@@ -1166,15 +1104,36 @@ class _CustomerQuickSwipe extends StatefulWidget {
 }
 
 class _CustomerQuickSwipeState extends State<_CustomerQuickSwipe> {
+  static _CustomerQuickSwipeState? _openedState;
+
   double _offset = 0;
   bool _dragging = false;
 
-  void _close() {
+  void _close({bool clearRegistry = true}) {
     if (!mounted) return;
     setState(() {
       _dragging = false;
       _offset = 0;
     });
+    if (clearRegistry && identical(_openedState, this)) {
+      _openedState = null;
+    }
+  }
+
+  void _claimOpenSlot() {
+    final previous = _openedState;
+    if (previous != null && !identical(previous, this)) {
+      previous._close(clearRegistry: false);
+    }
+    _openedState = this;
+  }
+
+  @override
+  void dispose() {
+    if (identical(_openedState, this)) {
+      _openedState = null;
+    }
+    super.dispose();
   }
 
   @override
@@ -1185,54 +1144,63 @@ class _CustomerQuickSwipeState extends State<_CustomerQuickSwipe> {
         final revealWidth =
             constraints.maxWidth < 340 ? constraints.maxWidth * 0.76 : 248.0;
         final actionWidth = revealWidth / widget.actions.length;
+        final actionOpacity =
+            (_offset.abs() / 12).clamp(0.0, 1.0).toDouble();
+
         return ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Stack(
             alignment: Alignment.centerRight,
             children: [
               Positioned.fill(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: SizedBox(
-                    width: revealWidth,
-                    child: Row(
-                      children: widget.actions.map((action) {
-                        return SizedBox(
-                          width: actionWidth,
-                          child: Material(
-                            color: action.color,
-                            child: InkWell(
-                              onTap: () {
-                                _close();
-                                action.onTap();
-                              },
-                              child: Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      action.icon,
-                                      color: Colors.white,
-                                      size: 20,
+                child: IgnorePointer(
+                  ignoring: actionOpacity == 0,
+                  child: Opacity(
+                    opacity: actionOpacity,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: SizedBox(
+                        width: revealWidth,
+                        child: Row(
+                          children: widget.actions.map((action) {
+                            return SizedBox(
+                              width: actionWidth,
+                              child: Material(
+                                color: action.color,
+                                child: InkWell(
+                                  onTap: () {
+                                    _close();
+                                    action.onTap();
+                                  },
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          action.icon,
+                                          color: Colors.white,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          action.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      action.label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        );
-                      }).toList(growable: false),
+                            );
+                          }).toList(growable: false),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1240,6 +1208,7 @@ class _CustomerQuickSwipeState extends State<_CustomerQuickSwipe> {
               GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onHorizontalDragStart: (_) {
+                  if (_offset == 0) _claimOpenSlot();
                   setState(() => _dragging = true);
                 },
                 onHorizontalDragUpdate: (details) {
@@ -1250,10 +1219,16 @@ class _CustomerQuickSwipeState extends State<_CustomerQuickSwipe> {
                   });
                 },
                 onHorizontalDragEnd: (_) {
+                  final shouldOpen =
+                      _offset.abs() >= revealWidth * 0.24;
+                  if (shouldOpen) {
+                    _claimOpenSlot();
+                  } else if (identical(_openedState, this)) {
+                    _openedState = null;
+                  }
                   setState(() {
                     _dragging = false;
-                    _offset =
-                        _offset.abs() >= revealWidth * 0.24 ? -revealWidth : 0;
+                    _offset = shouldOpen ? -revealWidth : 0;
                   });
                 },
                 onHorizontalDragCancel: _close,
