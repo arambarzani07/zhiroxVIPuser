@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/admin_notifications_screen.dart';
+import 'package:zhirox/screens/admin/collection_center_screen.dart';
 import 'package:zhirox/screens/admin/debt_restore_screen.dart';
 import 'package:zhirox/screens/admin/daftar_sync_dashboard_screen.dart';
 import 'package:zhirox/screens/admin/governance_center_screen.dart';
@@ -130,6 +131,15 @@ class AdminSettingsScreen extends StatelessWidget {
                               body: SafeArea(child: IntelligenceCenterScreen()),
                             ),
                           ),
+                        ),
+                        const Divider(height: 1),
+                        _SettingsRow(
+                          icon: Icons.event_repeat_rounded,
+                          title: 'ناوەندی بەدواداچوونی قەرز',
+                          subtitle:
+                              'Aging، پێشەنگی کڕیار و بەدواداچوونی داهاتوو',
+                          onTap: () =>
+                              _open(context, const CollectionCenterScreen()),
                         ),
                         const Divider(height: 1),
                         _SettingsRow(
