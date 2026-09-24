@@ -128,6 +128,16 @@ class FakeCustomerPushGateway implements CustomerPushGateway {
   }
 
   @override
+  Future<CustomerPushSettings> loadSettings() async =>
+      const CustomerPushSettings(overdueIntervalDays: 3);
+
+  @override
+  Future<CustomerPushSettings> updateSettings({
+    required int overdueIntervalDays,
+  }) async =>
+      CustomerPushSettings(overdueIntervalDays: overdueIntervalDays);
+
+  @override
   Future<CustomerPushSendResult> broadcastManual(String message) async {
     throw UnimplementedError();
   }
