@@ -163,16 +163,29 @@ for marker in (
 user_list_source = (LIB / 'screens/shared/user_list_screen.dart').read_text(
     encoding='utf-8'
 )
+customer_directory_controller_source = (
+    LIB / 'features/customers/customer_directory_controller.dart'
+).read_text(encoding='utf-8')
+customer_center_widgets_source = (
+    LIB / 'features/customers/customer_center_widgets.dart'
+).read_text(encoding='utf-8')
+customer_center_source = (
+    user_list_source
+    + '\n'
+    + customer_directory_controller_source
+    + '\n'
+    + customer_center_widgets_source
+)
 for marker in ('_inboxError!', 'warning_amber_rounded', 'هەوڵدانەوە'):
-    if marker not in user_list_source:
+    if marker not in customer_center_source:
         fail(f'customer balance retry UI missing marker: {marker}')
 for marker in (
     'PBService.getCustomerDirectoryPage',
     'loadMore: true',
-    '_nextUserCursor',
+    '_nextCursor',
     '_hasMoreUsers',
 ):
-    if marker not in user_list_source:
+    if marker not in customer_center_source:
         fail(f'customer directory pagination marker missing: {marker}')
 for marker in ("'customer_directory'", "'customer_debts_page'"):
     if marker not in pb:
@@ -301,18 +314,18 @@ if '_showPaymentDialog(RecordModel user)' in customer_list_source:
 # Customer Inbox must batch summaries and avoid request storms from text search
 # or realtime financial-event bursts.
 for marker in (
-    'PBService.getCustomerInboxRows(ids)',
-    'Timer? _customerSearchDebounce;',
+    'PBService.getCustomerInboxRows(customerIds)',
+    'Timer? _searchDebounce;',
     '_scheduleCustomerSearch',
     'Duration(milliseconds: 300)',
     '_inboxRefreshInFlight',
     '_inboxRefreshPending',
-    '_markFinancialChatReadBestEffort',
+    'markFinancialChatReadBestEffort',
 ):
-    if marker not in customer_list_source:
-        fail(f'lib/screens/shared/user_list_screen.dart: Customer Inbox performance marker missing: {marker}')
-if 'onChanged: (value) => _loadUsers(search: value)' in customer_list_source:
-    fail('lib/screens/shared/user_list_screen.dart: customer search must not query on every keypress')
+    if marker not in customer_center_source:
+        fail(f'Customer Center performance marker missing: {marker}')
+if 'onChanged: (value) => _loadUsers(search: value)' in customer_center_source:
+    fail('Customer Center search must not query on every keypress')
 for marker in ('getCustomerInboxRows(', 'markFinancialChatRead('):
     if marker not in pb:
         fail(f'lib/services/pb_service.dart: Customer Inbox RPC marker missing: {marker}')
@@ -568,18 +581,18 @@ else:
 for marker in ('required DateTime readThrough', 'readThrough.toUtc().toIso8601String()'):
     if marker not in pb:
         fail(f'lib/services/pb_service.dart: required read-through marker missing: {marker}')
-if 'if (readThrough == null) return;' not in customer_list_source:
-    fail('lib/screens/shared/user_list_screen.dart: missing null read-through fail-closed guard')
+if 'if (readThrough == null) return;' not in customer_directory_controller_source:
+    fail('Customer Directory controller: missing null read-through fail-closed guard')
 
 
 # Customer-list async loads must ignore stale failures and preserve the active
 # search query when connectivity returns.
-if 'if (!mounted || generation != _loadGeneration) return;' not in customer_list_source:
-    fail('lib/screens/shared/user_list_screen.dart: stale customer-list failures must be generation-guarded')
-if 'if (online && mounted) _loadUsers();' in customer_list_source:
-    fail('lib/screens/shared/user_list_screen.dart: reconnect must not discard the active customer search')
-if "_loadUsers(search: _searchController.text.trim());" not in customer_list_source:
-    fail('lib/screens/shared/user_list_screen.dart: reconnect/search-preserving reload marker missing')
+if 'if (_disposed || generation != _generation) return;' not in customer_directory_controller_source:
+    fail('Customer Directory controller: stale customer-list failures must be generation-guarded')
+if 'if (online && mounted) _loadUsers();' in customer_center_source:
+    fail('Customer Center reconnect must not discard the active customer search')
+if 'unawaited(load(search: _search));' not in customer_directory_controller_source:
+    fail('Customer Directory controller: reconnect/search-preserving reload marker missing')
 
 # User mobile client must not expose System Owner admin-management APIs.
 for forbidden in (
