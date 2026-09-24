@@ -1404,3 +1404,245 @@ body {
     display: none !important;
   }
 }
+
+
+/* Customer Portal V2: smart home balance + due timeline */
+.balance-breakdown {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.balance-breakdown > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 14px;
+  background: rgba(255,255,255,.055);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.balance-breakdown span {
+  color: rgba(255,255,255,.58);
+  font-size: 9.5px;
+  font-weight: 750;
+}
+
+.balance-breakdown b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  text-align: right;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+
+.payment-timeline-panel {
+  padding-bottom: 8px;
+}
+
+.schedule-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.schedule-stat {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border-radius: 13px;
+  background: rgba(246,247,251,.82);
+}
+
+.schedule-stat span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 750;
+}
+
+.schedule-stat strong {
+  color: var(--text);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-stat.is-danger {
+  background: rgba(229,72,77,.08);
+}
+
+.schedule-stat.is-danger strong {
+  color: #d43f44;
+}
+
+.schedule-stat.is-warning {
+  background: rgba(245,158,11,.09);
+}
+
+.schedule-stat.is-warning strong {
+  color: #b66f00;
+}
+
+.schedule-stat.is-ok {
+  background: rgba(14,159,110,.08);
+}
+
+.schedule-stat.is-ok strong {
+  color: #0e8d63;
+}
+
+.payment-timeline {
+  position: relative;
+  display: grid;
+}
+
+.payment-timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 66px;
+  padding: 10px 1px;
+  border-bottom: 1px solid var(--app-hairline);
+}
+
+.payment-timeline-item:last-child {
+  border-bottom: 0;
+}
+
+.timeline-rail {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  justify-self: center;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand-soft);
+}
+
+.payment-timeline-item:not(:last-child) .timeline-rail::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 1px;
+  height: 48px;
+  transform: translateX(-50%);
+  background: var(--app-hairline);
+}
+
+.payment-timeline-item.is-danger .timeline-rail {
+  background: #d43f44;
+  box-shadow: 0 0 0 2px rgba(229,72,77,.1);
+}
+
+.payment-timeline-item.is-warning .timeline-rail {
+  background: #d88a00;
+  box-shadow: 0 0 0 2px rgba(245,158,11,.12);
+}
+
+.payment-timeline-item.is-ok .timeline-rail {
+  background: #0e9f6e;
+  box-shadow: 0 0 0 2px rgba(14,159,110,.11);
+}
+
+.timeline-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.timeline-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.timeline-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 9.5px;
+}
+
+.timeline-side {
+  min-width: 74px;
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.timeline-side b {
+  max-width: 116px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  color: var(--text);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-side span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 8.5px;
+  font-weight: 850;
+}
+
+.payment-timeline-item.is-danger .timeline-side span {
+  background: rgba(229,72,77,.1);
+  color: #d43f44;
+}
+
+.payment-timeline-item.is-warning .timeline-side span {
+  background: rgba(245,158,11,.11);
+  color: #b66f00;
+}
+
+.payment-timeline-item.is-ok .timeline-side span {
+  background: rgba(14,159,110,.09);
+  color: #0e8d63;
+}
+
+@media (max-width: 360px) {
+  .balance-breakdown {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-stat-grid {
+    gap: 5px;
+  }
+
+  .schedule-stat {
+    padding-inline: 7px;
+  }
+
+  .timeline-side {
+    min-width: 62px;
+  }
+
+  .timeline-side b {
+    max-width: 90px;
+  }
+}
