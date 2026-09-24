@@ -72,12 +72,27 @@ const clearTransactionSearchButton = document.getElementById('clearTransactionSe
 const printStatementButton = document.getElementById('printStatement');
 const homeTab = document.getElementById('homeTab');
 const transactionsTab = document.getElementById('transactionsTab');
+const receiptsTab = document.getElementById('receiptsTab');
 const notificationsTab = document.getElementById('notificationsTab');
+const accountTab = document.getElementById('accountTab');
+const receiptHistoryEl = document.getElementById('receiptHistory');
+const receiptsRefreshButton = document.getElementById('receiptsRefresh');
+const receiptCountEl = document.getElementById('receiptCount');
+const latestReceiptDateEl = document.getElementById('latestReceiptDate');
+const accountCustomerNameEl = document.getElementById('accountCustomerName');
+const accountCustomerPhoneEl = document.getElementById('accountCustomerPhone');
+const accountMarketNameEl = document.getElementById('accountMarketName');
+const accountMarketPhoneEl = document.getElementById('accountMarketPhone');
+const accountMarketAddressEl = document.getElementById('accountMarketAddress');
+const accountNotificationsButton = document.getElementById('accountNotifications');
+const accountRefreshButton = document.getElementById('accountRefresh');
 const tabButtons = [...document.querySelectorAll('[data-portal-tab]')];
 const views = {
   home: document.getElementById('homeView'),
   transactions: document.getElementById('transactionsView'),
+  receipts: document.getElementById('receiptsView'),
   notifications: document.getElementById('notificationsView'),
+  account: document.getElementById('accountView'),
 };
 
 function setStatus(message, kind = 'muted') {
@@ -110,11 +125,16 @@ function setActiveView(name) {
 
 homeTab.addEventListener('click', () => setActiveView('home'));
 transactionsTab.addEventListener('click', () => setActiveView('transactions'));
+receiptsTab.addEventListener('click', () => {
+  setActiveView('receipts');
+  if (currentNotificationItems.length === 0) void loadNotificationHistory();
+});
 notificationsTab.addEventListener('click', () => {
   setActiveView('notifications');
   void loadNotificationHistory();
   void loadNotificationPreferences();
 });
+accountTab.addEventListener('click', () => setActiveView('account'));
 openTransactionsButton.addEventListener('click', () => setActiveView('transactions'));
 
 function isIos() {
@@ -215,6 +235,7 @@ let activeToken = '';
 let vapidPublicKey = '';
 let nextOffset = 0;
 let currentPortalData = null;
+let currentNotificationItems = [];
 let loadedRows = [];
 let transactionFilter = 'all';
 let transactionQuery = '';
@@ -575,6 +596,94 @@ function notificationStatusLabel(status) {
   }
 }
 
+function renderAccountDetails(data) {
+  if (!data || typeof data !== 'object') return;
+  if (accountCustomerNameEl) {
+    accountCustomerNameEl.textContent =
+      String(data.customer_name || '').trim() || 'کڕیار';
+  }
+  if (accountCustomerPhoneEl) {
+    accountCustomerPhoneEl.textContent =
+      String(data.customer_phone || '').trim() || 'ژمارەی مۆبایل تۆمار نەکراوە';
+  }
+  if (accountMarketNameEl) {
+    accountMarketNameEl.textContent =
+      String(data.market_name || '').trim() || 'ZHIROX';
+  }
+  if (accountMarketPhoneEl) {
+    accountMarketPhoneEl.textContent =
+      String(data.market_phone || '').trim() || '—';
+  }
+  if (accountMarketAddressEl) {
+    accountMarketAddressEl.textContent =
+      String(data.market_address || '').trim() || '—';
+  }
+}
+
+function renderReceiptHistory(items) {
+  if (!receiptHistoryEl) return;
+  const receipts = (Array.isArray(items) ? items : [])
+    .filter((item) => String(item?.receipt_id || '').trim());
+
+  receiptHistoryEl.replaceChildren();
+  if (receiptCountEl) receiptCountEl.textContent = String(receipts.length);
+  if (latestReceiptDateEl) {
+    latestReceiptDateEl.textContent = receipts.length > 0
+      ? formatShortDate(receipts[0].created_at) || '—'
+      : '—';
+  }
+
+  if (receipts.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'receipt-empty-state';
+    addText(empty, 'strong', 'هێشتا پسووڵەیەک نییە');
+    addText(
+      empty,
+      'span',
+      'کاتێک قەرز یان پارەدانەوەیەک پسووڵەی هەبێت، لێرە پیشان دەدرێت.',
+    );
+    receiptHistoryEl.appendChild(empty);
+    return;
+  }
+
+  for (const item of receipts) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'receipt-history-card';
+    card.addEventListener('click', () => void openReceipt(item.receipt_id));
+
+    const icon = document.createElement('span');
+    icon.className = 'receipt-history-icon';
+    icon.textContent = item.event_type === 'payment_created' ? '✓' : '▤';
+
+    const copy = document.createElement('span');
+    copy.className = 'receipt-history-copy';
+    addText(
+      copy,
+      'strong',
+      item.event_type === 'payment_created'
+        ? 'پسووڵەی پارەدانەوە'
+        : 'پسووڵەی قەرز',
+    );
+    addText(
+      copy,
+      'small',
+      item.receipt_number
+        ? `#${item.receipt_number} • ${formatShortDate(item.created_at)}`
+        : formatShortDate(item.created_at) || 'پسووڵەی دیجیتاڵ',
+    );
+
+    const amount = document.createElement('span');
+    amount.className = 'receipt-history-amount';
+    amount.textContent = item.amount != null
+      ? money(item.amount, item.currency)
+      : 'کردنەوە';
+
+    card.append(icon, copy, amount);
+    receiptHistoryEl.appendChild(card);
+  }
+}
+
 function notificationDeepLink(item) {
   const raw = typeof item.deep_link === 'string' ? item.deep_link.trim() : '';
   if (!raw) return null;
@@ -898,7 +1007,9 @@ async function loadNotificationHistory() {
   notificationHistoryRefreshButton.disabled = true;
   try {
     const data = await api({ ...credentials, limit: 50 });
-    renderNotificationHistory(data.items);
+    currentNotificationItems = Array.isArray(data.items) ? data.items : [];
+    renderNotificationHistory(currentNotificationItems);
+    renderReceiptHistory(currentNotificationItems);
     const unread = Number(data.unread_count || 0);
     notificationsTab.dataset.unread = unread > 0 ? String(unread) : '';
     if (notificationUnreadBadgeEl) {
@@ -950,6 +1061,7 @@ async function loadPortal(offset = 0, append = false) {
   renderPrimaryBalance(data);
   renderSummaryMetrics(data);
   renderAccountInsights(data);
+  renderAccountDetails(data);
   renderRows(data.rows, append);
   if (!append) renderRecentRows(data.rows);
 
@@ -1087,6 +1199,20 @@ if (receiptPrintButton) {
     document.body.classList.add('printing-receipt');
     window.setTimeout(() => window.print(), 80);
   });
+}
+
+if (receiptsRefreshButton) {
+  receiptsRefreshButton.addEventListener('click', () => void loadNotificationHistory());
+}
+if (accountNotificationsButton) {
+  accountNotificationsButton.addEventListener('click', () => {
+    setActiveView('notifications');
+    void loadNotificationPreferences();
+    void loadNotificationHistory();
+  });
+}
+if (accountRefreshButton) {
+  accountRefreshButton.addEventListener('click', () => void refreshPortal());
 }
 
 if (headerRefreshButton) {
