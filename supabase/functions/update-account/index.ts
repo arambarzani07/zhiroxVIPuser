@@ -102,6 +102,9 @@ Deno.serve(async (req) => {
       "approved",
       "active",
       "debt_limit",
+      "is_pinned",
+      "pinned_at",
+      "is_vip",
       "debt_duration",
       "can_add_customers",
       "can_set_debt_limit",
@@ -114,6 +117,25 @@ Deno.serve(async (req) => {
     const update: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(incoming)) {
       if (allowed.has(key)) update[key] = value;
+    }
+
+    if (Object.hasOwn(update, "debt_limit")) {
+      const debtLimit = Number(update.debt_limit);
+      if (!Number.isFinite(debtLimit) || debtLimit < 0) {
+        return json({ error: "invalid_debt_limit" }, 400);
+      }
+      update.debt_limit = debtLimit;
+    }
+
+    if (Object.hasOwn(update, "is_pinned")) {
+      update.is_pinned = update.is_pinned === true;
+      update.pinned_at = update.is_pinned ? new Date().toISOString() : null;
+    } else {
+      delete update.pinned_at;
+    }
+
+    if (Object.hasOwn(update, "is_vip")) {
+      update.is_vip = update.is_vip === true;
     }
 
     if (typeof update.phone === "string") {
