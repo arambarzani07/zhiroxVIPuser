@@ -2270,3 +2270,216 @@ body.exporting-period-pdf #periodStatementDocument tr {
   break-inside: avoid;
   page-break-inside: avoid;
 }
+
+
+/* Portal V3.4 — page-by-page A4 PDF renderer for iOS/Safari */
+.pdf-page-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  width: 794px;
+  height: 1123px;
+  overflow: hidden;
+  background: #fff;
+  pointer-events: none;
+}
+
+.pdf-a4-page {
+  position: relative;
+  width: 794px;
+  height: 1123px;
+  overflow: hidden;
+  padding: 46px 42px 42px;
+  background: #fff;
+  color: #151a2d;
+  direction: rtl;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+}
+
+.pdf-a4-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 285px;
+  gap: 26px;
+  min-height: 122px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #dfe3e9;
+}
+
+.pdf-a4-market {
+  min-width: 0;
+}
+
+.pdf-a4-kicker {
+  margin-bottom: 5px;
+  color: #3157e0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.pdf-a4-market h1 {
+  margin: 0;
+  color: #11172b;
+  font-size: 26px;
+  line-height: 1.25;
+}
+
+.pdf-a4-market p {
+  margin: 7px 0 0;
+  color: #697386;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.pdf-a4-meta {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.pdf-a4-meta > div {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.pdf-a4-meta span {
+  color: #697386;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.pdf-a4-meta strong {
+  overflow-wrap: anywhere;
+  color: #151a2d;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.pdf-a4-table {
+  width: 100%;
+  margin-top: 14px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  direction: rtl;
+}
+
+.pdf-a4-table th,
+.pdf-a4-table td {
+  height: 39px;
+  padding: 7px 8px;
+  border-bottom: 1px solid #e1e5ec;
+  vertical-align: middle;
+  text-align: right;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.pdf-a4-table th {
+  height: 38px;
+  background: #f3f5f9;
+  color: #3f485e;
+  font-size: 10.5px;
+  font-weight: 900;
+}
+
+.pdf-a4-table th:nth-child(1),
+.pdf-a4-table td:nth-child(1) {
+  width: 84px;
+  text-align: center;
+}
+
+.pdf-a4-table th:nth-child(2),
+.pdf-a4-table td:nth-child(2) {
+  width: 330px;
+}
+
+.pdf-a4-table th:nth-child(3),
+.pdf-a4-table td:nth-child(3) {
+  width: 155px;
+}
+
+.pdf-a4-table th:nth-child(4),
+.pdf-a4-table td:nth-child(4) {
+  width: 140px;
+}
+
+.pdf-a4-table tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+
+.pdf-row-no {
+  color: #697386;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-item-name {
+  font-weight: 750;
+}
+
+.pdf-price,
+.pdf-date {
+  direction: ltr;
+  text-align: right !important;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-price {
+  color: #11172b;
+  font-weight: 850;
+}
+
+.pdf-date {
+  color: #697386;
+}
+
+.pdf-a4-totals {
+  display: grid;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.pdf-a4-totals > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 47px;
+  padding: 10px 14px;
+  border: 1px solid #ccd4e2;
+  background: #fafbfc;
+}
+
+.pdf-a4-totals span {
+  color: #5d667a;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.pdf-a4-totals strong {
+  direction: ltr;
+  color: #11172b;
+  font-size: 20px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-a4-note {
+  margin: 10px 0 0;
+  color: #697386;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.pdf-a4-page-number {
+  position: absolute;
+  bottom: 20px;
+  right: 42px;
+  left: 42px;
+  color: #8a93a5;
+  text-align: center;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
