@@ -15,15 +15,29 @@ const lockedStateEl = document.getElementById('lockedState');
 const marketBrandEl = document.getElementById('marketBrand');
 const customerGreetingEl = document.getElementById('customerGreeting');
 const accountBadgeEl = document.getElementById('accountBadge');
+const headerRefreshButton = document.getElementById('headerRefresh');
 const primaryRemainingEl = document.getElementById('primaryRemaining');
 const primaryCurrencyEl = document.getElementById('primaryCurrency');
 const summaryMetricsEl = document.getElementById('summaryMetrics');
+const dueInsightCardEl = document.getElementById('dueInsightCard');
+const dueInsightTitleEl = document.getElementById('dueInsightTitle');
+const dueInsightMetaEl = document.getElementById('dueInsightMeta');
+const debtLimitCardEl = document.getElementById('debtLimitCard');
+const debtLimitTitleEl = document.getElementById('debtLimitTitle');
+const debtLimitMetaEl = document.getElementById('debtLimitMeta');
+const debtLimitProgressEl = document.getElementById('debtLimitProgress');
+const lastUpdatedLabelEl = document.getElementById('lastUpdatedLabel');
+const quickTransactionsButton = document.getElementById('quickTransactions');
+const quickNotificationsButton = document.getElementById('quickNotifications');
+const quickPrintButton = document.getElementById('quickPrint');
+const quickRefreshButton = document.getElementById('quickRefresh');
 const recentLedgerEl = document.getElementById('recentLedger');
 const ledgerEl = document.getElementById('ledger');
 const loadMoreButton = document.getElementById('loadMore');
 const notificationStateEl = document.getElementById('notificationState');
 const notificationHistoryEl = document.getElementById('notificationHistory');
 const notificationHistoryRefreshButton = document.getElementById('notificationHistoryRefresh');
+const notificationUnreadBadgeEl = document.getElementById('notificationUnreadBadge');
 const prefDueRemindersEl = document.getElementById('prefDueReminders');
 const prefInstallmentRemindersEl = document.getElementById('prefInstallmentReminders');
 const prefMonthlyStatementsEl = document.getElementById('prefMonthlyStatements');
@@ -33,6 +47,11 @@ const preferenceResultEl = document.getElementById('preferenceResult');
 const showIosHelpButton = document.getElementById('showIosHelp');
 const iosHelpDialog = document.getElementById('iosHelpDialog');
 const openTransactionsButton = document.getElementById('openTransactions');
+const transactionSearchEl = document.getElementById('transactionSearch');
+const transactionFilterButtons = [...document.querySelectorAll('[data-transaction-filter]')];
+const transactionResultCountEl = document.getElementById('transactionResultCount');
+const clearTransactionSearchButton = document.getElementById('clearTransactionSearch');
+const printStatementButton = document.getElementById('printStatement');
 const homeTab = document.getElementById('homeTab');
 const transactionsTab = document.getElementById('transactionsTab');
 const notificationsTab = document.getElementById('notificationsTab');
@@ -173,6 +192,10 @@ function resolveLinkToken() {
 let activeToken = '';
 let vapidPublicKey = '';
 let nextOffset = 0;
+let currentPortalData = null;
+let loadedRows = [];
+let transactionFilter = 'all';
+let transactionQuery = '';
 
 function number(value) {
   const parsed = Number(value ?? 0);
@@ -243,6 +266,181 @@ function renderSummaryMetrics(totals) {
   }
 }
 
+function formatShortDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('ku-IQ', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function renderAccountInsights(data) {
+  const due = data?.due_summary && typeof data.due_summary === 'object'
+    ? data.due_summary
+    : {};
+  const overdueCount = number(due.overdue_count);
+  const dueToday = number(due.due_today_count);
+  const nextDue = due.next_due && typeof due.next_due === 'object'
+    ? due.next_due
+    : null;
+  const oldestOverdue = due.oldest_overdue && typeof due.oldest_overdue === 'object'
+    ? due.oldest_overdue
+    : null;
+
+  dueInsightCardEl?.classList.remove('is-danger', 'is-warning', 'is-ok');
+  if (overdueCount > 0) {
+    dueInsightCardEl?.classList.add('is-danger');
+    dueInsightTitleEl.textContent = `${overdueCount} دانە دواکەوتوو`;
+    const pieces = [];
+    if (number(due.overdue_iqd) > 0) pieces.push(money(due.overdue_iqd, 'IQD'));
+    if (number(due.overdue_usd) > 0) pieces.push(money(due.overdue_usd, 'USD'));
+    if (oldestOverdue?.days_overdue != null) {
+      pieces.push(`کۆنترین: ${number(oldestOverdue.days_overdue)} ڕۆژ`);
+    }
+    dueInsightMetaEl.textContent = pieces.join(' • ') || 'پێویستی بە پارەدانەوە هەیە';
+  } else if (dueToday > 0) {
+    dueInsightCardEl?.classList.add('is-warning');
+    dueInsightTitleEl.textContent = 'دانەوەی ئەمڕۆ';
+    dueInsightMetaEl.textContent = nextDue
+      ? `${money(nextDue.amount, nextDue.currency)} • ${nextDue.kind === 'installment' ? 'قسط' : 'قەرز'}`
+      : 'بەرواری دانەوە گەیشتووە';
+  } else if (nextDue) {
+    dueInsightCardEl?.classList.add('is-ok');
+    const days = number(nextDue.days_until_due);
+    const kind = nextDue.kind === 'installment'
+      ? `قسط${nextDue.installment_no ? `ی ${nextDue.installment_no}` : ''}`
+      : 'قەرز';
+    dueInsightTitleEl.textContent = days === 1
+      ? 'سبەی دانەوەیە'
+      : `${days} ڕۆژ ماوە`;
+    dueInsightMetaEl.textContent =
+      `${kind} • ${money(nextDue.amount, nextDue.currency)} • ${formatShortDate(nextDue.due_date)}`;
+  } else {
+    dueInsightCardEl?.classList.add('is-ok');
+    dueInsightTitleEl.textContent = 'هیچ دانەوەیەکی نزیک نییە';
+    dueInsightMetaEl.textContent = 'هەژمارەکەت لە ڕووی بەرواری دانەوە ئارامە';
+  }
+
+  const limit = number(data?.debt_limit);
+  const iqdTotal = Array.isArray(data?.totals)
+    ? data.totals.find((item) => String(item?.currency || '').toUpperCase() !== 'USD')
+    : null;
+  if (limit > 0 && debtLimitCardEl) {
+    const remaining = number(iqdTotal?.remaining);
+    const percent = Math.max(0, (remaining / limit) * 100);
+    debtLimitCardEl.hidden = false;
+    debtLimitCardEl.classList.toggle('is-danger', percent >= 100);
+    debtLimitCardEl.classList.toggle('is-warning', percent >= 80 && percent < 100);
+    debtLimitTitleEl.textContent = `${Math.round(percent)}٪ بەکارهاتوو`;
+    debtLimitMetaEl.textContent = `${money(remaining, 'IQD')} لە ${money(limit, 'IQD')}`;
+    debtLimitProgressEl.style.width = `${Math.min(percent, 100)}%`;
+  } else if (debtLimitCardEl) {
+    debtLimitCardEl.hidden = true;
+  }
+
+  if (lastUpdatedLabelEl) {
+    const asOf = new Date(data?.as_of || Date.now());
+    lastUpdatedLabelEl.textContent = Number.isNaN(asOf.getTime())
+      ? 'نوێکراوە'
+      : `نوێکراوە ${asOf.toLocaleTimeString('ku-IQ', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })}`;
+  }
+}
+
+function isOverdueDebt(item) {
+  if (item?.kind !== 'debt' || number(item?.remaining) <= 0 || !item?.due_date) {
+    return false;
+  }
+  const due = new Date(`${item.due_date}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return due < today;
+}
+
+function transactionSearchText(item) {
+  const date = new Date(item?.occurred_at);
+  const localizedDate = Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleDateString('ku-IQ');
+  return [
+    item?.kind === 'payment' ? 'پارەدان' : 'قەرز',
+    item?.amount,
+    item?.remaining,
+    item?.currency,
+    item?.note,
+    item?.due_date,
+    item?.status,
+    localizedDate,
+  ].filter((value) => value != null).join(' ').toLowerCase();
+}
+
+function filteredTransactionRows() {
+  const query = transactionQuery.trim().toLowerCase();
+  return loadedRows.filter((item) => {
+    const filterMatch =
+      transactionFilter === 'all' ||
+      transactionFilter === item.kind ||
+      (transactionFilter === 'overdue' && isOverdueDebt(item));
+    if (!filterMatch) return false;
+    if (!query) return true;
+    return transactionSearchText(item).includes(query);
+  });
+}
+
+function updateTransactionFilterUi() {
+  for (const button of transactionFilterButtons) {
+    button.classList.toggle(
+      'is-active',
+      button.dataset.transactionFilter === transactionFilter,
+    );
+  }
+  if (clearTransactionSearchButton) {
+    clearTransactionSearchButton.hidden =
+      !transactionQuery && transactionFilter === 'all';
+  }
+}
+
+function renderFilteredTransactions() {
+  ledgerEl.replaceChildren();
+  const rows = filteredTransactionRows();
+  if (rows.length === 0) {
+    addText(
+      ledgerEl,
+      'p',
+      loadedRows.length === 0
+        ? 'هێشتا هیچ مامەڵەیەک تۆمار نەکراوە.'
+        : 'هیچ مامەڵەیەک لەم گەڕان/فلتەرەدا نەدۆزرایەوە.',
+      'empty',
+    );
+  } else {
+    for (const item of rows) ledgerEl.appendChild(buildLedgerEntry(item));
+  }
+  if (transactionResultCountEl) {
+    transactionResultCountEl.textContent = `${rows.length} مامەڵە`;
+  }
+  updateTransactionFilterUi();
+}
+
+function mergeLoadedRows(rows, append) {
+  const incoming = Array.isArray(rows) ? rows : [];
+  if (!append) {
+    loadedRows = incoming.slice();
+    return;
+  }
+  const byKey = new Map(
+    loadedRows.map((item) => [`${item.kind || ''}:${item.id || ''}`, item]),
+  );
+  for (const item of incoming) {
+    byKey.set(`${item.kind || ''}:${item.id || ''}`, item);
+  }
+  loadedRows = [...byKey.values()];
+}
+
 function buildLedgerEntry(item) {
   const isPayment = item.kind === 'payment';
   const entry = document.createElement('article');
@@ -258,17 +456,24 @@ function buildLedgerEntry(item) {
   const dateText = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('ku-IQ');
   const detail = [dateText, typeof item.note === 'string' ? item.note : ''].filter(Boolean).join(' — ');
   if (detail) addText(entry, 'div', detail, 'entry-meta');
-  if (!isPayment) addText(entry, 'div', `ماوە: ${money(item.remaining, item.currency)}`, 'entry-meta');
+  if (!isPayment) {
+    addText(entry, 'div', `ماوە: ${money(item.remaining, item.currency)}`, 'entry-meta');
+    if (item.due_date) {
+      const overdue = isOverdueDebt(item);
+      const dueLine = document.createElement('div');
+      dueLine.className = overdue ? 'entry-due is-overdue' : 'entry-due';
+      dueLine.textContent = overdue
+        ? `دواکەوتوو • ${formatShortDate(item.due_date)}`
+        : `دانەوە: ${formatShortDate(item.due_date)}`;
+      entry.appendChild(dueLine);
+    }
+  }
   return entry;
 }
 
 function renderRows(rows, append = false) {
-  if (!append) ledgerEl.replaceChildren();
-  if (!Array.isArray(rows) || rows.length === 0) {
-    if (!append) addText(ledgerEl, 'p', 'هێشتا هیچ مامەڵەیەک تۆمار نەکراوە.', 'empty');
-    return;
-  }
-  for (const item of rows) ledgerEl.appendChild(buildLedgerEntry(item));
+  mergeLoadedRows(rows, append);
+  renderFilteredTransactions();
 }
 
 function renderRecentRows(rows) {
@@ -515,6 +720,10 @@ async function saveNotificationPreferences() {
 async function focusTransaction(eventId) {
   const id = String(eventId || '').trim();
   if (!id) return false;
+  transactionFilter = 'all';
+  transactionQuery = '';
+  if (transactionSearchEl) transactionSearchEl.value = '';
+  renderFilteredTransactions();
   setActiveView('transactions');
 
   for (let page = 0; page < 10; page += 1) {
@@ -541,6 +750,15 @@ async function loadNotificationHistory() {
     renderNotificationHistory(data.items);
     const unread = Number(data.unread_count || 0);
     notificationsTab.dataset.unread = unread > 0 ? String(unread) : '';
+    if (notificationUnreadBadgeEl) {
+      notificationUnreadBadgeEl.hidden = unread <= 0;
+      notificationUnreadBadgeEl.textContent = unread > 99 ? '99+' : String(unread);
+    }
+    if (unread > 0) {
+      notificationsTab.setAttribute('aria-label', `ئاگادارکردنەوە — ${unread} نەخوێندراو`);
+    } else {
+      notificationsTab.removeAttribute('aria-label');
+    }
   } catch (_) {
     notificationHistoryEl.replaceChildren();
     addText(
@@ -577,14 +795,61 @@ async function loadPortal(offset = 0, append = false) {
 
   lockedStateEl.hidden = true;
   portalAppEl.hidden = false;
+  currentPortalData = data;
   renderPrimaryBalance(data.totals);
   renderSummaryMetrics(data.totals);
+  renderAccountInsights(data);
   renderRows(data.rows, append);
   if (!append) renderRecentRows(data.rows);
 
   nextOffset = offset + (Array.isArray(data.rows) ? data.rows.length : 0);
   loadMoreButton.hidden = data.has_more !== true;
   return data;
+}
+
+async function refreshPortal() {
+  const buttons = [headerRefreshButton, quickRefreshButton].filter(Boolean);
+  for (const button of buttons) button.disabled = true;
+  try {
+    const data = await loadPortal(0, false);
+    configureNotificationExperience(data);
+    await Promise.all([
+      loadNotificationHistory(),
+      loadNotificationPreferences(),
+    ]);
+    setStatus('هەژمارەکەت نوێکرایەوە.', 'ok');
+  } catch (_) {
+    setStatus('نوێکردنەوە سەرکەوتوو نەبوو.', 'err');
+  } finally {
+    for (const button of buttons) button.disabled = false;
+  }
+}
+
+async function ensureAllTransactionsLoaded() {
+  let pages = 0;
+  while (!loadMoreButton.hidden && pages < 100) {
+    await loadPortal(nextOffset, true);
+    pages += 1;
+  }
+}
+
+async function printStatement() {
+  const buttons = [quickPrintButton, printStatementButton].filter(Boolean);
+  for (const button of buttons) button.disabled = true;
+  try {
+    await ensureAllTransactionsLoaded();
+    transactionFilter = 'all';
+    transactionQuery = '';
+    if (transactionSearchEl) transactionSearchEl.value = '';
+    renderFilteredTransactions();
+    setActiveView('transactions');
+    document.body.classList.add('printing-statement');
+    window.setTimeout(() => window.print(), 80);
+  } catch (_) {
+    setResult('نەتوانرا کەشفی حیساب ئامادە بکرێت.', 'err');
+  } finally {
+    for (const button of buttons) button.disabled = false;
+  }
 }
 
 function configureNotificationExperience(data) {
@@ -662,6 +927,51 @@ loadMoreButton.addEventListener('click', async () => {
   } finally {
     loadMoreButton.disabled = false;
   }
+});
+
+if (headerRefreshButton) {
+  headerRefreshButton.addEventListener('click', () => void refreshPortal());
+}
+if (quickRefreshButton) {
+  quickRefreshButton.addEventListener('click', () => void refreshPortal());
+}
+if (quickTransactionsButton) {
+  quickTransactionsButton.addEventListener('click', () => setActiveView('transactions'));
+}
+if (quickNotificationsButton) {
+  quickNotificationsButton.addEventListener('click', () => {
+    setActiveView('notifications');
+    void loadNotificationHistory();
+  });
+}
+if (quickPrintButton) {
+  quickPrintButton.addEventListener('click', () => void printStatement());
+}
+if (printStatementButton) {
+  printStatementButton.addEventListener('click', () => void printStatement());
+}
+if (transactionSearchEl) {
+  transactionSearchEl.addEventListener('input', () => {
+    transactionQuery = transactionSearchEl.value || '';
+    renderFilteredTransactions();
+  });
+}
+for (const button of transactionFilterButtons) {
+  button.addEventListener('click', () => {
+    transactionFilter = button.dataset.transactionFilter || 'all';
+    renderFilteredTransactions();
+  });
+}
+if (clearTransactionSearchButton) {
+  clearTransactionSearchButton.addEventListener('click', () => {
+    transactionFilter = 'all';
+    transactionQuery = '';
+    if (transactionSearchEl) transactionSearchEl.value = '';
+    renderFilteredTransactions();
+  });
+}
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('printing-statement');
 });
 
 notificationHistoryRefreshButton.addEventListener('click', () => {
