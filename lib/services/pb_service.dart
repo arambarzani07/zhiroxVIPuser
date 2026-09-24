@@ -700,6 +700,45 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
 
   // ==================== Debts ====================
 
+  static Future<List<Map<String, dynamic>>> getDebtInstallments(
+    String debtId,
+  ) async {
+    await ensureInitialized();
+    final raw = await client
+        .from('debt_installments')
+        .select(
+          'id,debt_id,customer_id,installment_no,amount,due_date,status,paid_at,created_at,updated_at',
+        )
+        .eq('debt_id', debtId)
+        .neq('status', 'cancelled')
+        .order('installment_no');
+    return (raw as List)
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
+
+  static Future<List<Map<String, dynamic>>> setDebtInstallmentSchedule(
+    String debtId,
+    List<Map<String, dynamic>> schedule,
+  ) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'set_debt_installment_schedule',
+      params: {
+        'p_debt_id': debtId,
+        'p_schedule': schedule,
+      },
+    );
+    if (raw is! List) {
+      throw const FormatException('invalid installment schedule response');
+    }
+    return raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
+
   static Future<double> getCustomerBalance(String customerId) async {
     await ensureInitialized();
     const pageSize = 500;
