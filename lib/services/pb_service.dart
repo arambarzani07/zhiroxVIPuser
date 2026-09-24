@@ -486,6 +486,35 @@ class PBService {
     }).toList(growable: false);
   }
 
+  static Future<List<RecordModel>> getPinnedCustomers({
+    String search = '',
+  }) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_pinned_customers',
+      params: {'p_search': search.trim()},
+    );
+    if (raw is! List) throw const FormatException('invalid pinned customers');
+    return raw
+        .whereType<Map>()
+        .map((row) => _profileRecord(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  static Future<Map<String, dynamic>> getCustomerDebtLimitRecommendation(
+    String customerId,
+  ) async {
+    await ensureInitialized();
+    final raw = await client.rpc(
+      'get_customer_debt_limit_recommendation',
+      params: {'p_customer_id': customerId},
+    );
+    if (raw is! Map) {
+      throw const FormatException('invalid debt limit recommendation');
+    }
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<List<RecordModel>> getUsers({
     String? role,
     String? search,
