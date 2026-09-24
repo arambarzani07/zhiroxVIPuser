@@ -27,6 +27,7 @@ type ActionBody = {
   action?: string;
   debt_id?: string;
   payment_id?: string;
+  general_payment_id?: string;
   limit?: number;
 };
 
