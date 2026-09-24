@@ -3,11 +3,34 @@
 import 'package:flutter/material.dart';
 import 'package:zhirox/utils/constants.dart';
 
+abstract final class AppSpacing {
+  static const double xxs = 4;
+  static const double xs = 8;
+  static const double sm = 12;
+  static const double md = 16;
+  static const double lg = 20;
+  static const double xl = 28;
+  static const double xxl = 36;
+}
+
+abstract final class AppMotion {
+  static const Duration instant = Duration(milliseconds: 120);
+  static const Duration fast = Duration(milliseconds: 180);
+  static const Duration standard = Duration(milliseconds: 240);
+  static const Duration deliberate = Duration(milliseconds: 320);
+}
+
+abstract final class AppBreakpoints {
+  static const double compact = 390;
+  static const double tablet = 720;
+  static const double wide = 1100;
+}
+
 abstract final class AppDesign {
   static const double radiusSmall = 12;
   static const double radiusMedium = 18;
   static const double radiusLarge = 28;
-  static const double pagePadding = 16;
+  static const double pagePadding = AppSpacing.md;
 
   static ThemeData get lightTheme {
     final scheme = ColorScheme.fromSeed(
