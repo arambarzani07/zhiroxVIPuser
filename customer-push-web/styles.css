@@ -877,3 +877,206 @@ body {
     box-shadow: none !important;
   }
 }
+
+
+/* Secure digital receipt */
+.receipt-dialog {
+  width: min(92vw, 520px);
+  max-height: 88dvh;
+  padding: 0;
+  border: 0;
+  border-radius: 28px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 28px 90px rgba(15,23,42,.24);
+}
+.receipt-dialog::backdrop {
+  background: rgba(9,14,29,.55);
+  backdrop-filter: blur(7px);
+}
+.receipt-sheet {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  overflow-y: auto;
+  max-height: 88dvh;
+  box-sizing: border-box;
+}
+.digital-receipt-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-inline-end: 34px;
+}
+.receipt-brand-mark {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+  box-shadow: 0 9px 22px rgba(49,87,224,.2);
+}
+.digital-receipt-head h2 {
+  margin: 1px 0;
+  font-size: 19px;
+}
+.receipt-number {
+  margin: 0;
+  direction: ltr;
+  text-align: right;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+.receipt-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 8px;
+}
+.receipt-meta-grid > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 10px 11px;
+  border-radius: 13px;
+  background: rgba(246,247,251,.78);
+}
+.receipt-meta-grid span,
+.receipt-line span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.receipt-meta-grid strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.receipt-amount-card {
+  display: grid;
+  gap: 3px;
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(145deg,#11172b,#24345f);
+  color: #fff;
+}
+.receipt-amount-card > span {
+  color: rgba(255,255,255,.68);
+  font-size: 11px;
+}
+.receipt-amount-card > strong {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+.receipt-amount-card > small {
+  color: rgba(255,255,255,.72);
+  font-size: 11px;
+}
+.receipt-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--app-hairline);
+}
+.receipt-line strong {
+  max-width: 70%;
+  text-align: start;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.receipt-note-row { align-items: flex-start; }
+.receipt-section-title {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.receipt-items {
+  display: grid;
+  gap: 0;
+  border-block: 1px solid var(--app-hairline);
+}
+.receipt-item {
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--app-hairline);
+}
+.receipt-item:last-child { border-bottom: 0; }
+.receipt-item > div { display: grid; gap: 3px; }
+.receipt-item strong { font-size: 12px; }
+.receipt-item small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.receipt-footer {
+  min-height: 1em;
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.receipt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 420px) {
+  .receipt-dialog {
+    width: calc(100vw - 20px);
+    border-radius: 24px;
+  }
+  .receipt-sheet { padding: 18px; }
+  .receipt-meta-grid { grid-template-columns: 1fr 1fr; }
+  .receipt-amount-card > strong { font-size: 25px; }
+}
+
+@media print {
+  body.printing-receipt .portal-header,
+  body.printing-receipt #portalApp,
+  body.printing-receipt #lockedState,
+  body.printing-receipt #iosHelpDialog {
+    display: none !important;
+  }
+  body.printing-receipt .receipt-dialog {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    color: #111827 !important;
+  }
+  body.printing-receipt .receipt-dialog::backdrop { display: none !important; }
+  body.printing-receipt .receipt-sheet {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  body.printing-receipt .dialog-close,
+  body.printing-receipt .receipt-actions {
+    display: none !important;
+  }
+  body.printing-receipt .receipt-meta-grid > div {
+    background: #f7f8fb !important;
+  }
+  body.printing-receipt .receipt-amount-card {
+    background: #f2f4f8 !important;
+    color: #111827 !important;
+    border: 1px solid #d9dee8 !important;
+  }
+  body.printing-receipt .receipt-amount-card > span,
+  body.printing-receipt .receipt-amount-card > small {
+    color: #667085 !important;
+  }
+}
