@@ -33,6 +33,16 @@ function deps(overrides: Partial<PublicPushDeps> = {}): PublicPushDeps {
       source: { kind: "payment", amount: 2500, currency: "IQD" },
       settings: {},
     }),
+    periodStatement: async (args) => ({
+      customer_name: "Customer A",
+      market_name: "Market A",
+      from_date: args.fromDate,
+      to_date: args.toDate,
+      rows: [{ row_no: 1, name: "Item A", amount: 2500, currency: "IQD", date: args.fromDate }],
+      totals: [{ currency: "IQD", total: 2500 }],
+      row_count: 1,
+      truncated: false,
+    }),
     notificationHistory: async () => ({
       items: [{
         id: "00000000-0000-0000-0000-000000000123",
@@ -246,6 +256,59 @@ Deno.test("secure receipt can be opened with the same portal token", async () =>
   assertEquals(body.id, receiptId);
   assertEquals(body.receipt_number, "R-100");
   assertEquals(body.customer_name, "Customer A");
+});
+
+Deno.test("period statement uses secure customer credentials and date range", async () => {
+  let receivedFrom = "";
+  let receivedTo = "";
+  const res = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "statement",
+        token,
+        from_date: "2026-01-01",
+        to_date: "2026-09-24",
+      }),
+    }),
+    deps({
+      periodStatement: async (args) => {
+        receivedFrom = args.fromDate;
+        receivedTo = args.toDate;
+        return {
+          rows: [{ row_no: 1, name: "Item A", amount: 1000, currency: "IQD", date: args.fromDate }],
+          totals: [{ currency: "IQD", total: 1000 }],
+          row_count: 1,
+          truncated: false,
+        };
+      },
+    }),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(receivedFrom, "2026-01-01");
+  assertEquals(receivedTo, "2026-09-24");
+  const body = await res.json();
+  assertEquals(body.row_count, 1);
+  assertEquals(body.totals[0].total, 1000);
+});
+
+Deno.test("period statement rejects reversed date ranges", async () => {
+  const res = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "statement",
+        token,
+        from_date: "2026-09-24",
+        to_date: "2026-01-01",
+      }),
+    }),
+    deps(),
+  );
+  assertEquals(res.status, 400);
+  assertEquals(await res.json(), { error: "invalid_input" });
 });
 
 Deno.test("notification history can authenticate with permanent token", async () => {
