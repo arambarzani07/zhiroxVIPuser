@@ -1085,3 +1085,322 @@ body {
     color: #667085 !important;
   }
 }
+
+
+/* Customer Portal V2: five-tab shell, receipts and account */
+.portal-nav.app-tab-bar {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  padding-inline: 5px;
+}
+
+.app-tab-bar .nav-item {
+  min-width: 0;
+  padding-inline: 1px;
+  font-size: 9px;
+}
+
+.app-tab-bar .tab-icon {
+  width: 28px;
+  height: 27px;
+}
+
+.app-tab-bar .tab-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.receipt-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 9px;
+}
+
+.receipt-summary-strip > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px;
+  border-radius: 17px;
+  background: var(--surface);
+  box-shadow: 0 7px 22px rgba(20,31,61,.045);
+}
+
+.receipt-summary-strip span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.receipt-summary-strip strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.receipts-panel {
+  padding-block: 4px;
+}
+
+.receipt-history {
+  display: grid;
+}
+
+.receipt-history-card {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 38px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--app-hairline);
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+}
+
+.receipt-history-card:last-child {
+  border-bottom: 0;
+}
+
+.receipt-history-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.receipt-history-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.receipt-history-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.receipt-history-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.receipt-history-amount {
+  max-width: 116px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  text-align: end;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-empty-state {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  padding: 20px;
+  text-align: center;
+}
+
+.receipt-empty-state strong {
+  font-size: 14px;
+}
+
+.receipt-empty-state span {
+  max-width: 290px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.account-hero {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 17px;
+  border-radius: 23px;
+  background: linear-gradient(145deg, #11172b 0%, #202c51 72%, #3157e0 135%);
+  color: #fff;
+  box-shadow: 0 16px 38px rgba(20,31,61,.15);
+}
+
+.account-avatar {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 17px;
+  background: rgba(255,255,255,.12);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.account-identity {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.account-caption {
+  color: rgba(255,255,255,.62);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.account-identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+}
+
+.account-identity small {
+  direction: ltr;
+  text-align: right;
+  color: rgba(255,255,255,.72);
+  font-size: 10.5px;
+}
+
+.account-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 10px 1px;
+  border-bottom: 1px solid var(--app-hairline);
+}
+
+.account-row:last-child {
+  border-bottom: 0;
+}
+
+.account-row span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.account-row strong {
+  max-width: 65%;
+  overflow-wrap: anywhere;
+  text-align: start;
+  font-size: 11px;
+}
+
+.account-ok {
+  color: #0e9f6e !important;
+}
+
+.account-security-panel {
+  padding-block: 8px;
+}
+
+.account-action {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  padding: 11px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--app-hairline);
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+}
+
+.account-action:last-child {
+  border-bottom: 0;
+}
+
+.account-action > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.account-action strong {
+  font-size: 12px;
+}
+
+.account-action small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.account-action b {
+  color: var(--brand);
+  font-size: 18px;
+}
+
+.account-footnote {
+  margin: 0;
+  padding: 3px 12px 10px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+@media (max-width: 390px) {
+  .portal-nav.app-tab-bar {
+    width: calc(100% - 12px);
+    min-height: 66px;
+    padding-inline: 3px;
+  }
+
+  .app-tab-bar .nav-item {
+    font-size: 8.5px;
+  }
+
+  .app-tab-bar .tab-icon {
+    width: 27px;
+  }
+
+  .receipt-history-card {
+    grid-template-columns: 36px minmax(0,1fr);
+  }
+
+  .receipt-history-amount {
+    grid-column: 2;
+    max-width: none;
+    text-align: start;
+  }
+}
+
+@media print {
+  #receiptsView,
+  #accountView {
+    display: none !important;
+  }
+}
