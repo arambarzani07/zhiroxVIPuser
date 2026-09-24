@@ -118,6 +118,43 @@
           <p id="result" class="action-result" aria-live="polite"></p>
         </article>
 
+        <section class="panel notification-preferences-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">هەڵبژاردەکان</p>
+              <h2>جۆری ئاگادارکردنەوە</h2>
+            </div>
+          </div>
+          <p class="preference-note">ئاگادارییە دارایییە گرنگەکان وەک قەرز، پارەدانەوە و گۆڕانی سنووری قەرز هەمیشە چالاکن.</p>
+          <div class="preference-list">
+            <label class="preference-row is-mandatory">
+              <span>
+                <strong>قەرز و پارەدانەوە</strong>
+                <small>ئاگاداری داراییی گرنگ — ناچالاک ناکرێت</small>
+              </span>
+              <input type="checkbox" checked disabled aria-label="ئاگاداری داراییی گرنگ هەمیشە چالاکە">
+            </label>
+            <label class="preference-row">
+              <span><strong>یادخستنەوەی بەرواری قەرز</strong><small>٣ ڕۆژ، ١ ڕۆژ، ئەمڕۆ و دواکەوتن</small></span>
+              <input id="prefDueReminders" type="checkbox" checked>
+            </label>
+            <label class="preference-row">
+              <span><strong>یادخستنەوەی قسط</strong><small>قسطی داهاتوو و قسطی دواکەوتوو</small></span>
+              <input id="prefInstallmentReminders" type="checkbox" checked>
+            </label>
+            <label class="preference-row">
+              <span><strong>کەشفی حیسابی مانگانە</strong><small>پوختەی قەرز، پارەدان و ماوە</small></span>
+              <input id="prefMonthlyStatements" type="checkbox" checked>
+            </label>
+            <label class="preference-row">
+              <span><strong>پەیامی بەڕێوەبەر</strong><small>پەیامە تایبەتەکانی مارکێت</small></span>
+              <input id="prefManualMessages" type="checkbox" checked>
+            </label>
+          </div>
+          <button id="saveNotificationPreferences" class="secondary-action" type="button">پاشەکەوتکردنی هەڵبژاردەکان</button>
+          <p id="preferenceResult" class="action-result" aria-live="polite"></p>
+        </section>
+
         <section class="panel notification-history-panel">
           <div class="section-heading">
             <div>
