@@ -262,6 +262,7 @@ let activeToken = '';
 let vapidPublicKey = '';
 let nextOffset = 0;
 let currentPortalData = null;
+let currentPeriodStatement = null;
 let currentNotificationItems = [];
 let loadedRows = [];
 let transactionFilter = 'all';
@@ -1270,6 +1271,7 @@ function initializeStatementDates() {
 }
 
 function renderPeriodStatement(data) {
+  currentPeriodStatement = data && typeof data === 'object' ? data : null;
   const rows = Array.isArray(data?.rows) ? data.rows : [];
   const totals = Array.isArray(data?.totals) ? data.totals : [];
   periodStatementRowsEl.replaceChildren();
@@ -1410,203 +1412,6 @@ async function applyStatementPreset(preset) {
   syncStatementDateDisplays();
 }
 
-function escapePrintText(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-function buildPeriodPrintHtml() {
-  const clone = periodStatementDocumentEl.cloneNode(true);
-  clone.hidden = false;
-  clone.removeAttribute('hidden');
-  clone.querySelector('.period-statement-actions')?.remove();
-
-  const market = statementMarketNameEl?.textContent?.trim() || 'ZHIROX';
-  const customer = statementCustomerNameEl?.textContent?.trim() || '';
-  const period = statementPeriodLabelEl?.textContent?.trim() || '';
-  const title = [market, customer, period].filter(Boolean).join(' — ');
-
-  return `<!doctype html>
-<html lang="ku" dir="rtl">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${escapePrintText(title || 'پسووڵەی ماوە')}</title>
-  <style>
-    @page { size: A4 portrait; margin: 13mm 11mm 15mm; }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #fff; color: #151a2d; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
-      direction: rtl;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    .print-preview-shell { max-width: 210mm; margin: 0 auto; padding: 18px; }
-    .print-toolbar {
-      position: sticky; top: 0; z-index: 10;
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      margin: 0 0 16px; padding: 10px;
-      border: 1px solid #e3e7ef; border-radius: 14px;
-      background: rgba(255,255,255,.96); box-shadow: 0 10px 26px rgba(17,24,39,.08);
-    }
-    .print-toolbar strong { font-size: 13px; }
-    .print-toolbar small { display: block; margin-top: 2px; color: #697386; font-size: 10px; }
-    #printNow {
-      border: 0; border-radius: 11px; padding: 10px 16px;
-      background: #3157e0; color: white; font-weight: 800; font-size: 12px;
-    }
-    .period-statement-document {
-      overflow: visible; border: 0; border-radius: 0; background: #fff; box-shadow: none;
-    }
-    .period-statement-head {
-      display: grid; grid-template-columns: minmax(0,1fr) minmax(190px,.72fr);
-      gap: 18px; padding: 0 0 15px; border-bottom: 1px solid #dfe3e9;
-      break-inside: avoid;
-    }
-    .period-statement-kicker { margin: 0 0 4px; color: #3157e0; font-size: 10px; font-weight: 900; }
-    .period-statement-head h2 { margin: 0; font-size: 21px; }
-    .period-statement-market-meta { margin: 5px 0 0; color: #697386; font-size: 10px; line-height: 1.6; }
-    .period-statement-meta { display: grid; gap: 7px; }
-    .period-statement-meta > div {
-      display: grid; grid-template-columns: auto minmax(0,1fr);
-      align-items: start; gap: 9px;
-    }
-    .period-statement-meta span { color: #697386; font-size: 9.5px; }
-    .period-statement-meta strong { text-align: right; overflow-wrap: anywhere; font-size: 10.5px; }
-    .period-table-wrap { width: 100%; overflow: visible; margin-top: 8px; }
-    .period-statement-table {
-      width: 100%; border-collapse: collapse; direction: rtl; table-layout: fixed;
-    }
-    .period-statement-table thead { display: table-header-group; }
-    .period-statement-table tr { break-inside: avoid; }
-    .period-statement-table th, .period-statement-table td {
-      padding: 7px 6px; border-bottom: 1px solid #dfe3e9;
-      vertical-align: top; text-align: right; font-size: 10px; line-height: 1.5;
-    }
-    .period-statement-table th {
-      background: #f2f4f8; color: #394156; font-weight: 900;
-    }
-    .period-statement-table th:nth-child(1), .period-statement-table td:nth-child(1) {
-      width: 12%; text-align: center;
-    }
-    .period-statement-table th:nth-child(2), .period-statement-table td:nth-child(2) { width: 42%; }
-    .period-statement-table th:nth-child(3), .period-statement-table td:nth-child(3) { width: 23%; }
-    .period-statement-table th:nth-child(4), .period-statement-table td:nth-child(4) { width: 23%; }
-    .period-col-row { color: #697386; font-variant-numeric: tabular-nums; }
-    .period-col-name { font-weight: 700; }
-    .period-col-price, .period-col-date {
-      direction: ltr; text-align: right !important; white-space: nowrap;
-      font-variant-numeric: tabular-nums;
-    }
-    .period-col-price { font-weight: 850; }
-    .period-col-date { color: #697386; }
-    .period-statement-totals {
-      display: grid; gap: 7px; padding: 14px 0 0; break-inside: avoid;
-    }
-    .period-total-row {
-      display: flex; align-items: center; justify-content: space-between; gap: 16px;
-      min-height: 42px; padding: 9px 12px; border: 1px solid #cfd5df; background: #fafbfc;
-    }
-    .period-total-row span { color: #697386; font-size: 10px; font-weight: 800; }
-    .period-total-row strong {
-      direction: ltr; color: #11172b; font-size: 17px; font-weight: 950;
-      font-variant-numeric: tabular-nums;
-    }
-    .period-statement-footer {
-      margin: 0; padding: 10px 0 0; color: #697386;
-      text-align: center; font-size: 9.5px; line-height: 1.7;
-    }
-    @media (max-width: 620px) {
-      .print-preview-shell { padding: 10px; }
-      .period-statement-head { grid-template-columns: 1fr; gap: 10px; }
-    }
-    @media print {
-      .print-preview-shell { max-width: none; margin: 0; padding: 0; }
-      .print-toolbar { display: none !important; }
-    }
-  </style>
-</head>
-<body>
-  <main class="print-preview-shell">
-    <div class="print-toolbar">
-      <div>
-        <strong>پسووڵە ئامادەیە</strong>
-        <small>لە iPhone: Print Preview → Share → Save to Files</small>
-      </div>
-      <button id="printNow" type="button">چاپ / Save PDF</button>
-    </div>
-    ${clone.outerHTML}
-  </main>
-</body>
-</html>`;
-}
-
-function fallbackPeriodPrint() {
-  document.body.classList.add('printing-period-statement');
-  try {
-    window.print();
-  } finally {
-    window.setTimeout(() => {
-      document.body.classList.remove('printing-period-statement');
-    }, 1200);
-  }
-}
-
-function openPeriodStatementPrintPreview() {
-  if (!periodStatementDocumentEl || periodStatementDocumentEl.hidden) {
-    if (statementBuilderResultEl) {
-      statementBuilderResultEl.textContent = 'سەرەتا پسووڵەکە دروست بکە، پاشان PDF بکە.';
-      statementBuilderResultEl.className = 'action-result err';
-    }
-    return;
-  }
-
-  const preview = window.open('', '_blank');
-  if (!preview) {
-    fallbackPeriodPrint();
-    return;
-  }
-
-  try {
-    preview.document.open();
-    preview.document.write(buildPeriodPrintHtml());
-    preview.document.close();
-
-    const printNow = preview.document.getElementById('printNow');
-    printNow?.addEventListener('click', () => {
-      preview.focus();
-      preview.print();
-    });
-
-    preview.focus();
-
-    const launchPrint = () => {
-      window.setTimeout(() => {
-        try {
-          preview.focus();
-          preview.print();
-        } catch (_) {
-          // The visible print button remains available as an iOS fallback.
-        }
-      }, 220);
-    };
-
-    if (preview.document.fonts?.ready) {
-      preview.document.fonts.ready.then(launchPrint).catch(launchPrint);
-    } else {
-      launchPrint();
-    }
-  } catch (_) {
-    try { preview.close(); } catch (_) {}
-    fallbackPeriodPrint();
-  }
-}
-
 function safePdfFilename(value) {
   return String(value || 'ZHIROX')
     .replace(/[\\/:*?"<>|]+/g, '-')
@@ -1627,10 +1432,9 @@ function canvasHasVisibleContent(canvas) {
   if (!canvas || canvas.width < 20 || canvas.height < 20) return false;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return true;
-
   try {
-    const cols = 24;
-    const rows = 34;
+    const cols = 18;
+    const rows = 26;
     let visible = 0;
     for (let y = 0; y < rows; y += 1) {
       const py = Math.min(
@@ -1645,16 +1449,15 @@ function canvasHasVisibleContent(canvas) {
         const pixel = ctx.getImageData(px, py, 1, 1).data;
         if (
           pixel[3] > 10 &&
-          (pixel[0] < 242 || pixel[1] < 242 || pixel[2] < 242)
+          (pixel[0] < 245 || pixel[1] < 245 || pixel[2] < 245)
         ) {
           visible += 1;
-          if (visible >= 5) return true;
+          if (visible >= 4) return true;
         }
       }
     }
     return false;
   } catch (_) {
-    // A tainted canvas still means rendering produced content; do not block export.
     return true;
   }
 }
@@ -1665,33 +1468,180 @@ function nextPaint() {
   });
 }
 
+function appendPdfCell(row, text, className = '') {
+  const cell = document.createElement('td');
+  if (className) cell.className = className;
+  cell.textContent = String(text ?? '');
+  row.appendChild(cell);
+  return cell;
+}
+
+function buildPdfA4Page(data, pageRows, pageNumber, pageCount, includeTotals) {
+  const page = document.createElement('section');
+  page.className = 'pdf-a4-page';
+  page.dir = 'rtl';
+
+  const head = document.createElement('header');
+  head.className = 'pdf-a4-head';
+
+  const marketWrap = document.createElement('div');
+  marketWrap.className = 'pdf-a4-market';
+  const kicker = document.createElement('div');
+  kicker.className = 'pdf-a4-kicker';
+  kicker.textContent = 'پسووڵەی ماوە';
+  const market = document.createElement('h1');
+  market.textContent =
+    String(data?.market_name || currentPortalData?.market_name || 'ZHIROX').trim() ||
+    'ZHIROX';
+  const marketMeta = document.createElement('p');
+  marketMeta.textContent = [
+    String(data?.market_phone || currentPortalData?.market_phone || '').trim(),
+    String(data?.market_address || currentPortalData?.market_address || '').trim(),
+  ].filter(Boolean).join(' • ');
+  marketWrap.append(kicker, market, marketMeta);
+
+  const meta = document.createElement('div');
+  meta.className = 'pdf-a4-meta';
+  const metaRows = [
+    ['کڕیار', String(data?.customer_name || currentPortalData?.customer_name || '—')],
+    ['ماوە', `${statementDateLabel(data?.from_date)} تا ${statementDateLabel(data?.to_date)}`],
+    ['بەرواری دروستکردن', statementDateLabel(toLocalIsoDate(data?.generated_at || new Date()))],
+  ];
+  for (const [label, value] of metaRows) {
+    const item = document.createElement('div');
+    const key = document.createElement('span');
+    key.textContent = label;
+    const val = document.createElement('strong');
+    val.textContent = value;
+    item.append(key, val);
+    meta.appendChild(item);
+  }
+  head.append(marketWrap, meta);
+  page.appendChild(head);
+
+  const table = document.createElement('table');
+  table.className = 'pdf-a4-table';
+  table.dir = 'rtl';
+
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  for (const label of ['ژمارەی ڕیز', 'ناوی بابەت', 'نرخ', 'بەروار']) {
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.textContent = label;
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  for (const row of pageRows) {
+    const tr = document.createElement('tr');
+    appendPdfCell(tr, row?.row_no ?? '', 'pdf-row-no');
+    appendPdfCell(tr, row?.name || 'بابەت', 'pdf-item-name');
+    appendPdfCell(tr, money(row?.amount, row?.currency), 'pdf-price');
+    appendPdfCell(tr, statementDateLabel(row?.date), 'pdf-date');
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  page.appendChild(table);
+
+  if (includeTotals) {
+    const totals = document.createElement('div');
+    totals.className = 'pdf-a4-totals';
+    const items = Array.isArray(data?.totals) ? data.totals : [];
+    for (const item of items) {
+      const line = document.createElement('div');
+      const label = document.createElement('span');
+      label.textContent =
+        items.length > 1
+          ? `کۆی گشتی — ${String(item?.currency || 'IQD')}`
+          : 'کۆی گشتی';
+      const value = document.createElement('strong');
+      value.textContent = money(item?.total, item?.currency);
+      line.append(label, value);
+      totals.appendChild(line);
+    }
+    page.appendChild(totals);
+
+    const footerNote = String(
+      data?.footer_note || currentPortalData?.footer_note || '',
+    ).trim();
+    if (footerNote) {
+      const note = document.createElement('p');
+      note.className = 'pdf-a4-note';
+      note.textContent = footerNote;
+      page.appendChild(note);
+    }
+  }
+
+  const footer = document.createElement('footer');
+  footer.className = 'pdf-a4-page-number';
+  footer.textContent = `پەڕە ${pageNumber} لە ${pageCount}`;
+  page.appendChild(footer);
+  return page;
+}
+
+function splitStatementRows(rows, rowsPerPage = 18) {
+  const pages = [];
+  for (let index = 0; index < rows.length; index += rowsPerPage) {
+    pages.push(rows.slice(index, index + rowsPerPage));
+  }
+  return pages.length > 0 ? pages : [[]];
+}
+
+async function deliverPdfBlob(blob, filename) {
+  let delivered = false;
+  if (typeof File === 'function' && navigator.share && navigator.canShare) {
+    try {
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'پسووڵەی ماوە',
+        });
+        delivered = true;
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        delivered = true;
+      }
+    }
+  }
+
+  if (!delivered) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = 'noopener';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+}
+
 async function downloadPeriodStatementPdf() {
-  if (!periodStatementDocumentEl || periodStatementDocumentEl.hidden) {
-    if (statementBuilderResultEl) {
-      statementBuilderResultEl.textContent =
-        'سەرەتا پسووڵەکە دروست بکە، پاشان PDF دروست بکە.';
-      statementBuilderResultEl.className = 'action-result err';
-    }
+  const data = currentPeriodStatement;
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+
+  if (!data || rows.length === 0) {
+    statementBuilderResultEl.textContent =
+      'سەرەتا پسووڵەکە دروست بکە، پاشان PDF دروست بکە.';
+    statementBuilderResultEl.className = 'action-result err';
     return;
   }
 
-  const statementRowCount =
-    periodStatementRowsEl?.querySelectorAll('tr').length ?? 0;
-  if (statementRowCount === 0) {
-    if (statementBuilderResultEl) {
-      statementBuilderResultEl.textContent =
-        'هیچ بابەتێک بۆ خستنە ناو PDF نییە.';
-      statementBuilderResultEl.className = 'action-result err';
-    }
-    return;
-  }
-
-  if (typeof window.html2pdf !== 'function') {
-    if (statementBuilderResultEl) {
-      statementBuilderResultEl.textContent =
-        'PDF engine بار نەبووە؛ پەڕەکە Refresh بکە و دووبارە هەوڵ بدە.';
-      statementBuilderResultEl.className = 'action-result err';
-    }
+  if (
+    typeof window.html2canvas !== 'function' ||
+    !window.jspdf ||
+    typeof window.jspdf.jsPDF !== 'function'
+  ) {
+    statementBuilderResultEl.textContent =
+      'PDF engine بار نەبووە؛ پەڕەکە Refresh بکە و دووبارە هەوڵ بدە.';
+    statementBuilderResultEl.className = 'action-result err';
     return;
   }
 
@@ -1699,144 +1649,80 @@ async function downloadPeriodStatementPdf() {
   if (printPeriodStatementButton) {
     printPeriodStatementButton.disabled = true;
     printPeriodStatementButton.innerHTML =
-      '<span class="period-pdf-icon" aria-hidden="true">PDF</span><span><strong>دروستکردنی PDF...</strong><small>ناوەڕۆک پشکنین دەکرێت</small></span>';
+      '<span class="period-pdf-icon" aria-hidden="true">PDF</span><span><strong>دروستکردنی PDF...</strong><small>پەڕەکان یەک بە یەک ئامادە دەکرێن</small></span>';
   }
 
-  document.body.classList.add('exporting-period-pdf');
+  const stage = document.createElement('div');
+  stage.className = 'pdf-page-stage';
+  document.body.appendChild(stage);
 
   try {
-    await nextPaint();
+    const pages = splitStatementRows(rows, 18);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+      compress: true,
+    });
 
-    const filename = periodPdfFilename();
-    const table = periodStatementDocumentEl.querySelector('.period-statement-table');
-    const sourceWidth = Math.max(
-      Math.ceil(periodStatementDocumentEl.scrollWidth || 0),
-      Math.ceil(table?.scrollWidth || 0),
-      480,
-    );
-    const sourceHeight = Math.max(
-      Math.ceil(periodStatementDocumentEl.scrollHeight || 0),
-      400,
-    );
+    for (let index = 0; index < pages.length; index += 1) {
+      const pageNumber = index + 1;
+      const page = buildPdfA4Page(
+        data,
+        pages[index],
+        pageNumber,
+        pages.length,
+        pageNumber === pages.length,
+      );
 
-    const worker = window.html2pdf()
-      .set({
-        margin: [8, 7, 9, 7],
-        filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: Math.min(2.1, Math.max(1.5, window.devicePixelRatio || 2)),
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-          scrollX: 0,
-          scrollY: -window.scrollY,
-          width: sourceWidth,
-          windowWidth: Math.max(794, sourceWidth),
-          windowHeight: Math.max(1123, sourceHeight),
-          onclone: (clonedDocument) => {
-            const clonedStatement =
-              clonedDocument.getElementById('periodStatementDocument');
-            if (!clonedStatement) return;
+      stage.replaceChildren(page);
+      statementBuilderResultEl.textContent =
+        `دروستکردنی PDF — پەڕە ${pageNumber} لە ${pages.length}`;
+      statementBuilderResultEl.className = 'action-result ok';
 
-            clonedStatement.hidden = false;
-            clonedStatement.removeAttribute('hidden');
-            clonedStatement.style.width = `${sourceWidth}px`;
-            clonedStatement.style.maxWidth = 'none';
-            clonedStatement.style.overflow = 'visible';
-            clonedStatement.style.background = '#ffffff';
-            clonedStatement.style.boxShadow = 'none';
+      await nextPaint();
 
-            clonedStatement
-              .querySelector('.period-statement-actions')
-              ?.remove();
+      const canvas = await window.html2canvas(page, {
+        scale: Math.min(2, Math.max(1.5, window.devicePixelRatio || 2)),
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        width: 794,
+        height: 1123,
+        windowWidth: 794,
+        windowHeight: 1123,
+        scrollX: 0,
+        scrollY: 0,
+      });
 
-            const wrap = clonedStatement.querySelector('.period-table-wrap');
-            if (wrap instanceof HTMLElement) {
-              wrap.style.overflow = 'visible';
-            }
+      if (!canvasHasVisibleContent(canvas)) {
+        throw new Error(`blank_page_${pageNumber}`);
+      }
 
-            const clonedTable =
-              clonedStatement.querySelector('.period-statement-table');
-            if (clonedTable instanceof HTMLElement) {
-              clonedTable.style.width = '100%';
-              clonedTable.style.minWidth = '0';
-            }
-          },
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait',
-          compress: true,
-        },
-        pagebreak: {
-          mode: ['css', 'legacy'],
-          avoid: ['tr', '.period-total-row', '.period-statement-head'],
-        },
-      })
-      .from(periodStatementDocumentEl)
-      .toCanvas();
-
-    const canvas = await worker.get('canvas');
-    if (!canvasHasVisibleContent(canvas)) {
-      throw new Error('blank_canvas');
+      const image = canvas.toDataURL('image/jpeg', 0.96);
+      if (index > 0) pdf.addPage('a4', 'portrait');
+      pdf.addImage(image, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
     }
 
-    await worker.toPdf();
-    const blob = await worker.outputPdf('blob');
-    if (!(blob instanceof Blob) || blob.size < 1000) {
+    const blob = pdf.output('blob');
+    if (!(blob instanceof Blob) || blob.size < 1500) {
       throw new Error('empty_pdf');
     }
 
-    let delivered = false;
-    if (typeof File === 'function' && navigator.share && navigator.canShare) {
-      try {
-        const file = new File([blob], filename, { type: 'application/pdf' });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: 'پسووڵەی ماوە',
-          });
-          delivered = true;
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          delivered = true;
-        }
-      }
-    }
+    await deliverPdfBlob(blob, periodPdfFilename());
 
-    if (!delivered) {
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = filename;
-      anchor.rel = 'noopener';
-      anchor.style.display = 'none';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-    }
-
-    if (statementBuilderResultEl) {
-      statementBuilderResultEl.textContent =
-        `PDF ـەکە بە ${statementRowCount} بابەت ئامادە کرا.`;
-      statementBuilderResultEl.className = 'action-result ok';
-    }
+    statementBuilderResultEl.textContent =
+      `PDF ـەکە بە ${rows.length} بابەت و ${pages.length} پەڕە ئامادە کرا.`;
+    statementBuilderResultEl.className = 'action-result ok';
   } catch (error) {
-    if (statementBuilderResultEl) {
-      const blank =
-        error instanceof Error &&
-        (error.message === 'blank_canvas' || error.message === 'empty_pdf');
-      statementBuilderResultEl.textContent = blank
-        ? 'Safari ناوەڕۆکی PDF ـەکە render نەکرد؛ پەڕەکە Refresh بکە و دووبارە هەوڵ بدە.'
-        : 'دروستکردنی PDF سەرکەوتوو نەبوو؛ تکایە دووبارە هەوڵ بدە.';
-      statementBuilderResultEl.className = 'action-result err';
-    }
+    const reason = error instanceof Error ? error.message : '';
+    statementBuilderResultEl.textContent = reason.startsWith('blank_page_')
+      ? 'یەکێک لە پەڕەکانی PDF بەتاڵ render بوو؛ فایلە بەتاڵەکە دروست نەکرا.'
+      : 'دروستکردنی PDF سەرکەوتوو نەبوو؛ تکایە دووبارە هەوڵ بدە.';
+    statementBuilderResultEl.className = 'action-result err';
   } finally {
-    document.body.classList.remove('exporting-period-pdf');
+    stage.remove();
     if (printPeriodStatementButton) {
       printPeriodStatementButton.disabled = false;
       printPeriodStatementButton.innerHTML = originalHtml;
