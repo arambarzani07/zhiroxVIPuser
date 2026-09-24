@@ -1351,6 +1351,16 @@ class PBService {
   }
 
 
+  static List<RecordModel> _dedupeRecordsById(
+    Iterable<RecordModel> records,
+  ) {
+    final seen = <String>{};
+    return records.where((record) {
+      final id = record.id.trim();
+      return id.isEmpty || seen.add(id);
+    }).toList(growable: false);
+  }
+
   static Future<List<RecordModel>> getUsers({
     String? role,
     String? search,
@@ -1380,7 +1390,7 @@ class PBService {
         if (raw.length < pageSize) break;
         offset += pageSize;
       }
-      return users;
+      return _dedupeRecordsById(users);
     }
     await ensureInitialized();
     const pageSize = 500;
@@ -1402,7 +1412,7 @@ class PBService {
       if (page.length < pageSize) break;
       offset += pageSize;
     }
-    return users;
+    return _dedupeRecordsById(users);
   }
 
   static Future<List<RecordModel>> getAllApprovedCustomers({required String adminId}) {
