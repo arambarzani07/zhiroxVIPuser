@@ -464,7 +464,6 @@ class FinancialPaymentFlow {
     var customerWideSaved = false;
     var savedCustomerAmount = 0.0;
     var savedCustomerRemaining = 0.0;
-    var savedAllocationCount = 0;
     RecordModel? savedPayment;
     RecordModel? savedDebt;
 
@@ -555,10 +554,8 @@ class FinancialPaymentFlow {
                     const SizedBox(height: 4),
                     Text(
                       isGeneral
-                          ? 'بڕی پارەدان بنووسە؛ سیستەم بە خۆکار لە هەموو قەرزە ماوەکان دابەشی دەکات.'
-                          : openDebts.length > 1
-                              ? 'قەرز هەڵبژێرە و بڕی پارەدانەوە بنووسە.'
-                              : 'بڕی پارەدانەوە بنووسە.',
+                          ? 'پارەدانەوەی گشتی: بڕەکە تەنها لە کۆی گشتی قەرز کەم دەبێتەوە و بەسەر مامەڵەکان دابەش نابێت.'
+                          : 'پارەدانەوەی مامەڵە: تەنها ئەم قەرزە کەم دەبێتەوە.',
                       style: TextStyle(
                         fontSize: 12,
                         color: isDark
@@ -569,12 +566,12 @@ class FinancialPaymentFlow {
                     const SizedBox(height: 14),
                     _buildPaymentProgress(paymentStep, isDark),
                     const SizedBox(height: 16),
-                    if (openDebts.length > 1) ...[
+                    if (canPayGeneral || openDebts.length > 1) ...[
                       DropdownButtonFormField<String>(
                         initialValue: selectedDebtId,
                         isExpanded: true,
                         decoration: const InputDecoration(
-                          labelText: 'قەرز',
+                          labelText: 'جۆری پارەدان / مامەڵە',
                           border: OutlineInputBorder(),
                         ),
                         items: [
@@ -582,7 +579,7 @@ class FinancialPaymentFlow {
                             DropdownMenuItem<String>(
                               value: _allDebtsId,
                               child: Text(
-                                'هەموو قەرزەکان • ${AppHelpers.formatCurrency(customerBalance)}',
+                                'پارەدانەوەی گشتی • ${AppHelpers.formatCurrency(customerBalance)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -679,7 +676,7 @@ class FinancialPaymentFlow {
                           child: OutlinedButton(
                             onPressed: saving
                                 ? null
-                                : () => applyQuickAmount(remainingStorage * 0.25),
+                                : () => applyQuickAmount(maximumPaymentStorage * 0.25),
                             child: const Text('25%'),
                           ),
                         ),
@@ -688,7 +685,7 @@ class FinancialPaymentFlow {
                           child: OutlinedButton(
                             onPressed: saving
                                 ? null
-                                : () => applyQuickAmount(remainingStorage * 0.50),
+                                : () => applyQuickAmount(maximumPaymentStorage * 0.50),
                             child: const Text('50%'),
                           ),
                         ),
@@ -697,7 +694,7 @@ class FinancialPaymentFlow {
                           child: FilledButton.tonal(
                             onPressed: saving
                                 ? null
-                                : () => applyQuickAmount(remainingStorage),
+                                : () => applyQuickAmount(maximumPaymentStorage),
                             child: const Text('تەواو'),
                           ),
                         ),
@@ -721,7 +718,7 @@ class FinancialPaymentFlow {
                         children: [
                           Expanded(
                             child: _confirmationRow(
-                              isGeneral ? 'کۆی ماوەی ئێستا' : 'ماوەی ئێستا',
+                              isGeneral ? 'کۆی گشتی ماوە' : 'ماوەی ئەم مامەڵە',
                               isGeneral
                                   ? AppHelpers.formatCurrency(remainingStorage)
                                   : _formatDisplay(debt!, remainingStorage),
@@ -751,7 +748,7 @@ class FinancialPaymentFlow {
                     if (isGeneral) ...[
                       const SizedBox(height: 8),
                       Text(
-                        'هەموو قەرزەکان: ${openDebts.length} • کۆی ماوە: ${AppHelpers.formatCurrency(customerBalance)}',
+                        'پارەدانەوەی گشتی • کۆی ماوە: ${AppHelpers.formatCurrency(customerBalance)} • هیچ مامەڵەیەک دەستکاری ناکرێت',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 10.5,
@@ -764,7 +761,7 @@ class FinancialPaymentFlow {
                     ],
                     if (reviewMode &&
                         typedStorageAmount > 0 &&
-                        typedStorageAmount <= remainingStorage + 0.0001) ...[
+                        typedStorageAmount <= maximumPaymentStorage + 0.0001) ...[
                       const SizedBox(height: 10),
                       _buildInlineReview(
                         isGeneral: isGeneral,
@@ -772,7 +769,6 @@ class FinancialPaymentFlow {
                         before: remainingStorage,
                         amount: typedStorageAmount,
                         after: remainingAfter,
-                        allocationCount: previewAllocationCount,
                         isDark: isDark,
                       ),
                     ],
