@@ -11,6 +11,7 @@ import 'package:zhirox/screens/shared/financial_payment_flow.dart';
 import 'package:zhirox/screens/shared/financial_document_actions.dart';
 
 import 'package:zhirox/services/pb_service.dart';
+import 'package:zhirox/services/customer_push_service.dart';
 import 'package:zhirox/services/financial_date_range_summary.dart';
 import 'package:zhirox/services/financial_ui_state.dart';
 import 'package:zhirox/services/pdf_service.dart';
@@ -4938,30 +4939,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> _manageReadLink({required bool revoke}) async {
     final confirmed = await AppHelpers.showConfirmDialog(
       context,
-      title: revoke ? 'ڕاگرتنی لینکی کڕیار' : 'لینکی خوێندنەوەی کڕیار',
+      title: revoke ? 'ڕاگرتنی لینکی کڕیار' : 'لینکی کڕیار',
       message: revoke
-          ? 'لینکی ئەم کڕیارە چیتر کار ناکات. دڵنیایت؟'
-          : 'هەر کەسێک ئەم لینکەی هەبێت هەژماری ئەم کڕیارە دەبینێت. لینکەکە ٩٠ ڕۆژ کار دەکات و لینکی پێشوو ڕادەگیرێت.',
+          ? 'هەموو لینک و ئامێرە پەیوەستکراوەکانی ئەم کڕیارە ڕادەگیرێن. دڵنیایت؟'
+          : 'لینکەکە لە push.zhirox.com دەکرێتەوە و هەژماری کڕیار، ئاگادارکردنەوە و پسووڵەکان لە هەمان پۆرتالدا پیشان دەدرێن.',
     );
     if (!confirmed || !mounted) return;
+
+    const gateway = CustomerPushService();
     try {
-      final response = await PBService.client.functions.invoke(
-        'customer-read-link',
-        body: {
-          'action': revoke ? 'revoke' : 'create',
-          'customer_id': widget.userId,
-        },
-      );
-      final data = response.data;
-      if (data is! Map || (revoke ? data['revoked'] != true : data['url'] is! String)) {
-        throw Exception('نەتوانرا لینکەکە ئامادە بکرێت');
-      }
-      if (!mounted) return;
       if (revoke) {
-        AppHelpers.showSnackBar(context, 'لینکی کڕیار ڕاگیرا');
+        await gateway.revokeAll(widget.userId);
+        if (mounted) {
+          AppHelpers.showSnackBar(
+            context,
+            'هەموو لینک و ئامێرەکانی کڕیار ڕاگیران',
+          );
+        }
         return;
       }
-      final url = data['url'] as String;
+
+      final link = await gateway.createLink(widget.userId);
+      final url = link.url.toString();
+      if (!url.startsWith('https://push.zhirox.com/')) {
+        throw const FormatException('unexpected customer portal host');
+      }
+      if (!mounted) return;
+
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
@@ -4977,7 +4981,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 await Clipboard.setData(ClipboardData(text: url));
                 if (!dialogContext.mounted) return;
                 Navigator.pop(dialogContext);
-                if (mounted) AppHelpers.showSnackBar(context, 'لینک کۆپی کرا');
+                if (mounted) {
+                  AppHelpers.showSnackBar(context, 'لینکی push.zhirox.com کۆپی کرا');
+                }
               },
               child: const Text('کۆپیکردنی لینک'),
             ),
@@ -4986,7 +4992,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
     } catch (_) {
       if (mounted) {
-        AppHelpers.showSnackBar(context, 'نەتوانرا کردارەکە ئەنجام بدرێت. دووبارە هەوڵ بدە.', isError: true);
+        AppHelpers.showSnackBar(
+          context,
+          'نەتوانرا لینکی push.zhirox.com ئامادە بکرێت. دووبارە هەوڵ بدە.',
+          isError: true,
+        );
       }
     }
   }
