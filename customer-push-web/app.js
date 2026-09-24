@@ -24,6 +24,12 @@ const loadMoreButton = document.getElementById('loadMore');
 const notificationStateEl = document.getElementById('notificationState');
 const notificationHistoryEl = document.getElementById('notificationHistory');
 const notificationHistoryRefreshButton = document.getElementById('notificationHistoryRefresh');
+const prefDueRemindersEl = document.getElementById('prefDueReminders');
+const prefInstallmentRemindersEl = document.getElementById('prefInstallmentReminders');
+const prefMonthlyStatementsEl = document.getElementById('prefMonthlyStatements');
+const prefManualMessagesEl = document.getElementById('prefManualMessages');
+const saveNotificationPreferencesButton = document.getElementById('saveNotificationPreferences');
+const preferenceResultEl = document.getElementById('preferenceResult');
 const showIosHelpButton = document.getElementById('showIosHelp');
 const iosHelpDialog = document.getElementById('iosHelpDialog');
 const openTransactionsButton = document.getElementById('openTransactions');
@@ -70,6 +76,7 @@ transactionsTab.addEventListener('click', () => setActiveView('transactions'));
 notificationsTab.addEventListener('click', () => {
   setActiveView('notifications');
   void loadNotificationHistory();
+  void loadNotificationPreferences();
 });
 openTransactionsButton.addEventListener('click', () => setActiveView('transactions'));
 
@@ -122,9 +129,17 @@ function persistedPushCredentials() {
 }
 
 function scrubLinkCredentialsFromLocation() {
-  if (window.location.search || window.location.hash) {
-    window.history.replaceState(null, '', window.location.pathname);
+  const url = new URL(window.location.href);
+  url.searchParams.delete('token');
+  if (url.hash) {
+    const fragment = new URLSearchParams(
+      url.hash.startsWith('#') ? url.hash.slice(1) : url.hash,
+    );
+    fragment.delete('token');
+    url.hash = fragment.toString() ? `#${fragment.toString()}` : '';
   }
+  const suffix = `${url.search}${url.hash}`;
+  window.history.replaceState(null, '', `${url.pathname}${suffix}`);
 }
 
 function resolveLinkToken() {
@@ -232,6 +247,7 @@ function buildLedgerEntry(item) {
   const isPayment = item.kind === 'payment';
   const entry = document.createElement('article');
   entry.className = 'entry';
+  if (item.id) entry.dataset.eventId = String(item.id);
   const head = document.createElement('div');
   head.className = 'entry-head';
   addText(head, 'strong', isPayment ? 'پارەدان' : 'قەرز', isPayment ? 'payment-label' : 'debt-label');
@@ -279,7 +295,13 @@ function notificationEventLabel(eventType) {
     case 'manual':
       return 'پەیامی بەڕێوەبەر';
     case 'due_reminder':
-      return 'یادخستنەوە';
+      return 'یادخستنەوەی قەرز';
+    case 'installment_reminder':
+      return 'یادخستنەوەی قسط';
+    case 'debt_limit_changed':
+      return 'گۆڕانی سنووری قەرز';
+    case 'monthly_statement':
+      return 'کەشفی حیسابی مانگانە';
     default:
       return 'ئاگادارکردنەوە';
   }
@@ -302,6 +324,50 @@ function notificationStatusLabel(status) {
   }
 }
 
+function notificationDeepLink(item) {
+  const raw = typeof item.deep_link === 'string' ? item.deep_link.trim() : '';
+  if (!raw) return null;
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+    return url;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function markNotification(item, acknowledge = false) {
+  const id = String(item?.id || '').trim();
+  if (!id) return false;
+  const action = acknowledge ? 'acknowledge' : 'mark_read';
+  const credentials = portalCredentials(0, action);
+  if (!credentials) return false;
+  try {
+    await api({ ...credentials, notification_id: id });
+    item.read_at = item.read_at || new Date().toISOString();
+    if (acknowledge) item.acknowledged_at = item.acknowledged_at || new Date().toISOString();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function followNotification(item) {
+  await markNotification(item, false);
+  const target = notificationDeepLink(item);
+  if (!target) {
+    setActiveView('notifications');
+    await loadNotificationHistory();
+    return;
+  }
+
+  const view = target.searchParams.get('view') || 'notifications';
+  setActiveView(views[view] ? view : 'notifications');
+  const eventId = target.searchParams.get('event') || '';
+  if (eventId) await focusTransaction(eventId);
+  await loadNotificationHistory();
+}
+
 function renderNotificationHistory(items) {
   notificationHistoryEl.replaceChildren();
   if (!Array.isArray(items) || items.length === 0) {
@@ -317,24 +383,43 @@ function renderNotificationHistory(items) {
   for (const item of items) {
     const card = document.createElement('article');
     card.className = 'notification-history-item';
+    if (!item.read_at) card.classList.add('is-unread');
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
 
     const head = document.createElement('div');
     head.className = 'notification-history-head';
     addText(head, 'strong', notificationEventLabel(item.event_type));
+
+    const stateWrap = document.createElement('div');
+    stateWrap.className = 'notification-history-state-wrap';
+    if (!item.read_at) addText(stateWrap, 'span', 'نوێ', 'unread-badge');
     addText(
-      head,
+      stateWrap,
       'span',
       notificationStatusLabel(item.status),
       `notification-history-status status-${item.status || 'unknown'}`,
     );
+    head.appendChild(stateWrap);
     card.appendChild(head);
 
     const detail = typeof item.message === 'string' && item.message.trim()
       ? item.message.trim()
       : item.amount != null
         ? money(item.amount, item.currency)
-        : '';
+        : item.event_type === 'monthly_statement' && item.period
+          ? `کەشفی حیسابی ${item.period}`
+          : '';
     if (detail) addText(card, 'div', detail, 'notification-history-body');
+
+    if (item.receipt_number) {
+      addText(
+        card,
+        'div',
+        `پسووڵە: ${item.receipt_number}`,
+        'notification-receipt-number',
+      );
+    }
 
     const date = new Date(item.created_at);
     if (!Number.isNaN(date.getTime())) {
@@ -346,8 +431,104 @@ function renderNotificationHistory(items) {
       );
     }
 
+    if (item.requires_ack === true) {
+      const actions = document.createElement('div');
+      actions.className = 'notification-history-actions';
+      if (item.acknowledged_at) {
+        addText(actions, 'span', '✓ بینرا / پەسەندکرا', 'receipt-acked');
+      } else {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'receipt-ack';
+        button.textContent = 'بینیم / پەسەندم کرد';
+        button.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          button.disabled = true;
+          const ok = await markNotification(item, true);
+          if (ok) {
+            renderNotificationHistory(items);
+          } else {
+            button.disabled = false;
+          }
+        });
+        actions.appendChild(button);
+      }
+      card.appendChild(actions);
+    }
+
+    const open = () => { void followNotification(item); };
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
+      }
+    });
     notificationHistoryEl.appendChild(card);
   }
+}
+
+async function loadNotificationPreferences() {
+  const credentials = portalCredentials(0, 'preferences');
+  if (!credentials || !prefDueRemindersEl) return;
+  try {
+    const data = await api(credentials);
+    prefDueRemindersEl.checked = data.due_reminders !== false;
+    prefInstallmentRemindersEl.checked = data.installment_reminders !== false;
+    prefMonthlyStatementsEl.checked = data.monthly_statements !== false;
+    prefManualMessagesEl.checked = data.manual_messages !== false;
+  } catch (_) {
+    if (preferenceResultEl) {
+      preferenceResultEl.textContent = 'نەتوانرا هەڵبژاردەکانی ئاگادارکردنەوە باربکرێن.';
+      preferenceResultEl.className = 'action-result err';
+    }
+  }
+}
+
+async function saveNotificationPreferences() {
+  const credentials = portalCredentials(0, 'update_preferences');
+  if (!credentials || !saveNotificationPreferencesButton) return;
+  saveNotificationPreferencesButton.disabled = true;
+  if (preferenceResultEl) preferenceResultEl.textContent = '';
+  try {
+    await api({
+      ...credentials,
+      due_reminders: prefDueRemindersEl.checked,
+      installment_reminders: prefInstallmentRemindersEl.checked,
+      monthly_statements: prefMonthlyStatementsEl.checked,
+      manual_messages: prefManualMessagesEl.checked,
+    });
+    if (preferenceResultEl) {
+      preferenceResultEl.textContent = 'هەڵبژاردەکان پاشەکەوت کران.';
+      preferenceResultEl.className = 'action-result ok';
+    }
+  } catch (_) {
+    if (preferenceResultEl) {
+      preferenceResultEl.textContent = 'پاشەکەوتکردنی هەڵبژاردەکان سەرکەوتوو نەبوو.';
+      preferenceResultEl.className = 'action-result err';
+    }
+  } finally {
+    saveNotificationPreferencesButton.disabled = false;
+  }
+}
+
+async function focusTransaction(eventId) {
+  const id = String(eventId || '').trim();
+  if (!id) return false;
+  setActiveView('transactions');
+
+  for (let page = 0; page < 10; page += 1) {
+    const target = ledgerEl.querySelector(`[data-event-id="${CSS.escape(id)}"]`);
+    if (target) {
+      target.classList.add('is-targeted');
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => target.classList.remove('is-targeted'), 3500);
+      return true;
+    }
+    if (loadMoreButton.hidden) break;
+    await loadPortal(nextOffset, true);
+  }
+  return false;
 }
 
 async function loadNotificationHistory() {
@@ -356,8 +537,10 @@ async function loadNotificationHistory() {
 
   notificationHistoryRefreshButton.disabled = true;
   try {
-    const data = await api({ ...credentials, limit: 20 });
+    const data = await api({ ...credentials, limit: 50 });
     renderNotificationHistory(data.items);
+    const unread = Number(data.unread_count || 0);
+    notificationsTab.dataset.unread = unread > 0 ? String(unread) : '';
   } catch (_) {
     notificationHistoryEl.replaceChildren();
     addText(
@@ -445,9 +628,25 @@ async function initialize() {
 
   try {
     const data = await loadPortal();
-    setActiveView('home');
     configureNotificationExperience(data);
-    await loadNotificationHistory();
+    await Promise.all([
+      loadNotificationHistory(),
+      loadNotificationPreferences(),
+    ]);
+
+    const deepLink = new URL(window.location.href);
+    const requestedView = deepLink.searchParams.get('view');
+    const notificationId = deepLink.searchParams.get('notification') || '';
+    const eventId = deepLink.searchParams.get('event') || '';
+
+    setActiveView(views[requestedView] ? requestedView : (eventId ? 'transactions' : 'home'));
+    if (notificationId) {
+      const credentials = portalCredentials(0, 'mark_read');
+      if (credentials) {
+        void api({ ...credentials, notification_id: notificationId }).catch(() => {});
+      }
+    }
+    if (eventId) await focusTransaction(eventId);
     setStatus('هەژمارەکەت ئامادەیە.', 'ok');
   } catch (_) {
     showLockedPortal();
@@ -468,6 +667,11 @@ loadMoreButton.addEventListener('click', async () => {
 notificationHistoryRefreshButton.addEventListener('click', () => {
   void loadNotificationHistory();
 });
+if (saveNotificationPreferencesButton) {
+  saveNotificationPreferencesButton.addEventListener('click', () => {
+    void saveNotificationPreferences();
+  });
+}
 
 showIosHelpButton.addEventListener('click', () => {
   if (typeof iosHelpDialog.showModal === 'function') {
@@ -523,7 +727,10 @@ enableButton.addEventListener('click', async () => {
     enableButton.hidden = true;
     showIosHelpButton.hidden = true;
     await loadPortal();
-    await loadNotificationHistory();
+    await Promise.all([
+      loadNotificationHistory(),
+      loadNotificationPreferences(),
+    ]);
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'request_failed';
     if (reason === 'permission_denied') {
