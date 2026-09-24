@@ -7,6 +7,8 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
 import 'package:zhirox/screens/shared/add_user_screen.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
+import 'package:zhirox/screens/shared/financial_payment_flow.dart';
+import 'package:zhirox/services/pdf_service.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -958,6 +960,95 @@ class _UserListScreenState extends State<UserListScreen> {
     return digits.substring(digits.length - 4);
   }
 
+  Future<void> _quickCustomerDebt(RecordModel user) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddDebtScreen(customerId: user.id),
+      ),
+    );
+    if (mounted) {
+      await _loadUsers(search: _searchController.text.trim());
+    }
+  }
+
+  Future<void> _quickCustomerPayment(
+    RecordModel user,
+    AuthProvider auth,
+  ) async {
+    try {
+      final snapshot = await PBService.getCustomerFinanceSnapshot(user.id);
+      if (!mounted) return;
+      final openDebts = List<RecordModel>.from(
+        snapshot['openDebts'] as List? ?? const [],
+      );
+      final saved = await FinancialPaymentFlow.show(
+        context: context,
+        debts: openDebts,
+        createdBy: auth.userId,
+        createdByName: auth.userName,
+      );
+      if (saved && mounted) {
+        await _loadUsers(search: _searchController.text.trim());
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا پارەدانەوە بکەرێتەوە.',
+        ),
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _quickCustomerChat(RecordModel user) async {
+    await _openUserProfile(user);
+  }
+
+  Future<void> _quickCustomerStatement(
+    RecordModel user,
+    AuthProvider auth,
+  ) async {
+    try {
+      final snapshot = await PBService.getCustomerFinanceSnapshot(user.id);
+      if (!mounted) return;
+      if (snapshot['complete'] != true) {
+        AppHelpers.showSnackBar(
+          context,
+          'کەشف حساب تەواو نییە؛ دووبارە هەوڵ بدە.',
+          isError: true,
+        );
+        return;
+      }
+      final debts = await PBService.getAllCustomerDebtsLive(user.id);
+      if (!mounted) return;
+      await PdfService.generateCustomerStatement(
+        activeDebts: debts,
+        customerName: user.getStringValue('name'),
+        marketName: auth.marketName,
+        adminName: auth.userName,
+        adminPhone: auth.user?.getStringValue('phone') ?? '',
+        totalDebt: (snapshot['totalDebtIqd'] as num?)?.toDouble() ?? 0,
+        totalRemaining:
+            (snapshot['totalRemainingIqd'] as num?)?.toDouble() ?? 0,
+        totalPaid: (snapshot['totalPaidIqd'] as num?)?.toDouble() ?? 0,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا کەشف حساب دروست بکرێت.',
+        ),
+        isError: true,
+      );
+    }
+  }
+
   Widget _buildUserCard(RecordModel user, int index, AuthProvider auth) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final name = user.getStringValue('name');
@@ -973,7 +1064,7 @@ class _UserListScreenState extends State<UserListScreen> {
     final canManageCustomer = widget.role == 'customer' &&
         (auth.userRole == 'admin' || auth.userRole == 'employee');
 
-    return Container(
+    final card = Container(
       key: ValueKey<String>('user-card-${user.id}'),
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -1247,6 +1338,174 @@ class _UserListScreenState extends State<UserListScreen> {
           ),
         ),
       ),
+    );
+  
+    if (!canManageCustomer) return card;
+    return _CustomerQuickSwipe(
+      actions: [
+        _CustomerQuickAction(
+          icon: Icons.add_card_rounded,
+          label: 'قەرز',
+          color: Colors.orange,
+          onTap: () => _quickCustomerDebt(user),
+        ),
+        _CustomerQuickAction(
+          icon: Icons.payments_outlined,
+          label: 'پارە',
+          color: Colors.green,
+          onTap: () => _quickCustomerPayment(user, auth),
+        ),
+        _CustomerQuickAction(
+          icon: Icons.chat_bubble_outline_rounded,
+          label: 'چات',
+          color: AppColors.primary,
+          onTap: () => _quickCustomerChat(user),
+        ),
+        _CustomerQuickAction(
+          icon: Icons.picture_as_pdf_outlined,
+          label: 'کەشف',
+          color: Colors.deepPurple,
+          onTap: () => _quickCustomerStatement(user, auth),
+        ),
+      ],
+      child: card,
+    );
+}
+}
+
+
+class _CustomerQuickAction {
+  const _CustomerQuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+}
+
+class _CustomerQuickSwipe extends StatefulWidget {
+  const _CustomerQuickSwipe({
+    required this.actions,
+    required this.child,
+  });
+
+  final List<_CustomerQuickAction> actions;
+  final Widget child;
+
+  @override
+  State<_CustomerQuickSwipe> createState() => _CustomerQuickSwipeState();
+}
+
+class _CustomerQuickSwipeState extends State<_CustomerQuickSwipe> {
+  double _offset = 0;
+  bool _dragging = false;
+
+  void _close() {
+    if (!mounted) return;
+    setState(() {
+      _dragging = false;
+      _offset = 0;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.actions.isEmpty) return widget.child;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final revealWidth =
+            constraints.maxWidth < 340 ? constraints.maxWidth * 0.76 : 248.0;
+        final actionWidth = revealWidth / widget.actions.length;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            alignment: Alignment.centerRight,
+            children: [
+              Positioned.fill(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SizedBox(
+                    width: revealWidth,
+                    child: Row(
+                      children: widget.actions.map((action) {
+                        return SizedBox(
+                          width: actionWidth,
+                          child: Material(
+                            color: action.color,
+                            child: InkWell(
+                              onTap: () {
+                                _close();
+                                action.onTap();
+                              },
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      action.icon,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      action.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(growable: false),
+                    ),
+                  ),
+                ),
+              ),
+              GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragStart: (_) {
+                  setState(() => _dragging = true);
+                },
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    _offset = (_offset + details.delta.dx)
+                        .clamp(-revealWidth, 0.0)
+                        .toDouble();
+                  });
+                },
+                onHorizontalDragEnd: (_) {
+                  setState(() {
+                    _dragging = false;
+                    _offset =
+                        _offset.abs() >= revealWidth * 0.24 ? -revealWidth : 0;
+                  });
+                },
+                onHorizontalDragCancel: _close,
+                child: AnimatedContainer(
+                  duration: _dragging
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  transform: Matrix4.translationValues(_offset, 0, 0),
+                  child: widget.child,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
