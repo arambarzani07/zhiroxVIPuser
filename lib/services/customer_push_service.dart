@@ -392,6 +392,20 @@ class CustomerPushRetryResult {
   }
 }
 
+class CustomerPushSettings {
+  final int overdueIntervalDays;
+
+  const CustomerPushSettings({required this.overdueIntervalDays});
+
+  factory CustomerPushSettings.fromJson(Map<String, dynamic> json) {
+    final value = json['overdue_interval_days'];
+    if (value is! int || value < 1 || value > 30) {
+      throw const FormatException('Malformed customer push settings payload');
+    }
+    return CustomerPushSettings(overdueIntervalDays: value);
+  }
+}
+
 class CustomerPushSendResult {
   final String campaignId;
   final int queuedCustomers;
@@ -462,6 +476,12 @@ abstract interface class CustomerPushGateway {
   );
 
   Future<CustomerPushSendResult> broadcastManual(String message);
+
+  Future<CustomerPushSettings> loadSettings();
+
+  Future<CustomerPushSettings> updateSettings({
+    required int overdueIntervalDays,
+  });
 }
 
 class CustomerPushService implements CustomerPushGateway {
@@ -481,6 +501,7 @@ class CustomerPushService implements CustomerPushGateway {
     String? filter,
     int? limit,
     int? offset,
+    int? overdueIntervalDays,
   }) async {
     final body = <String, dynamic>{'action': action};
     if (customerId != null) body['customer_id'] = customerId;
@@ -490,6 +511,9 @@ class CustomerPushService implements CustomerPushGateway {
     if (filter != null) body['filter'] = filter;
     if (limit != null) body['limit'] = limit;
     if (offset != null) body['offset'] = offset;
+    if (overdueIntervalDays != null) {
+      body['overdue_interval_days'] = overdueIntervalDays;
+    }
 
     final injected = _invoker;
     if (injected != null) {
@@ -634,5 +658,29 @@ class CustomerPushService implements CustomerPushGateway {
       message: _manualMessage(message),
     );
     return CustomerPushSendResult.fromJson(_requireMap(data));
+  }
+
+  @override
+  Future<CustomerPushSettings> loadSettings() async {
+    final data = await _invokeAdmin('get_settings');
+    return CustomerPushSettings.fromJson(_requireMap(data));
+  }
+
+  @override
+  Future<CustomerPushSettings> updateSettings({
+    required int overdueIntervalDays,
+  }) async {
+    if (overdueIntervalDays < 1 || overdueIntervalDays > 30) {
+      throw ArgumentError.value(
+        overdueIntervalDays,
+        'overdueIntervalDays',
+        'Must be between 1 and 30',
+      );
+    }
+    final data = await _invokeAdmin(
+      'update_settings',
+      overdueIntervalDays: overdueIntervalDays,
+    );
+    return CustomerPushSettings.fromJson(_requireMap(data));
   }
 }
