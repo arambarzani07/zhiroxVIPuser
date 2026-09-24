@@ -179,7 +179,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                     for (var value = 2; value <= 12; value++)
                       DropdownMenuItem(
                         value: value,
-                        child: Text('${value} قسط'),
+                        child: Text('$value قسط'),
                       ),
                   ],
                   onChanged: (value) {
@@ -199,7 +199,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                       .map(
                         (value) => DropdownMenuItem(
                           value: value,
-                          child: Text('${value} ڕۆژ'),
+                          child: Text('$value ڕۆژ'),
                         ),
                       )
                       .toList(growable: false),
@@ -298,7 +298,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
       setState(() => _installments = installments);
       AppHelpers.showSnackBar(
         context,
-        'پلانی ${selectedCount} قسط پاشەکەوت کرا؛ هەر قسط reminder ـی خۆی هەیە.',
+        'پلانی $selectedCount قسط پاشەکەوت کرا؛ هەر قسط reminder ـی خۆی هەیە.',
       );
     } catch (e) {
       if (!mounted) return;
@@ -1044,7 +1044,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                             backgroundColor: color.withValues(alpha: 0.10),
                             foregroundColor: color,
                             child: Text(
-                              '${no}',
+                              '$no',
                               style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
