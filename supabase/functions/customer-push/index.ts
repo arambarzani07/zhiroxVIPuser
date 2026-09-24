@@ -35,6 +35,9 @@ export type PublicPushDeps = {
   inspect: (tokenHash: string) => Promise<Record<string, unknown>>;
   portal: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; offset: number }) => Promise<Record<string, unknown>>;
   notificationHistory: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; limit: number }) => Promise<Record<string, unknown>>;
+  preferences?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null }) => Promise<Record<string, unknown>>;
+  updatePreferences?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; dueReminders: boolean; installmentReminders: boolean; monthlyStatements: boolean; manualMessages: boolean }) => Promise<Record<string, unknown>>;
+  markNotification?: (args: { notificationId: string; tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; acknowledge: boolean }) => Promise<Record<string, unknown>>;
   redeem: (args: { tokenHash: string; endpoint: string; p256dh: string; auth: string; deviceSecretHash: string; userAgent: string; platform: string }) => Promise<Record<string, unknown>>;
   unsubscribe: (endpoint: string, deviceSecretHash: string) => Promise<boolean>;
   consumeRateLimit: (keyHash: string, limit: number, windowSeconds: number) => Promise<boolean>;
@@ -48,6 +51,10 @@ function clientIp(req: Request): string {
 }
 function isToken(value: unknown): value is string {
   return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 async function enforceRateLimit(req: Request, deps: PublicPushDeps): Promise<boolean> {
   const keyHash = await deps.hash(`${deps.rateLimitSalt}:${clientIp(req)}`);
@@ -105,12 +112,15 @@ export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Pro
     action === "validate" ||
     action === "subscribe" ||
     action === "portal" ||
-    action === "notifications"
+    action === "notifications" ||
+    action === "preferences" ||
+    action === "update_preferences" ||
+    action === "mark_read" ||
+    action === "acknowledge"
   ) {
     if (!(await enforceRateLimit(req, deps))) return json({ error: "rate_limited" }, 429);
     if (
-      action !== "portal" &&
-      action !== "notifications" &&
+      (action === "validate" || action === "subscribe") &&
       !isToken(body.token)
     ) {
       return json({ error: "link_unavailable" }, 400);
@@ -159,6 +169,63 @@ export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Pro
         limit,
       });
       return json(history);
+    } catch (_) {
+      return json({ error: "link_unavailable" }, 404);
+    }
+  }
+
+  if (action === "preferences" || action === "update_preferences") {
+    const token = isToken(body.token) ? body.token : null;
+    const endpoint = typeof body.endpoint === "string" && body.endpoint.startsWith("https://")
+      ? body.endpoint
+      : null;
+    const deviceSecret = isToken(body.device_secret) ? body.device_secret : null;
+    if (!token && (!endpoint || !deviceSecret)) {
+      return json({ error: "link_unavailable" }, 400);
+    }
+
+    const auth = {
+      tokenHash: token ? await deps.hash(token) : null,
+      endpoint,
+      deviceSecretHash: deviceSecret ? await deps.hash(deviceSecret) : null,
+    };
+    try {
+      if (action === "preferences") {
+        if (!deps.preferences) return json({ error: "feature_unavailable" }, 503);
+        return json(await deps.preferences(auth));
+      }
+      if (!deps.updatePreferences) return json({ error: "feature_unavailable" }, 503);
+      return json(await deps.updatePreferences({
+        ...auth,
+        dueReminders: body.due_reminders !== false,
+        installmentReminders: body.installment_reminders !== false,
+        monthlyStatements: body.monthly_statements !== false,
+        manualMessages: body.manual_messages !== false,
+      }));
+    } catch (_) {
+      return json({ error: "link_unavailable" }, 404);
+    }
+  }
+
+  if (action === "mark_read" || action === "acknowledge") {
+    const token = isToken(body.token) ? body.token : null;
+    const endpoint = typeof body.endpoint === "string" && body.endpoint.startsWith("https://")
+      ? body.endpoint
+      : null;
+    const deviceSecret = isToken(body.device_secret) ? body.device_secret : null;
+    const notificationId = String(body.notification_id ?? "").trim();
+    if ((!token && (!endpoint || !deviceSecret)) || !isUuid(notificationId)) {
+      return json({ error: "invalid_input" }, 400);
+    }
+    if (!deps.markNotification) return json({ error: "feature_unavailable" }, 503);
+    try {
+      return json(await deps.markNotification({
+        notificationId,
+        tokenHash: token ? await deps.hash(token) : null,
+        endpoint,
+        deviceSecretHash: deviceSecret ? await deps.hash(deviceSecret) : null,
+        acknowledge: action === "acknowledge",
+      }));
     } catch (_) {
       return json({ error: "link_unavailable" }, 404);
     }
@@ -231,6 +298,48 @@ async function serve(req: Request): Promise<Response> {
           p_endpoint: args.endpoint,
           p_device_secret_hash: args.deviceSecretHash,
           p_limit: args.limit,
+        },
+      );
+      if (error) throw error;
+      return (data ?? {}) as Record<string, unknown>;
+    },
+    preferences: async (args) => {
+      const { data, error } = await admin.rpc(
+        "read_customer_notification_preferences_service",
+        {
+          p_token_hash: args.tokenHash,
+          p_endpoint: args.endpoint,
+          p_device_secret_hash: args.deviceSecretHash,
+        },
+      );
+      if (error) throw error;
+      return (data ?? {}) as Record<string, unknown>;
+    },
+    updatePreferences: async (args) => {
+      const { data, error } = await admin.rpc(
+        "update_customer_notification_preferences_service",
+        {
+          p_token_hash: args.tokenHash,
+          p_endpoint: args.endpoint,
+          p_device_secret_hash: args.deviceSecretHash,
+          p_due_reminders: args.dueReminders,
+          p_installment_reminders: args.installmentReminders,
+          p_monthly_statements: args.monthlyStatements,
+          p_manual_messages: args.manualMessages,
+        },
+      );
+      if (error) throw error;
+      return (data ?? {}) as Record<string, unknown>;
+    },
+    markNotification: async (args) => {
+      const { data, error } = await admin.rpc(
+        "mark_customer_push_notification_read_service",
+        {
+          p_outbox_id: args.notificationId,
+          p_token_hash: args.tokenHash,
+          p_endpoint: args.endpoint,
+          p_device_secret_hash: args.deviceSecretHash,
+          p_acknowledge: args.acknowledge,
         },
       );
       if (error) throw error;
