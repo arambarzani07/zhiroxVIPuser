@@ -2188,3 +2188,57 @@ body {
     display: none !important;
   }
 }
+
+
+/* Portal V3.2 — real client-side PDF export */
+.pdf-render-host {
+  position: fixed;
+  top: 0;
+  left: -12000px;
+  width: 794px;
+  min-height: 1123px;
+  z-index: -1;
+  pointer-events: none;
+  background: #fff;
+}
+
+.pdf-export-document {
+  width: 760px !important;
+  max-width: none !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.pdf-export-document .period-statement-head {
+  grid-template-columns: minmax(0,1fr) minmax(220px,.72fr) !important;
+  padding: 18px 16px !important;
+  break-inside: avoid;
+}
+
+.pdf-export-document .period-table-wrap {
+  overflow: visible !important;
+}
+
+.pdf-export-document .period-statement-table {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+}
+
+.pdf-export-document .period-statement-table tr,
+.pdf-export-document .period-total-row {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.pdf-export-document .period-statement-totals {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.pdf-export-document .period-statement-actions {
+  display: none !important;
+}
