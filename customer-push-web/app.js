@@ -96,6 +96,8 @@ const accountNotificationsButton = document.getElementById('accountNotifications
 const accountRefreshButton = document.getElementById('accountRefresh');
 const statementFromDateEl = document.getElementById('statementFromDate');
 const statementToDateEl = document.getElementById('statementToDate');
+const statementFromDisplayEl = document.getElementById('statementFromDisplay');
+const statementToDisplayEl = document.getElementById('statementToDisplay');
 const generatePeriodStatementButton = document.getElementById('generatePeriodStatement');
 const statementBuilderResultEl = document.getElementById('statementBuilderResult');
 const periodStatementDocumentEl = document.getElementById('periodStatementDocument');
@@ -1241,142 +1243,91 @@ function toLocalIsoDate(value) {
 
 function statementDateLabel(value) {
   if (!value) return '—';
-  const date = new Date(`${value}T12:00:00`);
-  return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleDateString('ku-IQ', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      });
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+  if (!match) return String(value);
+  return `${match[3]} / ${match[2]} / ${match[1]}`;
+}
+
+function syncStatementDateDisplays() {
+  if (statementFromDisplayEl) {
+    statementFromDisplayEl.textContent = statementDateLabel(statementFromDateEl?.value);
+  }
+  if (statementToDisplayEl) {
+    statementToDisplayEl.textContent = statementDateLabel(statementToDateEl?.value);
+  }
 }
 
 function initializeStatementDates() {
   if (!statementFromDateEl || !statementToDateEl) return;
   const today = new Date();
   if (!statementFromDateEl.value) {
-    statementFromDateEl.value =
-      `${today.getFullYear()}-01-01`;
+    statementFromDateEl.value = `${today.getFullYear()}-01-01`;
   }
   if (!statementToDateEl.value) {
     statementToDateEl.value = toLocalIsoDate(today);
   }
+  syncStatementDateDisplays();
 }
 
-function statementItemName(item, index) {
-  const base = receiptItemLabel(item, index) || `بابەتی ${index + 1}`;
-  const rawQty = item?.qty ?? item?.quantity;
-  const qty = Number(rawQty);
-  if (Number.isFinite(qty) && qty > 1) {
-    return `${base} × ${new Intl.NumberFormat('en-US', {
-      maximumFractionDigits: 2,
-    }).format(qty)}`;
-  }
-  return base;
-}
-
-function statementItemAmount(item) {
-  if (!item || typeof item !== 'object') return 0;
-  const explicit = item.total ?? item.total_price;
-  const explicitNumber = Number(explicit);
-  if (Number.isFinite(explicitNumber)) return explicitNumber;
-
-  const price = Number(item.price ?? item.unit_price ?? 0);
-  const qty = Number(item.qty ?? item.quantity ?? 1);
-  if (!Number.isFinite(price)) return 0;
-  return price * (Number.isFinite(qty) ? qty : 1);
-}
-
-function buildPeriodStatementRows(fromDate, toDate) {
-  const rows = [];
-  for (const debt of loadedRows) {
-    if (debt?.kind !== 'debt') continue;
-    const occurredDate = toLocalIsoDate(debt.occurred_at);
-    if (!occurredDate || occurredDate < fromDate || occurredDate > toDate) {
-      continue;
-    }
-
-    const items = Array.isArray(debt.items) ? debt.items : [];
-    if (items.length === 0) {
-      rows.push({
-        name: String(debt.note || 'قەرز').trim() || 'قەرز',
-        amount: number(debt.amount),
-        currency: String(debt.currency || 'IQD').toUpperCase(),
-        occurredAt: debt.occurred_at,
-        date: occurredDate,
-      });
-      continue;
-    }
-
-    items.forEach((item, index) => {
-      rows.push({
-        name: statementItemName(item, index),
-        amount: statementItemAmount(item),
-        currency: String(item?.currency || debt.currency || 'IQD').toUpperCase(),
-        occurredAt: debt.occurred_at,
-        date: occurredDate,
-      });
-    });
-  }
-
-  rows.sort((a, b) => {
-    const byDate = String(a.occurredAt || '').localeCompare(String(b.occurredAt || ''));
-    return byDate !== 0 ? byDate : a.name.localeCompare(b.name, 'ku');
-  });
-  return rows;
-}
-
-function renderPeriodStatement(rows, fromDate, toDate) {
+function renderPeriodStatement(data) {
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  const totals = Array.isArray(data?.totals) ? data.totals : [];
   periodStatementRowsEl.replaceChildren();
   periodStatementTotalsEl.replaceChildren();
 
-  const totals = new Map();
   rows.forEach((row, index) => {
     const tr = document.createElement('tr');
+
     const rowNo = document.createElement('td');
     rowNo.className = 'period-col-row';
-    rowNo.textContent = String(index + 1);
+    rowNo.textContent = String(row?.row_no ?? index + 1);
 
     const name = document.createElement('td');
     name.className = 'period-col-name';
-    name.textContent = row.name;
+    name.textContent = String(row?.name || 'بابەت');
 
     const price = document.createElement('td');
     price.className = 'period-col-price';
-    price.textContent = money(row.amount, row.currency);
+    price.textContent = money(row?.amount, row?.currency);
 
     const date = document.createElement('td');
     date.className = 'period-col-date';
-    date.textContent = statementDateLabel(row.date);
+    date.textContent = statementDateLabel(row?.date);
 
     tr.append(rowNo, name, price, date);
     periodStatementRowsEl.appendChild(tr);
-    totals.set(row.currency, number(totals.get(row.currency)) + number(row.amount));
   });
 
-  for (const [currency, total] of [...totals.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+  for (const item of totals) {
     const totalRow = document.createElement('div');
     totalRow.className = 'period-total-row';
-    addText(totalRow, 'span', totals.size > 1 ? `کۆی گشتی — ${currency}` : 'کۆی گشتی');
-    addText(totalRow, 'strong', money(total, currency));
+    addText(
+      totalRow,
+      'span',
+      totals.length > 1
+        ? `کۆی گشتی — ${String(item?.currency || 'IQD')}`
+        : 'کۆی گشتی',
+    );
+    addText(totalRow, 'strong', money(item?.total, item?.currency));
     periodStatementTotalsEl.appendChild(totalRow);
   }
 
   statementMarketNameEl.textContent =
-    String(currentPortalData?.market_name || 'ZHIROX').trim() || 'ZHIROX';
+    String(data?.market_name || currentPortalData?.market_name || 'ZHIROX').trim() || 'ZHIROX';
   statementCustomerNameEl.textContent =
-    String(currentPortalData?.customer_name || '—').trim() || '—';
+    String(data?.customer_name || currentPortalData?.customer_name || '—').trim() || '—';
   statementPeriodLabelEl.textContent =
-    `${statementDateLabel(fromDate)} تا ${statementDateLabel(toDate)}`;
-  statementCreatedDateEl.textContent = new Date().toLocaleDateString('ku-IQ');
+    `${statementDateLabel(data?.from_date)} تا ${statementDateLabel(data?.to_date)}`;
+  statementCreatedDateEl.textContent =
+    statementDateLabel(toLocalIsoDate(data?.generated_at || new Date()));
 
   const marketMeta = [
-    String(currentPortalData?.market_phone || '').trim(),
-    String(currentPortalData?.market_address || '').trim(),
+    String(data?.market_phone || currentPortalData?.market_phone || '').trim(),
+    String(data?.market_address || currentPortalData?.market_address || '').trim(),
   ].filter(Boolean);
   statementMarketMetaEl.textContent = marketMeta.join(' • ');
   periodStatementFooterEl.textContent =
-    String(currentPortalData?.footer_note || '').trim();
+    String(data?.footer_note || currentPortalData?.footer_note || '').trim();
 
   periodStatementDocumentEl.hidden = false;
 }
@@ -1400,23 +1351,43 @@ async function generatePeriodStatement() {
     return;
   }
 
+  const credentials = portalCredentials(0, 'statement');
+  if (!credentials) {
+    statementBuilderResultEl.textContent = 'دەستگەیشتن بە هەژمارەکە بەردەست نییە.';
+    statementBuilderResultEl.className = 'action-result err';
+    return;
+  }
+
   generatePeriodStatementButton.disabled = true;
   try {
-    await ensureAllTransactionsLoaded();
-    const rows = buildPeriodStatementRows(fromDate, toDate);
+    const data = await api({
+      ...credentials,
+      from_date: fromDate,
+      to_date: toDate,
+    });
+    const rows = Array.isArray(data?.rows) ? data.rows : [];
     if (rows.length === 0) {
       periodStatementDocumentEl.hidden = true;
       statementBuilderResultEl.textContent = 'هیچ بابەتێک لەم ماوەیەدا نەدۆزرایەوە.';
       statementBuilderResultEl.className = 'action-result err';
       return;
     }
-    renderPeriodStatement(rows, fromDate, toDate);
+    if (data?.truncated === true) {
+      periodStatementDocumentEl.hidden = true;
+      statementBuilderResultEl.textContent =
+        'ژمارەی بابەتەکان زۆرە؛ تکایە ماوەکە کورتتر بکە.';
+      statementBuilderResultEl.className = 'action-result err';
+      return;
+    }
+
+    renderPeriodStatement(data);
     statementBuilderResultEl.textContent =
-      `${rows.length} بابەت بۆ پسووڵەکە ئامادە کرا.`;
+      `${Number(data?.row_count || rows.length)} بابەت بۆ پسووڵەکە ئامادە کرا.`;
     statementBuilderResultEl.className = 'action-result ok';
   } catch (_) {
     periodStatementDocumentEl.hidden = true;
-    statementBuilderResultEl.textContent = 'نەتوانرا پسووڵەی ماوە دروست بکرێت.';
+    statementBuilderResultEl.textContent =
+      'نەتوانرا پسووڵەی ماوە دروست بکرێت. تکایە دووبارە هەوڵ بدە.';
     statementBuilderResultEl.className = 'action-result err';
   } finally {
     generatePeriodStatementButton.disabled = false;
@@ -1434,18 +1405,9 @@ async function applyStatementPreset(preset) {
   } else if (preset === 'year') {
     statementFromDateEl.value = `${today.getFullYear()}-01-01`;
   } else if (preset === 'all') {
-    try {
-      await ensureAllTransactionsLoaded();
-      const debtDates = loadedRows
-        .filter((item) => item?.kind === 'debt')
-        .map((item) => toLocalIsoDate(item.occurred_at))
-        .filter(Boolean)
-        .sort();
-      statementFromDateEl.value = debtDates[0] || `${today.getFullYear()}-01-01`;
-    } catch (_) {
-      statementFromDateEl.value = `${today.getFullYear()}-01-01`;
-    }
+    statementFromDateEl.value = `${Math.max(2006, today.getFullYear() - 20)}-01-01`;
   }
+  syncStatementDateDisplays();
 }
 
 async function ensureAllTransactionsLoaded() {
@@ -1613,6 +1575,12 @@ if (quickPrintButton) {
 }
 if (printStatementButton) {
   printStatementButton.addEventListener('click', () => void printStatement());
+}
+if (statementFromDateEl) {
+  statementFromDateEl.addEventListener('change', syncStatementDateDisplays);
+}
+if (statementToDateEl) {
+  statementToDateEl.addEventListener('change', syncStatementDateDisplays);
 }
 if (generatePeriodStatementButton) {
   generatePeriodStatementButton.addEventListener('click', () => {
