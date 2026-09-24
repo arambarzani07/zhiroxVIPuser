@@ -57,10 +57,16 @@
           <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3.5 10.6 12 3.8l8.5 6.8v8.6a1.8 1.8 0 0 1-1.8 1.8h-4.2v-6.2h-5V21H5.3a1.8 1.8 0 0 1-1.8-1.8Z"/></svg></span><span class="tab-label">سەرەکی</span>
         </button>
         <button id="transactionsTab" type="button" class="nav-item" data-portal-tab="transactions" aria-controls="transactionsView">
-          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6.5 3.5h11A2.5 2.5 0 0 1 20 6v12a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18V6a2.5 2.5 0 0 1 2.5-2.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span class="tab-label">مامەڵەکان</span>
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6.5 3.5h11A2.5 2.5 0 0 1 20 6v12a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18V6a2.5 2.5 0 0 1 2.5-2.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span class="tab-label">مامەڵە</span>
+        </button>
+        <button id="receiptsTab" type="button" class="nav-item" data-portal-tab="receipts" aria-controls="receiptsView">
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6 3.5h12v17l-2.2-1.4-1.9 1.4-1.9-1.4-1.9 1.4-1.9-1.4L6 20.5Z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></span><span class="tab-label">پسووڵە</span>
         </button>
         <button id="notificationsTab" type="button" class="nav-item" data-portal-tab="notifications" aria-controls="notificationsView">
-          <span class="tab-icon notification-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M18 9.5a6 6 0 0 0-12 0c0 6-2.5 6.5-2.5 6.5h17S18 15.5 18 9.5Z"/><path d="M9.5 19.5a2.8 2.8 0 0 0 5 0"/></svg><span id="notificationUnreadBadge" class="nav-badge" hidden>0</span></span><span class="tab-label">ئاگادارکردنەوە</span>
+          <span class="tab-icon notification-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M18 9.5a6 6 0 0 0-12 0c0 6-2.5 6.5-2.5 6.5h17S18 15.5 18 9.5Z"/><path d="M9.5 19.5a2.8 2.8 0 0 0 5 0"/></svg><span id="notificationUnreadBadge" class="nav-badge" hidden>0</span></span><span class="tab-label">ئاگاداری</span>
+        </button>
+        <button id="accountTab" type="button" class="nav-item" data-portal-tab="account" aria-controls="accountView">
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.7-4 3-6 6.5-6s5.8 2 6.5 6"/></svg></span><span class="tab-label">هەژمار</span>
         </button>
       </nav>
 
@@ -164,6 +170,23 @@
         </section>
       </section>
 
+      <section id="receiptsView" class="portal-view" aria-labelledby="receiptsHeading" hidden>
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">پسووڵەی دیجیتاڵ</p>
+            <h2 id="receiptsHeading">پسووڵەکان</h2>
+          </div>
+          <button id="receiptsRefresh" class="text-action" type="button">نوێکردنەوە</button>
+        </div>
+        <section class="receipt-summary-strip">
+          <div><span>کۆی پسووڵە</span><strong id="receiptCount">0</strong></div>
+          <div><span>دوایین پسووڵە</span><strong id="latestReceiptDate">—</strong></div>
+        </section>
+        <section class="panel receipts-panel">
+          <div id="receiptHistory" class="receipt-history" aria-live="polite"></div>
+        </section>
+      </section>
+
       <section id="notificationsView" class="portal-view" aria-labelledby="notificationsHeading" hidden>
         <div class="view-heading">
           <div>
@@ -240,6 +263,55 @@
         </section>
       </section>
     </div>
+
+      <section id="accountView" class="portal-view" aria-labelledby="accountHeading" hidden>
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">هەژمار و مارکێت</p>
+            <h2 id="accountHeading">هەژمارەکەم</h2>
+          </div>
+        </div>
+
+        <section class="account-hero">
+          <div class="account-avatar" aria-hidden="true">ک</div>
+          <div class="account-identity">
+            <span class="account-caption">کڕیار</span>
+            <strong id="accountCustomerName">—</strong>
+            <small id="accountCustomerPhone">—</small>
+          </div>
+        </section>
+
+        <section class="panel account-details-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">زانیاریی مارکێت</p>
+              <h2 id="accountMarketName">—</h2>
+            </div>
+          </div>
+          <div class="account-row"><span>ژمارەی مۆبایل</span><strong id="accountMarketPhone">—</strong></div>
+          <div class="account-row"><span>ناونیشان</span><strong id="accountMarketAddress">—</strong></div>
+          <div class="account-row"><span>دۆخی هەژمار</span><strong class="account-ok">چالاک</strong></div>
+        </section>
+
+        <section class="panel account-security-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">پاراستن</p>
+              <h2>دەستگەیشتن و ئاگاداری</h2>
+            </div>
+          </div>
+          <button id="accountNotifications" class="account-action" type="button">
+            <span><strong>ڕێکخستنی ئاگادارکردنەوە</strong><small>Reminder، monthly statement و پەیامی مارکێت</small></span>
+            <b aria-hidden="true">‹</b>
+          </button>
+          <button id="accountRefresh" class="account-action" type="button">
+            <span><strong>نوێکردنەوەی داتا</strong><small>دۆخی هەژمار و مامەڵەکان تازە بکەرەوە</small></span>
+            <b aria-hidden="true">↻</b>
+          </button>
+        </section>
+
+        <p class="account-footnote">داتای دارایی لەم پۆرتالە تەنها بۆ بینینە؛ دەستکاری قەرز و پارەدانەوە لەلایەن مارکێتەوە ئەنجام دەدرێت.</p>
+      </section>
 
     <dialog id="receiptDialog" class="receipt-dialog">
       <form method="dialog" class="receipt-sheet">
