@@ -24,11 +24,11 @@ void main() {
       host(
         AppAsyncStateView(
           state: AppAsyncState.error,
-          child: const SizedBox.shrink(),
           message: 'هەڵەی تاقیکردنەوە',
           onRetry: () async {
             retries++;
           },
+          child: const SizedBox.shrink(),
         ),
       ),
     );
@@ -44,9 +44,9 @@ void main() {
       host(
         const AppAsyncStateView(
           state: AppAsyncState.empty,
-          child: SizedBox.shrink(),
           emptyTitle: 'هیچ کڕیارێک نییە',
           emptyMessage: 'کڕیاری نوێ زیاد بکە.',
+          child: SizedBox.shrink(),
         ),
       ),
     );
