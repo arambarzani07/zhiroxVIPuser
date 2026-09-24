@@ -251,7 +251,13 @@ function addText(parent, tag, text, className = '') {
   return node;
 }
 
-function renderPrimaryBalance(totals) {
+function renderPrimaryBalance(data) {
+  if (data?.effective_remaining_iqd != null) {
+    primaryRemainingEl.textContent = money(data.effective_remaining_iqd, 'IQD');
+    primaryCurrencyEl.textContent = 'IQD';
+    return;
+  }
+  const totals = data?.totals;
   const first = Array.isArray(totals) && totals.length > 0 ? totals[0] : null;
   const currency = typeof first?.currency === 'string' ? first.currency : 'IQD';
   primaryRemainingEl.textContent = money(first?.remaining ?? 0, currency);
@@ -266,25 +272,32 @@ function metric(label, value, currency) {
   return card;
 }
 
-function renderSummaryMetrics(totals) {
+function renderSummaryMetrics(data) {
+  const totals = data?.totals;
   summaryMetricsEl.replaceChildren();
   if (!Array.isArray(totals) || totals.length === 0) {
     summaryMetricsEl.append(
       metric('کۆی قەرز', 0, 'IQD'),
       metric('کۆی پارەدان', 0, 'IQD'),
     );
-    return;
+  } else {
+    for (const item of totals) {
+      const currency = typeof item.currency === 'string' ? item.currency : 'IQD';
+      summaryMetricsEl.append(
+        metric(`کۆی قەرز — ${currency}`, item.total_debt, currency),
+        metric(`پارەدانەوەی مامەڵە — ${currency}`, item.paid, currency),
+      );
+      if (totals.length > 1) {
+        summaryMetricsEl.append(metric(`قەرزی مامەڵەکان — ${currency}`, item.remaining, currency));
+      }
+    }
   }
 
-  for (const item of totals) {
-    const currency = typeof item.currency === 'string' ? item.currency : 'IQD';
+  if (number(data?.general_paid_iqd) > 0) {
     summaryMetricsEl.append(
-      metric(`کۆی قەرز — ${currency}`, item.total_debt, currency),
-      metric(`کۆی پارەدان — ${currency}`, item.paid, currency),
+      metric('پارەدانەوەی گشتی', data.general_paid_iqd, 'IQD'),
+      metric('کۆی گشتی ماوە', data.effective_remaining_iqd, 'IQD'),
     );
-    if (totals.length > 1) {
-      summaryMetricsEl.append(metric(`قەرزی ماوە — ${currency}`, item.remaining, currency));
-    }
   }
 }
 
@@ -350,7 +363,9 @@ function renderAccountInsights(data) {
     ? data.totals.find((item) => String(item?.currency || '').toUpperCase() !== 'USD')
     : null;
   if (limit > 0 && debtLimitCardEl) {
-    const remaining = number(iqdTotal?.remaining);
+    const remaining = data?.effective_remaining_iqd != null
+      ? number(data.effective_remaining_iqd)
+      : number(iqdTotal?.remaining);
     const percent = Math.max(0, (remaining / limit) * 100);
     debtLimitCardEl.hidden = false;
     debtLimitCardEl.classList.toggle('is-danger', percent >= 100);
@@ -390,7 +405,9 @@ function transactionSearchText(item) {
     ? ''
     : date.toLocaleDateString('ku-IQ');
   return [
-    item?.kind === 'payment' ? 'پارەدان' : 'قەرز',
+    item?.kind === 'payment'
+      ? (item?.payment_scope === 'general' ? 'پارەدانەوەی گشتی' : 'پارەدانەوەی مامەڵە')
+      : 'قەرز',
     item?.amount,
     item?.remaining,
     item?.currency,
@@ -470,7 +487,14 @@ function buildLedgerEntry(item) {
   if (item.id) entry.dataset.eventId = String(item.id);
   const head = document.createElement('div');
   head.className = 'entry-head';
-  addText(head, 'strong', isPayment ? 'پارەدان' : 'قەرز', isPayment ? 'payment-label' : 'debt-label');
+  addText(
+    head,
+    'strong',
+    isPayment
+      ? (item.payment_scope === 'general' ? 'پارەدانەوەی گشتی' : 'پارەدانەوەی مامەڵە')
+      : 'قەرز',
+    isPayment ? 'payment-label' : 'debt-label',
+  );
   addText(head, 'strong', money(item.amount, item.currency));
   entry.appendChild(head);
 
@@ -923,8 +947,8 @@ async function loadPortal(offset = 0, append = false) {
   lockedStateEl.hidden = true;
   portalAppEl.hidden = false;
   currentPortalData = data;
-  renderPrimaryBalance(data.totals);
-  renderSummaryMetrics(data.totals);
+  renderPrimaryBalance(data);
+  renderSummaryMetrics(data);
   renderAccountInsights(data);
   renderRows(data.rows, append);
   if (!append) renderRecentRows(data.rows);
