@@ -8,6 +8,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen.dart';
 import 'package:zhirox/screens/shared/financial_payment_flow.dart';
+import 'package:zhirox/screens/shared/customer_period_statement_screen.dart';
 import 'package:zhirox/screens/shared/financial_document_actions.dart';
 
 import 'package:zhirox/services/pb_service.dart';
@@ -1064,6 +1065,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 minimumSize: const Size.fromHeight(48),
                 foregroundColor: _accentColor,
                 side: BorderSide(color: _accentColor.withValues(alpha: 0.25)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+        ),
+      if (auth.canViewDebts)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+            child: FilledButton.icon(
+              onPressed: _openPeriodStatement,
+              icon: const Icon(Icons.date_range_rounded, size: 19),
+              label: const Text('کەشفی حیسابی ماوە'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+                backgroundColor: _accentColor,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -3645,6 +3665,27 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         isError: true,
       );
     }
+  }
+
+  Future<void> _openPeriodStatement() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.canViewDebts) {
+      AppHelpers.showSnackBar(
+        context,
+        'دەسەڵاتی بینینی قەرزەکانت نییە.',
+        isError: true,
+      );
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CustomerPeriodStatementScreen(
+          customerId: widget.userId,
+          customerName: _user?.getStringValue('name') ?? '',
+          canExport: auth.canExportData,
+        ),
+      ),
+    );
   }
 
   Future<void> _generateCurrentFinancialStatement() async {
