@@ -63,6 +63,11 @@ export type AdminDeps = {
     message: string;
     requestId: string;
   }) => Promise<Record<string, unknown>>;
+  getSettings: (args: { actorId: string }) => Promise<Record<string, unknown>>;
+  updateSettings: (args: {
+    actorId: string;
+    overdueIntervalDays: number;
+  }) => Promise<Record<string, unknown>>;
   publicBaseUrl: string;
 };
 
@@ -101,6 +106,21 @@ export async function handleAdminAction(
       message,
       requestId: deps.randomId(),
     });
+  }
+
+  if (action === "get_settings") {
+    return await deps.getSettings({ actorId });
+  }
+
+  if (action === "update_settings") {
+    const rawInterval = Number(body.overdue_interval_days ?? 3);
+    const overdueIntervalDays = Number.isFinite(rawInterval)
+      ? Math.trunc(rawInterval)
+      : 0;
+    if (overdueIntervalDays < 1 || overdueIntervalDays > 30) {
+      throw new Error("invalid_overdue_interval");
+    }
+    return await deps.updateSettings({ actorId, overdueIntervalDays });
   }
 
   if (action === "overview") {
@@ -210,6 +230,25 @@ async function handle(req: Request): Promise<Response> {
       randomId: () => crypto.randomUUID(),
       hash: sha256Hex,
       publicBaseUrl: CUSTOMER_PUSH_PUBLIC_BASE_URL,
+      getSettings: async ({ actorId }) => {
+        const { data, error } = await admin.rpc(
+          "get_market_notification_settings_service",
+          { p_actor: actorId },
+        );
+        if (error) throw error;
+        return (data ?? {}) as Record<string, unknown>;
+      },
+      updateSettings: async ({ actorId, overdueIntervalDays }) => {
+        const { data, error } = await admin.rpc(
+          "update_market_notification_settings_service",
+          {
+            p_actor: actorId,
+            p_overdue_interval_days: overdueIntervalDays,
+          },
+        );
+        if (error) throw error;
+        return (data ?? {}) as Record<string, unknown>;
+      },
       manageLink: async ({ actorId, customerId, tokenHash, expiresAt }) => {
         const { error } = await admin.rpc("manage_customer_push_link", {
           p_actor: actorId,
@@ -297,6 +336,7 @@ async function handle(req: Request): Promise<Response> {
       message.includes("invalid_customer_id") ||
       message.includes("invalid_outbox_id") ||
       message.includes("invalid_overview_filter") ||
+      message.includes("invalid_overdue_interval") ||
       message.includes("invalid_message") ||
       message.includes("unsupported_action")
     ) {
