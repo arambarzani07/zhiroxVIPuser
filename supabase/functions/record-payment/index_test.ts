@@ -11,10 +11,10 @@ const customerId = "00000000-0000-0000-0000-000000000121";
 const marketId = "00000000-0000-0000-0000-000000000101";
 const debtId = "00000000-0000-0000-0000-000000000301";
 
-Deno.test("canonical payment id handles single and customer-wide results", () => {
+Deno.test("canonical payment id handles debt-specific and general results", () => {
   assertEquals(canonicalPaymentId({ id: paymentIdA }), paymentIdA);
   assertEquals(
-    canonicalPaymentId({ payments: [{ id: paymentIdB }, { id: paymentIdC }] }),
+    canonicalPaymentId({ id: paymentIdB, payment_scope: "general", payments: [] }),
     paymentIdB,
   );
 });
@@ -22,10 +22,13 @@ Deno.test("canonical payment id handles single and customer-wide results", () =>
 Deno.test("customer-wide payment enqueues one event using total action amount", async () => {
   const captured: Record<string, unknown>[] = [];
   const paymentResult = {
+    id: paymentIdB,
     customer_id: customerId,
+    payment_scope: "general",
     amount: 25000,
     remaining: 100000,
-    payments: [{ id: paymentIdB }, { id: paymentIdC }],
+    allocation_count: 0,
+    payments: [],
   };
 
   const returned = await finalizePaymentPush(
@@ -61,6 +64,7 @@ Deno.test("customer-wide payment enqueues one event using total action amount", 
       remaining_iqd: 100000,
       market_name: "ZHIROX Market",
       occurred_at: "2026-09-17T00:00:00.000Z",
+      payment_scope: "general",
     },
   }]);
 });
@@ -92,6 +96,7 @@ Deno.test("debt-specific USD payment converts stored IQD amount for push copy", 
   const payload = captured[0]?.payload as Record<string, unknown>;
   assertEquals(payload.amount, 100);
   assertEquals(payload.currency, "USD");
+  assertEquals(payload.payment_scope, "debt");
 });
 
 Deno.test("push enqueue failure never fails a successful payment result", async () => {
