@@ -67,30 +67,40 @@ class CustomerCenterHeader extends StatelessWidget {
                 children: [
                   Icon(icon, color: Colors.white, size: 22),
                   const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 11,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
+                  Expanded(
                     child: Text(
-                      '$totalCount $countLabel',
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 11.5,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 112),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        '$totalCount $countLabel',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                   ),
@@ -477,31 +487,39 @@ class CustomerDirectoryCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Text(
-                              balanceUnavailable
-                                  ? 'ماوە: نەتوانرا باربکرێت'
-                                  : hasBalance
-                                      ? 'ماوە: ${_formatBalance(balance)}'
-                                      : 'ماوە: ...',
-                              style: TextStyle(
-                                color: balanceUnavailable
-                                    ? AppColors.warning
-                                    : !hasBalance
-                                        ? scheme.onSurfaceVariant
-                                        : balance > 0
-                                            ? AppColors.danger
-                                            : AppColors.success,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                            Expanded(
+                              child: Text(
+                                balanceUnavailable
+                                    ? 'ماوە: نەتوانرا باربکرێت'
+                                    : hasBalance
+                                        ? 'ماوە: ${_formatBalance(balance)}'
+                                        : 'ماوە: ...',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: balanceUnavailable
+                                      ? AppColors.warning
+                                      : !hasBalance
+                                          ? scheme.onSurfaceVariant
+                                          : balance > 0
+                                              ? AppColors.danger
+                                              : AppColors.success,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                             if (openDebtCount > 0) ...[
                               const SizedBox(width: 7),
-                              Text(
-                                '$openDebtCount قەرزی کراوە',
-                                style: TextStyle(
-                                  color: scheme.onSurfaceVariant,
-                                  fontSize: 10,
+                              Flexible(
+                                child: Text(
+                                  '$openDebtCount قەرزی کراوە',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: scheme.onSurfaceVariant,
+                                    fontSize: 10,
+                                  ),
                                 ),
                               ),
                             ],
