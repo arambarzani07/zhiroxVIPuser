@@ -3,7 +3,7 @@ name: Publish Customer Push Portal
 on:
   workflow_run:
     workflows:
-      - Customer Push Portal Pages
+      - Customer Push Portal Validation
     types:
       - completed
     branches:
