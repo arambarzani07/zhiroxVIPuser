@@ -1073,6 +1073,25 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     }
   }
 
+  static Future<void> deleteGeneralPayment(String id) async {
+    await ensureInitialized();
+    try {
+      final response = await client.functions.invoke(
+        'debt-restore-admin',
+        body: {
+          'action': 'delete_general_payment',
+          'general_payment_id': id,
+        },
+      );
+      final data = response.data;
+      if (data is! Map || data['payment_deleted'] != true) {
+        throw _functionError(data);
+      }
+    } on FunctionsException catch (e) {
+      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
+    }
+  }
+
   static Future<RecordModel> createPayment({
     required String debtId,
     required double amount,
