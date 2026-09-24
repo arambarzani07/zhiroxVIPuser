@@ -417,6 +417,8 @@ class FinancialPaymentFlow {
         return false;
       }
     }
+    if (!context.mounted) return false;
+
     if (customerBalance <= 0) {
       if (context.mounted) {
         AppHelpers.showSnackBar(
