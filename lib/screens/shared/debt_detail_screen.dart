@@ -492,6 +492,23 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                                     ],
                                   ),
                                 ),
+                              if (!isCustomer &&
+                                  (auth.userRole == 'admin' ||
+                                      auth.canEditDebts) &&
+                                  status != 'paid')
+                                const PopupMenuItem(
+                                  value: 'installments',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.calendar_month_outlined,
+                                        size: 19,
+                                      ),
+                                      SizedBox(width: 10),
+                                      Text('پلانی قسط'),
+                                    ],
+                                  ),
+                                ),
                               if (!isCustomer && auth.userRole == 'admin')
                                 const PopupMenuItem(
                                   value: 'delete',
@@ -790,6 +807,15 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
           ),
 
           ..._buildItemsSliver(),
+
+          ..._buildInstallmentSliver(
+            isDark: isDark,
+            canEdit: !isCustomer &&
+                (auth.userRole == 'admin' || auth.canEditDebts) &&
+                status != 'paid',
+            currency: currency,
+            dollarRate: dollarRate,
+          ),
 
           SliverToBoxAdapter(
             child: Padding(
