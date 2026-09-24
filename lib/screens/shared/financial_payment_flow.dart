@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:zhirox/screens/shared/payment_receipt_actions.dart';
-import 'package:zhirox/services/customer_payment_allocator.dart';
 import 'package:zhirox/services/financial_ui_state.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -10,10 +9,10 @@ import 'package:zhirox/utils/helpers.dart';
 
 /// Single source of truth for recording debt payments from every screen.
 ///
-/// When opened from the customer-level payment action and more than one debt is
-/// open, the default target is the customer's full open balance. The backend
-/// distributes that amount atomically from the oldest open debt to the newest.
-/// A payment opened from one concrete debt remains debt-specific.
+/// A payment opened from the customer profile is a general payment: it reduces
+/// only the customer's effective total balance and never mutates individual
+/// debt rows. A payment opened from one concrete debt remains debt-specific and
+/// changes only that selected debt.
 class FinancialPaymentFlow {
   FinancialPaymentFlow._();
 
@@ -55,40 +54,6 @@ class FinancialPaymentFlow {
     final compat = debt.getStringValue('customer').trim();
     if (compat.isNotEmpty) return compat;
     return debt.getStringValue('customer_id').trim();
-  }
-
-  static DateTime _debtSortAt(RecordModel debt) {
-    for (final key in const ['custom_date', 'created', 'created_at', 'updated']) {
-      final raw = debt.getStringValue(key).trim();
-      final parsed = DateTime.tryParse(raw);
-      if (parsed != null) return parsed;
-    }
-    return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-  }
-
-  static double _customerOpenBalance(List<RecordModel> debts) {
-    return debts.fold<double>(
-      0,
-      (sum, debt) => sum + debt.getDoubleValue('remaining'),
-    );
-  }
-
-  static List<CustomerPaymentAllocation> _customerAllocations(
-    List<RecordModel> debts,
-    double amount,
-  ) {
-    return allocateCustomerPayment(
-      amount: amount,
-      debts: debts
-          .map(
-            (debt) => CustomerPaymentDebt(
-              id: debt.id,
-              remaining: debt.getDoubleValue('remaining'),
-              sortAt: _debtSortAt(debt),
-            ),
-          )
-          .toList(growable: false),
-    );
   }
 
   static Widget _buildPaymentProgress(
