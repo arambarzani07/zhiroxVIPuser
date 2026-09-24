@@ -27,6 +27,10 @@ function deps(overrides: Record<string, unknown> = {}) {
       latest_at: null,
     }),
     revokeAll: async () => 0,
+    getSettings: async () => ({ overdue_interval_days: 3 }),
+    updateSettings: async ({ overdueIntervalDays }: any) => ({
+      overdue_interval_days: overdueIntervalDays,
+    }),
     sendManual: async () => ({
       campaign_id: requestId,
       queued_customers: 0,
@@ -180,6 +184,54 @@ Deno.test("broadcast_manual does not require a customer id", async () => {
     target_devices: 23,
     market_name: "کانی چنار",
   });
+});
+
+Deno.test("notification interval settings can be read and updated", async () => {
+  assertEquals(
+    await handleAdminAction(
+      { action: "get_settings" },
+      actorId,
+      deps({ getSettings: async () => ({ overdue_interval_days: 5 }) }),
+    ),
+    { overdue_interval_days: 5 },
+  );
+
+  let captured = 0;
+  assertEquals(
+    await handleAdminAction(
+      { action: "update_settings", overdue_interval_days: 7 },
+      actorId,
+      deps({
+        updateSettings: async ({ overdueIntervalDays }: any) => {
+          captured = overdueIntervalDays;
+          return { overdue_interval_days: overdueIntervalDays };
+        },
+      }),
+    ),
+    { overdue_interval_days: 7 },
+  );
+  assertEquals(captured, 7);
+});
+
+Deno.test("notification interval rejects values outside 1-30 days", async () => {
+  await assertRejects(
+    () => handleAdminAction(
+      { action: "update_settings", overdue_interval_days: 0 },
+      actorId,
+      deps(),
+    ),
+    Error,
+    "invalid_overdue_interval",
+  );
+  await assertRejects(
+    () => handleAdminAction(
+      { action: "update_settings", overdue_interval_days: 31 },
+      actorId,
+      deps(),
+    ),
+    Error,
+    "invalid_overdue_interval",
+  );
 });
 
 Deno.test("manual push rejects empty and oversized messages", async () => {
