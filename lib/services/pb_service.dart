@@ -1506,6 +1506,31 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     };
   }
 
+  static Future<Map<String, dynamic>> getCustomerPeriodStatement({
+    required String customerId,
+    required DateTime fromDate,
+    required DateTime toDate,
+  }) async {
+    await ensureInitialized();
+    String isoDate(DateTime value) =>
+        '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+
+    final raw = await client.rpc(
+      'get_customer_period_statement_for_user',
+      params: {
+        'p_customer_id': customerId,
+        'p_from_date': isoDate(fromDate),
+        'p_to_date': isoDate(toDate),
+      },
+    );
+    if (raw is! Map) {
+      throw const FormatException('invalid customer period statement');
+    }
+    return Map<String, dynamic>.from(raw);
+  }
+
   static Future<List<RecordModel>> getAllCustomerDebtsLive(
     String customerId,
   ) async {
