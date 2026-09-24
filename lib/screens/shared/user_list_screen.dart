@@ -91,13 +91,6 @@ class _UserListScreenState extends State<UserListScreen> {
     );
   }
 
-  Future<void> _loadCustomerInboxInBackground(
-    List<RecordModel> users, {
-    int? generation,
-  }) {
-    return _directory.refreshInbox();
-  }
-
   void _scheduleCustomerSearch(String value) {
     _directory.scheduleSearch(value);
   }
@@ -202,7 +195,7 @@ class _UserListScreenState extends State<UserListScreen> {
             widget.role == 'customer');
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final pinHeader = shouldPinUserListHeader(widget.role);
-    final header = _buildDirectoryHeader(canAdd: canAdd, isDark: isDark);
+    final header = _buildDirectoryHeader(canAdd: canAdd);
 
     return Scaffold(
       backgroundColor: isDark
@@ -231,42 +224,9 @@ class _UserListScreenState extends State<UserListScreen> {
               widget.role == 'customer' &&
               _inboxError != null)
             SliverToBoxAdapter(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 8, 8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: isDark ? 0.14 : 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.warning_amber_rounded,
-                      color: Colors.orange,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _inboxError!,
-                        textDirection: TextDirection.rtl,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: isDark
-                              ? AppDarkColors.textPrimary
-                              : const Color(0xFF7A4D00),
-                        ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => unawaited(_directory.refreshInbox()),
-                      child: const Text('هەوڵدانەوە'),
-                    ),
-                  ],
-                ),
+              child: CustomerInboxWarning(
+                message: _inboxError!,
+                onRetry: () => unawaited(_directory.refreshInbox()),
               ),
             ),
           _isLoading
@@ -291,7 +251,7 @@ class _UserListScreenState extends State<UserListScreen> {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) =>
-                          _buildUserCard(_users[index], index, auth),
+                          _buildUserCard(_users[index], auth),
                       childCount: _users.length,
                     ),
                   ),
@@ -317,7 +277,6 @@ class _UserListScreenState extends State<UserListScreen> {
 
   Widget _buildDirectoryHeader({
     required bool canAdd,
-    required bool isDark,
   }) {
     return CustomerCenterHeader(
       title: _isEmployee ? 'کارمەندەکان' : 'کڕیارەکان',
@@ -894,7 +853,6 @@ class _UserListScreenState extends State<UserListScreen> {
 
   Widget _buildUserCard(
     RecordModel user,
-    int index,
     AuthProvider auth,
   ) {
     final name = user.getStringValue('name');
