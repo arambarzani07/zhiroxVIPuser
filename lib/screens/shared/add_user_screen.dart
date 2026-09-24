@@ -40,6 +40,135 @@ class _AddUserDialogState extends State<AddUserDialog> {
     super.dispose();
   }
 
+  Future<bool> _confirmSameNameCustomers(
+    List<dynamic> matches,
+    String enteredName,
+  ) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: isDark ? AppDarkColors.card : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+        contentPadding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.content_copy_rounded,
+              size: 19,
+              color: Colors.orange,
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                'ناوی هاوشێوە هەیە',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? AppDarkColors.textPrimary : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'پێشتر کڕیار بە ناوی «$enteredName» تۆمارکراوە. ئەگەر ئەمە کەسێکی جیاوازە دەتوانیت بەردەوام بیت.',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1.45,
+                  color: isDark
+                      ? AppDarkColors.textSecondary
+                      : const Color(0xFF667085),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...matches.take(3).map((customer) {
+                final name = customer.getStringValue('name');
+                final phone = customer.getStringValue('phone');
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppDarkColors.surface
+                        : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark
+                          ? AppDarkColors.cardBorder
+                          : const Color(0xFFE4E7EC),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.person_outline_rounded,
+                        size: 16,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark
+                                ? AppDarkColors.textPrimary
+                                : const Color(0xFF344054),
+                          ),
+                        ),
+                      ),
+                      if (phone.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          phone,
+                          textDirection: TextDirection.ltr,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: isDark
+                                ? AppDarkColors.textSecondary
+                                : const Color(0xFF667085),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('پاشگەزبوونەوە'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('کەسێکی جیاوازە — بەردەوام بە'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   Future<void> _save() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
@@ -65,6 +194,19 @@ class _AddUserDialogState extends State<AddUserDialog> {
 
     try {
       final auth = context.read<AuthProvider>();
+      if (widget.role == 'customer') {
+        final matches = await PBService.findPotentialDuplicateCustomers(
+          name: name,
+          adminId: auth.adminId,
+        );
+        if (!mounted) return;
+        if (matches.isNotEmpty) {
+          setState(() => _isLoading = false);
+          final proceed = await _confirmSameNameCustomers(matches, name);
+          if (!mounted || !proceed) return;
+          setState(() => _isLoading = true);
+        }
+      }
       final debtLimit = double.tryParse(_debtLimitController.text.trim()) ?? 0;
 
       await PBService.createUser(
@@ -88,7 +230,14 @@ class _AddUserDialogState extends State<AddUserDialog> {
       }
     } catch (e) {
       if (mounted) {
-        AppHelpers.showSnackBar(context, 'نەتوانرا هەژمارەکە زیاد بکرێت. دووبارە هەوڵ بدە.', isError: true);
+        AppHelpers.showSnackBar(
+          context,
+          AppHelpers.backendErrorMessage(
+            e,
+            fallback: 'نەتوانرا هەژمارەکە زیاد بکرێت. دووبارە هەوڵ بدە.',
+          ),
+          isError: true,
+        );
       }
     }
 
