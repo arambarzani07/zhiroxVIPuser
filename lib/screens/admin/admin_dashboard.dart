@@ -247,16 +247,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
     if (_isLoading && _stats.isEmpty) {
       return const AppAsyncStateView(
         state: AppAsyncState.loading,
-        child: SizedBox.shrink(),
         loadingLabel: 'داشبۆرد ئامادە دەکرێت...',
+        child: SizedBox.shrink(),
       );
     }
     if (_stats.isEmpty && _statsError != null) {
       return AppAsyncStateView(
         state: AppAsyncState.error,
-        child: const SizedBox.shrink(),
         message: _statsError,
         onRetry: _loadStats,
+        child: const SizedBox.shrink(),
       );
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
