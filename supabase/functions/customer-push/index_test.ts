@@ -36,6 +36,26 @@ function deps(overrides: Partial<PublicPushDeps> = {}): PublicPushDeps {
       }],
       limit: 20,
     }),
+    preferences: async () => ({
+      mandatory_financial: true,
+      due_reminders: true,
+      installment_reminders: true,
+      monthly_statements: true,
+      manual_messages: true,
+    }),
+    updatePreferences: async (args) => ({
+      mandatory_financial: true,
+      due_reminders: args.dueReminders,
+      installment_reminders: args.installmentReminders,
+      monthly_statements: args.monthlyStatements,
+      manual_messages: args.manualMessages,
+    }),
+    markNotification: async (args) => ({
+      id: args.notificationId,
+      read_at: "2026-09-24T09:00:00Z",
+      acknowledged_at: args.acknowledge ? "2026-09-24T09:00:00Z" : null,
+      requires_ack: true,
+    }),
     redeem: async () => ({ linked: true }),
     unsubscribe: async () => true,
     consumeRateLimit: async () => true,
@@ -245,6 +265,82 @@ Deno.test("notification history can reopen with device credentials", async () =>
   assertEquals(receivedHash, await sha256Hex(secret));
 });
 
+
+Deno.test("notification preferences can be read and updated with device credentials", async () => {
+  const secret = "b".repeat(64);
+  const readRes = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "preferences",
+        endpoint: "https://push.example/device",
+        device_secret: secret,
+      }),
+    }),
+    deps(),
+  );
+  assertEquals(readRes.status, 200);
+  assertEquals((await readRes.json()).mandatory_financial, true);
+
+  const updateRes = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "update_preferences",
+        endpoint: "https://push.example/device",
+        device_secret: secret,
+        due_reminders: false,
+        installment_reminders: true,
+        monthly_statements: false,
+        manual_messages: true,
+      }),
+    }),
+    deps(),
+  );
+  assertEquals(updateRes.status, 200);
+  assertEquals(await updateRes.json(), {
+    mandatory_financial: true,
+    due_reminders: false,
+    installment_reminders: true,
+    monthly_statements: false,
+    manual_messages: true,
+  });
+});
+
+Deno.test("notification can be marked read or acknowledged without exposing customer identity", async () => {
+  const notificationId = "00000000-0000-4000-8000-000000000123";
+  const read = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "mark_read",
+        token,
+        notification_id: notificationId,
+      }),
+    }),
+    deps(),
+  );
+  assertEquals(read.status, 200);
+  assertEquals((await read.json()).acknowledged_at, null);
+
+  const ack = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "acknowledge",
+        token,
+        notification_id: notificationId,
+      }),
+    }),
+    deps(),
+  );
+  assertEquals(ack.status, 200);
+  assertEquals((await ack.json()).acknowledged_at, "2026-09-24T09:00:00Z");
+});
 
 Deno.test("revoked or unavailable token returns generic error", async () => {
   const res = await routeCustomerPush(
