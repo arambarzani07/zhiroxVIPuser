@@ -182,11 +182,17 @@
           <div class="period-date-grid">
             <label>
               <span>لە بەروار</span>
-              <input id="statementFromDate" type="date">
+              <span class="date-picker-control">
+                <span id="statementFromDisplay" class="date-picker-display">—</span>
+                <input id="statementFromDate" class="date-picker-native" type="date" aria-label="لە بەروار">
+              </span>
             </label>
             <label>
               <span>تا بەروار</span>
-              <input id="statementToDate" type="date">
+              <span class="date-picker-control">
+                <span id="statementToDisplay" class="date-picker-display">—</span>
+                <input id="statementToDate" class="date-picker-native" type="date" aria-label="تا بەروار">
+              </span>
             </label>
           </div>
           <div class="period-presets">
