@@ -301,6 +301,16 @@ class _UserListScreenState extends State<UserListScreen> {
         _isLoading = false;
         _isLoadingMore = false;
       });
+      if (!loadMore &&
+          widget.role == 'customer' &&
+          _users.isNotEmpty) {
+        unawaited(
+          _loadCustomerInboxInBackground(
+            List<RecordModel>.from(_users),
+            generation: generation,
+          ),
+        );
+      }
       if (!loadMore && _scrollController.hasClients) {
         _scrollController.jumpTo(0);
       }
