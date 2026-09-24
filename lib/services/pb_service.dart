@@ -625,6 +625,32 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
   return customers;
 }
 
+  static String _normalizeDuplicateName(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'\\s+'), ' ');
+  }
+
+  static Future<List<RecordModel>> findPotentialDuplicateCustomers({
+    required String name,
+    required String adminId,
+  }) async {
+    final normalized = _normalizeDuplicateName(name);
+    if (normalized.isEmpty || adminId.trim().isEmpty) {
+      return const <RecordModel>[];
+    }
+    final candidates = await getUsers(
+      role: 'customer',
+      search: name.trim(),
+      adminId: adminId.trim(),
+    );
+    return _dedupeRecordsById(
+      candidates.where(
+        (customer) =>
+            _normalizeDuplicateName(customer.getStringValue('name')) ==
+            normalized,
+      ),
+    ).take(5).toList(growable: false);
+  }
+
   static Future<RecordModel> getUser(String id) async {
     var user = await pb.collection('users').getOne(id);
     await ensureInitialized();
