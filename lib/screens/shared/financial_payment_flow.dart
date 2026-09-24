@@ -835,25 +835,14 @@ class FinancialPaymentFlow {
                               final storageAmount = isGeneral
                                   ? displayAmount
                                   : _displayToStorage(debt!, displayAmount);
-                              if (storageAmount > remainingStorage + 0.0001) {
+                              if (storageAmount >
+                                  maximumPaymentStorage + 0.0001) {
                                 setSheetState(() => localError = isGeneral
-                                    ? 'بڕی پارەدانەوە نابێت لە کۆی ماوەی کڕیار زیاتر بێت.'
-                                    : 'بڕی پارەدانەوە نابێت لە ماوەی قەرز زیاتر بێت.');
+                                    ? 'بڕی پارەدانەوە نابێت لە کۆی گشتی ماوە زیاتر بێت.'
+                                    : debtRemaining > customerBalance
+                                        ? 'بڕی پارەدانەوە نابێت لە کۆی گشتی ماوەی کڕیار زیاتر بێت.'
+                                        : 'بڕی پارەدانەوە نابێت لە ماوەی ئەم مامەڵەیە زیاتر بێت.');
                                 return;
-                              }
-
-                              var allocationCount = 1;
-                              if (isGeneral) {
-                                try {
-                                  allocationCount = _customerAllocations(
-                                    openDebts,
-                                    storageAmount,
-                                  ).length;
-                                } catch (_) {
-                                  setSheetState(() => localError =
-                                      'بڕی پارەدانەوە لە کۆی ماوەی کڕیار زیاترە.');
-                                  return;
-                                }
                               }
 
                               if (!reviewMode) {
@@ -888,32 +877,8 @@ class FinancialPaymentFlow {
                                           (customerBalance - storageAmount)
                                               .clamp(0.0, customerBalance)
                                               .toDouble();
-                                  savedAllocationCount = int.tryParse(
-                                        '${result['allocation_count'] ?? allocationCount}',
-                                      ) ??
-                                      allocationCount;
                                   customerWideSaved = true;
                                   saved = true;
-
-                                  final rawPayments = result['payments'];
-                                  if (savedAllocationCount == 1 &&
-                                      rawPayments is List &&
-                                      rawPayments.isNotEmpty &&
-                                      rawPayments.first is Map) {
-                                    final row = Map<String, dynamic>.from(
-                                      rawPayments.first as Map,
-                                    );
-                                    final paymentId = row['id']?.toString() ?? '';
-                                    final debtId = row['debt_id']?.toString() ?? '';
-                                    if (paymentId.isNotEmpty && debtId.isNotEmpty) {
-                                      try {
-                                        savedPayment = await PBService.pb
-                                            .collection('payments')
-                                            .getOne(paymentId);
-                                        savedDebt = await PBService.getDebt(debtId);
-                                      } catch (_) {}
-                                    }
-                                  }
 
                                   await _notifyCustomerPayment(
                                     customerId: customerId,
@@ -1001,17 +966,16 @@ class FinancialPaymentFlow {
     if (saved && context.mounted) {
       AppHelpers.showSnackBar(
         context,
-        customerWideSaved && savedAllocationCount > 1
-            ? 'پارەدانەوە بە سەرکەوتوویی لە $savedAllocationCount قەرز دابەش کرا'
-            : 'پارەدانەوە بە سەرکەوتوویی تۆمارکرا',
+        customerWideSaved
+            ? 'پارەدانەوەی گشتی بە سەرکەوتوویی تۆمارکرا'
+            : 'پارەدانەوەی مامەڵە بە سەرکەوتوویی تۆمارکرا',
       );
 
-      if (customerWideSaved && savedAllocationCount > 1) {
+      if (customerWideSaved) {
         await _showCustomerPaymentResult(
           context: context,
           amount: savedCustomerAmount,
           remaining: savedCustomerRemaining,
-          allocationCount: savedAllocationCount,
         );
       } else {
         final payment = savedPayment;
