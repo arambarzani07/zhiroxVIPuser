@@ -34,6 +34,8 @@ const debtLimitMetaEl = document.getElementById('debtLimitMeta');
 const debtLimitProgressEl = document.getElementById('debtLimitProgress');
 const lastUpdatedLabelEl = document.getElementById('lastUpdatedLabel');
 const quickTransactionsButton = document.getElementById('quickTransactions');
+const quickStatementButton = document.getElementById('quickStatement');
+const quickReceiptsButton = document.getElementById('quickReceipts');
 const quickNotificationsButton = document.getElementById('quickNotifications');
 const quickPrintButton = document.getElementById('quickPrint');
 const quickRefreshButton = document.getElementById('quickRefresh');
@@ -77,6 +79,7 @@ const clearTransactionSearchButton = document.getElementById('clearTransactionSe
 const printStatementButton = document.getElementById('printStatement');
 const homeTab = document.getElementById('homeTab');
 const transactionsTab = document.getElementById('transactionsTab');
+const statementTab = document.getElementById('statementTab');
 const receiptsTab = document.getElementById('receiptsTab');
 const notificationsTab = document.getElementById('notificationsTab');
 const accountTab = document.getElementById('accountTab');
@@ -91,10 +94,26 @@ const accountMarketPhoneEl = document.getElementById('accountMarketPhone');
 const accountMarketAddressEl = document.getElementById('accountMarketAddress');
 const accountNotificationsButton = document.getElementById('accountNotifications');
 const accountRefreshButton = document.getElementById('accountRefresh');
+const statementFromDateEl = document.getElementById('statementFromDate');
+const statementToDateEl = document.getElementById('statementToDate');
+const generatePeriodStatementButton = document.getElementById('generatePeriodStatement');
+const statementBuilderResultEl = document.getElementById('statementBuilderResult');
+const periodStatementDocumentEl = document.getElementById('periodStatementDocument');
+const periodStatementRowsEl = document.getElementById('periodStatementRows');
+const periodStatementTotalsEl = document.getElementById('periodStatementTotals');
+const statementMarketNameEl = document.getElementById('statementMarketName');
+const statementMarketMetaEl = document.getElementById('statementMarketMeta');
+const statementCustomerNameEl = document.getElementById('statementCustomerName');
+const statementPeriodLabelEl = document.getElementById('statementPeriodLabel');
+const statementCreatedDateEl = document.getElementById('statementCreatedDate');
+const periodStatementFooterEl = document.getElementById('periodStatementFooter');
+const printPeriodStatementButton = document.getElementById('printPeriodStatement');
+const statementPresetButtons = [...document.querySelectorAll('[data-statement-preset]')];
 const tabButtons = [...document.querySelectorAll('[data-portal-tab]')];
 const views = {
   home: document.getElementById('homeView'),
   transactions: document.getElementById('transactionsView'),
+  statement: document.getElementById('statementView'),
   receipts: document.getElementById('receiptsView'),
   notifications: document.getElementById('notificationsView'),
   account: document.getElementById('accountView'),
@@ -130,6 +149,7 @@ function setActiveView(name) {
 
 homeTab.addEventListener('click', () => setActiveView('home'));
 transactionsTab.addEventListener('click', () => setActiveView('transactions'));
+statementTab.addEventListener('click', () => setActiveView('statement'));
 receiptsTab.addEventListener('click', () => {
   setActiveView('receipts');
   if (currentNotificationItems.length === 0) void loadNotificationHistory();
@@ -1056,7 +1076,9 @@ async function loadNotificationPreferences() {
   try {
     const data = await api(credentials);
     prefDueRemindersEl.checked = data.due_reminders !== false;
-    prefInstallmentRemindersEl.checked = data.installment_reminders !== false;
+    if (prefInstallmentRemindersEl) {
+      prefInstallmentRemindersEl.checked = data.installment_reminders !== false;
+    }
     prefMonthlyStatementsEl.checked = data.monthly_statements !== false;
     prefManualMessagesEl.checked = data.manual_messages !== false;
   } catch (_) {
@@ -1076,7 +1098,7 @@ async function saveNotificationPreferences() {
     await api({
       ...credentials,
       due_reminders: prefDueRemindersEl.checked,
-      installment_reminders: prefInstallmentRemindersEl.checked,
+      installment_reminders: false,
       monthly_statements: prefMonthlyStatementsEl.checked,
       manual_messages: prefManualMessagesEl.checked,
     });
@@ -1124,10 +1146,13 @@ async function loadNotificationHistory() {
   notificationHistoryRefreshButton.disabled = true;
   try {
     const data = await api({ ...credentials, limit: 50 });
-    currentNotificationItems = Array.isArray(data.items) ? data.items : [];
+    currentNotificationItems = (Array.isArray(data.items) ? data.items : [])
+      .filter((item) => item?.event_type !== 'installment_reminder');
     renderNotificationHistory(currentNotificationItems);
     renderReceiptHistory(currentNotificationItems);
-    const unread = Number(data.unread_count || 0);
+    const unread = currentNotificationItems
+      .filter((item) => !item?.read_at)
+      .length;
     notificationsTab.dataset.unread = unread > 0 ? String(unread) : '';
     if (notificationUnreadBadgeEl) {
       notificationUnreadBadgeEl.hidden = unread <= 0;
@@ -1178,8 +1203,6 @@ async function loadPortal(offset = 0, append = false) {
   renderPrimaryBalance(data);
   renderBalanceBreakdown(data);
   renderSummaryMetrics(data);
-  renderAccountInsights(data);
-  renderPaymentTimeline(data);
   renderAccountDetails(data);
   renderRows(data.rows, append);
   if (!append) renderRecentRows(data.rows);
@@ -1204,6 +1227,224 @@ async function refreshPortal() {
     setStatus('نوێکردنەوە سەرکەوتوو نەبوو.', 'err');
   } finally {
     for (const button of buttons) button.disabled = false;
+  }
+}
+
+function toLocalIsoDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function statementDateLabel(value) {
+  if (!value) return '—';
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString('ku-IQ', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+}
+
+function initializeStatementDates() {
+  if (!statementFromDateEl || !statementToDateEl) return;
+  const today = new Date();
+  if (!statementFromDateEl.value) {
+    statementFromDateEl.value =
+      `${today.getFullYear()}-01-01`;
+  }
+  if (!statementToDateEl.value) {
+    statementToDateEl.value = toLocalIsoDate(today);
+  }
+}
+
+function statementItemName(item, index) {
+  const base = receiptItemLabel(item, index) || `بابەتی ${index + 1}`;
+  const rawQty = item?.qty ?? item?.quantity;
+  const qty = Number(rawQty);
+  if (Number.isFinite(qty) && qty > 1) {
+    return `${base} × ${new Intl.NumberFormat('en-US', {
+      maximumFractionDigits: 2,
+    }).format(qty)}`;
+  }
+  return base;
+}
+
+function statementItemAmount(item) {
+  if (!item || typeof item !== 'object') return 0;
+  const explicit = item.total ?? item.total_price;
+  const explicitNumber = Number(explicit);
+  if (Number.isFinite(explicitNumber)) return explicitNumber;
+
+  const price = Number(item.price ?? item.unit_price ?? 0);
+  const qty = Number(item.qty ?? item.quantity ?? 1);
+  if (!Number.isFinite(price)) return 0;
+  return price * (Number.isFinite(qty) ? qty : 1);
+}
+
+function buildPeriodStatementRows(fromDate, toDate) {
+  const rows = [];
+  for (const debt of loadedRows) {
+    if (debt?.kind !== 'debt') continue;
+    const occurredDate = toLocalIsoDate(debt.occurred_at);
+    if (!occurredDate || occurredDate < fromDate || occurredDate > toDate) {
+      continue;
+    }
+
+    const items = Array.isArray(debt.items) ? debt.items : [];
+    if (items.length === 0) {
+      rows.push({
+        name: String(debt.note || 'قەرز').trim() || 'قەرز',
+        amount: number(debt.amount),
+        currency: String(debt.currency || 'IQD').toUpperCase(),
+        occurredAt: debt.occurred_at,
+        date: occurredDate,
+      });
+      continue;
+    }
+
+    items.forEach((item, index) => {
+      rows.push({
+        name: statementItemName(item, index),
+        amount: statementItemAmount(item),
+        currency: String(item?.currency || debt.currency || 'IQD').toUpperCase(),
+        occurredAt: debt.occurred_at,
+        date: occurredDate,
+      });
+    });
+  }
+
+  rows.sort((a, b) => {
+    const byDate = String(a.occurredAt || '').localeCompare(String(b.occurredAt || ''));
+    return byDate !== 0 ? byDate : a.name.localeCompare(b.name, 'ku');
+  });
+  return rows;
+}
+
+function renderPeriodStatement(rows, fromDate, toDate) {
+  periodStatementRowsEl.replaceChildren();
+  periodStatementTotalsEl.replaceChildren();
+
+  const totals = new Map();
+  rows.forEach((row, index) => {
+    const tr = document.createElement('tr');
+    const rowNo = document.createElement('td');
+    rowNo.className = 'period-col-row';
+    rowNo.textContent = String(index + 1);
+
+    const name = document.createElement('td');
+    name.className = 'period-col-name';
+    name.textContent = row.name;
+
+    const price = document.createElement('td');
+    price.className = 'period-col-price';
+    price.textContent = money(row.amount, row.currency);
+
+    const date = document.createElement('td');
+    date.className = 'period-col-date';
+    date.textContent = statementDateLabel(row.date);
+
+    tr.append(rowNo, name, price, date);
+    periodStatementRowsEl.appendChild(tr);
+    totals.set(row.currency, number(totals.get(row.currency)) + number(row.amount));
+  });
+
+  for (const [currency, total] of [...totals.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const totalRow = document.createElement('div');
+    totalRow.className = 'period-total-row';
+    addText(totalRow, 'span', totals.size > 1 ? `کۆی گشتی — ${currency}` : 'کۆی گشتی');
+    addText(totalRow, 'strong', money(total, currency));
+    periodStatementTotalsEl.appendChild(totalRow);
+  }
+
+  statementMarketNameEl.textContent =
+    String(currentPortalData?.market_name || 'ZHIROX').trim() || 'ZHIROX';
+  statementCustomerNameEl.textContent =
+    String(currentPortalData?.customer_name || '—').trim() || '—';
+  statementPeriodLabelEl.textContent =
+    `${statementDateLabel(fromDate)} تا ${statementDateLabel(toDate)}`;
+  statementCreatedDateEl.textContent = new Date().toLocaleDateString('ku-IQ');
+
+  const marketMeta = [
+    String(currentPortalData?.market_phone || '').trim(),
+    String(currentPortalData?.market_address || '').trim(),
+  ].filter(Boolean);
+  statementMarketMetaEl.textContent = marketMeta.join(' • ');
+  periodStatementFooterEl.textContent =
+    String(currentPortalData?.footer_note || '').trim();
+
+  periodStatementDocumentEl.hidden = false;
+}
+
+async function generatePeriodStatement() {
+  if (!statementFromDateEl || !statementToDateEl) return;
+  const fromDate = statementFromDateEl.value;
+  const toDate = statementToDateEl.value;
+
+  statementBuilderResultEl.textContent = '';
+  statementBuilderResultEl.className = 'action-result';
+
+  if (!fromDate || !toDate) {
+    statementBuilderResultEl.textContent = 'تکایە هەردوو بەروارەکە دیاری بکە.';
+    statementBuilderResultEl.className = 'action-result err';
+    return;
+  }
+  if (fromDate > toDate) {
+    statementBuilderResultEl.textContent = 'بەرواری دەستپێک نابێت دوای بەرواری کۆتایی بێت.';
+    statementBuilderResultEl.className = 'action-result err';
+    return;
+  }
+
+  generatePeriodStatementButton.disabled = true;
+  try {
+    await ensureAllTransactionsLoaded();
+    const rows = buildPeriodStatementRows(fromDate, toDate);
+    if (rows.length === 0) {
+      periodStatementDocumentEl.hidden = true;
+      statementBuilderResultEl.textContent = 'هیچ بابەتێک لەم ماوەیەدا نەدۆزرایەوە.';
+      statementBuilderResultEl.className = 'action-result err';
+      return;
+    }
+    renderPeriodStatement(rows, fromDate, toDate);
+    statementBuilderResultEl.textContent =
+      `${rows.length} بابەت بۆ پسووڵەکە ئامادە کرا.`;
+    statementBuilderResultEl.className = 'action-result ok';
+  } catch (_) {
+    periodStatementDocumentEl.hidden = true;
+    statementBuilderResultEl.textContent = 'نەتوانرا پسووڵەی ماوە دروست بکرێت.';
+    statementBuilderResultEl.className = 'action-result err';
+  } finally {
+    generatePeriodStatementButton.disabled = false;
+  }
+}
+
+async function applyStatementPreset(preset) {
+  if (!statementFromDateEl || !statementToDateEl) return;
+  const today = new Date();
+  statementToDateEl.value = toLocalIsoDate(today);
+
+  if (preset === 'month') {
+    statementFromDateEl.value =
+      `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  } else if (preset === 'year') {
+    statementFromDateEl.value = `${today.getFullYear()}-01-01`;
+  } else if (preset === 'all') {
+    try {
+      await ensureAllTransactionsLoaded();
+      const debtDates = loadedRows
+        .filter((item) => item?.kind === 'debt')
+        .map((item) => toLocalIsoDate(item.occurred_at))
+        .filter(Boolean)
+        .sort();
+      statementFromDateEl.value = debtDates[0] || `${today.getFullYear()}-01-01`;
+    } catch (_) {
+      statementFromDateEl.value = `${today.getFullYear()}-01-01`;
+    }
   }
 }
 
@@ -1275,6 +1516,7 @@ async function initialize() {
 
   try {
     const data = await loadPortal();
+    initializeStatementDates();
     configureNotificationExperience(data);
     await Promise.all([
       loadNotificationHistory(),
@@ -1345,6 +1587,15 @@ if (accountRefreshButton) {
 if (headerRefreshButton) {
   headerRefreshButton.addEventListener('click', () => void refreshPortal());
 }
+if (quickStatementButton) {
+  quickStatementButton.addEventListener('click', () => setActiveView('statement'));
+}
+if (quickReceiptsButton) {
+  quickReceiptsButton.addEventListener('click', () => {
+    setActiveView('receipts');
+    if (currentNotificationItems.length === 0) void loadNotificationHistory();
+  });
+}
 if (quickRefreshButton) {
   quickRefreshButton.addEventListener('click', () => void refreshPortal());
 }
@@ -1362,6 +1613,22 @@ if (quickPrintButton) {
 }
 if (printStatementButton) {
   printStatementButton.addEventListener('click', () => void printStatement());
+}
+if (generatePeriodStatementButton) {
+  generatePeriodStatementButton.addEventListener('click', () => {
+    void generatePeriodStatement();
+  });
+}
+for (const button of statementPresetButtons) {
+  button.addEventListener('click', () => {
+    void applyStatementPreset(button.dataset.statementPreset || '');
+  });
+}
+if (printPeriodStatementButton) {
+  printPeriodStatementButton.addEventListener('click', () => {
+    document.body.classList.add('printing-period-statement');
+    window.setTimeout(() => window.print(), 80);
+  });
 }
 if (transactionSearchEl) {
   transactionSearchEl.addEventListener('input', () => {
@@ -1386,6 +1653,7 @@ if (clearTransactionSearchButton) {
 window.addEventListener('afterprint', () => {
   document.body.classList.remove('printing-statement');
   document.body.classList.remove('printing-receipt');
+  document.body.classList.remove('printing-period-statement');
 });
 
 notificationHistoryRefreshButton.addEventListener('click', () => {
