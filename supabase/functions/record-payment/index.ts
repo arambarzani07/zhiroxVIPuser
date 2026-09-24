@@ -50,6 +50,7 @@ export type PaymentPushEnqueue = {
     remaining_iqd: number;
     market_name: string;
     occurred_at: string;
+    payment_scope?: "general" | "debt";
   };
 };
 
@@ -129,6 +130,7 @@ export async function finalizePaymentPush(
         remaining_iqd: context.remainingIqd,
         market_name: context.marketName,
         occurred_at: deps.now().toISOString(),
+        payment_scope: isCustomerWide ? "general" : "debt",
       },
     });
   } catch (error) {
@@ -190,26 +192,14 @@ async function loadPaymentPushContext(
     throw new Error(`payment_push_market_context_failed:${marketError?.message ?? "not_found"}`);
   }
 
-  const pageSize = 1000;
-  let offset = 0;
-  let remainingIqd = 0;
-  while (true) {
-    const { data: debts, error: debtsError } = await admin
-      .from("debts")
-      .select("remaining")
-      .eq("customer_id", resolvedCustomerId)
-      .eq("is_deleted", false)
-      .range(offset, offset + pageSize - 1);
-    if (debtsError) {
-      throw new Error(`payment_push_balance_failed:${debtsError.message}`);
-    }
-    for (const debt of debts ?? []) {
-      const remaining = Number(debt.remaining ?? 0);
-      if (Number.isFinite(remaining) && remaining > 0) remainingIqd += remaining;
-    }
-    if ((debts ?? []).length < pageSize) break;
-    offset += pageSize;
+  const { data: effectiveBalance, error: balanceError } = await admin.rpc(
+    "get_customer_effective_balance",
+    { p_customer_id: resolvedCustomerId },
+  );
+  if (balanceError) {
+    throw new Error(`payment_push_balance_failed:${balanceError.message}`);
   }
+  const remainingIqd = Number(effectiveBalance ?? 0);
 
   return {
     customerId: resolvedCustomerId,
