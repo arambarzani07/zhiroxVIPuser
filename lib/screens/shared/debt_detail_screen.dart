@@ -124,6 +124,195 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     }
   }
 
+  Future<void> _showInstallmentDialog() async {
+    final debt = _debt;
+    if (debt == null) return;
+
+    final remaining = debt.getDoubleValue('remaining');
+    if (remaining <= 0) {
+      AppHelpers.showSnackBar(context, 'ئەم قەرزە تەواو دراوەتەوە.');
+      return;
+    }
+
+    final pending = _installments
+        .where((item) => item['status']?.toString() == 'pending')
+        .toList(growable: false);
+    var count = pending.length >= 2 ? pending.length.clamp(2, 12).toInt() : 2;
+    var intervalDays = 30;
+
+    DateTime firstDue = DateTime.now().add(const Duration(days: 30));
+    if (pending.isNotEmpty) {
+      firstDue = DateTime.tryParse(pending.first['due_date']?.toString() ?? '') ??
+          firstDue;
+      if (pending.length > 1) {
+        final secondDue =
+            DateTime.tryParse(pending[1]['due_date']?.toString() ?? '');
+        if (secondDue != null) {
+          intervalDays = secondDue.difference(firstDue).inDays.clamp(1, 90).toInt();
+        }
+      }
+    } else {
+      final debtDue = DateTime.tryParse(debt.getStringValue('due_date'));
+      if (debtDue != null && debtDue.isAfter(DateTime.now())) {
+        firstDue = debtDue;
+      }
+    }
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final previewAmount = remaining / count;
+          return AlertDialog(
+            scrollable: true,
+            title: const Text('پلانی قسط'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<int>(
+                  initialValue: count,
+                  decoration: const InputDecoration(
+                    labelText: 'ژمارەی قسطەکان',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    for (var value = 2; value <= 12; value++)
+                      DropdownMenuItem(
+                        value: value,
+                        child: Text('${value} قسط'),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() => count = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  initialValue: intervalDays,
+                  decoration: const InputDecoration(
+                    labelText: 'ماوەی نێوان قسطەکان',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [7, 14, 30, 45, 60, 90]
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text('${value} ڕۆژ'),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() => intervalDays = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.event_outlined),
+                  title: const Text('بەرواری یەکەم قسط'),
+                  subtitle: Text(
+                    '${firstDue.year.toString().padLeft(4, '0')}-'
+                    '${firstDue.month.toString().padLeft(2, '0')}-'
+                    '${firstDue.day.toString().padLeft(2, '0')}',
+                  ),
+                  trailing: const Icon(Icons.edit_calendar_outlined),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: dialogContext,
+                      initialDate: firstDue,
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(
+                        const Duration(days: 3650),
+                      ),
+                    );
+                    if (picked != null) {
+                      setDialogState(() => firstDue = picked);
+                    }
+                  },
+                ),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    'بڕی نزیکەی هەر قسط: ${AppHelpers.formatCurrency(previewAmount)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('پاشگەزبوونەوە'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(dialogContext).pop({
+                  'count': count,
+                  'interval_days': intervalDays,
+                  'first_due': firstDue,
+                }),
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('پاشەکەوتکردن'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (!mounted || result == null) return;
+
+    final selectedCount = result['count'] as int;
+    final selectedInterval = result['interval_days'] as int;
+    final selectedFirstDue = result['first_due'] as DateTime;
+    final baseAmount =
+        double.parse((remaining / selectedCount).toStringAsFixed(2));
+    final schedule = <Map<String, dynamic>>[];
+    var allocated = 0.0;
+    for (var index = 0; index < selectedCount; index++) {
+      final isLast = index == selectedCount - 1;
+      final installmentAmount = isLast
+          ? double.parse((remaining - allocated).toStringAsFixed(2))
+          : baseAmount;
+      allocated += installmentAmount;
+      final due =
+          selectedFirstDue.add(Duration(days: selectedInterval * index));
+      schedule.add({
+        'amount': installmentAmount,
+        'due_date':
+            '${due.year.toString().padLeft(4, '0')}-'
+            '${due.month.toString().padLeft(2, '0')}-'
+            '${due.day.toString().padLeft(2, '0')}',
+      });
+    }
+
+    try {
+      final installments = await PBService.setDebtInstallmentSchedule(
+        widget.debtId,
+        schedule,
+      );
+      if (!mounted) return;
+      setState(() => _installments = installments);
+      AppHelpers.showSnackBar(
+        context,
+        'پلانی ${selectedCount} قسط پاشەکەوت کرا؛ هەر قسط reminder ـی خۆی هەیە.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'پاشەکەوتکردنی پلانی قسط سەرکەوتوو نەبوو.',
+        ),
+        isError: true,
+      );
+    }
+  }
+
   Future<void> _handleDebtAction(String action) async {
     try {
       switch (action) {
@@ -132,6 +321,9 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
           break;
         case 'edit':
           await _editCurrentDebt();
+          break;
+        case 'installments':
+          await _showInstallmentDialog();
           break;
         case 'delete':
           await _confirmDelete();
