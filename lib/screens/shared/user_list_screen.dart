@@ -114,7 +114,27 @@ class _UserListScreenState extends State<UserListScreen> {
         adminId: adminId.isNotEmpty ? adminId : null,
       );
       if (!mounted || generation != _loadGeneration) return;
-      final uniqueUsers = _dedupeUsersById(users);
+      final uniqueUsers = _dedupeUsersById(users)
+        ..sort((a, b) {
+          final aPinned = a.getBoolValue('is_pinned');
+          final bPinned = b.getBoolValue('is_pinned');
+          if (aPinned != bPinned) return aPinned ? -1 : 1;
+          if (aPinned && bPinned) {
+            final aAt = DateTime.tryParse(a.getStringValue('pinned_at'));
+            final bAt = DateTime.tryParse(b.getStringValue('pinned_at'));
+            if (aAt != null && bAt != null) return bAt.compareTo(aAt);
+            if (aAt != null) return -1;
+            if (bAt != null) return 1;
+          }
+          final aCreated = DateTime.tryParse(a.getStringValue('created_at'));
+          final bCreated = DateTime.tryParse(b.getStringValue('created_at'));
+          if (aCreated != null && bCreated != null) {
+            return bCreated.compareTo(aCreated);
+          }
+          return a.getStringValue('name').compareTo(
+                b.getStringValue('name'),
+              );
+        });
       setState(() {
         _users = uniqueUsers;
         _isLoading = false;
@@ -160,6 +180,20 @@ class _UserListScreenState extends State<UserListScreen> {
       DateTime? activityFor(String id) =>
           DateTime.tryParse(rows[id]?['last_activity_at']?.toString() ?? '');
       sorted.sort((a, b) {
+        final aPinned = a.getBoolValue('is_pinned');
+        final bPinned = b.getBoolValue('is_pinned');
+        if (aPinned != bPinned) return aPinned ? -1 : 1;
+        if (aPinned && bPinned) {
+          final aPinnedAt =
+              DateTime.tryParse(a.getStringValue('pinned_at'));
+          final bPinnedAt =
+              DateTime.tryParse(b.getStringValue('pinned_at'));
+          if (aPinnedAt != null && bPinnedAt != null) {
+            return bPinnedAt.compareTo(aPinnedAt);
+          }
+          if (aPinnedAt != null) return -1;
+          if (bPinnedAt != null) return 1;
+        }
         final aAt = activityFor(a.id);
         final bAt = activityFor(b.id);
         if (aAt == null && bAt == null) {
@@ -833,6 +867,374 @@ class _UserListScreenState extends State<UserListScreen> {
     }
   }
 
+  Future<void> _showCustomerPrioritySheet(
+    RecordModel user,
+    AuthProvider auth,
+  ) async {
+    if (widget.role != 'customer' || auth.userRole != 'admin') return;
+
+    Map<String, dynamic>? recommendation;
+    try {
+      recommendation =
+          await PBService.getCustomerDebtLimitRecommendation(user.id);
+    } catch (_) {}
+    if (!mounted) return;
+
+    var isPinned = user.getBoolValue('is_pinned');
+    var isVip = user.getBoolValue('is_vip');
+    var saving = false;
+    final currentLimit = user.getDoubleValue('debt_limit');
+    final limitController = TextEditingController(
+      text: currentLimit > 0 ? currentLimit.toStringAsFixed(0) : '0',
+    );
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final isDark =
+              Theme.of(sheetContext).brightness == Brightness.dark;
+          final suggested =
+              (recommendation?['suggested_limit'] as num?)?.toDouble() ?? 0;
+          final paymentRatio =
+              ((recommendation?['payment_ratio'] as num?)?.toDouble() ?? 0)
+                  .clamp(0.0, 1.0)
+                  .toDouble();
+          final debtCount =
+              (recommendation?['debt_count'] as num?)?.toInt() ?? 0;
+          final settledCount =
+              (recommendation?['settled_count'] as num?)?.toInt() ?? 0;
+          final overdueCount =
+              (recommendation?['overdue_open_count'] as num?)?.toInt() ?? 0;
+          final confidence =
+              recommendation?['confidence']?.toString() ?? 'low';
+          final confidenceLabel = switch (confidence) {
+            'high' => 'بەرز',
+            'medium' => 'مامناوەند',
+            _ => 'کەم',
+          };
+
+          return Container(
+            padding: EdgeInsets.fromLTRB(
+              14,
+              10,
+              14,
+              14 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? AppDarkColors.card : Colors.white,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 34,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? AppDarkColors.cardBorder
+                            : const Color(0xFFD0D5DD),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.workspace_premium_outlined,
+                          size: 19,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user.getStringValue('name'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: isDark
+                                    ? AppDarkColors.textPrimary
+                                    : const Color(0xFF1D2939),
+                              ),
+                            ),
+                            Text(
+                              'Pin • VIP • سنووری قەرز',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: isDark
+                                    ? AppDarkColors.textSecondary
+                                    : const Color(0xFF667085),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    value: isPinned,
+                    onChanged: saving
+                        ? null
+                        : (value) =>
+                            setSheetState(() => isPinned = value),
+                    secondary: Icon(
+                      isPinned
+                          ? Icons.push_pin_rounded
+                          : Icons.push_pin_outlined,
+                      color: isPinned ? AppColors.primary : null,
+                    ),
+                    title: const Text(
+                      'پینکردنی کڕیار',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'لە سەرەوەی لیستی کڕیاران بمێنێتەوە',
+                      style: TextStyle(fontSize: 10.5),
+                    ),
+                  ),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    value: isVip,
+                    onChanged: saving
+                        ? null
+                        : (value) => setSheetState(() => isVip = value),
+                    secondary: Icon(
+                      isVip
+                          ? Icons.workspace_premium_rounded
+                          : Icons.workspace_premium_outlined,
+                      color: isVip ? Colors.amber.shade700 : null,
+                    ),
+                    title: const Text(
+                      'کڕیاری VIP',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'نیشانەی VIP و سنووری قەرزی تایبەتی',
+                      style: TextStyle(fontSize: 10.5),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  if (recommendation != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(
+                          alpha: isDark ? 0.10 : 0.055,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.auto_awesome_rounded,
+                                size: 17,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              const Expanded(
+                                child: Text(
+                                  'پێشنیاری زیرەکی سنووری قەرز',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                'دڵنیایی: $confidenceLabel',
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  color: isDark
+                                      ? AppDarkColors.textSecondary
+                                      : const Color(0xFF667085),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            suggested > 0
+                                ? AppHelpers.formatCurrency(suggested)
+                                : 'هێشتا داتای پێویست نییە',
+                            textDirection: TextDirection.ltr,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: isDark
+                                  ? AppDarkColors.textPrimary
+                                  : const Color(0xFF101828),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            'پارەدانەوە ${(paymentRatio * 100).toStringAsFixed(0)}٪ • '
+                            '$settledCount/$debtCount قەرز تەواوکراو • '
+                            '$overdueCount بەسەرچوو',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isDark
+                                  ? AppDarkColors.textSecondary
+                                  : const Color(0xFF667085),
+                            ),
+                          ),
+                          if (suggested > 0) ...[
+                            const SizedBox(height: 7),
+                            OutlinedButton.icon(
+                              onPressed: saving
+                                  ? null
+                                  : () {
+                                      limitController.text =
+                                          suggested.toStringAsFixed(0);
+                                      setSheetState(() {});
+                                    },
+                              icon: const Icon(
+                                Icons.bolt_rounded,
+                                size: 16,
+                              ),
+                              label: const Text(
+                                'پێشنیارەکە بەکاربهێنە',
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  TextField(
+                    controller: limitController,
+                    enabled: !saving,
+                    keyboardType: TextInputType.number,
+                    textDirection: TextDirection.ltr,
+                    decoration: InputDecoration(
+                      labelText: isVip
+                          ? 'سنووری قەرزی VIP'
+                          : 'سنووری قەرز',
+                      suffixText: 'د.ع',
+                      prefixIcon: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final limit = double.tryParse(
+                                  limitController.text
+                                      .replaceAll(',', '')
+                                      .trim(),
+                                ) ??
+                                -1;
+                            if (limit < 0) {
+                              AppHelpers.showSnackBar(
+                                context,
+                                'سنووری قەرز دروست نییە',
+                                isError: true,
+                              );
+                              return;
+                            }
+                            setSheetState(() => saving = true);
+                            try {
+                              await PBService.updateUser(
+                                user.id,
+                                {
+                                  'is_pinned': isPinned,
+                                  'is_vip': isVip,
+                                  'debt_limit': limit,
+                                },
+                              );
+                              if (sheetContext.mounted) {
+                                Navigator.pop(sheetContext, true);
+                              }
+                            } catch (e) {
+                              if (sheetContext.mounted) {
+                                setSheetState(() => saving = false);
+                              }
+                              if (mounted) {
+                                AppHelpers.showSnackBar(
+                                  context,
+                                  AppHelpers.backendErrorMessage(
+                                    e,
+                                    fallback:
+                                        'نەتوانرا ڕێکخستنەکانی کڕیار پاشەکەوت بکرێت.',
+                                  ),
+                                  isError: true,
+                                );
+                              }
+                            }
+                          },
+                    icon: saving
+                        ? const SizedBox(
+                            width: 17,
+                            height: 17,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save_outlined, size: 18),
+                    label: Text(
+                      saving ? 'پاشەکەوتکردن...' : 'پاشەکەوتکردن',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    limitController.dispose();
+
+    if (saved == true && mounted) {
+      await _loadUsers(search: _searchController.text.trim());
+    }
+  }
+
   Widget _buildUserCard(RecordModel user, int index, AuthProvider auth) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final name = user.getStringValue('name');
@@ -840,6 +1242,8 @@ class _UserListScreenState extends State<UserListScreen> {
     final displayName =
         _hasSameNamePeer(user) && phoneTail.isNotEmpty ? '$name · $phoneTail' : name;
     final approved = user.getBoolValue('approved');
+    final isPinnedCustomer = user.getBoolValue('is_pinned');
+    final isVipCustomer = user.getBoolValue('is_vip');
     final accentColor = AppColors.primary;
     final balance = _balances[user.id] ?? 0;
     final balanceUnavailable = _balanceErrors.contains(user.id);
@@ -867,6 +1271,9 @@ class _UserListScreenState extends State<UserListScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () => _openUserProfile(user),
+          onLongPress: canManageCustomer && auth.userRole == 'admin'
+              ? () => _showCustomerPrioritySheet(user, auth)
+              : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             child: Row(
@@ -909,6 +1316,35 @@ class _UserListScreenState extends State<UserListScreen> {
                               ),
                             ),
                           ),
+                          if (isVipCustomer) ...[
+                            const SizedBox(width: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(7),
+                              ),
+                              child: Text(
+                                'VIP',
+                                style: TextStyle(
+                                  color: Colors.amber.shade700,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (isPinnedCustomer) ...[
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.push_pin_rounded,
+                              size: 14,
+                              color: AppColors.primary,
+                            ),
+                          ],
                           if (unread) ...[
                             const SizedBox(width: 6),
                             Container(
