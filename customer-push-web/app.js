@@ -194,8 +194,12 @@ function resolveLinkToken() {
   const linkToken = queryToken || fragmentToken;
 
   if (linkToken) {
-    if (!TOKEN_PATTERN.test(linkToken)) return '';
+    if (!TOKEN_PATTERN.test(linkToken)) {
+      scrubLinkCredentialsFromLocation();
+      return '';
+    }
     localStorage.setItem(LINK_TOKEN_KEY, linkToken);
+    scrubLinkCredentialsFromLocation();
     if (manifestEl) {
       manifestEl.href = './manifest.webmanifest';
     }
