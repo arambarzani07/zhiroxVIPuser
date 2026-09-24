@@ -547,12 +547,14 @@ class PBService {
     final data = envelope.data;
     final users = <RecordModel>[];
     final inbox = <String, Map<String, dynamic>>{};
+    final seenUserIds = <String>{};
     final items = data['items'];
     if (items is List) {
       for (final item in items) {
         if (item is! Map) continue;
         final row = Map<String, dynamic>.from(item);
         final user = _profileRecord(row);
+        if (user.id.isEmpty || !seenUserIds.add(user.id)) continue;
         users.add(user);
         inbox[user.id] = {
           'customer_id': user.id,
@@ -583,6 +585,7 @@ class PBService {
 /// the first 500 records.
 static Future<List<RecordModel>> getAllApprovedCustomers() async {
   final customers = <RecordModel>[];
+  final seenCustomerIds = <String>{};
   Map<String, dynamic>? cursor;
 
   while (true) {
@@ -594,7 +597,12 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
       page['items'] as List? ?? const [],
     );
     customers.addAll(
-      items.where((customer) => customer.getBoolValue('approved')),
+      items.where(
+        (customer) =>
+            customer.getBoolValue('approved') &&
+            customer.id.isNotEmpty &&
+            seenCustomerIds.add(customer.id),
+      ),
     );
     if (page['hasMore'] != true) break;
     final next = page['nextCursor'];
