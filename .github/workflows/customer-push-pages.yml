@@ -7,13 +7,6 @@ on:
     paths:
       - '.github/workflows/customer-push-pages.yml'
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Customer Push Portal Pages
-    types:
-      - completed
-    branches:
-      - user-source
 
 permissions:
   contents: read
@@ -26,7 +19,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
