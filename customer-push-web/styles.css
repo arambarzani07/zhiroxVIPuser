@@ -2051,3 +2051,47 @@ body {
     padding: 10px 0 0 !important;
   }
 }
+
+
+/* Portal V3 — iPhone-friendly date presentation */
+.date-picker-control {
+  position: relative;
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(15,23,42,.09);
+  border-radius: 14px;
+  background: rgba(246,247,251,.82);
+}
+
+.date-picker-display {
+  width: 100%;
+  padding: 0 14px;
+  direction: ltr;
+  text-align: center;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.date-picker-native {
+  position: absolute !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 48px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.date-picker-control:focus-within {
+  border-color: rgba(49,87,224,.42);
+  box-shadow: 0 0 0 3px rgba(49,87,224,.08);
+}
