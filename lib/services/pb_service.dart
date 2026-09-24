@@ -741,23 +741,11 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
 
   static Future<double> getCustomerBalance(String customerId) async {
     await ensureInitialized();
-    const pageSize = 500;
-    var offset = 0;
-    var total = 0.0;
-    while (true) {
-      final raw = await client
-          .from('debts')
-          .select('remaining')
-          .eq('customer_id', customerId)
-          .isFilter('deleted_at', null)
-          .order('id')
-          .range(offset, offset + pageSize - 1);
-      for (final row in raw) {
-        total += _financeDouble(row['remaining']);
-      }
-      if (raw.length < pageSize) return total;
-      offset += pageSize;
-    }
+    final raw = await client.rpc(
+      'get_customer_effective_balance',
+      params: {'p_customer_id': customerId},
+    );
+    return _financeDouble(raw);
   }
 
   static String _mimeForPath(String path) {
@@ -1460,6 +1448,8 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
       'totalDebtIqd': _financeDouble(data['total_debt_iqd']),
       'totalRemainingIqd': _financeDouble(data['total_remaining_iqd']),
       'totalPaidIqd': _financeDouble(data['total_paid_iqd']),
+      'generalPaidIqd': _financeDouble(data['general_paid_iqd']),
+      'grossRemainingIqd': _financeDouble(data['gross_remaining_iqd']),
       'openDebtCount': int.tryParse('${data['open_debt_count'] ?? 0}') ?? 0,
       'openDebts': openDebts,
       'complete': data['complete'] == true,
