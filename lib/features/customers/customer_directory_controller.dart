@@ -7,207 +7,36 @@ import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/helpers.dart';
 
-class CustomerDirectoryController extends ChangeNotifier {
-  CustomerDirectoryController({
-    required this.role,
-    required this.adminId,
+abstract class CustomerDirectoryGateway {
+  const CustomerDirectoryGateway();
+
+  Future<Map<String, dynamic>> getCustomerPage({
+    required String search,
+    required String filter,
+    required int limit,
+    Map<String, dynamic>? cursor,
   });
 
-  static const Map<String, String> filterLabels = {
-    'all': 'هەموو',
-    'with_debt': 'قەرزدار',
-    'debt_free': 'بێ قەرز',
-    'active': 'چالاک',
-    'inactive': 'ناچالاک',
-  };
-
-  final String role;
-  final String adminId;
-
-  List<RecordModel> _users = const [];
-  Map<String, double> _balances = const {};
-  Set<String> _balanceErrors = const {};
-  Map<String, Map<String, dynamic>> _inbox = const {};
-
-  bool _loading = true;
-  bool _loadingMore = false;
-  bool _hasMore = false;
-  int _totalUsers = 0;
-  String? _loadError;
-  String? _inboxError;
-  Map<String, dynamic>? _nextCursor;
-  String _filter = 'all';
-  String _search = '';
-  int _generation = 0;
-
-  StreamSubscription<bool>? _connectivitySub;
-  RealtimeChannel? _inboxRealtimeChannel;
-  Timer? _searchDebounce;
-  Timer? _inboxRealtimeDebounce;
-  bool _inboxRefreshInFlight = false;
-  bool _inboxRefreshPending = false;
-  bool _disposed = false;
-
-  List<RecordModel> get users => _users;
-  Map<String, double> get balances => _balances;
-  Set<String> get balanceErrors => _balanceErrors;
-  Map<String, Map<String, dynamic>> get inbox => _inbox;
-  bool get isLoading => _loading;
-  bool get isLoadingMore => _loadingMore;
-  bool get hasMore => _hasMore;
-  int get totalUsers => _totalUsers;
-  String? get loadError => _loadError;
-  String? get inboxError => _inboxError;
-  String get filter => _filter;
-  String get search => _search;
-  bool get isCustomerDirectory => role == 'customer';
-
-  Future<void> initialize() async {
-    _connectivitySub = ConnectivityService.instance.statusStream.listen((online) {
-      if (online && !_disposed) {
-        unawaited(load(search: _search));
-      }
-    });
-    if (isCustomerDirectory) {
-      unawaited(_subscribeInboxRealtime());
-    }
-    await load();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    _searchDebounce?.cancel();
-    _inboxRealtimeDebounce?.cancel();
-    _connectivitySub?.cancel();
-    final channel = _inboxRealtimeChannel;
-    if (channel != null) {
-      unawaited(PBService.client.removeChannel(channel));
-    }
-    super.dispose();
-  }
-
-  void scheduleSearch(String value) {
-    _searchDebounce?.cancel();
-    _search = value.trim();
-    _safeNotify();
-    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
-      if (_disposed) return;
-      unawaited(load(search: _search));
-    });
-  }
-
-  Future<void> clearSearch() async {
-    _searchDebounce?.cancel();
-    _search = '';
-    await load(search: '');
-  }
-
-  Future<void> selectFilter(String value) async {
-    if (!filterLabels.containsKey(value) || value == _filter) return;
-    _filter = value;
-    _safeNotify();
-    await load(search: _search);
-  }
-
-  Future<void> refresh() => load(search: _search);
-
-  Future<void> loadMore() {
-    if (!isCustomerDirectory || !_hasMore || _loadingMore) {
-      return Future<void>.value();
-    }
-    return load(search: _search, loadMore: true);
-  }
-
-  RecordModel _customerRecord(Map<String, dynamic> row) {
-    final phone = row['phone']?.toString() ?? '';
-    return RecordModel.fromJson({
-      ...row,
-      'id': row['id']?.toString() ?? '',
-      'collectionId': '',
-      'collectionName': 'users',
-      'email': phone.isEmpty ? '' : '$phone@zhirox.local',
-      'created': row['created_at']?.toString() ?? '',
-      'updated':
-          row['updated_at']?.toString() ?? row['created_at']?.toString() ?? '',
-    });
-  }
-
-  Future<Map<String, dynamic>> _getCustomerDirectoryPage({
+  Future<List<RecordModel>> getUsers({
+    required String role,
     required String search,
-    int limit = 60,
-    Map<String, dynamic>? cursor,
-  }) async {
-    if (_filter == 'all') {
-      return PBService.getCustomerDirectoryPage(
-        search: search,
-        limit: limit,
-        cursor: cursor,
-      );
-    }
+    required String adminId,
+  });
 
-    await PBService.ensureInitialized();
-    final params = <String, dynamic>{
-      'p_search': search.trim(),
-      'p_filter': _filter,
-      'p_limit': limit.clamp(1, 100),
-    };
-    final cursorCreatedAt = cursor?['created_at']?.toString() ?? '';
-    final cursorId = cursor?['id']?.toString() ?? '';
-    if (cursorCreatedAt.isNotEmpty && cursorId.isNotEmpty) {
-      params['p_cursor_created_at'] = cursorCreatedAt;
-      params['p_cursor_id'] = cursorId;
-    }
+  Future<List<RecordModel>> getPinnedCustomers({required String search});
 
-    final raw = await PBService.client.rpc(
-      'get_customer_directory_page_filtered',
-      params: params,
-    );
-    if (raw is! Map) {
-      throw const FormatException('invalid customer directory page');
-    }
+  Future<Map<String, Map<String, dynamic>>> getInboxRows(
+    List<String> customerIds,
+  );
 
-    final data = Map<String, dynamic>.from(raw);
-    final users = <RecordModel>[];
-    final inbox = <String, Map<String, dynamic>>{};
-    final items = data['items'];
-    if (items is List) {
-      for (final item in items) {
-        if (item is! Map) continue;
-        final row = Map<String, dynamic>.from(item);
-        final user = _customerRecord(row);
-        users.add(user);
-        inbox[user.id] = _inboxRow(user.id, row);
-      }
-    }
+  Future<void> markFinancialChatRead(
+    String customerId, {
+    required DateTime readThrough,
+  });
+}
 
-    return {
-      'items': users,
-      'inbox': inbox,
-      'totalItems': int.tryParse('${data['total_count'] ?? 0}') ?? 0,
-      'hasMore': data['has_more'] == true,
-      'nextCursor': data['next_cursor'] is Map
-          ? Map<String, dynamic>.from(data['next_cursor'] as Map)
-          : null,
-    };
-  }
-
-  Map<String, dynamic> _inboxRow(
-    String customerId,
-    Map<String, dynamic> row,
-  ) {
-    return {
-      'customer_id': customerId,
-      'remaining': row['remaining'],
-      'open_debt_count': row['open_debt_count'],
-      'last_activity_at': row['last_activity_at'],
-      'last_kind': row['last_kind'],
-      'last_amount': row['last_amount'],
-      'last_preview': row['last_preview'],
-      'last_event_type': row['last_event_type'],
-      'unread': row['unread'] == true,
-    };
-  }
+class PBServiceCustomerDirectoryGateway implements CustomerDirectoryGateway {
+  const PBServiceCustomerDirectoryGateway();
 
   List<RecordModel> _dedupe(Iterable<RecordModel> users) {
     final byId = <String, RecordModel>{};
@@ -248,8 +77,9 @@ class CustomerDirectoryController extends ChangeNotifier {
       Map<String, dynamic>? nextCursor;
 
       if (isCustomerDirectory) {
-        final page = await _getCustomerDirectoryPage(
+        final page = await gateway.getCustomerPage(
           search: requestedSearch,
+          filter: _filter,
           limit: 60,
           cursor: loadMore ? _nextCursor : null,
         );
@@ -262,9 +92,8 @@ class CustomerDirectoryController extends ChangeNotifier {
         nextCursor = page['nextCursor'] as Map<String, dynamic>?;
 
         if (!loadMore && _filter == 'all') {
-          final pinned = await PBService.getPinnedCustomers(
-            search: requestedSearch,
-          );
+          final pinned =
+              await gateway.getPinnedCustomers(search: requestedSearch);
           if (pinned.isNotEmpty) {
             final pinnedIds = pinned.map((item) => item.id).toSet();
             users = _dedupe([
@@ -274,10 +103,10 @@ class CustomerDirectoryController extends ChangeNotifier {
           }
         }
       } else {
-        users = await PBService.getUsers(
+        users = await gateway.getUsers(
           role: role,
-          search: requestedSearch.isEmpty ? null : requestedSearch,
-          adminId: adminId.isEmpty ? null : adminId,
+          search: requestedSearch,
+          adminId: adminId,
         );
         totalUsers = users.length;
       }
@@ -350,7 +179,7 @@ class CustomerDirectoryController extends ChangeNotifier {
 
     _inboxRefreshInFlight = true;
     try {
-      final rows = await PBService.getCustomerInboxRows(ids);
+      final rows = await gateway.getInboxRows(ids);
       if (_disposed || (generation != null && generation != _generation)) {
         return;
       }
@@ -406,7 +235,7 @@ class CustomerDirectoryController extends ChangeNotifier {
   ) async {
     if (readThrough == null) return;
     try {
-      await PBService.markFinancialChatRead(
+      await gateway.markFinancialChatRead(
         customerId,
         readThrough: readThrough,
       );
