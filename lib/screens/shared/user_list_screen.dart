@@ -776,6 +776,19 @@ class _UserListScreenState extends State<UserListScreen> {
   }
 
   Future<void> _quickCustomerChat(RecordModel user) async {
+    final inbox = _customerInbox[user.id];
+    final readThrough = DateTime.tryParse(
+      inbox?['last_activity_at']?.toString() ?? '',
+    );
+    if (inbox != null && inbox['unread'] == true) {
+      setState(() => inbox['unread'] = false);
+    }
+    unawaited(
+      _markFinancialChatReadBestEffort(
+        user.id,
+        readThrough,
+      ),
+    );
     await _openUserProfile(user);
   }
 
