@@ -2,7 +2,10 @@ export type PushEventType =
   | "debt_created"
   | "payment_created"
   | "due_reminder"
-  | "manual";
+  | "manual"
+  | "debt_limit_changed"
+  | "installment_reminder"
+  | "monthly_statement";
 
 export type PushPayload = {
   amount?: number;
@@ -13,6 +16,15 @@ export type PushPayload = {
   due_date?: string;
   overdue?: boolean;
   message?: string;
+  old_limit?: number;
+  new_limit?: number;
+  installment_no?: number;
+  debt_id?: string;
+  days_until_due?: number;
+  days_overdue?: number;
+  period?: string;
+  total_debt?: number;
+  total_paid?: number;
 };
 
 function formatAmount(amount: number | undefined, currency: string | undefined): string {
@@ -73,22 +85,59 @@ export function formatPushBody(
     return {
       title: market,
       body:
-        `🧾 قەرزی نوێ تۆمارکرا • بڕ: ${formatAmount(payload.amount, payload.currency)} • کۆی ماوە: ${formatIqd(payload.remaining_iqd)}`,
+        `🧾 قەرزی نوێ تۆمارکرا • بڕ: ${formatAmount(payload.amount, payload.currency)} • کۆی ماوە: ${formatIqd(payload.remaining_iqd)} • کلیک بکە بۆ پسووڵە/کەشفی حیساب`,
+    };
+  }
+
+  if (eventType === "payment_created") {
+    if (Number(payload.remaining_iqd ?? 0) <= 0) {
+      return {
+        title: market,
+        body:
+          `✅ قەرزەکانت بە تەواوی دراونەتەوە 🎉 • بڕی وەرگیراو: ${formatAmount(payload.amount, payload.currency)} • کلیک بکە بۆ پسووڵە`,
+      };
+    }
+    return {
+      title: market,
+      body:
+        `💰 پارەدانەوە تۆمارکرا • بڕی دراو: ${formatAmount(payload.amount, payload.currency)} • ماوە: ${formatIqd(payload.remaining_iqd)} • کلیک بکە بۆ پسووڵە/کەشفی حیساب`,
     };
   }
 
   if (eventType === "due_reminder") {
+    const overdueDays = Number(payload.days_overdue ?? 0);
+    const untilDays = Number(payload.days_until_due ?? 0);
     return {
       title: market,
       body: payload.overdue === true
-        ? `⚠️ قەرزەکەت دوا کەوتووە • بڕی دواخراو: ${formatAmount(payload.amount, payload.currency)} • کۆی ماوە: ${formatIqd(payload.remaining_iqd)}`
-        : `⏰ بیرخستنەوەی قەرز • بڕی پێویست: ${formatAmount(payload.amount, payload.currency)} • کۆی ماوە: ${formatIqd(payload.remaining_iqd)}`,
+        ? `⚠️ قەرزەکەت ${overdueDays > 0 ? `${overdueDays} ڕۆژ ` : ""}دوا کەوتووە • بڕی دواخراو: ${formatAmount(payload.amount, payload.currency)} • کۆی ماوە: ${formatIqd(payload.remaining_iqd)}`
+        : untilDays === 0
+        ? `⏰ ئەمڕۆ بەرواری دانەوەی قەرزەکەتە • بڕ: ${formatAmount(payload.amount, payload.currency)}`
+        : `⏰ ${untilDays} ڕۆژ ماوە بۆ دانەوەی قەرز • بڕ: ${formatAmount(payload.amount, payload.currency)}`,
+    };
+  }
+
+  if (eventType === "installment_reminder") {
+    const no = Number(payload.installment_no ?? 0);
+    return {
+      title: market,
+      body: payload.overdue === true
+        ? `⚠️ قسطی ${no || ""} دوا کەوتووە • بڕ: ${formatAmount(payload.amount, payload.currency)}`
+        : `📅 بیرخستنەوەی قسطی ${no || ""} • بڕ: ${formatAmount(payload.amount, payload.currency)}`,
+    };
+  }
+
+  if (eventType === "debt_limit_changed") {
+    return {
+      title: market,
+      body:
+        `📊 سنووری قەرزەکەت نوێکرایەوە • لە ${formatIqd(payload.old_limit)} بۆ ${formatIqd(payload.new_limit)}`,
     };
   }
 
   return {
     title: market,
     body:
-      `💰 پارەدانەوە تۆمارکرا • بڕی دراو: ${formatAmount(payload.amount, payload.currency)} • ماوە: ${formatIqd(payload.remaining_iqd)}`,
+      `📄 کەشفی حیسابی مانگی ${String(payload.period ?? "").trim()} ئامادەیە • کۆی قەرزی نوێ: ${formatIqd(payload.total_debt)} • پارەدان: ${formatIqd(payload.total_paid)} • ماوە: ${formatIqd(payload.remaining_iqd)}`,
   };
 }
