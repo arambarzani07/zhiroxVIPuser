@@ -138,21 +138,20 @@ class FinancialPaymentFlow {
   }
 
   static Widget _buildInlineReview({
-    required bool isAll,
+    required bool isGeneral,
     required RecordModel? debt,
     required double before,
     required double amount,
     required double after,
-    required int allocationCount,
     required bool isDark,
   }) {
-    final amountText = isAll
+    final amountText = isGeneral
         ? AppHelpers.formatCurrency(amount)
         : _formatDisplay(debt!, amount);
-    final beforeText = isAll
+    final beforeText = isGeneral
         ? AppHelpers.formatCurrency(before)
         : _formatDisplay(debt!, before);
-    final afterText = isAll
+    final afterText = isGeneral
         ? AppHelpers.formatCurrency(after)
         : _formatDisplay(debt!, after);
     return Container(
@@ -186,6 +185,12 @@ class FinancialPaymentFlow {
             ],
           ),
           const SizedBox(height: 10),
+          _confirmationRow(
+            'جۆری پارەدان',
+            isGeneral ? 'پارەدانەوەی گشتی' : 'پارەدانەوەی مامەڵە',
+            isDark,
+          ),
+          const SizedBox(height: 7),
           _confirmationRow('ماوەی پێش پارەدان', beforeText, isDark),
           const SizedBox(height: 7),
           _confirmationRow(
@@ -194,14 +199,6 @@ class FinancialPaymentFlow {
             isDark,
             valueColor: Colors.green.shade700,
           ),
-          if (isAll) ...[
-            const SizedBox(height: 7),
-            _confirmationRow(
-              'ژمارەی قەرزی کاریگەر',
-              '$allocationCount',
-              isDark,
-            ),
-          ],
           const Divider(height: 18),
           _confirmationRow(
             'ماوەی دوای پارەدان',
@@ -210,20 +207,20 @@ class FinancialPaymentFlow {
             valueColor: after <= 0 ? Colors.green : Colors.orange,
             emphasized: true,
           ),
-          if (isAll) ...[
-            const SizedBox(height: 8),
-            Text(
-              'بڕەکە لە قەرزە کۆنترەکانەوە بەرەو نوێترەکان دابەش دەکرێت.',
-              style: TextStyle(
-                fontSize: 10.5,
-                height: 1.4,
-                fontWeight: FontWeight.w600,
-                color: isDark
-                    ? AppDarkColors.textSecondary
-                    : const Color(0xFF667085),
-              ),
+          const SizedBox(height: 8),
+          Text(
+            isGeneral
+                ? 'تەنها کۆی گشتی قەرزی کڕیار کەم دەبێتەوە؛ هیچ مامەڵەیەکی تاکەکەسی دەستکاری ناکرێت.'
+                : 'تەنها ئەم مامەڵەیە کەم دەبێتەوە و هیچ قەرزێکی تر کاریگەری وەرناگرێت.',
+            style: TextStyle(
+              fontSize: 10.5,
+              height: 1.4,
+              fontWeight: FontWeight.w600,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF667085),
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -320,7 +317,6 @@ class FinancialPaymentFlow {
     required BuildContext context,
     required double amount,
     required double remaining,
-    required int allocationCount,
   }) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     await showDialog<void>(
@@ -330,7 +326,7 @@ class FinancialPaymentFlow {
           children: [
             Icon(Icons.check_circle_rounded, color: Colors.green),
             SizedBox(width: 8),
-            Expanded(child: Text('پارەدانەوە تۆمارکرا')),
+            Expanded(child: Text('پارەدانەوەی گشتی تۆمارکرا')),
           ],
         ),
         content: Column(
@@ -344,17 +340,23 @@ class FinancialPaymentFlow {
               emphasized: true,
             ),
             const SizedBox(height: 10),
-            _confirmationRow(
-              'لەسەر ژمارەی قەرز',
-              '$allocationCount',
-              isDark,
-            ),
+            _confirmationRow('جۆر', 'پارەدانەوەی گشتی', isDark),
             const SizedBox(height: 10),
             _confirmationRow(
               'کۆی ماوە',
               AppHelpers.formatCurrency(remaining),
               isDark,
               valueColor: remaining <= 0 ? Colors.green : Colors.orange,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'هیچ مامەڵەیەکی تاکەکەسی دەستکاری نەکرا.',
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark
+                    ? AppDarkColors.textSecondary
+                    : const Color(0xFF667085),
+              ),
             ),
           ],
         ),
