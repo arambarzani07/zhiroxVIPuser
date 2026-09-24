@@ -29,6 +29,10 @@
       </div>
       <div class="header-actions">
         <div id="accountBadge" class="status-badge" role="status">پشکنین...</div>
+        <button id="notificationsTab" class="icon-action header-notification-action" type="button" data-portal-tab="notifications" aria-controls="notificationsView" aria-label="ئاگادارکردنەوەکان" title="ئاگادارکردنەوەکان">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9.5a6 6 0 0 0-12 0c0 6-2.5 6.5-2.5 6.5h17S18 15.5 18 9.5Z"/><path d="M9.5 19.5a2.8 2.8 0 0 0 5 0"/></svg>
+          <span id="notificationUnreadBadge" class="header-notification-badge" hidden>0</span>
+        </button>
         <button id="headerRefresh" class="icon-action" type="button" aria-label="نوێکردنەوەی هەژمار" title="نوێکردنەوە">↻</button>
       </div>
     </header>
@@ -54,19 +58,19 @@
     <div id="portalApp" hidden>
       <nav class="portal-nav app-tab-bar" aria-label="بەشەکانی پۆرتال">
         <button id="homeTab" type="button" class="nav-item is-active" data-portal-tab="home" aria-controls="homeView" aria-current="page">
-          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3.5 10.6 12 3.8l8.5 6.8v8.6a1.8 1.8 0 0 1-1.8 1.8h-4.2v-6.2h-5V21H5.3a1.8 1.8 0 0 1-1.8-1.8Z"/></svg></span><span class="tab-label">سەرەکی</span>
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 10.6 12 3.8l8.5 6.8v8.6a1.8 1.8 0 0 1-1.8 1.8h-4.2v-6.2h-5V21H5.3a1.8 1.8 0 0 1-1.8-1.8Z"/></svg></span><span class="tab-label">سەرەکی</span>
         </button>
         <button id="transactionsTab" type="button" class="nav-item" data-portal-tab="transactions" aria-controls="transactionsView">
-          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6.5 3.5h11A2.5 2.5 0 0 1 20 6v12a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18V6a2.5 2.5 0 0 1 2.5-2.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span class="tab-label">مامەڵە</span>
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6.5 3.5h11A2.5 2.5 0 0 1 20 6v12a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18V6a2.5 2.5 0 0 1 2.5-2.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span class="tab-label">مامەڵە</span>
+        </button>
+        <button id="statementTab" type="button" class="nav-item nav-item-statement" data-portal-tab="statement" aria-controls="statementView">
+          <span class="tab-icon statement-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3.5h14v17H5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span class="tab-label">کەشفی حیساب</span>
         </button>
         <button id="receiptsTab" type="button" class="nav-item" data-portal-tab="receipts" aria-controls="receiptsView">
-          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6 3.5h12v17l-2.2-1.4-1.9 1.4-1.9-1.4-1.9 1.4-1.9-1.4L6 20.5Z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></span><span class="tab-label">پسووڵە</span>
-        </button>
-        <button id="notificationsTab" type="button" class="nav-item" data-portal-tab="notifications" aria-controls="notificationsView">
-          <span class="tab-icon notification-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M18 9.5a6 6 0 0 0-12 0c0 6-2.5 6.5-2.5 6.5h17S18 15.5 18 9.5Z"/><path d="M9.5 19.5a2.8 2.8 0 0 0 5 0"/></svg><span id="notificationUnreadBadge" class="nav-badge" hidden>0</span></span><span class="tab-label">ئاگاداری</span>
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2.2-1.4-1.9 1.4-1.9-1.4-1.9 1.4-1.9-1.4L6 20.5Z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></span><span class="tab-label">پسووڵە</span>
         </button>
         <button id="accountTab" type="button" class="nav-item" data-portal-tab="account" aria-controls="accountView">
-          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.7-4 3-6 6.5-6s5.8 2 6.5 6"/></svg></span><span class="tab-label">هەژمار</span>
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.7-4 3-6 6.5-6s5.8 2 6.5 6"/></svg></span><span class="tab-label">هەژمار</span>
         </button>
       </nav>
 
@@ -100,38 +104,6 @@
 
         <div id="summaryMetrics" class="summary-grid"></div>
 
-        <div class="insight-grid">
-          <article id="dueInsightCard" class="insight-card">
-            <div class="insight-icon" aria-hidden="true">◷</div>
-            <div class="insight-copy">
-              <span class="insight-kicker">دانەوە</span>
-              <strong id="dueInsightTitle">پشکنین...</strong>
-              <small id="dueInsightMeta">زانیاریی بەرواری دانەوە</small>
-            </div>
-          </article>
-          <article id="debtLimitCard" class="insight-card" hidden>
-            <div class="insight-icon" aria-hidden="true">◎</div>
-            <div class="insight-copy">
-              <span class="insight-kicker">سنووری قەرز</span>
-              <strong id="debtLimitTitle">—</strong>
-              <small id="debtLimitMeta">—</small>
-              <div class="limit-progress" aria-hidden="true"><span id="debtLimitProgress"></span></div>
-            </div>
-          </article>
-        </div>
-
-        <section class="panel payment-timeline-panel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">پلانی دانەوە</p>
-              <h2>بەروار و قسطەکان</h2>
-            </div>
-            <button id="openDueTransactions" class="text-action" type="button">مامەڵەکان</button>
-          </div>
-          <div id="scheduleStats" class="schedule-stat-grid"></div>
-          <div id="paymentTimeline" class="payment-timeline" aria-live="polite"></div>
-        </section>
-
         <section class="panel quick-actions-panel">
           <div class="section-heading">
             <div>
@@ -142,8 +114,8 @@
           </div>
           <div class="quick-action-grid">
             <button id="quickTransactions" class="quick-action" type="button"><span aria-hidden="true">↔</span><strong>مامەڵەکان</strong><small>قەرز و پارەدان</small></button>
-            <button id="quickNotifications" class="quick-action" type="button"><span aria-hidden="true">◉</span><strong>ئاگاداری</strong><small>مێژوو و ڕێکخستن</small></button>
-            <button id="quickPrint" class="quick-action" type="button"><span aria-hidden="true">▤</span><strong>کەشفی حیساب</strong><small>Print / Save PDF</small></button>
+            <button id="quickStatement" class="quick-action" type="button"><span aria-hidden="true">▤</span><strong>کەشفی حیساب</strong><small>هەڵبژاردنی ماوە</small></button>
+            <button id="quickReceipts" class="quick-action" type="button"><span aria-hidden="true">✓</span><strong>پسووڵەکان</strong><small>پسووڵەی دیجیتاڵ</small></button>
             <button id="quickRefresh" class="quick-action" type="button"><span aria-hidden="true">↻</span><strong>نوێکردنەوە</strong><small>داتای تازە</small></button>
           </div>
         </section>
@@ -190,6 +162,77 @@
           <div id="ledger" class="ledger"></div>
           <button id="loadMore" class="secondary-action load-more" type="button" hidden>بینینی مامەڵەی زیاتر</button>
         </section>
+      </section>
+
+      <section id="statementView" class="portal-view statement-view" aria-labelledby="statementHeading" hidden>
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">پسووڵەی ماوە</p>
+            <h2 id="statementHeading">کەشفی حیساب</h2>
+          </div>
+        </div>
+
+        <section class="panel period-builder-panel">
+          <div class="period-builder-head">
+            <div>
+              <strong>ماوەکە دیاری بکە</strong>
+              <small>هەموو بابەتەکانی ئەو ماوەیە لە یەک پسووڵەدا کۆدەکرێنەوە.</small>
+            </div>
+          </div>
+          <div class="period-date-grid">
+            <label>
+              <span>لە بەروار</span>
+              <input id="statementFromDate" type="date">
+            </label>
+            <label>
+              <span>تا بەروار</span>
+              <input id="statementToDate" type="date">
+            </label>
+          </div>
+          <div class="period-presets">
+            <button type="button" data-statement-preset="month">ئەم مانگە</button>
+            <button type="button" data-statement-preset="year">ئەم ساڵە</button>
+            <button type="button" data-statement-preset="all">هەموو</button>
+          </div>
+          <button id="generatePeriodStatement" class="primary-action period-generate" type="button">دروستکردنی پسووڵە</button>
+          <p id="statementBuilderResult" class="action-result" aria-live="polite"></p>
+        </section>
+
+        <article id="periodStatementDocument" class="period-statement-document" hidden>
+          <header class="period-statement-head">
+            <div>
+              <p class="period-statement-kicker">پسووڵەی ماوە</p>
+              <h2 id="statementMarketName">ZHIROX</h2>
+              <p id="statementMarketMeta" class="period-statement-market-meta"></p>
+            </div>
+            <div class="period-statement-meta">
+              <div><span>کڕیار</span><strong id="statementCustomerName">—</strong></div>
+              <div><span>ماوە</span><strong id="statementPeriodLabel">—</strong></div>
+              <div><span>بەرواری دروستکردن</span><strong id="statementCreatedDate">—</strong></div>
+            </div>
+          </header>
+
+          <div class="period-table-wrap">
+            <table class="period-statement-table" dir="rtl">
+              <thead>
+                <tr>
+                  <th scope="col">ژمارەی ڕیز</th>
+                  <th scope="col">ناوی بابەت</th>
+                  <th scope="col">نرخ</th>
+                  <th scope="col">بەروار</th>
+                </tr>
+              </thead>
+              <tbody id="periodStatementRows"></tbody>
+            </table>
+          </div>
+
+          <div id="periodStatementTotals" class="period-statement-totals"></div>
+          <p id="periodStatementFooter" class="period-statement-footer"></p>
+
+          <div class="period-statement-actions">
+            <button id="printPeriodStatement" class="primary-action" type="button">Print / Save PDF</button>
+          </div>
+        </article>
       </section>
 
       <section id="receiptsView" class="portal-view" aria-labelledby="receiptsHeading" hidden>
@@ -251,10 +294,6 @@
               <input id="prefDueReminders" type="checkbox" checked>
             </label>
             <label class="preference-row">
-              <span><strong>یادخستنەوەی قسط</strong><small>قسطی داهاتوو و قسطی دواکەوتوو</small></span>
-              <input id="prefInstallmentReminders" type="checkbox" checked>
-            </label>
-            <label class="preference-row">
               <span><strong>کەشفی حیسابی مانگانە</strong><small>پوختەی قەرز، پارەدان و ماوە</small></span>
               <input id="prefMonthlyStatements" type="checkbox" checked>
             </label>
@@ -284,7 +323,6 @@
           <p>لینک و ناسنامەی ئامێر لە پۆرتالەکەدا پیشان نادرێن. بەڕێوەبەر دەتوانێت دەستگەیشتن ڕابگرێت.</p>
         </section>
       </section>
-    </div>
 
       <section id="accountView" class="portal-view" aria-labelledby="accountHeading" hidden>
         <div class="view-heading">
@@ -334,6 +372,8 @@
 
         <p class="account-footnote">داتای دارایی لەم پۆرتالە تەنها بۆ بینینە؛ دەستکاری قەرز و پارەدانەوە لەلایەن مارکێتەوە ئەنجام دەدرێت.</p>
       </section>
+
+    </div>
 
     <dialog id="receiptDialog" class="receipt-dialog">
       <form method="dialog" class="receipt-sheet">
