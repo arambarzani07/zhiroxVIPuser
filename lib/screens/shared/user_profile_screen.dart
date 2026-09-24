@@ -50,6 +50,8 @@ class _ProfileTimelineItem {
   });
 
   bool get isPayment => kind == 'payment';
+  bool get isGeneralPayment =>
+      isPayment && record.getStringValue('payment_scope') == 'general';
   bool get isSystem => kind == 'system';
 }
 
@@ -292,6 +294,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'financial_events',
+            callback: (payload) {
+              final raw = payload.newRecord.isNotEmpty
+                  ? payload.newRecord
+                  : payload.oldRecord;
+              if (raw['customer_id']?.toString() != widget.userId) return;
+              _handleFinancialRealtimeEvent();
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'customer_general_payments',
             callback: (payload) {
               final raw = payload.newRecord.isNotEmpty
                   ? payload.newRecord
@@ -2876,7 +2890,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            isPayment ? 'پارە وەرگرتنەوە' : 'قەرز',
+                            item.isGeneralPayment
+                                ? 'پارەدانەوەی گشتی'
+                                : isPayment
+                                    ? 'پارە وەرگرتنەوەی مامەڵە'
+                                    : 'قەرز',
                             style: TextStyle(
                               color: isDark
                                   ? AppDarkColors.textPrimary
@@ -3198,7 +3216,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       dollarRate: dollarRate,
       showConversion: currency == 'USD',
     );
-    final prefix = isPayment ? 'پارە وەرگرتنەوە' : 'قەرز';
+    final prefix = item.isGeneralPayment
+        ? 'پارەدانەوەی گشتی'
+        : isPayment
+            ? 'پارە وەرگرتنەوەی مامەڵە'
+            : 'قەرز';
     return text.isEmpty ? '$prefix • $amountText' : '$prefix • $amountText • $text';
   }
 
@@ -3413,7 +3435,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                 ),
                 title: Text(
-                  item.isPayment ? 'پارە وەرگرتنەوە' : 'قەرز',
+                  item.isGeneralPayment
+                      ? 'پارەدانەوەی گشتی'
+                      : item.isPayment
+                          ? 'پارە وەرگرتنەوەی مامەڵە'
+                          : 'قەرز',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
                 ),
                 subtitle: Text(
@@ -3427,14 +3453,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
               ),
               const Divider(height: 8),
-              ListTile(
-                dense: true,
-                visualDensity: VisualDensity.compact,
-                leading: const Icon(Icons.open_in_new_rounded, size: 19),
-                title: const Text('وردەکاری مامەڵە', style: TextStyle(fontSize: 13)),
-                onTap: () => Navigator.pop(sheetContext, 'details'),
-              ),
-              if (auth.userRole != 'customer')
+              if (debt != null)
+                ListTile(
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  leading: const Icon(Icons.open_in_new_rounded, size: 19),
+                  title: const Text(
+                    'وردەکاری مامەڵە',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  onTap: () => Navigator.pop(sheetContext, 'details'),
+                ),
+              if (auth.userRole != 'customer' && debt != null)
                 ListTile(
                   dense: true,
                   visualDensity: VisualDensity.compact,
