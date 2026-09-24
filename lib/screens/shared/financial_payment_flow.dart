@@ -392,13 +392,44 @@ class FinancialPaymentFlow {
         .map(_customerId)
         .where((id) => id.isNotEmpty)
         .toSet();
-    final canPayAll = openDebts.length > 1 && customerIds.length == 1;
     final customerId = customerIds.length == 1 ? customerIds.first : '';
-    final customerBalance = _customerOpenBalance(openDebts);
+    final canPayGeneral = customerId.isNotEmpty;
+    final grossOpenBalance = openDebts.fold<double>(
+      0,
+      (sum, debt) => sum + debt.getDoubleValue('remaining'),
+    );
+
+    double customerBalance = grossOpenBalance;
+    if (canPayGeneral) {
+      try {
+        customerBalance = await PBService.getCustomerBalance(customerId);
+      } catch (error) {
+        if (context.mounted) {
+          AppHelpers.showSnackBar(
+            context,
+            AppHelpers.backendErrorMessage(
+              error,
+              fallback: 'نەتوانرا کۆی گشتی قەرزی کڕیار بخوێندرێتەوە.',
+            ),
+            isError: true,
+          );
+        }
+        return false;
+      }
+    }
+    if (customerBalance <= 0) {
+      if (context.mounted) {
+        AppHelpers.showSnackBar(
+          context,
+          'کۆی گشتی قەرزی کڕیار سفرە؛ پارەدانەوەی زیاتر پێویست نییە.',
+        );
+      }
+      return false;
+    }
 
     final amountController = TextEditingController();
     final noteController = TextEditingController();
-    var selectedDebtId = canPayAll ? _allDebtsId : openDebts.first.id;
+    var selectedDebtId = canPayGeneral ? _allDebtsId : openDebts.first.id;
     if (initialDebtId != null &&
         openDebts.any((debt) => debt.id == initialDebtId)) {
       selectedDebtId = initialDebtId;
@@ -446,17 +477,23 @@ class FinancialPaymentFlow {
         builder: (sheetContext) => StatefulBuilder(
           builder: (sheetContext, setSheetState) {
             final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
-            final isAll = selectedDebtId == _allDebtsId;
-            final debt = isAll ? null : selectedDebt();
-            final remainingStorage = isAll
+            final isGeneral = selectedDebtId == _allDebtsId;
+            final debt = isGeneral ? null : selectedDebt();
+            final debtRemaining =
+                isGeneral ? 0.0 : debt!.getDoubleValue('remaining');
+            final remainingStorage =
+                isGeneral ? customerBalance : debtRemaining;
+            final maximumPaymentStorage = isGeneral
                 ? customerBalance
-                : debt!.getDoubleValue('remaining');
-            final currency = isAll ? 'IQD' : _currency(debt!);
+                : (debtRemaining < customerBalance
+                    ? debtRemaining
+                    : customerBalance);
+            final currency = isGeneral ? 'IQD' : _currency(debt!);
             final typedDisplayAmount = double.tryParse(
                   amountController.text.trim().replaceAll(',', ''),
                 ) ??
                 0;
-            final typedStorageAmount = isAll
+            final typedStorageAmount = isGeneral
                 ? typedDisplayAmount
                 : _displayToStorage(debt!, typedDisplayAmount);
             final remainingAfter = (remainingStorage - typedStorageAmount)
@@ -465,25 +502,15 @@ class FinancialPaymentFlow {
             final paymentStep = resolveFinancialPaymentStep(
               targetSelected: selectedDebtId.isNotEmpty,
               amount: typedStorageAmount,
-              maximum: remainingStorage,
+              maximum: maximumPaymentStorage,
               reviewRequested: reviewMode,
             );
-            var previewAllocationCount = 1;
-            if (isAll &&
-                typedStorageAmount > 0 &&
-                typedStorageAmount <= remainingStorage + 0.0001) {
-              try {
-                previewAllocationCount =
-                    _customerAllocations(openDebts, typedStorageAmount).length;
-              } catch (_) {}
-            }
-
             void applyQuickAmount(double storageValue) {
               final safeStorage = storageValue
-                  .clamp(0.0, remainingStorage)
+                  .clamp(0.0, maximumPaymentStorage)
                   .toDouble();
               amountController.text = _inputAmount(
-                isAll ? safeStorage : _storageToDisplay(debt!, safeStorage),
+                isGeneral ? safeStorage : _storageToDisplay(debt!, safeStorage),
               );
               amountController.selection = TextSelection.collapsed(
                 offset: amountController.text.length,
@@ -527,7 +554,7 @@ class FinancialPaymentFlow {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      isAll
+                      isGeneral
                           ? 'بڕی پارەدان بنووسە؛ سیستەم بە خۆکار لە هەموو قەرزە ماوەکان دابەشی دەکات.'
                           : openDebts.length > 1
                               ? 'قەرز هەڵبژێرە و بڕی پارەدانەوە بنووسە.'
@@ -551,7 +578,7 @@ class FinancialPaymentFlow {
                           border: OutlineInputBorder(),
                         ),
                         items: [
-                          if (canPayAll)
+                          if (canPayGeneral)
                             DropdownMenuItem<String>(
                               value: _allDebtsId,
                               child: Text(
@@ -694,8 +721,8 @@ class FinancialPaymentFlow {
                         children: [
                           Expanded(
                             child: _confirmationRow(
-                              isAll ? 'کۆی ماوەی ئێستا' : 'ماوەی ئێستا',
-                              isAll
+                              isGeneral ? 'کۆی ماوەی ئێستا' : 'ماوەی ئێستا',
+                              isGeneral
                                   ? AppHelpers.formatCurrency(remainingStorage)
                                   : _formatDisplay(debt!, remainingStorage),
                               isDark,
@@ -708,7 +735,7 @@ class FinancialPaymentFlow {
                           Expanded(
                             child: _confirmationRow(
                               'دوای پارەدان',
-                              isAll
+                              isGeneral
                                   ? AppHelpers.formatCurrency(remainingAfter)
                                   : _formatDisplay(debt!, remainingAfter),
                               isDark,
@@ -721,7 +748,7 @@ class FinancialPaymentFlow {
                         ],
                       ),
                     ),
-                    if (isAll) ...[
+                    if (isGeneral) ...[
                       const SizedBox(height: 8),
                       Text(
                         'هەموو قەرزەکان: ${openDebts.length} • کۆی ماوە: ${AppHelpers.formatCurrency(customerBalance)}',
@@ -740,7 +767,7 @@ class FinancialPaymentFlow {
                         typedStorageAmount <= remainingStorage + 0.0001) ...[
                       const SizedBox(height: 10),
                       _buildInlineReview(
-                        isAll: isAll,
+                        isGeneral: isGeneral,
                         debt: debt,
                         before: remainingStorage,
                         amount: typedStorageAmount,
@@ -809,18 +836,18 @@ class FinancialPaymentFlow {
                                 return;
                               }
 
-                              final storageAmount = isAll
+                              final storageAmount = isGeneral
                                   ? displayAmount
                                   : _displayToStorage(debt!, displayAmount);
                               if (storageAmount > remainingStorage + 0.0001) {
-                                setSheetState(() => localError = isAll
+                                setSheetState(() => localError = isGeneral
                                     ? 'بڕی پارەدانەوە نابێت لە کۆی ماوەی کڕیار زیاتر بێت.'
                                     : 'بڕی پارەدانەوە نابێت لە ماوەی قەرز زیاتر بێت.');
                                 return;
                               }
 
                               var allocationCount = 1;
-                              if (isAll) {
+                              if (isGeneral) {
                                 try {
                                   allocationCount = _customerAllocations(
                                     openDebts,
@@ -847,7 +874,7 @@ class FinancialPaymentFlow {
                                 localError = null;
                               });
                               try {
-                                if (isAll) {
+                                if (isGeneral) {
                                   if (customerId.isEmpty) {
                                     throw Exception('ناسنامەی کڕیار نەدۆزرایەوە');
                                   }
