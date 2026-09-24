@@ -36,6 +36,7 @@ export type PublicPushDeps = {
   portal: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; offset: number }) => Promise<Record<string, unknown>>;
   dueSummary?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null }) => Promise<Record<string, unknown>>;
   receipt?: (args: { receiptId: string; tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null }) => Promise<Record<string, unknown>>;
+  periodStatement?: (args: { fromDate: string; toDate: string; tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null }) => Promise<Record<string, unknown>>;
   notificationHistory: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; limit: number }) => Promise<Record<string, unknown>>;
   preferences?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null }) => Promise<Record<string, unknown>>;
   updatePreferences?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; dueReminders: boolean; installmentReminders: boolean; monthlyStatements: boolean; manualMessages: boolean }) => Promise<Record<string, unknown>>;
@@ -119,7 +120,8 @@ export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Pro
     action === "update_preferences" ||
     action === "mark_read" ||
     action === "acknowledge" ||
-    action === "receipt"
+    action === "receipt" ||
+    action === "statement"
   ) {
     if (!(await enforceRateLimit(req, deps))) return json({ error: "rate_limited" }, 429);
     if (
@@ -172,6 +174,37 @@ export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Pro
     try {
       return json(await deps.receipt({
         receiptId,
+        tokenHash: token ? await deps.hash(token) : null,
+        endpoint,
+        deviceSecretHash: deviceSecret ? await deps.hash(deviceSecret) : null,
+      }));
+    } catch (_) {
+      return json({ error: "link_unavailable" }, 404);
+    }
+  }
+
+  if (action === "statement") {
+    const token = isToken(body.token) ? body.token : null;
+    const endpoint = typeof body.endpoint === "string" && body.endpoint.startsWith("https://")
+      ? body.endpoint
+      : null;
+    const deviceSecret = isToken(body.device_secret) ? body.device_secret : null;
+    const fromDate = String(body.from_date ?? "").trim();
+    const toDate = String(body.to_date ?? "").trim();
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    if (
+      (!token && (!endpoint || !deviceSecret)) ||
+      !datePattern.test(fromDate) ||
+      !datePattern.test(toDate) ||
+      fromDate > toDate
+    ) {
+      return json({ error: "invalid_input" }, 400);
+    }
+    if (!deps.periodStatement) return json({ error: "feature_unavailable" }, 503);
+    try {
+      return json(await deps.periodStatement({
+        fromDate,
+        toDate,
         tokenHash: token ? await deps.hash(token) : null,
         endpoint,
         deviceSecretHash: deviceSecret ? await deps.hash(deviceSecret) : null,
@@ -340,6 +373,20 @@ async function serve(req: Request): Promise<Response> {
         "read_customer_portal_receipt_service",
         {
           p_receipt_id: args.receiptId,
+          p_token_hash: args.tokenHash,
+          p_endpoint: args.endpoint,
+          p_device_secret_hash: args.deviceSecretHash,
+        },
+      );
+      if (error) throw error;
+      return (data ?? {}) as Record<string, unknown>;
+    },
+    periodStatement: async (args) => {
+      const { data, error } = await admin.rpc(
+        "read_customer_period_statement_service",
+        {
+          p_from_date: args.fromDate,
+          p_to_date: args.toDate,
           p_token_hash: args.tokenHash,
           p_endpoint: args.endpoint,
           p_device_secret_hash: args.deviceSecretHash,
