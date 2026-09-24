@@ -920,9 +920,50 @@ class _UserListScreenState extends State<UserListScreen> {
     );
   }
 
+  String _normalizedCustomerName(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'\\s+'), ' ');
+
+  bool _hasSameNamePeer(RecordModel user) {
+    if (widget.role != 'customer') return false;
+    final normalized = _normalizedCustomerName(user.getStringValue('name'));
+    if (normalized.isEmpty) return false;
+    return _users.any(
+      (other) =>
+          other.id != user.id &&
+          _normalizedCustomerName(other.getStringValue('name')) == normalized,
+    );
+  }
+
+  String _customerPhoneTail(RecordModel user) {
+    const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+    const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+    final buffer = StringBuffer();
+    for (final codePoint in user.getStringValue('phone').runes) {
+      final char = String.fromCharCode(codePoint);
+      final latin = '0123456789'.indexOf(char);
+      if (latin >= 0) {
+        buffer.write(char);
+        continue;
+      }
+      final arabic = arabicDigits.indexOf(char);
+      if (arabic >= 0) {
+        buffer.write(arabic);
+        continue;
+      }
+      final persian = persianDigits.indexOf(char);
+      if (persian >= 0) buffer.write(persian);
+    }
+    final digits = buffer.toString();
+    if (digits.length <= 4) return digits;
+    return digits.substring(digits.length - 4);
+  }
+
   Widget _buildUserCard(RecordModel user, int index, AuthProvider auth) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final name = user.getStringValue('name');
+    final phoneTail = _customerPhoneTail(user);
+    final displayName =
+        _hasSameNamePeer(user) && phoneTail.isNotEmpty ? '$name · $phoneTail' : name;
     final approved = user.getBoolValue('approved');
     final accentColor = AppColors.primary;
     final balance = _balances[user.id] ?? 0;
@@ -982,7 +1023,7 @@ class _UserListScreenState extends State<UserListScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              name,
+                              displayName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
