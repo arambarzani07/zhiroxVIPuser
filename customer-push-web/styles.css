@@ -178,6 +178,11 @@ h2 { margin: 0; font-size: 18px; }
 .privacy-panel p:last-child, .state-copy, .dialog-copy { color: var(--muted); line-height: 1.8; }
 .state-card { text-align: center; padding-block: 34px; }
 .state-icon { width: 52px; height: 52px; margin: 0 auto 12px; border-radius: 16px; display: grid; place-items: center; background: var(--danger-soft); color: var(--danger); font-weight: 900; font-size: 22px; }
+.access-guide { max-width: 440px; margin: 22px auto 0; padding: 18px; border-radius: 18px; background: #f5f7fc; text-align: start; }
+.access-guide h3 { margin: 0 0 12px; font-size: 16px; }
+.access-guide ol { margin: 0; padding-inline-start: 24px; color: var(--muted); line-height: 2; font-size: 14px; }
+.access-retry { margin-top: 16px; padding: 12px 18px; border: 0; border-radius: 12px; background: #183b79; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.access-retry:focus-visible { outline: 3px solid #76a7ff; outline-offset: 3px; }
 .help-dialog { width: min(calc(100% - 28px), 480px); border: 0; border-radius: 22px; padding: 0; box-shadow: 0 24px 70px rgba(20,31,61,.22); }
 .help-dialog::backdrop { background: rgba(15,20,35,.48); }
 .help-dialog form { padding: 22px; }
