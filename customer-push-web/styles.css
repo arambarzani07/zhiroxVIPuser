@@ -2483,3 +2483,137 @@ body.exporting-period-pdf #periodStatementDocument tr {
   font-size: 9px;
   font-variant-numeric: tabular-nums;
 }
+
+
+/* Portal V3.5 — advanced statement controls */
+.period-statement-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+
+.period-statement-summary > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 10px 11px;
+  border: 1px solid rgba(15,23,42,.06);
+  border-radius: 13px;
+  background: #f8f9fc;
+}
+
+.period-statement-summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 800;
+}
+
+.period-statement-summary strong {
+  color: var(--text);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.period-statement-tools {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(145px,.55fr) auto;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.period-search-wrap {
+  min-width: 0;
+}
+
+.period-search-wrap input,
+.period-sort {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: 12px;
+  outline: 0;
+  background: #fafbfc;
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+}
+
+.period-search-wrap input {
+  padding: 0 12px;
+}
+
+.period-sort {
+  padding-inline: 10px 30px;
+}
+
+.period-search-wrap input:focus,
+.period-sort:focus {
+  border-color: rgba(49,87,224,.38);
+  box-shadow: 0 0 0 3px rgba(49,87,224,.07);
+}
+
+.period-csv-action {
+  min-width: 60px;
+  min-height: 42px;
+  margin: 0;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.period-result-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 17px 4px;
+  color: var(--muted);
+  font-size: 9.5px;
+}
+
+.period-result-meta > span {
+  font-variant-numeric: tabular-nums;
+}
+
+.period-statement-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+@media (max-width: 560px) {
+  .period-statement-tools {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .period-search-wrap {
+    grid-column: 1 / -1;
+  }
+
+  .period-csv-action {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .period-statement-summary {
+    gap: 5px;
+    padding-inline: 12px;
+  }
+
+  .period-statement-summary > div {
+    padding-inline: 8px;
+  }
+
+  .period-statement-summary span {
+    font-size: 8px;
+  }
+
+  .period-statement-tools {
+    padding-inline: 12px;
+  }
+}
