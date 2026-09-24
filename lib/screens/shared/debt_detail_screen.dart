@@ -23,6 +23,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     with SingleTickerProviderStateMixin {
   RecordModel? _debt;
   List<RecordModel> _payments = [];
+  List<Map<String, dynamic>> _installments = const [];
   double? _customerTotalPaidIqd;
   double? _customerTotalRemainingIqd;
   bool _isLoading = true;
@@ -56,6 +57,8 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     try {
       final debt = await PBService.getDebt(widget.debtId);
       final paymentsFuture = PBService.getPayments(debtId: widget.debtId);
+      final installmentsFuture = PBService.getDebtInstallments(widget.debtId)
+          .catchError((_) => <Map<String, dynamic>>[]);
       final customerId = debt.getStringValue('customer').trim();
       Map<String, dynamic>? customerSnapshot;
       if (customerId.isNotEmpty) {
@@ -67,11 +70,13 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
         }
       }
       final payments = await paymentsFuture;
+      final installments = await installmentsFuture;
       if (!mounted) return;
 
       setState(() {
         _debt = debt;
         _payments = payments;
+        _installments = installments;
         _customerTotalPaidIqd =
             (customerSnapshot?['totalPaidIqd'] as num?)?.toDouble();
         _customerTotalRemainingIqd =
@@ -85,6 +90,7 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
       setState(() {
         _debt = null;
         _payments = [];
+        _installments = const [];
         _customerTotalPaidIqd = null;
         _customerTotalRemainingIqd = null;
         _isLoading = false;
