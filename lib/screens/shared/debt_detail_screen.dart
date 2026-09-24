@@ -928,6 +928,194 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
     );
   }
 
+  List<Widget> _buildInstallmentSliver({
+    required bool isDark,
+    required bool canEdit,
+    required String currency,
+    required double dollarRate,
+  }) {
+    final installments = _installments
+        .where((item) => item['status']?.toString() != 'cancelled')
+        .toList(growable: false);
+    if (installments.isEmpty && !canEdit) return const [];
+
+    final displayCurrency =
+        currency == 'USD' && dollarRate > 0 ? 'USD' : 'IQD';
+
+    return [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+            decoration: BoxDecoration(
+              color: isDark ? AppDarkColors.card : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : const Color(0xFFE9EDF3),
+              ),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(
+                        Icons.calendar_month_outlined,
+                        color: Colors.orange,
+                        size: 19,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'پلانی قسط',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: isDark
+                                  ? AppDarkColors.textPrimary
+                                  : const Color(0xFF1D2939),
+                            ),
+                          ),
+                          Text(
+                            installments.isEmpty
+                                ? 'هێشتا پلانێک دیاری نەکراوە'
+                                : '${installments.length} قسط • هەر قسط reminder ـی خۆی هەیە',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: isDark
+                                  ? AppDarkColors.textSecondary
+                                  : const Color(0xFF98A2B3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (canEdit)
+                      TextButton.icon(
+                        onPressed: _showInstallmentDialog,
+                        icon: const Icon(Icons.edit_calendar_outlined, size: 17),
+                        label: Text(
+                          installments.isEmpty ? 'دروستکردن' : 'دەستکاری',
+                        ),
+                      ),
+                  ],
+                ),
+                if (installments.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Divider(
+                    height: 1,
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : const Color(0xFFF0F2F5),
+                  ),
+                  ...installments.map((item) {
+                    final no =
+                        int.tryParse(item['installment_no']?.toString() ?? '') ??
+                            0;
+                    final rawAmount =
+                        double.tryParse(item['amount']?.toString() ?? '') ?? 0;
+                    final displayAmount =
+                        displayCurrency == 'USD' && dollarRate > 0
+                            ? rawAmount / dollarRate
+                            : rawAmount;
+                    final dueDate = item['due_date']?.toString() ?? '';
+                    final paid = item['status']?.toString() == 'paid';
+                    final color = paid ? Colors.green : Colors.orange;
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: color.withValues(alpha: 0.10),
+                            foregroundColor: color,
+                            child: Text(
+                              '${no}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  AppHelpers.formatCurrencyWithType(
+                                    displayAmount,
+                                    displayCurrency,
+                                    dollarRate: dollarRate,
+                                    showConversion: false,
+                                  ),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: isDark
+                                        ? AppDarkColors.textPrimary
+                                        : const Color(0xFF344054),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  dueDate.isEmpty
+                                      ? 'بەروار دیاری نەکراوە'
+                                      : AppHelpers.formatDate(dueDate),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark
+                                        ? AppDarkColors.textSecondary
+                                        : const Color(0xFF98A2B3),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              paid ? 'دراوەتەوە' : 'چاوەڕوان',
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
   Widget _buildMetaCell(
     IconData icon,
     String label,
