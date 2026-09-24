@@ -24,6 +24,7 @@ const baseEvent = (): WorkerEvent => ({
   market_id: "market-1",
   customer_id: "customer-1",
   event_type: "debt_created",
+  event_record_id: "00000000-0000-4000-8000-000000000301",
   payload: {
     amount: 1000,
     currency: "IQD",
@@ -97,7 +98,10 @@ function fakeWorker(options: {
 Deno.test("notification click target uses canonical push domain", async () => {
   const repo = fakeWorker({ subscriptions: [{ ...subA }] });
   await processOutboxEvent(baseEvent(), repo.deps);
-  assertEquals(repo.sentMessages[0]?.url, "https://push.zhirox.com/");
+  assertEquals(
+    repo.sentMessages[0]?.url,
+    "https://push.zhirox.com/?view=transactions&notification=event-1&event=00000000-0000-4000-8000-000000000301",
+  );
 });
 
 Deno.test("fanout is frozen after first processing", async () => {
