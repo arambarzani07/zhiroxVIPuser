@@ -35,6 +35,7 @@ export type PublicPushDeps = {
   inspect: (tokenHash: string) => Promise<Record<string, unknown>>;
   portal: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; offset: number }) => Promise<Record<string, unknown>>;
   dueSummary?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null }) => Promise<Record<string, unknown>>;
+  receipt?: (args: { receiptId: string; tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null }) => Promise<Record<string, unknown>>;
   notificationHistory: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; limit: number }) => Promise<Record<string, unknown>>;
   preferences?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null }) => Promise<Record<string, unknown>>;
   updatePreferences?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; dueReminders: boolean; installmentReminders: boolean; monthlyStatements: boolean; manualMessages: boolean }) => Promise<Record<string, unknown>>;
@@ -117,7 +118,8 @@ export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Pro
     action === "preferences" ||
     action === "update_preferences" ||
     action === "mark_read" ||
-    action === "acknowledge"
+    action === "acknowledge" ||
+    action === "receipt"
   ) {
     if (!(await enforceRateLimit(req, deps))) return json({ error: "rate_limited" }, 429);
     if (
@@ -151,6 +153,29 @@ export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Pro
         due_summary: dueSummary,
         vapid_public_key: deps.vapidPublicKey,
       });
+    } catch (_) {
+      return json({ error: "link_unavailable" }, 404);
+    }
+  }
+
+  if (action === "receipt") {
+    const token = isToken(body.token) ? body.token : null;
+    const endpoint = typeof body.endpoint === "string" && body.endpoint.startsWith("https://")
+      ? body.endpoint
+      : null;
+    const deviceSecret = isToken(body.device_secret) ? body.device_secret : null;
+    const receiptId = String(body.receipt_id ?? "").trim();
+    if ((!token && (!endpoint || !deviceSecret)) || !isUuid(receiptId)) {
+      return json({ error: "invalid_input" }, 400);
+    }
+    if (!deps.receipt) return json({ error: "feature_unavailable" }, 503);
+    try {
+      return json(await deps.receipt({
+        receiptId,
+        tokenHash: token ? await deps.hash(token) : null,
+        endpoint,
+        deviceSecretHash: deviceSecret ? await deps.hash(deviceSecret) : null,
+      }));
     } catch (_) {
       return json({ error: "link_unavailable" }, 404);
     }
@@ -302,6 +327,19 @@ async function serve(req: Request): Promise<Response> {
       const { data, error } = await admin.rpc(
         "read_customer_portal_due_summary_service",
         {
+          p_token_hash: args.tokenHash,
+          p_endpoint: args.endpoint,
+          p_device_secret_hash: args.deviceSecretHash,
+        },
+      );
+      if (error) throw error;
+      return (data ?? {}) as Record<string, unknown>;
+    },
+    receipt: async (args) => {
+      const { data, error } = await admin.rpc(
+        "read_customer_portal_receipt_service",
+        {
+          p_receipt_id: args.receiptId,
           p_token_hash: args.tokenHash,
           p_endpoint: args.endpoint,
           p_device_secret_hash: args.deviceSecretHash,
