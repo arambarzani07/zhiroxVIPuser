@@ -46,6 +46,23 @@ const saveNotificationPreferencesButton = document.getElementById('saveNotificat
 const preferenceResultEl = document.getElementById('preferenceResult');
 const showIosHelpButton = document.getElementById('showIosHelp');
 const iosHelpDialog = document.getElementById('iosHelpDialog');
+const receiptDialog = document.getElementById('receiptDialog');
+const receiptMarketNameEl = document.getElementById('receiptMarketName');
+const receiptNumberEl = document.getElementById('receiptNumber');
+const receiptCustomerNameEl = document.getElementById('receiptCustomerName');
+const receiptDateEl = document.getElementById('receiptDate');
+const receiptTypeEl = document.getElementById('receiptType');
+const receiptAmountLabelEl = document.getElementById('receiptAmountLabel');
+const receiptAmountEl = document.getElementById('receiptAmount');
+const receiptRemainingEl = document.getElementById('receiptRemaining');
+const receiptDueRowEl = document.getElementById('receiptDueRow');
+const receiptDueDateEl = document.getElementById('receiptDueDate');
+const receiptNoteRowEl = document.getElementById('receiptNoteRow');
+const receiptNoteEl = document.getElementById('receiptNote');
+const receiptItemsSectionEl = document.getElementById('receiptItemsSection');
+const receiptItemsEl = document.getElementById('receiptItems');
+const receiptFooterEl = document.getElementById('receiptFooter');
+const receiptPrintButton = document.getElementById('receiptPrint');
 const openTransactionsButton = document.getElementById('openTransactions');
 const transactionSearchEl = document.getElementById('transactionSearch');
 const transactionFilterButtons = [...document.querySelectorAll('[data-transaction-filter]')];
@@ -541,6 +558,109 @@ function notificationDeepLink(item) {
   }
 }
 
+function receiptItemLabel(item, index) {
+  if (!item || typeof item !== 'object') return `بابەتی ${index + 1}`;
+  return String(
+    item.name ??
+    item.title ??
+    item.item_name ??
+    item.product_name ??
+    item.description ??
+    `بابەتی ${index + 1}`
+  ).trim();
+}
+
+function receiptItemMeta(item) {
+  if (!item || typeof item !== 'object') return '';
+  const parts = [];
+  const quantity = item.quantity ?? item.qty;
+  const price = item.price ?? item.unit_price;
+  const total = item.total ?? item.total_price;
+  if (quantity != null) parts.push(`ژمارە: ${quantity}`);
+  if (price != null) parts.push(`نرخ: ${number(price).toLocaleString('en-US')}`);
+  if (total != null) parts.push(`کۆ: ${number(total).toLocaleString('en-US')}`);
+  return parts.join(' • ');
+}
+
+function renderReceipt(data) {
+  const source = data?.source && typeof data.source === 'object'
+    ? data.source
+    : {};
+  const settings = data?.settings && typeof data.settings === 'object'
+    ? data.settings
+    : {};
+  const isPayment = source.kind === 'payment';
+  const currency = String(source.currency || 'IQD').toUpperCase();
+  const rawAmount = number(source.amount);
+  const dollarRate = number(source.dollar_rate);
+  const displayAmount = currency === 'USD' && dollarRate > 0
+    ? rawAmount / dollarRate
+    : rawAmount;
+  const displayCurrency = currency === 'USD' && dollarRate > 0 ? 'USD' : 'IQD';
+
+  receiptMarketNameEl.textContent =
+    String(data.market_name || settings.receipt_title || 'ZHIROX');
+  receiptNumberEl.textContent =
+    data.receipt_number ? `#${data.receipt_number}` : '—';
+  receiptCustomerNameEl.textContent = String(data.customer_name || '—');
+  receiptDateEl.textContent = formatShortDate(source.occurred_at || data.created_at) || '—';
+  receiptTypeEl.textContent = isPayment ? 'پارەدانەوە' : 'قەرز';
+  receiptAmountLabelEl.textContent = isPayment ? 'بڕی پارەدانەوە' : 'بڕی قەرز';
+  receiptAmountEl.textContent = money(displayAmount, displayCurrency);
+
+  if (!isPayment && source.remaining != null) {
+    const rawRemaining = number(source.remaining);
+    const remaining = currency === 'USD' && dollarRate > 0
+      ? rawRemaining / dollarRate
+      : rawRemaining;
+    receiptRemainingEl.textContent = `ماوە: ${money(remaining, displayCurrency)}`;
+  } else {
+    receiptRemainingEl.textContent = '';
+  }
+
+  const dueDate = String(source.due_date || '').trim();
+  receiptDueRowEl.hidden = !dueDate;
+  if (dueDate) receiptDueDateEl.textContent = formatShortDate(dueDate);
+
+  const note = String(source.note || '').trim();
+  receiptNoteRowEl.hidden = !note;
+  if (note) receiptNoteEl.textContent = note;
+
+  receiptItemsEl.replaceChildren();
+  const items = Array.isArray(source.items) ? source.items : [];
+  receiptItemsSectionEl.hidden = items.length === 0;
+  items.forEach((item, index) => {
+    const row = document.createElement('div');
+    row.className = 'receipt-item';
+    const copy = document.createElement('div');
+    addText(copy, 'strong', receiptItemLabel(item, index));
+    const meta = receiptItemMeta(item);
+    if (meta) addText(copy, 'small', meta);
+    row.appendChild(copy);
+    receiptItemsEl.appendChild(row);
+  });
+
+  receiptFooterEl.textContent = String(settings.footer_note || '').trim();
+}
+
+async function openReceipt(receiptId) {
+  const id = String(receiptId || '').trim();
+  if (!id) return false;
+  const credentials = portalCredentials(0, 'receipt');
+  if (!credentials) return false;
+  try {
+    const data = await api({ ...credentials, receipt_id: id });
+    renderReceipt(data);
+    if (typeof receiptDialog?.showModal === 'function') {
+      if (!receiptDialog.open) receiptDialog.showModal();
+    }
+    return true;
+  } catch (_) {
+    setResult('نەتوانرا پسووڵەکە بکرێتەوە.', 'err');
+    return false;
+  }
+}
+
 async function markNotification(item, acknowledge = false) {
   const id = String(item?.id || '').trim();
   if (!id) return false;
@@ -569,7 +689,9 @@ async function followNotification(item) {
   const view = target.searchParams.get('view') || 'notifications';
   setActiveView(views[view] ? view : 'notifications');
   const eventId = target.searchParams.get('event') || '';
+  const receiptId = target.searchParams.get('receipt') || '';
   if (eventId) await focusTransaction(eventId);
+  if (receiptId) await openReceipt(receiptId);
   await loadNotificationHistory();
 }
 
@@ -903,6 +1025,7 @@ async function initialize() {
     const requestedView = deepLink.searchParams.get('view');
     const notificationId = deepLink.searchParams.get('notification') || '';
     const eventId = deepLink.searchParams.get('event') || '';
+    const receiptId = deepLink.searchParams.get('receipt') || '';
 
     setActiveView(views[requestedView] ? requestedView : (eventId ? 'transactions' : 'home'));
     if (notificationId) {
@@ -912,6 +1035,7 @@ async function initialize() {
       }
     }
     if (eventId) await focusTransaction(eventId);
+    if (receiptId) await openReceipt(receiptId);
     setStatus('هەژمارەکەت ئامادەیە.', 'ok');
   } catch (_) {
     showLockedPortal();
@@ -928,6 +1052,13 @@ loadMoreButton.addEventListener('click', async () => {
     loadMoreButton.disabled = false;
   }
 });
+
+if (receiptPrintButton) {
+  receiptPrintButton.addEventListener('click', () => {
+    document.body.classList.add('printing-receipt');
+    window.setTimeout(() => window.print(), 80);
+  });
+}
 
 if (headerRefreshButton) {
   headerRefreshButton.addEventListener('click', () => void refreshPortal());
@@ -972,6 +1103,7 @@ if (clearTransactionSearchButton) {
 }
 window.addEventListener('afterprint', () => {
   document.body.classList.remove('printing-statement');
+  document.body.classList.remove('printing-receipt');
 });
 
 notificationHistoryRefreshButton.addEventListener('click', () => {
