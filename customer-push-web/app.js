@@ -1410,6 +1410,203 @@ async function applyStatementPreset(preset) {
   syncStatementDateDisplays();
 }
 
+function escapePrintText(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function buildPeriodPrintHtml() {
+  const clone = periodStatementDocumentEl.cloneNode(true);
+  clone.hidden = false;
+  clone.removeAttribute('hidden');
+  clone.querySelector('.period-statement-actions')?.remove();
+
+  const market = statementMarketNameEl?.textContent?.trim() || 'ZHIROX';
+  const customer = statementCustomerNameEl?.textContent?.trim() || '';
+  const period = statementPeriodLabelEl?.textContent?.trim() || '';
+  const title = [market, customer, period].filter(Boolean).join(' — ');
+
+  return `<!doctype html>
+<html lang="ku" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${escapePrintText(title || 'پسووڵەی ماوە')}</title>
+  <style>
+    @page { size: A4 portrait; margin: 13mm 11mm 15mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #151a2d; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+      direction: rtl;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .print-preview-shell { max-width: 210mm; margin: 0 auto; padding: 18px; }
+    .print-toolbar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      margin: 0 0 16px; padding: 10px;
+      border: 1px solid #e3e7ef; border-radius: 14px;
+      background: rgba(255,255,255,.96); box-shadow: 0 10px 26px rgba(17,24,39,.08);
+    }
+    .print-toolbar strong { font-size: 13px; }
+    .print-toolbar small { display: block; margin-top: 2px; color: #697386; font-size: 10px; }
+    #printNow {
+      border: 0; border-radius: 11px; padding: 10px 16px;
+      background: #3157e0; color: white; font-weight: 800; font-size: 12px;
+    }
+    .period-statement-document {
+      overflow: visible; border: 0; border-radius: 0; background: #fff; box-shadow: none;
+    }
+    .period-statement-head {
+      display: grid; grid-template-columns: minmax(0,1fr) minmax(190px,.72fr);
+      gap: 18px; padding: 0 0 15px; border-bottom: 1px solid #dfe3e9;
+      break-inside: avoid;
+    }
+    .period-statement-kicker { margin: 0 0 4px; color: #3157e0; font-size: 10px; font-weight: 900; }
+    .period-statement-head h2 { margin: 0; font-size: 21px; }
+    .period-statement-market-meta { margin: 5px 0 0; color: #697386; font-size: 10px; line-height: 1.6; }
+    .period-statement-meta { display: grid; gap: 7px; }
+    .period-statement-meta > div {
+      display: grid; grid-template-columns: auto minmax(0,1fr);
+      align-items: start; gap: 9px;
+    }
+    .period-statement-meta span { color: #697386; font-size: 9.5px; }
+    .period-statement-meta strong { text-align: right; overflow-wrap: anywhere; font-size: 10.5px; }
+    .period-table-wrap { width: 100%; overflow: visible; margin-top: 8px; }
+    .period-statement-table {
+      width: 100%; border-collapse: collapse; direction: rtl; table-layout: fixed;
+    }
+    .period-statement-table thead { display: table-header-group; }
+    .period-statement-table tr { break-inside: avoid; }
+    .period-statement-table th, .period-statement-table td {
+      padding: 7px 6px; border-bottom: 1px solid #dfe3e9;
+      vertical-align: top; text-align: right; font-size: 10px; line-height: 1.5;
+    }
+    .period-statement-table th {
+      background: #f2f4f8; color: #394156; font-weight: 900;
+    }
+    .period-statement-table th:nth-child(1), .period-statement-table td:nth-child(1) {
+      width: 12%; text-align: center;
+    }
+    .period-statement-table th:nth-child(2), .period-statement-table td:nth-child(2) { width: 42%; }
+    .period-statement-table th:nth-child(3), .period-statement-table td:nth-child(3) { width: 23%; }
+    .period-statement-table th:nth-child(4), .period-statement-table td:nth-child(4) { width: 23%; }
+    .period-col-row { color: #697386; font-variant-numeric: tabular-nums; }
+    .period-col-name { font-weight: 700; }
+    .period-col-price, .period-col-date {
+      direction: ltr; text-align: right !important; white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .period-col-price { font-weight: 850; }
+    .period-col-date { color: #697386; }
+    .period-statement-totals {
+      display: grid; gap: 7px; padding: 14px 0 0; break-inside: avoid;
+    }
+    .period-total-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      min-height: 42px; padding: 9px 12px; border: 1px solid #cfd5df; background: #fafbfc;
+    }
+    .period-total-row span { color: #697386; font-size: 10px; font-weight: 800; }
+    .period-total-row strong {
+      direction: ltr; color: #11172b; font-size: 17px; font-weight: 950;
+      font-variant-numeric: tabular-nums;
+    }
+    .period-statement-footer {
+      margin: 0; padding: 10px 0 0; color: #697386;
+      text-align: center; font-size: 9.5px; line-height: 1.7;
+    }
+    @media (max-width: 620px) {
+      .print-preview-shell { padding: 10px; }
+      .period-statement-head { grid-template-columns: 1fr; gap: 10px; }
+    }
+    @media print {
+      .print-preview-shell { max-width: none; margin: 0; padding: 0; }
+      .print-toolbar { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="print-preview-shell">
+    <div class="print-toolbar">
+      <div>
+        <strong>پسووڵە ئامادەیە</strong>
+        <small>لە iPhone: Print Preview → Share → Save to Files</small>
+      </div>
+      <button id="printNow" type="button">چاپ / Save PDF</button>
+    </div>
+    ${clone.outerHTML}
+  </main>
+</body>
+</html>`;
+}
+
+function fallbackPeriodPrint() {
+  document.body.classList.add('printing-period-statement');
+  try {
+    window.print();
+  } finally {
+    window.setTimeout(() => {
+      document.body.classList.remove('printing-period-statement');
+    }, 1200);
+  }
+}
+
+function openPeriodStatementPrintPreview() {
+  if (!periodStatementDocumentEl || periodStatementDocumentEl.hidden) {
+    if (statementBuilderResultEl) {
+      statementBuilderResultEl.textContent = 'سەرەتا پسووڵەکە دروست بکە، پاشان PDF بکە.';
+      statementBuilderResultEl.className = 'action-result err';
+    }
+    return;
+  }
+
+  const preview = window.open('', '_blank');
+  if (!preview) {
+    fallbackPeriodPrint();
+    return;
+  }
+
+  try {
+    preview.document.open();
+    preview.document.write(buildPeriodPrintHtml());
+    preview.document.close();
+
+    const printNow = preview.document.getElementById('printNow');
+    printNow?.addEventListener('click', () => {
+      preview.focus();
+      preview.print();
+    });
+
+    preview.focus();
+
+    const launchPrint = () => {
+      window.setTimeout(() => {
+        try {
+          preview.focus();
+          preview.print();
+        } catch (_) {
+          // The visible print button remains available as an iOS fallback.
+        }
+      }, 220);
+    };
+
+    if (preview.document.fonts?.ready) {
+      preview.document.fonts.ready.then(launchPrint).catch(launchPrint);
+    } else {
+      launchPrint();
+    }
+  } catch (_) {
+    try { preview.close(); } catch (_) {}
+    fallbackPeriodPrint();
+  }
+}
+
 async function ensureAllTransactionsLoaded() {
   let pages = 0;
   while (!loadMoreButton.hidden && pages < 100) {
@@ -1594,8 +1791,7 @@ for (const button of statementPresetButtons) {
 }
 if (printPeriodStatementButton) {
   printPeriodStatementButton.addEventListener('click', () => {
-    document.body.classList.add('printing-period-statement');
-    window.setTimeout(() => window.print(), 80);
+    openPeriodStatementPrintPreview();
   });
 }
 if (transactionSearchEl) {
