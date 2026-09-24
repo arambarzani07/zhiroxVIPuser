@@ -121,6 +121,30 @@ function errorText(error: unknown): string {
   return text.slice(0, 500);
 }
 
+function portalUrlForEvent(event: WorkerEvent): string {
+  const params = new URLSearchParams();
+  const eventType = event.event_type;
+  params.set(
+    "view",
+    eventType === "manual" || eventType === "debt_limit_changed"
+      ? "notifications"
+      : "transactions",
+  );
+  params.set("notification", event.id);
+
+  if (eventType === "debt_created" || eventType === "payment_created") {
+    params.set("event", String((event as any).event_record_id ?? ""));
+  } else if (eventType === "installment_reminder") {
+    const debtId = String(event.payload.debt_id ?? "").trim();
+    if (debtId) params.set("event", debtId);
+  } else if (eventType === "monthly_statement") {
+    const period = String(event.payload.period ?? "").trim();
+    if (period) params.set("period", period);
+  }
+
+  return `https://push.zhirox.com/?${params.toString()}`;
+}
+
 export async function reconcileRecentDebts(deps: ReconcileDeps): Promise<number> {
   const now = deps.now();
   const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -186,7 +210,7 @@ export async function processOutboxEvent(
     try {
       await deps.sendPush(delivery.subscription, {
         ...message,
-        url: "https://push.zhirox.com/",
+        url: portalUrlForEvent(event),
       });
       await deps.updateDelivery(delivery.id, {
         status: "sent",
@@ -276,6 +300,28 @@ function repositoryDeps(admin: any): WorkerDeps {
   return {
     now: () => new Date(),
     listActiveSubscriptions: async (event) => {
+      const preferenceField =
+        event.event_type === "due_reminder"
+          ? "due_reminders"
+          : event.event_type === "installment_reminder"
+          ? "installment_reminders"
+          : event.event_type === "monthly_statement"
+          ? "monthly_statements"
+          : event.event_type === "manual"
+          ? "manual_messages"
+          : null;
+
+      if (preferenceField) {
+        const { data: preference, error: preferenceError } = await admin
+          .from("customer_notification_preferences")
+          .select(preferenceField)
+          .eq("market_id", event.market_id)
+          .eq("customer_id", event.customer_id)
+          .maybeSingle();
+        if (preferenceError) throw preferenceError;
+        if (preference?.[preferenceField] === false) return [];
+      }
+
       const { data, error } = await admin.from("customer_push_subscriptions")
         .select("id,endpoint,p256dh,auth,active")
         .eq("market_id", event.market_id)
