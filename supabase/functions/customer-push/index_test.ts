@@ -24,6 +24,15 @@ function deps(overrides: Partial<PublicPushDeps> = {}): PublicPushDeps {
       rows: [],
       has_more: false,
     }),
+    receipt: async (args) => ({
+      id: args.receiptId,
+      receipt_number: "R-100",
+      market_name: "Market A",
+      customer_name: "Customer A",
+      source_type: "payment",
+      source: { kind: "payment", amount: 2500, currency: "IQD" },
+      settings: {},
+    }),
     notificationHistory: async () => ({
       items: [{
         id: "00000000-0000-0000-0000-000000000123",
@@ -216,6 +225,27 @@ Deno.test("portal can reopen from installed app using device credentials", async
   );
   assertEquals(res.status, 200);
   assertEquals(receivedHash, await sha256Hex(secret));
+});
+
+Deno.test("secure receipt can be opened with the same portal token", async () => {
+  const receiptId = "00000000-0000-4000-8000-000000000456";
+  const res = await routeCustomerPush(
+    new Request("https://x/functions/v1/customer-push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "receipt",
+        token,
+        receipt_id: receiptId,
+      }),
+    }),
+    deps(),
+  );
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.id, receiptId);
+  assertEquals(body.receipt_number, "R-100");
+  assertEquals(body.customer_name, "Customer A");
 });
 
 Deno.test("notification history can authenticate with permanent token", async () => {
