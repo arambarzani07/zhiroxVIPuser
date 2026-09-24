@@ -12,6 +12,8 @@ import 'package:zhirox/services/pdf_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/services/connectivity_service.dart';
+import 'package:zhirox/widgets/app_async_state.dart';
+import 'package:zhirox/widgets/zhirox_shell.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -183,7 +185,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final pendingNavCount = (_stats['pendingRequests'] as num?)?.toInt() ?? 0;
 
     final screens = [
@@ -202,201 +203,60 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     ];
 
-    return Scaffold(
-      backgroundColor: isDark
-          ? AppDarkColors.background
-          : const Color(0xFFF5F7FA),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: List<Widget>.generate(
-          screens.length,
-          (index) => _visitedTabs.contains(index)
-              ? screens[index]
-              : const SizedBox.shrink(),
-        ),
+    return ZhiroxAppShell(
+      index: _currentIndex,
+      pages: List<Widget>.generate(
+        screens.length,
+        (index) => _visitedTabs.contains(index)
+            ? screens[index]
+            : const SizedBox.shrink(),
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppDarkColors.card : Colors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(28),
-            topRight: Radius.circular(28),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
-              blurRadius: 24,
-              offset: const Offset(0, -6),
-            ),
-          ],
+      destinations: [
+        const ZhiroxDestination(
+          label: 'سەرەکی',
+          icon: Icons.space_dashboard_outlined,
+          selectedIcon: Icons.space_dashboard_rounded,
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildNavItem(
-                  0,
-                  Icons.space_dashboard_outlined,
-                  Icons.space_dashboard_rounded,
-                  'داشبۆرد',
-                ),
-                _buildNavItem(
-                  1,
-                  Icons.people_outline_rounded,
-                  Icons.people_rounded,
-                  'کڕیار',
-                ),
-                _buildNavItem(
-                  2,
-                  Icons.settings_outlined,
-                  Icons.settings_rounded,
-                  'ڕێکخستن',
-                  badgeCount: pendingNavCount,
-                ),
-              ],
-            ),
-          ),
+        const ZhiroxDestination(
+          label: 'کڕیار',
+          icon: Icons.people_outline_rounded,
+          selectedIcon: Icons.people_rounded,
         ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(
-    int index,
-    IconData icon,
-    IconData activeIcon,
-    String label, {
-    int badgeCount = 0,
-  }) {
-    final isSelected = _currentIndex == index;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inactiveColor =
-        isDark ? AppDarkColors.textSecondary : const Color(0xFF98A2B3);
-
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () {
-              if (_currentIndex == index) return;
-              setState(() {
-                _visitedTabs.add(index);
-                _currentIndex = index;
-              });
-              if (index == 0) unawaited(_loadStats());
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.10)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Icon(
-                        isSelected ? activeIcon : icon,
-                        size: 22,
-                        color: isSelected ? AppColors.primary : inactiveColor,
-                      ),
-                      if (badgeCount > 0)
-                        Positioned(
-                          top: -6,
-                          right: -9,
-                          child: Container(
-                            constraints: const BoxConstraints(minWidth: 17),
-                            height: 17,
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade600,
-                              borderRadius: BorderRadius.circular(9),
-                              border: Border.all(
-                                color: isDark ? AppDarkColors.card : Colors.white,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Text(
-                              badgeCount > 99 ? '99+' : '$badgeCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 8.5,
-                                fontWeight: FontWeight.w800,
-                                height: 1,
-                              ),
-                              textDirection: TextDirection.ltr,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: isSelected ? AppColors.primary : inactiveColor,
-                      fontSize: 11,
-                      fontWeight:
-                          isSelected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        ZhiroxDestination(
+          label: 'زیاتر',
+          icon: Icons.grid_view_outlined,
+          selectedIcon: Icons.grid_view_rounded,
+          badgeCount: pendingNavCount,
         ),
-      ),
+      ],
+      onSelected: (index) {
+        if (_currentIndex == index) {
+          if (index == 0) unawaited(_loadStats());
+          return;
+        }
+        setState(() {
+          _visitedTabs.add(index);
+          _currentIndex = index;
+        });
+        if (index == 0) unawaited(_loadStats());
+      },
     );
   }
 
   Widget _buildNewDashboard(AuthProvider auth) {
     if (_isLoading && _stats.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppAsyncStateView(
+        state: AppAsyncState.loading,
+        child: SizedBox.shrink(),
+        loadingLabel: 'داشبۆرد ئامادە دەکرێت...',
+      );
     }
     if (_stats.isEmpty && _statsError != null) {
-      return RefreshIndicator(
-        onRefresh: _loadStats,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(32),
-          children: [
-            const SizedBox(height: 120),
-            const Icon(
-              Icons.cloud_off_rounded,
-              size: 58,
-              color: Colors.orange,
-            ),
-            const SizedBox(height: 18),
-            Text(
-              _statsError!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, height: 1.7),
-            ),
-            const SizedBox(height: 20),
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: () => _loadStats(),
-                icon: const Icon(Icons.refresh),
-                label: const Text('دووبارە هەوڵ بدە'),
-              ),
-            ),
-          ],
-        ),
+      return AppAsyncStateView(
+        state: AppAsyncState.error,
+        child: const SizedBox.shrink(),
+        message: _statsError,
+        onRetry: _loadStats,
       );
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
