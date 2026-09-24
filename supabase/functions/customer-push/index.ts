@@ -34,6 +34,7 @@ export type PublicPushDeps = {
   rateLimitSalt: string;
   inspect: (tokenHash: string) => Promise<Record<string, unknown>>;
   portal: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; offset: number }) => Promise<Record<string, unknown>>;
+  dueSummary?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null }) => Promise<Record<string, unknown>>;
   notificationHistory: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; limit: number }) => Promise<Record<string, unknown>>;
   preferences?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null }) => Promise<Record<string, unknown>>;
   updatePreferences?: (args: { tokenHash: string | null; endpoint: string | null; deviceSecretHash: string | null; dueReminders: boolean; installmentReminders: boolean; monthlyStatements: boolean; manualMessages: boolean }) => Promise<Record<string, unknown>>;
@@ -136,13 +137,20 @@ export async function routeCustomerPush(req: Request, deps: PublicPushDeps): Pro
       return json({ error: "link_unavailable" }, 400);
     }
     try {
-      const portal = await deps.portal({
+      const auth = {
         tokenHash: token ? await deps.hash(token) : null,
         endpoint,
         deviceSecretHash: deviceSecret ? await deps.hash(deviceSecret) : null,
-        offset,
+      };
+      const portal = await deps.portal({ ...auth, offset });
+      const dueSummary = deps.dueSummary
+        ? await deps.dueSummary(auth)
+        : {};
+      return json({
+        ...portal,
+        due_summary: dueSummary,
+        vapid_public_key: deps.vapidPublicKey,
       });
-      return json({ ...portal, vapid_public_key: deps.vapidPublicKey });
     } catch (_) {
       return json({ error: "link_unavailable" }, 404);
     }
@@ -287,6 +295,18 @@ async function serve(req: Request): Promise<Response> {
         p_device_secret_hash: args.deviceSecretHash,
         p_offset: args.offset,
       });
+      if (error) throw error;
+      return (data ?? {}) as Record<string, unknown>;
+    },
+    dueSummary: async (args) => {
+      const { data, error } = await admin.rpc(
+        "read_customer_portal_due_summary_service",
+        {
+          p_token_hash: args.tokenHash,
+          p_endpoint: args.endpoint,
+          p_device_secret_hash: args.deviceSecretHash,
+        },
+      );
       if (error) throw error;
       return (data ?? {}) as Record<string, unknown>;
     },
