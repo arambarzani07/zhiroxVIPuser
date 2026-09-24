@@ -198,6 +198,8 @@
             </label>
           </div>
           <div class="period-presets">
+            <button type="button" data-statement-preset="7d">٧ ڕۆژ</button>
+            <button type="button" data-statement-preset="30d">٣٠ ڕۆژ</button>
             <button type="button" data-statement-preset="month">ئەم مانگە</button>
             <button type="button" data-statement-preset="year">ئەم ساڵە</button>
             <button type="button" data-statement-preset="all">هەموو</button>
@@ -220,6 +222,27 @@
             </div>
           </header>
 
+          <div class="period-statement-summary" aria-label="پوختەی پسووڵە">
+            <div><span>ژمارەی بابەت</span><strong id="statementItemCount">0</strong></div>
+            <div><span>ژمارەی ڕۆژ</span><strong id="statementDayCount">0</strong></div>
+            <div><span>ژمارەی دراو</span><strong id="statementCurrencyCount">0</strong></div>
+          </div>
+
+          <div class="period-statement-tools">
+            <label class="period-search-wrap">
+              <span class="sr-only">گەڕان لە بابەتەکان</span>
+              <input id="statementItemSearch" type="search" inputmode="search" autocomplete="off" placeholder="گەڕان بە ناوی بابەت...">
+            </label>
+            <select id="statementSort" class="period-sort" aria-label="ڕیزکردنی بابەتەکان">
+              <option value="date-asc">بەروار: کۆن → نوێ</option>
+              <option value="date-desc">بەروار: نوێ → کۆن</option>
+              <option value="name-asc">ناوی بابەت</option>
+              <option value="amount-desc">نرخ: زۆر → کەم</option>
+              <option value="amount-asc">نرخ: کەم → زۆر</option>
+            </select>
+            <button id="exportStatementCsv" class="secondary-action period-csv-action" type="button">CSV</button>
+          </div>
+
           <div class="period-table-wrap">
             <table class="period-statement-table" dir="rtl">
               <thead>
@@ -234,6 +257,10 @@
             </table>
           </div>
 
+          <div class="period-result-meta">
+            <span id="statementVisibleCount">0 بابەت</span>
+            <button id="clearStatementFilters" class="text-action" type="button" hidden>پاککردنەوەی فلتەر</button>
+          </div>
           <div id="periodStatementTotals" class="period-statement-totals"></div>
           <p id="periodStatementFooter" class="period-statement-footer"></p>
 
