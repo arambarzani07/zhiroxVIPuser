@@ -12,6 +12,7 @@ const resultEl = document.getElementById('result');
 const manifestEl = document.getElementById('appManifest');
 const portalAppEl = document.getElementById('portalApp');
 const lockedStateEl = document.getElementById('lockedState');
+lockedStateEl.querySelector('.access-retry')?.addEventListener('click', () => window.location.reload());
 const marketBrandEl = document.getElementById('marketBrand');
 const customerGreetingEl = document.getElementById('customerGreeting');
 const accountBadgeEl = document.getElementById('accountBadge');
