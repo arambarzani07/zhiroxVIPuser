@@ -32,6 +32,7 @@ export type WorkerEvent = {
   market_id: string;
   customer_id: string;
   event_type: PushEventType;
+  event_record_id?: string;
   payload: PushPayload;
   fanout_at?: string | null;
 };
