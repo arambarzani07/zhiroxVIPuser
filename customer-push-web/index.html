@@ -27,7 +27,10 @@
           <p id="customerGreeting" class="muted">بارکردنی زانیاریی هەژمار...</p>
         </div>
       </div>
-      <div id="accountBadge" class="status-badge" role="status">پشکنین...</div>
+      <div class="header-actions">
+        <div id="accountBadge" class="status-badge" role="status">پشکنین...</div>
+        <button id="headerRefresh" class="icon-action" type="button" aria-label="نوێکردنەوەی هەژمار" title="نوێکردنەوە">↻</button>
+      </div>
     </header>
 
     <p id="status" class="sr-status" aria-live="polite">پشکنینی لینک...</p>
@@ -48,7 +51,7 @@
           <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6.5 3.5h11A2.5 2.5 0 0 1 20 6v12a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18V6a2.5 2.5 0 0 1 2.5-2.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span class="tab-label">مامەڵەکان</span>
         </button>
         <button id="notificationsTab" type="button" class="nav-item" data-portal-tab="notifications" aria-controls="notificationsView">
-          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M18 9.5a6 6 0 0 0-12 0c0 6-2.5 6.5-2.5 6.5h17S18 15.5 18 9.5Z"/><path d="M9.5 19.5a2.8 2.8 0 0 0 5 0"/></svg></span><span class="tab-label">ئاگادارکردنەوە</span>
+          <span class="tab-icon notification-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M18 9.5a6 6 0 0 0-12 0c0 6-2.5 6.5-2.5 6.5h17S18 15.5 18 9.5Z"/><path d="M9.5 19.5a2.8 2.8 0 0 0 5 0"/></svg><span id="notificationUnreadBadge" class="nav-badge" hidden>0</span></span><span class="tab-label">ئاگادارکردنەوە</span>
         </button>
       </nav>
 
@@ -72,6 +75,42 @@
 
         <div id="summaryMetrics" class="summary-grid"></div>
 
+        <div class="insight-grid">
+          <article id="dueInsightCard" class="insight-card">
+            <div class="insight-icon" aria-hidden="true">◷</div>
+            <div class="insight-copy">
+              <span class="insight-kicker">دانەوە</span>
+              <strong id="dueInsightTitle">پشکنین...</strong>
+              <small id="dueInsightMeta">زانیاریی بەرواری دانەوە</small>
+            </div>
+          </article>
+          <article id="debtLimitCard" class="insight-card" hidden>
+            <div class="insight-icon" aria-hidden="true">◎</div>
+            <div class="insight-copy">
+              <span class="insight-kicker">سنووری قەرز</span>
+              <strong id="debtLimitTitle">—</strong>
+              <small id="debtLimitMeta">—</small>
+              <div class="limit-progress" aria-hidden="true"><span id="debtLimitProgress"></span></div>
+            </div>
+          </article>
+        </div>
+
+        <section class="panel quick-actions-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">کرداری خێرا</p>
+              <h2>خزمەتگوزارییەکان</h2>
+            </div>
+            <span id="lastUpdatedLabel" class="last-updated">—</span>
+          </div>
+          <div class="quick-action-grid">
+            <button id="quickTransactions" class="quick-action" type="button"><span aria-hidden="true">↔</span><strong>مامەڵەکان</strong><small>قەرز و پارەدان</small></button>
+            <button id="quickNotifications" class="quick-action" type="button"><span aria-hidden="true">◉</span><strong>ئاگاداری</strong><small>مێژوو و ڕێکخستن</small></button>
+            <button id="quickPrint" class="quick-action" type="button"><span aria-hidden="true">▤</span><strong>کەشفی حیساب</strong><small>Print / Save PDF</small></button>
+            <button id="quickRefresh" class="quick-action" type="button"><span aria-hidden="true">↻</span><strong>نوێکردنەوە</strong><small>داتای تازە</small></button>
+          </div>
+        </section>
+
         <section class="panel">
           <div class="section-heading">
             <div>
@@ -91,6 +130,25 @@
             <h2 id="transactionsHeading">قەرز و پارەدانەکان</h2>
           </div>
         </div>
+        <section class="panel statement-tools-panel">
+          <div class="statement-toolbar">
+            <label class="transaction-search-wrap">
+              <span class="sr-only">گەڕان لە مامەڵەکان</span>
+              <input id="transactionSearch" type="search" inputmode="search" autocomplete="off" placeholder="گەڕان بە بڕ، تێبینی، بەروار...">
+            </label>
+            <button id="printStatement" class="statement-print" type="button">Print / PDF</button>
+          </div>
+          <div class="transaction-filters" role="group" aria-label="فلتەری مامەڵەکان">
+            <button type="button" class="filter-chip is-active" data-transaction-filter="all">هەموو</button>
+            <button type="button" class="filter-chip" data-transaction-filter="debt">قەرز</button>
+            <button type="button" class="filter-chip" data-transaction-filter="payment">پارەدان</button>
+            <button type="button" class="filter-chip" data-transaction-filter="overdue">دواکەوتوو</button>
+          </div>
+          <div class="statement-meta-row">
+            <span id="transactionResultCount">0 مامەڵە</span>
+            <button id="clearTransactionSearch" class="text-action" type="button" hidden>پاککردنەوە</button>
+          </div>
+        </section>
         <section class="panel statement-panel">
           <div id="ledger" class="ledger"></div>
           <button id="loadMore" class="secondary-action load-more" type="button" hidden>بینینی مامەڵەی زیاتر</button>
