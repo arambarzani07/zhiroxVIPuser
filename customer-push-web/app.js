@@ -110,6 +110,14 @@ const statementPeriodLabelEl = document.getElementById('statementPeriodLabel');
 const statementCreatedDateEl = document.getElementById('statementCreatedDate');
 const periodStatementFooterEl = document.getElementById('periodStatementFooter');
 const printPeriodStatementButton = document.getElementById('printPeriodStatement');
+const statementItemCountEl = document.getElementById('statementItemCount');
+const statementDayCountEl = document.getElementById('statementDayCount');
+const statementCurrencyCountEl = document.getElementById('statementCurrencyCount');
+const statementItemSearchEl = document.getElementById('statementItemSearch');
+const statementSortEl = document.getElementById('statementSort');
+const exportStatementCsvButton = document.getElementById('exportStatementCsv');
+const statementVisibleCountEl = document.getElementById('statementVisibleCount');
+const clearStatementFiltersButton = document.getElementById('clearStatementFilters');
 const statementPresetButtons = [...document.querySelectorAll('[data-statement-preset]')];
 const tabButtons = [...document.querySelectorAll('[data-portal-tab]')];
 const views = {
@@ -263,6 +271,9 @@ let vapidPublicKey = '';
 let nextOffset = 0;
 let currentPortalData = null;
 let currentPeriodStatement = null;
+let currentStatementVisibleRows = [];
+let statementItemQuery = '';
+let statementSortMode = 'date-asc';
 let currentNotificationItems = [];
 let loadedRows = [];
 let transactionFilter = 'all';
@@ -1270,19 +1281,95 @@ function initializeStatementDates() {
   syncStatementDateDisplays();
 }
 
-function renderPeriodStatement(data) {
-  currentPeriodStatement = data && typeof data === 'object' ? data : null;
-  const rows = Array.isArray(data?.rows) ? data.rows : [];
-  const totals = Array.isArray(data?.totals) ? data.totals : [];
-  periodStatementRowsEl.replaceChildren();
-  periodStatementTotalsEl.replaceChildren();
+function statementRowSearchText(row) {
+  return [
+    row?.name,
+    row?.amount,
+    row?.currency,
+    row?.date,
+    statementDateLabel(row?.date),
+  ]
+    .filter((value) => value != null)
+    .join(' ')
+    .toLocaleLowerCase('ku');
+}
 
-  rows.forEach((row, index) => {
+function statementTotalsForRows(rows) {
+  const totals = new Map();
+  for (const row of rows) {
+    const currency = String(row?.currency || 'IQD').toUpperCase();
+    totals.set(currency, number(totals.get(currency)) + number(row?.amount));
+  }
+  return [...totals.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, total]) => ({ currency, total }));
+}
+
+function statementSortedRows(rows) {
+  const result = [...rows];
+  switch (statementSortMode) {
+    case 'date-desc':
+      result.sort((a, b) =>
+        String(b?.occurred_at || b?.date || '').localeCompare(
+          String(a?.occurred_at || a?.date || ''),
+        ));
+      break;
+    case 'name-asc':
+      result.sort((a, b) =>
+        String(a?.name || '').localeCompare(String(b?.name || ''), 'ku'));
+      break;
+    case 'amount-desc':
+      result.sort((a, b) => number(b?.amount) - number(a?.amount));
+      break;
+    case 'amount-asc':
+      result.sort((a, b) => number(a?.amount) - number(b?.amount));
+      break;
+    case 'date-asc':
+    default:
+      result.sort((a, b) =>
+        String(a?.occurred_at || a?.date || '').localeCompare(
+          String(b?.occurred_at || b?.date || ''),
+        ));
+      break;
+  }
+  return result;
+}
+
+function renderStatementTotals(totals) {
+  periodStatementTotalsEl.replaceChildren();
+  for (const item of totals) {
+    const totalRow = document.createElement('div');
+    totalRow.className = 'period-total-row';
+    addText(
+      totalRow,
+      'span',
+      totals.length > 1
+        ? `کۆی گشتی — ${String(item?.currency || 'IQD')}`
+        : 'کۆی گشتی',
+    );
+    addText(totalRow, 'strong', money(item?.total, item?.currency));
+    periodStatementTotalsEl.appendChild(totalRow);
+  }
+}
+
+function renderStatementRowsView() {
+  const sourceRows = Array.isArray(currentPeriodStatement?.rows)
+    ? currentPeriodStatement.rows
+    : [];
+  const query = statementItemQuery.trim().toLocaleLowerCase('ku');
+  const filtered = query
+    ? sourceRows.filter((row) => statementRowSearchText(row).includes(query))
+    : [...sourceRows];
+
+  currentStatementVisibleRows = statementSortedRows(filtered);
+  periodStatementRowsEl.replaceChildren();
+
+  currentStatementVisibleRows.forEach((row, index) => {
     const tr = document.createElement('tr');
 
     const rowNo = document.createElement('td');
     rowNo.className = 'period-col-row';
-    rowNo.textContent = String(row?.row_no ?? index + 1);
+    rowNo.textContent = String(index + 1);
 
     const name = document.createElement('td');
     name.className = 'period-col-name';
@@ -1300,24 +1387,47 @@ function renderPeriodStatement(data) {
     periodStatementRowsEl.appendChild(tr);
   });
 
-  for (const item of totals) {
-    const totalRow = document.createElement('div');
-    totalRow.className = 'period-total-row';
-    addText(
-      totalRow,
-      'span',
-      totals.length > 1
-        ? `کۆی گشتی — ${String(item?.currency || 'IQD')}`
-        : 'کۆی گشتی',
-    );
-    addText(totalRow, 'strong', money(item?.total, item?.currency));
-    periodStatementTotalsEl.appendChild(totalRow);
+  renderStatementTotals(statementTotalsForRows(currentStatementVisibleRows));
+
+  if (statementVisibleCountEl) {
+    statementVisibleCountEl.textContent =
+      `${currentStatementVisibleRows.length} بابەت`;
   }
+  if (clearStatementFiltersButton) {
+    clearStatementFiltersButton.hidden =
+      !statementItemQuery && statementSortMode === 'date-asc';
+  }
+}
+
+function renderStatementSummary(data) {
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  const uniqueDays = new Set(
+    rows.map((row) => String(row?.date || '')).filter(Boolean),
+  );
+  const uniqueCurrencies = new Set(
+    rows.map((row) => String(row?.currency || 'IQD').toUpperCase()),
+  );
+
+  if (statementItemCountEl) statementItemCountEl.textContent = String(rows.length);
+  if (statementDayCountEl) statementDayCountEl.textContent = String(uniqueDays.size);
+  if (statementCurrencyCountEl) {
+    statementCurrencyCountEl.textContent = String(uniqueCurrencies.size);
+  }
+}
+
+function renderPeriodStatement(data) {
+  currentPeriodStatement = data && typeof data === 'object' ? data : null;
+  statementItemQuery = '';
+  statementSortMode = 'date-asc';
+  if (statementItemSearchEl) statementItemSearchEl.value = '';
+  if (statementSortEl) statementSortEl.value = 'date-asc';
 
   statementMarketNameEl.textContent =
-    String(data?.market_name || currentPortalData?.market_name || 'ZHIROX').trim() || 'ZHIROX';
+    String(data?.market_name || currentPortalData?.market_name || 'ZHIROX').trim() ||
+    'ZHIROX';
   statementCustomerNameEl.textContent =
-    String(data?.customer_name || currentPortalData?.customer_name || '—').trim() || '—';
+    String(data?.customer_name || currentPortalData?.customer_name || '—').trim() ||
+    '—';
   statementPeriodLabelEl.textContent =
     `${statementDateLabel(data?.from_date)} تا ${statementDateLabel(data?.to_date)}`;
   statementCreatedDateEl.textContent =
@@ -1331,6 +1441,8 @@ function renderPeriodStatement(data) {
   periodStatementFooterEl.textContent =
     String(data?.footer_note || currentPortalData?.footer_note || '').trim();
 
+  renderStatementSummary(data);
+  renderStatementRowsView();
   periodStatementDocumentEl.hidden = false;
 }
 
@@ -1401,7 +1513,12 @@ async function applyStatementPreset(preset) {
   const today = new Date();
   statementToDateEl.value = toLocalIsoDate(today);
 
-  if (preset === 'month') {
+  if (preset === '7d' || preset === '30d') {
+    const days = preset === '7d' ? 6 : 29;
+    const from = new Date(today);
+    from.setDate(today.getDate() - days);
+    statementFromDateEl.value = toLocalIsoDate(from);
+  } else if (preset === 'month') {
     statementFromDateEl.value =
       `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
   } else if (preset === 'year') {
@@ -1423,9 +1540,57 @@ function safePdfFilename(value) {
 
 function periodPdfFilename() {
   const market = safePdfFilename(statementMarketNameEl?.textContent || 'ZHIROX');
+  const customer = safePdfFilename(statementCustomerNameEl?.textContent || 'customer');
   const fromDate = String(statementFromDateEl?.value || '').replaceAll('-', '');
   const toDate = String(statementToDateEl?.value || '').replaceAll('-', '');
-  return `${market}-statement-${fromDate || 'from'}-${toDate || 'to'}.pdf`;
+  return `${market}-${customer}-statement-${fromDate || 'from'}-${toDate || 'to'}.pdf`;
+}
+
+function csvCell(value) {
+  const text = String(value ?? '');
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function exportPeriodStatementCsv() {
+  const rows = Array.isArray(currentStatementVisibleRows)
+    ? currentStatementVisibleRows
+    : [];
+  if (rows.length === 0) {
+    statementBuilderResultEl.textContent = 'هیچ بابەتێک بۆ CSV نییە.';
+    statementBuilderResultEl.className = 'action-result err';
+    return;
+  }
+
+  const lines = [
+    ['ژمارەی ڕیز', 'ناوی بابەت', 'نرخ', 'دراو', 'بەروار']
+      .map(csvCell)
+      .join(','),
+    ...rows.map((row, index) =>
+      [
+        index + 1,
+        row?.name || 'بابەت',
+        number(row?.amount),
+        String(row?.currency || 'IQD').toUpperCase(),
+        row?.date || '',
+      ].map(csvCell).join(',')),
+  ];
+
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], {
+    type: 'text/csv;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = periodPdfFilename().replace(/\.pdf$/i, '.csv');
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+
+  statementBuilderResultEl.textContent =
+    `CSV ـەکە بە ${rows.length} بابەت ئامادە کرا.`;
+  statementBuilderResultEl.className = 'action-result ok';
 }
 
 function canvasHasVisibleContent(canvas) {
@@ -1506,6 +1671,7 @@ function buildPdfA4Page(data, pageRows, pageNumber, pageCount, includeTotals) {
     ['کڕیار', String(data?.customer_name || currentPortalData?.customer_name || '—')],
     ['ماوە', `${statementDateLabel(data?.from_date)} تا ${statementDateLabel(data?.to_date)}`],
     ['بەرواری دروستکردن', statementDateLabel(toLocalIsoDate(data?.generated_at || new Date()))],
+    ['ژمارەی بابەت', String(Array.isArray(data?.rows) ? data.rows.length : 0)],
   ];
   for (const [label, value] of metaRows) {
     const item = document.createElement('div');
@@ -1624,8 +1790,17 @@ async function deliverPdfBlob(blob, filename) {
 }
 
 async function downloadPeriodStatementPdf() {
-  const data = currentPeriodStatement;
-  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  const baseData = currentPeriodStatement;
+  const rows = Array.isArray(currentStatementVisibleRows)
+    ? currentStatementVisibleRows
+    : [];
+  const data = baseData
+    ? {
+        ...baseData,
+        rows,
+        totals: statementTotalsForRows(rows),
+      }
+    : null;
 
   if (!data || rows.length === 0) {
     statementBuilderResultEl.textContent =
@@ -1901,6 +2076,30 @@ if (statementFromDateEl) {
 }
 if (statementToDateEl) {
   statementToDateEl.addEventListener('change', syncStatementDateDisplays);
+}
+if (statementItemSearchEl) {
+  statementItemSearchEl.addEventListener('input', () => {
+    statementItemQuery = statementItemSearchEl.value || '';
+    renderStatementRowsView();
+  });
+}
+if (statementSortEl) {
+  statementSortEl.addEventListener('change', () => {
+    statementSortMode = statementSortEl.value || 'date-asc';
+    renderStatementRowsView();
+  });
+}
+if (clearStatementFiltersButton) {
+  clearStatementFiltersButton.addEventListener('click', () => {
+    statementItemQuery = '';
+    statementSortMode = 'date-asc';
+    if (statementItemSearchEl) statementItemSearchEl.value = '';
+    if (statementSortEl) statementSortEl.value = 'date-asc';
+    renderStatementRowsView();
+  });
+}
+if (exportStatementCsvButton) {
+  exportStatementCsvButton.addEventListener('click', exportPeriodStatementCsv);
 }
 if (generatePeriodStatementButton) {
   generatePeriodStatementButton.addEventListener('click', () => {
