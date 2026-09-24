@@ -31,12 +31,16 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   String? _error;
   Timer? _searchDebounce;
   int _generation = 0;
+  int _overdueIntervalDays = 3;
+  bool _settingsLoading = true;
+  bool _settingsSaving = false;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
     unawaited(_load());
+    unawaited(_loadSettings());
   }
 
   @override
@@ -106,6 +110,48 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
         _loadingMore = false;
         _error = 'نەتوانرا دۆخی ئاگادارکردنەوەی کڕیاران باربکرێت';
       });
+    }
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final settings = await _gateway.loadSettings();
+      if (!mounted) return;
+      setState(() {
+        _overdueIntervalDays = settings.overdueIntervalDays;
+        _settingsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _settingsLoading = false);
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    if (_settingsSaving) return;
+    setState(() => _settingsSaving = true);
+    try {
+      final settings = await _gateway.updateSettings(
+        overdueIntervalDays: _overdueIntervalDays,
+      );
+      if (!mounted) return;
+      setState(() => _overdueIntervalDays = settings.overdueIntervalDays);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'ئاگاداری قەرزی دواکەوتوو هەر $_overdueIntervalDays ڕۆژ جارێک دەنێردرێت.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('پاشەکەوتکردنی ڕێکخستنی ئاگادارکردنەوە سەرکەوتوو نەبوو'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _settingsSaving = false);
     }
   }
 
@@ -281,6 +327,83 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
           children: [
             const ManualPushBroadcastCard(),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                child: _settingsLoading
+                    ? const SizedBox(
+                        height: 72,
+                        child: Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.schedule_send_rounded),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'ماوەی دووبارەکردنەوەی ئاگاداری دواکەوتن',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'دوای تێپەڕبوونی بەرواری دانەوە، هەر $_overdueIntervalDays ڕۆژ جارێک یادخستنەوە دەنێردرێت.',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          Slider(
+                            value: _overdueIntervalDays.toDouble(),
+                            min: 1,
+                            max: 30,
+                            divisions: 29,
+                            label: '$_overdueIntervalDays ڕۆژ',
+                            onChanged: _settingsSaving
+                                ? null
+                                : (value) {
+                                    setState(
+                                      () => _overdueIntervalDays = value.round(),
+                                    );
+                                  },
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                '$_overdueIntervalDays ڕۆژ',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const Spacer(),
+                              FilledButton.icon(
+                                onPressed:
+                                    _settingsSaving ? null : _saveSettings,
+                                icon: _settingsSaving
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.save_outlined),
+                                label: const Text('پاشەکەوتکردن'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+              ),
+            ),
             const SizedBox(height: 18),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
