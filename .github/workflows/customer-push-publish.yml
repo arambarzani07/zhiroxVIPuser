@@ -1,0 +1,44 @@
+name: Publish Customer Push Portal
+
+on:
+  workflow_run:
+    workflows:
+      - Customer Push Portal Pages
+    types:
+      - completed
+    branches:
+      - user-source
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: customer-push-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout validated customer portal source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload customer portal
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: customer-push-web
+
+      - name: Deploy customer portal
+        id: deployment
+        uses: actions/deploy-pages@v4
