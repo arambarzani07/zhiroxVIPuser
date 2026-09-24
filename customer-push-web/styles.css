@@ -2242,3 +2242,31 @@ body {
 .pdf-export-document .period-statement-actions {
   display: none !important;
 }
+
+
+/* Portal V3.3 — export the visible statement, not an off-screen clone */
+body.exporting-period-pdf #periodStatementDocument {
+  overflow: visible !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+body.exporting-period-pdf #periodStatementDocument .period-statement-actions {
+  display: none !important;
+}
+
+body.exporting-period-pdf #periodStatementDocument .period-table-wrap {
+  overflow: visible !important;
+}
+
+body.exporting-period-pdf #periodStatementDocument .period-statement-table {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+body.exporting-period-pdf #periodStatementDocument .period-statement-head,
+body.exporting-period-pdf #periodStatementDocument .period-total-row,
+body.exporting-period-pdf #periodStatementDocument tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
