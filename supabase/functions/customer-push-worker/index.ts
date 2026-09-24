@@ -33,6 +33,8 @@ export type WorkerEvent = {
   customer_id: string;
   event_type: PushEventType;
   event_record_id?: string;
+  deep_link?: string | null;
+  receipt_id?: string | null;
   payload: PushPayload;
   fanout_at?: string | null;
 };
@@ -123,6 +125,15 @@ function errorText(error: unknown): string {
 }
 
 function portalUrlForEvent(event: WorkerEvent): string {
+  const storedDeepLink = String(event.deep_link ?? "").trim();
+  if (storedDeepLink.startsWith("/")) {
+    const target = new URL(storedDeepLink, "https://push.zhirox.com/");
+    if (!target.searchParams.has("notification")) {
+      target.searchParams.set("notification", event.id);
+    }
+    return target.toString();
+  }
+
   const params = new URLSearchParams();
   const eventType = event.event_type;
   params.set(
