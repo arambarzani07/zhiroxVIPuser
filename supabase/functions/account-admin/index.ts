@@ -256,6 +256,12 @@ Deno.serve(async (req) => {
         .single();
       if (profileError) {
         await admin.auth.admin.deleteUser(authData.user.id);
+        if (
+          profileError.code === "23505" &&
+          String(profileError.message ?? "").includes("profiles_normalized_phone_unique_idx")
+        ) {
+          return json({ error: "phone_exists" }, 409);
+        }
         return json({ error: profileError.message }, 400);
       }
       return json({ user: inserted }, 201);
