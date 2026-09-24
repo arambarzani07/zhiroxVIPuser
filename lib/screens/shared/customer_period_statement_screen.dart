@@ -378,19 +378,22 @@ class _CustomerPeriodStatementScreenState
         ),
         build: (_) => [
           pw.TableHelper.fromTextArray(
+            // pdf/widgets tables keep physical column order. Reverse
+            // the source columns so the rendered RTL table is visually:
+            // ژمارەی ڕیز | ناوی بابەت | نرخ | بەروار
             headers: [
-              k('ژمارەی ڕیز'),
-              k('ناوی بابەت'),
-              k('نرخ'),
               k('بەروار'),
+              k('نرخ'),
+              k('ناوی بابەت'),
+              k('ژمارەی ڕیز'),
             ],
             data: [
               for (var i = 0; i < rows.length; i++)
                 [
-                  (i + 1).toString(),
-                  k(rows[i]['name']?.toString() ?? 'بابەت'),
-                  _money(rows[i]['amount'], rows[i]['currency']),
                   _dateLabel(rows[i]['date']),
+                  _money(rows[i]['amount'], rows[i]['currency']),
+                  k(rows[i]['name']?.toString() ?? 'بابەت'),
+                  (i + 1).toString(),
                 ],
             ],
             headerStyle: pw.TextStyle(
