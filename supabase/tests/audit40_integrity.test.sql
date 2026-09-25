@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(27);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -203,6 +203,20 @@ select ok(
 select ok(
   to_regclass('private.backup_runtime_events') is not null,
   'backup runtime event history exists'
+);
+
+select ok(
+  to_regprocedure('public.resolve_daftar_recovered_dead_letters(uuid)') is not null,
+  'Daftar recovered dead-letter resolver exists'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.resolve_daftar_recovered_dead_letters(uuid)',
+    'EXECUTE'
+  ),
+  'authenticated users cannot resolve Daftar dead letters directly'
 );
 
 select * from finish();
