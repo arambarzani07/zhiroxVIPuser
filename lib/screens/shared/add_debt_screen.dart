@@ -1744,15 +1744,16 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
                 if (_currency == 'USD' && (v == null || v.isEmpty)) {
                   return 'نرخی دۆلار بنووسە';
                 }
-          // Amount/item entry UI lives in add_debt_items.dart.
-
-e': result,
-          'qty': 1,
-          'currency': _currency,
-        });
-      });
-    }
+                return null;
+              },
+            ),
+          ],
+        ],
+      ),
+    );
   }
+
+  // Amount/item entry UI lives in add_debt_items.dart.
 
   Widget _buildDetailsCard() {
     // Check permission for due date
