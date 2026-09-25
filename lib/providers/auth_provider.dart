@@ -245,7 +245,12 @@ class AuthProvider extends ChangeNotifier {
         _user = await PBService.getUser(authUser.id);
         await _validateSubscription();
         await _enforceAdminDeviceAuthorization();
-      } catch (_) {
+      } catch (error) {
+        if (PBService.isServiceRestrictionError(error)) {
+          // Preserve the Supabase session. A 402 is a temporary platform
+          // restriction, not an authentication revocation.
+          return;
+        }
         await PBService.logout();
         await _clearLocalUser();
         return;
@@ -322,6 +327,10 @@ class AuthProvider extends ChangeNotifier {
         await _validateSubscription();
         await _enforceAdminDeviceAuthorization();
       } catch (e) {
+        if (PBService.isServiceRestrictionError(e)) {
+          throw 'خزمەتگوزاری سێرڤەر کاتێک سنووردار کراوە. هەژمارەکەت نەسڕاوەتەوە؛ تکایە دواتر دووبارە هەوڵ بدە.';
+        }
+
         await PBService.logout();
         await _clearLocalUser();
 
