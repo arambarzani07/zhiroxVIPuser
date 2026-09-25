@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(35);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -272,6 +272,42 @@ select ok(
     pg_get_functiondef('public.resolve_daftar_recovered_dead_letters(uuid)'::regprocedure)
   ) > 0,
   'cutover dead letters resolve only after a later passing rehearsal'
+);
+
+select ok(
+  to_regprocedure(
+    'public.apply_daftar_inbound_general_payment_update(uuid,uuid,text,uuid,numeric,text,timestamptz)'
+  ) is not null,
+  'general payment inbound update helper exists'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.apply_daftar_inbound_general_payment_update(uuid,uuid,text,uuid,numeric,text,timestamptz)',
+    'EXECUTE'
+  ),
+  'authenticated users cannot call general payment inbound sync helper'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_trigger t
+    where t.tgrelid='public.customer_general_payments'::regclass
+      and not t.tgisinternal
+      and t.tgname='daftar_outbound_general_payment_mutation'
+  ),
+  1::bigint,
+  'general payment outbound mutation trigger exists exactly once'
+);
+
+select ok(
+  position(
+    'customer_general_payments' in
+    pg_get_functiondef('public.enqueue_daftar_outbound_mutation()'::regprocedure)
+  ) > 0,
+  'outbound mutation function transports general payments'
 );
 
 select * from finish();
