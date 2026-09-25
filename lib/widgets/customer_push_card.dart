@@ -403,7 +403,7 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
     }) {
       return Expanded(
         child: Container(
-          minHeight: 52,
+          constraints: const BoxConstraints(minHeight: 52),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: subtle,
