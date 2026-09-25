@@ -983,7 +983,7 @@ AS $function$
   where tc.user_id = auth.uid();
 $function$;
 
-CREATE OR REPLACE FUNCTION public.get_telegram_credentials_for_service(uuid)
+CREATE OR REPLACE FUNCTION public.get_telegram_credentials_for_service(p_user_id uuid)
  RETURNS TABLE(bot_token text, chat_id text)
  LANGUAGE sql
  SECURITY DEFINER
