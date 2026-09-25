@@ -1165,13 +1165,12 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       ),
       bottomNavigationBar: SafeArea(
         top: false,
-        child: _bui  // Customer selector/limit UI lives in add_debt_customer_section.dart.
-
-    ),
-        );
-      },
+        child: _buildBottomAction(),
+      ),
     );
   }
+
+  // Customer selector/limit UI lives in add_debt_customer_section.dart.
 
   Widget _buildCurrencyCard() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
