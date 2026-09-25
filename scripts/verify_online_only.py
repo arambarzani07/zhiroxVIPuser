@@ -66,18 +66,23 @@ add_debt_part_paths = sorted(
     path for path in add_debt_dir.glob('add_debt_*.dart')
     if path != add_debt_main_path
 )
-add_debt = add_debt_main + '\n' + '\n'.join(
-    path.read_text(encoding='utf-8') for path in add_debt_part_paths
-)
+add_debt_parts = {
+    path.name: path.read_text(encoding='utf-8') for path in add_debt_part_paths
+}
+add_debt = add_debt_main + '\n' + '\n'.join(add_debt_parts.values())
 for marker in (
     "part 'add_debt_items.dart';",
     "part 'add_debt_customer_section.dart';",
 ):
     if marker not in add_debt_main:
         fail(f'lib/screens/shared/add_debt_screen.dart: add-debt part wiring missing: {marker}')
+customer_section = add_debt_parts.get('add_debt_customer_section.dart', '')
 for marker in ('_customerLoadError', '_buildCustomerPicker', 'دووبارە هەوڵ بدە'):
-    if marker not in add_debt:
-        fail(f'lib/screens/shared/add_debt_screen.dart: fail-closed customer loading marker missing: {marker}')
+    if marker not in customer_section:
+        fail(
+            'lib/screens/shared/add_debt_customer_section.dart: '
+            f'fail-closed customer loading marker missing: {marker}'
+        )
 load_match = re.search(
     r'Future<void>\s+_loadCustomers\(\)\s+async\s*\{(.*?)(?=\s*@override\s*void dispose)',
     add_debt,
