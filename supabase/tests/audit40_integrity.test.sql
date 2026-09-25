@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(49);
+select plan(50);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -405,6 +405,15 @@ select ok(
     pg_get_functiondef('private.reconcile_daftar_source(uuid)'::regprocedure)
   ) > 0,
   'Daftar reconciliation recognizes general payment mappings'
+);
+
+
+select ok(
+  position(
+    'customer_general_payments gp' in
+    pg_get_functiondef('private.run_daftar_sync_reconciliation(uuid)'::regprocedure)
+  ) > 0,
+  'Daftar integrity reconciliation accepts general payment allocation targets'
 );
 
 select * from finish();
