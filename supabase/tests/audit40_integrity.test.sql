@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(50);
+select plan(52);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -414,6 +414,28 @@ select ok(
     pg_get_functiondef('private.run_daftar_sync_reconciliation(uuid)'::regprocedure)
   ) > 0,
   'Daftar integrity reconciliation accepts general payment allocation targets'
+);
+
+
+select is(
+  position(
+    'linked_payment_rows' in
+    pg_get_viewdef('private.zhirox_daftar_transactions_v1'::regclass, true)
+  ),
+  0,
+  'Daftar transaction projection does not reconstruct mirror rows from legacy allocation groups'
+);
+
+select ok(
+  position(
+    'zhirox:loan:' in
+    pg_get_viewdef('private.zhirox_daftar_transactions_v1'::regclass, true)
+  ) > 0
+  and position(
+    'legacy_import_links' in
+    pg_get_viewdef('private.zhirox_daftar_transactions_v1'::regclass, true)
+  ) > 0,
+  'Daftar transaction projection keeps only explicitly native local fallbacks'
 );
 
 select * from finish();
