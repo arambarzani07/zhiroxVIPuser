@@ -194,7 +194,25 @@ for marker in ("'customer_directory'", "'customer_debts_page'"):
 
 # Financial Chat realtime/audit markers: business history remains server-backed
 # and new activity must arrive through Supabase realtime, never a local cache.
-profile = (LIB / 'screens/shared/user_profile_screen.dart').read_text(encoding='utf-8')
+#
+# UserProfile is intentionally split across Dart part files. Verify the part
+# wiring explicitly, then treat the whole library as one source contract so
+# refactors do not create false policy failures.
+profile_dir = LIB / 'screens/shared'
+profile_main_path = profile_dir / 'user_profile_screen.dart'
+profile_financial_chat_path = profile_dir / 'user_profile_financial_chat.dart'
+profile_main = profile_main_path.read_text(encoding='utf-8')
+if not profile_financial_chat_path.exists():
+    fail('lib/screens/shared/user_profile_financial_chat.dart: Financial Chat module missing')
+if "part 'user_profile_financial_chat.dart';" not in profile_main:
+    fail('lib/screens/shared/user_profile_screen.dart: Financial Chat part wiring missing')
+profile_part_paths = sorted(
+    path for path in profile_dir.glob('user_profile_*.dart')
+    if path != profile_main_path
+)
+profile = profile_main + '\n' + '\n'.join(
+    path.read_text(encoding='utf-8') for path in profile_part_paths
+)
 payment_flow = (LIB / 'screens/shared/financial_payment_flow.dart').read_text(encoding='utf-8')
 document_actions = (LIB / 'screens/shared/financial_document_actions.dart').read_text(encoding='utf-8')
 debt_detail_source = (LIB / 'screens/shared/debt_detail_screen.dart').read_text(encoding='utf-8')
@@ -434,7 +452,7 @@ if 'generateFinancialChatStatement({' not in pdf_source:
 
 # Financial Chat reply/reference must be persisted server-side, not kept as
 # ephemeral UI-only state.
-profile_source = (LIB / 'screens/shared/user_profile_screen.dart').read_text(encoding='utf-8')
+profile_source = profile
 for marker in ('_financialReplyTarget', 'referenceKind:', 'referenceId:', 'reference_snapshot', 'وەک وەڵام / پەیوەستکردن'):
     if marker not in profile_source:
         fail(f'lib/screens/shared/user_profile_screen.dart: persistent Financial Chat reference marker missing: {marker}')
