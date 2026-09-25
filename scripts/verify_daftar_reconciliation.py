@@ -22,6 +22,8 @@ assert "reconciliation_missing_transactions = 0" in migration
 assert "reconcile_daftar_account_28" in worker
 assert "p_source_id: source.id" in worker
 assert "reconciliation_failed" in worker
+assert "resolve_daftar_recovered_dead_letters" in worker
+assert "dead_letter_recovery" in worker
 
 assert 'Verify Daftar shadow reconciliation' in workflow
 
