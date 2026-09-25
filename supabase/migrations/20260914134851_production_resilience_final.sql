@@ -139,7 +139,7 @@ end;
 $$;
 revoke all on function private.run_daftar_sync_reconciliation(uuid) from public,anon,authenticated;
 
-do $
+do $reconcile_cron$
 declare v_jobid bigint;
 begin
   select jobid into v_jobid from cron.job where jobname='daftar-sync-reconcile-account-28' limit 1;
@@ -156,7 +156,7 @@ begin
     raise notice 'Daftar account 28 source absent; skipping reconciliation cron on fresh install';
   end if;
 end
-$;
+$reconcile_cron$;
 
 -- 3) Scalable, checksummed tenant backups.
 alter table public.tenant_backups
@@ -298,7 +298,7 @@ $$;
 revoke all on function private.run_scheduled_tenant_backup(uuid) from public,anon,authenticated;
 grant execute on function private.run_scheduled_tenant_backup(uuid) to service_role;
 
-do $
+do $backup_cron$
 declare v_jobid bigint;
 begin
   select jobid into v_jobid from cron.job where jobname='daily-tenant-backup-account-28' limit 1;
@@ -313,7 +313,7 @@ begin
     raise notice 'Daftar account 28 source absent; skipping tenant backup cron on fresh install';
   end if;
 end
-$;
+$backup_cron$;
 
 -- 4) Transactional bulk restore with strict normal-operation guards.
 create or replace function private.guard_debt_financial_state()
