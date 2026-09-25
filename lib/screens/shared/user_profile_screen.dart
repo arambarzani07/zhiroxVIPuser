@@ -18,6 +18,7 @@ import 'package:zhirox/services/financial_ui_state.dart';
 import 'package:zhirox/services/pdf_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
+import 'package:zhirox/utils/customer_identity_display.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/services/connectivity_service.dart';
@@ -239,7 +240,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _financialFilterHydrating = false;
         _employeeStats = employeeStats;
         _nameController.text = user.getStringValue('name');
-        _phoneController.text = user.getStringValue('phone');
+        _phoneController.text = CustomerIdentityDisplay.visiblePhone(
+          user.getStringValue('phone'),
+        );
 
         if (role == 'employee') {
           _canAddCustomers = user.getBoolValue('can_add_customers');
@@ -612,7 +615,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       AppHelpers.showSnackBar(context, 'ناو بنووسە', isError: true);
       return;
     }
-    if (_phoneController.text.trim().isEmpty) {
+    final existingPhone = _user?.getStringValue('phone').trim() ?? '';
+    final enteredPhone = _phoneController.text.trim();
+    final importedWithoutPhone =
+        CustomerIdentityDisplay.isLegacyPlaceholderPhone(existingPhone);
+    if (enteredPhone.isEmpty && !importedWithoutPhone) {
       AppHelpers.showSnackBar(context, 'ژمارە مۆبایل بنووسە', isError: true);
       return;
     }
@@ -620,7 +627,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     try {
       final data = <String, dynamic>{
         'name': _nameController.text.trim(),
-        'phone': _phoneController.text.trim(),
+        if (enteredPhone.isNotEmpty) 'phone': enteredPhone,
       };
 
       await PBService.updateUser(widget.userId, data);
@@ -701,7 +708,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
 
     final name = _user!.getStringValue('name');
-    final phone = _user!.getStringValue('phone');
+    final rawPhone = _user!.getStringValue('phone');
+    final phone = CustomerIdentityDisplay.visiblePhone(rawPhone);
+    final legacySourceId = CustomerIdentityDisplay.legacySourceId(rawPhone);
 
     return Scaffold(
       backgroundColor: isDark
@@ -937,18 +946,28 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                Icons.phone_android,
+                                phone.isNotEmpty
+                                    ? Icons.phone_android
+                                    : legacySourceId != null
+                                        ? Icons.badge_outlined
+                                        : Icons.phone_disabled_outlined,
                                 size: 14,
                                 color: Colors.white.withValues(alpha: 0.7),
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                phone,
+                                phone.isNotEmpty
+                                    ? phone
+                                    : legacySourceId != null
+                                        ? 'کۆدی Daftar: $legacySourceId'
+                                        : 'ژمارە مۆبایل نییە',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.8),
                                   fontSize: 14,
                                 ),
-                                textDirection: TextDirection.ltr,
+                                textDirection: phone.isNotEmpty
+                                    ? TextDirection.ltr
+                                    : TextDirection.rtl,
                               ),
                             ],
                           ),
