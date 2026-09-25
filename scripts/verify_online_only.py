@@ -713,3 +713,110 @@ if edition == 'owner-source':
         "context.read<AuthProvider>().logout()",
         'PBService.registerAdmin(',
     ):
+        if required not in owner_management:
+            fail(f'lib/screens/auth/admin_management_screen.dart: Owner management marker missing: {required}')
+elif edition == 'user-source':
+    if 'RegisterAdminScreen' in login_source or 'register_admin_screen.dart' in login_source:
+        fail('lib/screens/auth/login_screen.dart: User edition must never route to RegisterAdminScreen')
+    for required in (
+        '_showOwnerContactDialog',
+        'تەنها لەلایەن خاوەن سیستەمەوە درووست دەکرێت.',
+    ):
+        if required not in login_source:
+            fail(f'lib/screens/auth/login_screen.dart: User owner-contact marker missing: {required}')
+
+# User-edition Owner isolation must remain enforced.
+for forbidden_path in (
+    ROOT / 'lib/screens/auth/admin_management_screen.dart',
+    ROOT / 'lib/screens/auth/register_admin_screen.dart',
+):
+    if forbidden_path.exists():
+        fail(f'{forbidden_path.relative_to(ROOT)}: owner-only screen must not ship in User source')
+if 'AdminManagementScreen' in main:
+    fail('lib/main.dart: User source must not reference AdminManagementScreen')
+for marker in (
+    "auth.user?.getBoolValue('is_system_owner') ?? false",
+    'ئەم هەژمارە بۆ ZHIROX Owner ـە',
+    'ئەپی User دەسەڵاتی خاوەن سیستەم نادات.',
+):
+    if marker not in main:
+        fail(f'lib/main.dart: User owner-isolation marker missing: {marker}')
+
+# User AuthProvider must not expose admin registration.
+auth_provider_source = (LIB / 'providers/auth_provider.dart').read_text(encoding='utf-8')
+for forbidden in (
+    'Future<void> registerAdmin(',
+    'PBService.registerAdmin(',
+):
+    if forbidden in auth_provider_source:
+        fail(f'lib/providers/auth_provider.dart: User source must not expose admin registration: {forbidden}')
+
+
+# Account Edge Function privilege boundaries.
+# Admin account lifecycle is Owner-only: creation is guarded by account-admin,
+# while destructive admin deletion must stay centralized in delete-account.
+update_account_edge = ROOT / 'supabase/functions/update-account/index.ts'
+if not update_account_edge.exists():
+    fail('supabase/functions/update-account/index.ts: production update-account source must be tracked')
+else:
+    update_account_source = update_account_edge.read_text(encoding='utf-8')
+    for required in (
+        'await isOperational(admin, requester)',
+        'sameTenantMember',
+        'target.role === "employee" || target.role === "customer"',
+        'targetAuthData',
+        'previousAuthMetadata',
+        'Object.hasOwn(update, "phone")',
+    ):
+        if required not in update_account_source:
+            fail(f'supabase/functions/update-account/index.ts: account hardening marker missing: {required}')
+    allowlist_area = update_account_source.split('const selfFields', 1)[-1].split('const allowed', 1)[0]
+    for forbidden in ('"role",', '"is_system_owner",', '"admin_id",'):
+        if forbidden in allowlist_area:
+            fail(f'supabase/functions/update-account/index.ts: privileged profile field entered update allowlist: {forbidden}')
+
+if account_admin_edge.exists():
+    account_admin_source = account_admin_edge.read_text(encoding='utf-8')
+    if 'admin_delete_requires_dedicated_endpoint' not in account_admin_source:
+        fail('supabase/functions/account-admin/index.ts: admin deletion must be routed to delete-account')
+    if 'const { data: tenantUsers }' in account_admin_source:
+        fail('supabase/functions/account-admin/index.ts: duplicate admin cascade deletion must stay removed')
+
+payment_screen = LIB / 'screens/admin/subscription_payment_screen.dart'
+fib_edge = ROOT / 'supabase/functions/fib-subscription-payment/index.ts'
+fib_migration = ROOT / 'supabase/migrations/20260911170000_add_fib_subscription_payments.sql'
+for path in (payment_screen, fib_edge, fib_migration):
+    if not path.exists():
+        fail(f'{path.relative_to(ROOT)}: FIB subscription payment component missing')
+if payment_screen.exists():
+    source = payment_screen.read_text(encoding='utf-8')
+    for marker in ('پارەدان بە FIB', 'PBService.createFibSubscriptionPayment', 'PBService.checkFibSubscriptionPayment'):
+        if marker not in source:
+            fail(f'lib/screens/admin/subscription_payment_screen.dart: FIB marker missing: {marker}')
+
+# Employee-aware debts/payments RLS calls this private helper while the query
+# runs as `authenticated`. Revoking EXECUTE makes normal dashboard and customer
+# balance reads fail with SQLSTATE 42501.
+employee_rls_migration = (
+    ROOT / 'supabase/migrations/20260912130000_enforce_employee_permissions.sql'
+)
+if not employee_rls_migration.exists():
+    fail('employee permission RLS migration must be tracked')
+else:
+    employee_rls_source = employee_rls_migration.read_text(encoding='utf-8')
+    if not re.search(
+        r'grant\s+execute\s+on\s+function\s+'
+        r'private\.employee_has_permission\s*\(\s*text\s*\)\s+'
+        r'to\s+authenticated\s*;',
+        employee_rls_source,
+        re.I,
+    ):
+        fail('authenticated must be able to evaluate employee-aware RLS policies')
+
+if violations:
+    print('ONLINE-ONLY POLICY FAILED')
+    for item in violations:
+        print(f' - {item}')
+    sys.exit(1)
+
+print('Online-only policy verification passed.')
