@@ -291,6 +291,7 @@ async function pruneMirrorRows(
   }
 }
 
+
 async function resolveAbsentTransactionDeadLetters(
   admin: any,
   syncSourceId: string,
@@ -304,65 +305,92 @@ async function resolveAbsentTransactionDeadLetters(
     .limit(1000);
   if (error) throw error;
 
-  for (const row of data ?? []) {
-    const sourceId = String(row.source_id ?? "").trim();
-    if (!sourceId) continue;
+  const rows = (data ?? [])
+    .map((row: any) => ({
+      id: String(row.id ?? ""),
+      sourceId: String(row.source_id ?? "").trim(),
+    }))
+    .filter((row: { id: string; sourceId: string }) => row.id && row.sourceId);
 
-    // Match the financial delete safety rule: one partial/truncated legacy
-    // snapshot must never be enough to close a financial dead letter.
-    if (presentIds.has(sourceId)) {
-      const { error: clearError } = await admin
-        .from("daftar_inbound_missing_candidates")
-        .delete()
-        .eq("sync_source_id", syncSourceId)
-        .eq("entity_kind", "payment")
-        .eq("source_id", sourceId);
-      if (clearError) throw clearError;
+  if (rows.length === 0) return;
+
+  const candidateMap = new Map<string, number>();
+  const pageSize = 1000;
+  for (let from = 0;; from += pageSize) {
+    const { data: candidates, error: candidateError } = await admin
+      .from("daftar_inbound_missing_candidates")
+      .select("source_id, missing_count")
+      .eq("sync_source_id", syncSourceId)
+      .eq("entity_kind", "payment")
+      .range(from, from + pageSize - 1);
+    if (candidateError) throw candidateError;
+    const page = candidates ?? [];
+    for (const row of page) {
+      candidateMap.set(String(row.source_id), Number(row.missing_count ?? 0));
+    }
+    if (page.length < pageSize) break;
+  }
+
+  const now = new Date().toISOString();
+  const clearIds = new Set<string>();
+  const missingRows: Array<Record<string, unknown>> = [];
+  const resolveIds: string[] = [];
+
+  for (const row of rows) {
+    if (presentIds.has(row.sourceId)) {
+      if (candidateMap.has(row.sourceId)) clearIds.add(row.sourceId);
       continue;
     }
 
-    const { data: existing, error: readError } = await admin
-      .from("daftar_inbound_missing_candidates")
-      .select("missing_count")
-      .eq("sync_source_id", syncSourceId)
-      .eq("entity_kind", "payment")
-      .eq("source_id", sourceId)
-      .maybeSingle();
-    if (readError) throw readError;
+    const missingCount = (candidateMap.get(row.sourceId) ?? 0) + 1;
+    missingRows.push({
+      sync_source_id: syncSourceId,
+      entity_kind: "payment",
+      source_id: row.sourceId,
+      missing_count: missingCount,
+      last_missing_at: now,
+    });
 
-    const missingCount = Number(existing?.missing_count ?? 0) + 1;
+    if (missingCount >= 2) {
+      resolveIds.push(row.id);
+      clearIds.add(row.sourceId);
+    }
+  }
+
+  for (let offset = 0; offset < missingRows.length; offset += 250) {
     const { error: upsertError } = await admin
       .from("daftar_inbound_missing_candidates")
-      .upsert({
-        sync_source_id: syncSourceId,
-        entity_kind: "payment",
-        source_id: sourceId,
-        missing_count: missingCount,
-        last_missing_at: new Date().toISOString(),
-      }, { onConflict: "sync_source_id,entity_kind,source_id" });
+      .upsert(missingRows.slice(offset, offset + 250), {
+        onConflict: "sync_source_id,entity_kind,source_id",
+      });
     if (upsertError) throw upsertError;
+  }
 
-    if (missingCount < 2) continue;
-
-    const { error: resolveError } = await admin.from("daftar_sync_dead_letters")
+  for (let offset = 0; offset < resolveIds.length; offset += 250) {
+    const { error: resolveError } = await admin
+      .from("daftar_sync_dead_letters")
       .update({
-        resolved_at: new Date().toISOString(),
+        resolved_at: now,
         resolution_note:
           "source_transaction_absent_from_two_consecutive_full_snapshots",
       })
-      .eq("id", row.id)
+      .in("id", resolveIds.slice(offset, offset + 250))
       .is("resolved_at", null);
     if (resolveError) throw resolveError;
+  }
 
+  const cleanupIds = [...clearIds];
+  for (let offset = 0; offset < cleanupIds.length; offset += 250) {
     const { error: cleanupError } = await admin
       .from("daftar_inbound_missing_candidates")
       .delete()
       .eq("sync_source_id", syncSourceId)
       .eq("entity_kind", "payment")
-      .eq("source_id", sourceId);
+      .in("source_id", cleanupIds.slice(offset, offset + 250));
     if (cleanupError) throw cleanupError;
   }
 }
+
 
 async function confirmMissingSourceIds(
   admin: any,
@@ -371,40 +399,62 @@ async function confirmMissingSourceIds(
   knownIds: string[],
   presentIds: Set<string>,
 ): Promise<string[]> {
-  const confirmed: string[] = [];
-  for (const sourceId of knownIds) {
-    if (presentIds.has(sourceId)) {
-      const { error } = await admin.from("daftar_inbound_missing_candidates")
-        .delete()
-        .eq("sync_source_id", source.id)
-        .eq("entity_kind", entityKind)
-        .eq("source_id", sourceId);
-      if (error) throw error;
-      continue;
-    }
+  const uniqueKnownIds = [...new Set(
+    knownIds.map((id) => String(id).trim()).filter(Boolean),
+  )];
+  if (uniqueKnownIds.length === 0) return [];
 
-    const { data: existing, error: readError } = await admin
+  const existing = new Map<string, number>();
+  const pageSize = 1000;
+  for (let from = 0;; from += pageSize) {
+    const { data, error } = await admin
       .from("daftar_inbound_missing_candidates")
-      .select("missing_count")
+      .select("source_id, missing_count")
       .eq("sync_source_id", source.id)
       .eq("entity_kind", entityKind)
-      .eq("source_id", sourceId)
-      .maybeSingle();
-    if (readError) throw readError;
-    const count = Number(existing?.missing_count ?? 0) + 1;
-    const { error: upsertError } = await admin
-      .from("daftar_inbound_missing_candidates")
-      .upsert({
-        sync_source_id: source.id,
-        entity_kind: entityKind,
-        source_id: sourceId,
-        missing_count: count,
-        last_missing_at: new Date().toISOString(),
-      }, { onConflict: "sync_source_id,entity_kind,source_id" });
-    if (upsertError) throw upsertError;
-    if (count >= 2) confirmed.push(sourceId);
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    const rows = data ?? [];
+    for (const row of rows) {
+      existing.set(String(row.source_id), Number(row.missing_count ?? 0));
+    }
+    if (rows.length < pageSize) break;
   }
-  return confirmed;
+
+  const clearIds = [...existing.keys()].filter((id) => presentIds.has(id));
+  for (let offset = 0; offset < clearIds.length; offset += 250) {
+    const { error } = await admin
+      .from("daftar_inbound_missing_candidates")
+      .delete()
+      .eq("sync_source_id", source.id)
+      .eq("entity_kind", entityKind)
+      .in("source_id", clearIds.slice(offset, offset + 250));
+    if (error) throw error;
+  }
+
+  const now = new Date().toISOString();
+  const missingRows = uniqueKnownIds
+    .filter((id) => !presentIds.has(id))
+    .map((sourceId) => ({
+      sync_source_id: source.id,
+      entity_kind: entityKind,
+      source_id: sourceId,
+      missing_count: (existing.get(sourceId) ?? 0) + 1,
+      last_missing_at: now,
+    }));
+
+  for (let offset = 0; offset < missingRows.length; offset += 250) {
+    const { error } = await admin
+      .from("daftar_inbound_missing_candidates")
+      .upsert(missingRows.slice(offset, offset + 250), {
+        onConflict: "sync_source_id,entity_kind,source_id",
+      });
+    if (error) throw error;
+  }
+
+  return missingRows
+    .filter((row) => row.missing_count >= 2)
+    .map((row) => row.source_id);
 }
 
 async function upsertLegacyLink(
