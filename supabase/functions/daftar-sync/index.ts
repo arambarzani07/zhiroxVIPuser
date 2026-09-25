@@ -304,19 +304,63 @@ async function resolveAbsentTransactionDeadLetters(
     .limit(1000);
   if (error) throw error;
 
-  const resolvedAt = new Date().toISOString();
   for (const row of data ?? []) {
     const sourceId = String(row.source_id ?? "").trim();
-    if (!sourceId || presentIds.has(sourceId)) continue;
+    if (!sourceId) continue;
+
+    // Match the financial delete safety rule: one partial/truncated legacy
+    // snapshot must never be enough to close a financial dead letter.
+    if (presentIds.has(sourceId)) {
+      const { error: clearError } = await admin
+        .from("daftar_inbound_missing_candidates")
+        .delete()
+        .eq("sync_source_id", syncSourceId)
+        .eq("entity_kind", "payment")
+        .eq("source_id", sourceId);
+      if (clearError) throw clearError;
+      continue;
+    }
+
+    const { data: existing, error: readError } = await admin
+      .from("daftar_inbound_missing_candidates")
+      .select("missing_count")
+      .eq("sync_source_id", syncSourceId)
+      .eq("entity_kind", "payment")
+      .eq("source_id", sourceId)
+      .maybeSingle();
+    if (readError) throw readError;
+
+    const missingCount = Number(existing?.missing_count ?? 0) + 1;
+    const { error: upsertError } = await admin
+      .from("daftar_inbound_missing_candidates")
+      .upsert({
+        sync_source_id: syncSourceId,
+        entity_kind: "payment",
+        source_id: sourceId,
+        missing_count: missingCount,
+        last_missing_at: new Date().toISOString(),
+      }, { onConflict: "sync_source_id,entity_kind,source_id" });
+    if (upsertError) throw upsertError;
+
+    if (missingCount < 2) continue;
+
     const { error: resolveError } = await admin.from("daftar_sync_dead_letters")
       .update({
-        resolved_at: resolvedAt,
+        resolved_at: new Date().toISOString(),
         resolution_note:
-          "source_transaction_absent_from_current_full_snapshot",
+          "source_transaction_absent_from_two_consecutive_full_snapshots",
       })
       .eq("id", row.id)
       .is("resolved_at", null);
     if (resolveError) throw resolveError;
+
+    const { error: cleanupError } = await admin
+      .from("daftar_inbound_missing_candidates")
+      .delete()
+      .eq("sync_source_id", syncSourceId)
+      .eq("entity_kind", "payment")
+      .eq("source_id", sourceId);
+    if (cleanupError) throw cleanupError;
   }
 }
 
