@@ -26,7 +26,7 @@ jobs:
           version: 2.117.0
 
       - name: Start local Supabase and apply migrations
-        run: supabase start
+        run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
 
       - name: Run Audit40 pgTAP contract
         run: supabase test db supabase/tests/audit40_integrity.test.sql
