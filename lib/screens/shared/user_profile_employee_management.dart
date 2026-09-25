@@ -74,7 +74,7 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
                     borderRadius: BorderRadius.circular(12),
                     onTap: () {
                       if (_employeeSection == index) return;
-                      setState(() => _employeeSection = index);
+                      _setProfileState(() => _employeeSection = index);
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
@@ -214,35 +214,35 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
                 title: 'زیادکردنی کڕیار',
                 value: _canAddCustomers,
                 enabled: canEdit,
-                onChanged: (v) => setState(() => _canAddCustomers = v),
+                onChanged: (v) => _setProfileState(() => _canAddCustomers = v),
               ),
               _permissionTile(
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'دانانی سنووری قەرز',
                 value: _canSetDebtLimit,
                 enabled: canEdit,
-                onChanged: (v) => setState(() => _canSetDebtLimit = v),
+                onChanged: (v) => _setProfileState(() => _canSetDebtLimit = v),
               ),
               _permissionTile(
                 icon: Icons.event_available_outlined,
                 title: 'دانانی بەرواری دانەوە',
                 value: _canSetDueDate,
                 enabled: canEdit,
-                onChanged: (v) => setState(() => _canSetDueDate = v),
+                onChanged: (v) => _setProfileState(() => _canSetDueDate = v),
               ),
               _permissionTile(
                 icon: Icons.edit_note_outlined,
                 title: 'دەستکاریکردنی قەرز',
                 value: _canEditDebts,
                 enabled: canEdit,
-                onChanged: (v) => setState(() => _canEditDebts = v),
+                onChanged: (v) => _setProfileState(() => _canEditDebts = v),
               ),
               _permissionTile(
                 icon: Icons.notifications_active_outlined,
                 title: 'ناردنی ئاگادارکردنەوە',
                 value: _canSendNotifications,
                 enabled: canEdit,
-                onChanged: (v) => setState(() => _canSendNotifications = v),
+                onChanged: (v) => _setProfileState(() => _canSendNotifications = v),
                 showDivider: false,
               ),
               if (canEdit) ...[
@@ -324,7 +324,7 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
 
   Future<void> _saveEmployeePermissions() async {
     if (_isSaving) return;
-    setState(() => _isSaving = true);
+    _setProfileState(() => _isSaving = true);
     try {
       await PBService.updateUser(widget.userId, {
         'can_add_customers': _canAddCustomers,
@@ -341,7 +341,7 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
         AppHelpers.showSnackBar(context, 'نەتوانرا دەسەڵاتەکان پاشەکەوت بکرێن', isError: true);
       }
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) _setProfileState(() => _isSaving = false);
     }
   }
 
