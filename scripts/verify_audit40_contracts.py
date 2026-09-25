@@ -4,7 +4,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 pb = (ROOT / "lib/services/pb_service.dart").read_text(errors="ignore")
-profile = (ROOT / "lib/screens/shared/user_profile_screen.dart").read_text(errors="ignore")
+profile_dir = ROOT / "lib/screens/shared"
+profile_main_path = profile_dir / "user_profile_screen.dart"
+profile_main = profile_main_path.read_text(errors="ignore")
+profile_parts = sorted(
+    path for path in profile_dir.glob("user_profile_*.dart")
+    if path != profile_main_path
+)
+profile = profile_main + "\n" + "\n".join(
+    path.read_text(errors="ignore") for path in profile_parts
+)
+assert "part 'user_profile_financial_chat.dart';" in profile_main
 compat = (ROOT / "lib/services/supabase_compat.dart").read_text(errors="ignore")
 gateway = (ROOT / "supabase/functions/debt-restore-admin/index.ts").read_text(errors="ignore")
 migrations = "\n".join(
