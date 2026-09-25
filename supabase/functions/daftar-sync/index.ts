@@ -1806,6 +1806,34 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Daftar PAYMENT is customer-level. Keep IQD repayments in ZHIROX's
+      // customer-wide/general ledger instead of distributing them across debt rows.
+      // Existing historical allocations are preserved until a remote edit causes
+      // the old allocation set to be removed above; the replacement then becomes
+      // a general payment.
+      if (currency.trim().toUpperCase() === "IQD") {
+        const { data: generalPaymentId, error: generalCreateError } =
+          await admin.rpc("apply_daftar_inbound_general_payment", {
+            p_admin_id: source.admin_id,
+            p_source_id: source.id,
+            p_remote_transaction_id: sourceTransactionId,
+            p_customer_id: customerId,
+            p_amount: transactionAmount,
+            p_currency: currency,
+            p_note: String(transaction.note ?? ""),
+            p_occurred_at: occurredAt,
+            p_payload_hash: payloadHash,
+          });
+        if (generalCreateError || !generalPaymentId) {
+          throw new Error(
+            `general_payment_create_failed:${sourceTransactionId}:${
+              generalCreateError?.message ?? "target_missing"
+            }`,
+          );
+        }
+        continue;
+      }
+
       const { data: existingAllocationLinks, error: allocationLinkError } =
         await admin.from("legacy_import_links")
           .select("source_id, target_id")

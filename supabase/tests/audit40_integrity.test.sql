@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(43);
+select plan(50);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -361,6 +361,59 @@ select ok(
     'SELECT'
   ),
   'Daftar-compatible transaction base view is not directly exposed'
+);
+
+
+select ok(
+  to_regprocedure(
+    'public.apply_daftar_inbound_general_payment(uuid,uuid,text,uuid,numeric,text,text,timestamptz,text)'
+  ) is not null,
+  'Daftar inbound general payment create helper exists'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.apply_daftar_inbound_general_payment(uuid,uuid,text,uuid,numeric,text,text,timestamptz,text)',
+    'EXECUTE'
+  ),
+  'authenticated users cannot call Daftar inbound general payment create helper'
+);
+
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.apply_daftar_inbound_general_payment(uuid,uuid,text,uuid,numeric,text,text,timestamptz,text)',
+    'EXECUTE'
+  ),
+  'service role can create Daftar inbound general payments'
+);
+
+select ok(
+  to_regprocedure('private.backfill_missing_daftar_general_payments(uuid)') is not null,
+  'missing Daftar payment backfill exists'
+);
+
+select ok(
+  to_regprocedure('private.customer_unmirrored_general_paid_total(uuid)') is not null,
+  'unmirrored general payment balance helper exists'
+);
+
+select ok(
+  position(
+    'customer_general_payments gp' in
+    pg_get_functiondef('private.reconcile_daftar_source(uuid)'::regprocedure)
+  ) > 0,
+  'Daftar reconciliation recognizes general payment mappings'
+);
+
+
+select ok(
+  position(
+    'customer_general_payments gp' in
+    pg_get_functiondef('private.run_daftar_sync_reconciliation(uuid)'::regprocedure)
+  ) > 0,
+  'Daftar integrity reconciliation accepts general payment allocation targets'
 );
 
 select * from finish();
