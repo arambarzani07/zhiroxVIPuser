@@ -997,7 +997,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
           // ───── Body ─────
           if (_isCustomer) ..._buildCustomerBody(),
-          if (_isEmployee) ...this._buildEmployeeBody(),
+          if (_isEmployee) ..._buildEmployeeBody(),
 
           const SliverPadding(padding: EdgeInsets.only(bottom: 40)),
         ],
