@@ -23,6 +23,8 @@ assert "p_general_payment_id: generalPaymentId" in gateway
 assert "_deleteFinancialPayment" in profile
 assert "PBService.deleteGeneralPayment(item.record.id)" in profile
 assert "auth.userRole == 'admin' && item.isPayment" in profile
+assert "currency == 'USD' && dollarRate <= 0" in profile
+assert "_timelineAmountInIqd(item) ?? double.nan" in profile
 
 assert "receipt_url_not_signed" in compat
 assert "getPublicUrl(filename)" not in compat
