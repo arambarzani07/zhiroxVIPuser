@@ -92,50 +92,50 @@ create table if not exists public.financial_events (
 -- Primary keys must exist before any foreign key below references them.
 -- Keep these bootstrap constraints early so a fresh local/project install is
 -- reproducible instead of depending on pre-existing production state.
-do $ begin
+do $pk$ begin
   if not exists (
     select 1 from pg_constraint
     where conrelid='public.profiles'::regclass and conname='profiles_pkey'
   ) then
     alter table public.profiles add constraint profiles_pkey primary key (id);
   end if;
-end $;
+end $pk$;
 
-do $ begin
+do $pk$ begin
   if not exists (
     select 1 from pg_constraint
     where conrelid='public.debts'::regclass and conname='debts_pkey'
   ) then
     alter table public.debts add constraint debts_pkey primary key (id);
   end if;
-end $;
+end $pk$;
 
-do $ begin
+do $pk$ begin
   if not exists (
     select 1 from pg_constraint
     where conrelid='public.payments'::regclass and conname='payments_pkey'
   ) then
     alter table public.payments add constraint payments_pkey primary key (id);
   end if;
-end $;
+end $pk$;
 
-do $ begin
+do $pk$ begin
   if not exists (
     select 1 from pg_constraint
     where conrelid='public.notifications'::regclass and conname='notifications_pkey'
   ) then
     alter table public.notifications add constraint notifications_pkey primary key (id);
   end if;
-end $;
+end $pk$;
 
-do $ begin
+do $pk$ begin
   if not exists (
     select 1 from pg_constraint
     where conrelid='public.financial_events'::regclass and conname='financial_events_pkey'
   ) then
     alter table public.financial_events add constraint financial_events_pkey primary key (id);
   end if;
-end $;
+end $pk$;
 
 do $$ begin
   if not exists (
