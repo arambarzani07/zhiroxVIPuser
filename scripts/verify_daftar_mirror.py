@@ -22,8 +22,11 @@ assert 'source.mirror_bootstrapped_at' in worker
 assert 'contactsFetch = await fetchRows<LegacyContact>' in worker
 assert '.range(offset, offset + pageSize - 1)' in worker
 assert 'resolveAbsentTransactionDeadLetters' in worker
-assert 'source_transaction_absent_from_current_full_snapshot' in worker
+assert 'source_transaction_absent_from_two_consecutive_full_snapshots' in worker
 assert 'currentTransactionIds' in worker
+assert 'daftar_inbound_missing_candidates' in worker
+assert 'const missingCount = Number(existing?.missing_count ?? 0) + 1' in worker
+assert 'if (missingCount < 2) continue' in worker
 
 assert 'mirror_bootstrapped_at' in gateway
 assert 'source.mirror_bootstrapped_at' in gateway
