@@ -919,10 +919,7 @@ async function buildEventWrite(
       ? snapshot
       : (generalPayment ?? {});
 
-    if (
-      event.operation !== "delete" &&
-      (!generalPayment || String(generalPayment.admin_id) !== source.admin_id)
-    ) {
+    if (!generalPayment || String(generalPayment.admin_id) !== source.admin_id) {
       return { skip: "entity_missing" };
     }
 
