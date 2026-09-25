@@ -1319,7 +1319,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   double? _timelineAmountInIqd(_ProfileTimelineItem item) {
     if (item.isSystem) return 0;
-    // Debt and payment amounts share one canonical base IQD storage unit.
+    if (item.isGeneralPayment) {
+      return item.record.getDoubleValue('amount');
+    }
+
+    final debt = item.isPayment ? item.relatedDebt : item.record;
+    final currency = debt?.getStringValue('currency').trim().toUpperCase() ?? 'IQD';
+    final dollarRate = debt?.getDoubleValue('dollar_rate') ?? 0;
+
+    // Current writes use IQD as the canonical storage unit. Some legacy USD
+    // rows predate that rule and have no conversion rate; mixing those raw USD
+    // values into an IQD running balance would be financially incorrect.
+    if (currency == 'USD' && dollarRate <= 0) return null;
     return item.record.getDoubleValue('amount');
   }
 
@@ -1910,7 +1921,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 kind: item.kind,
                 amount: item.isSystem
                     ? 0
-                    : item.record.getDoubleValue('amount'),
+                    : (_timelineAmountInIqd(item) ?? double.nan),
                 date: item.date,
               ),
             ),
