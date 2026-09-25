@@ -106,6 +106,13 @@ function normalizeContactPhone(value: unknown): string {
   return String(value ?? "").replace(/\D/g, "");
 }
 
+function outboundContactPhone(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw || raw.toLowerCase().startsWith("legacy_")) return "";
+  const digits = normalizeContactPhone(raw);
+  return digits.length >= 7 && digits.length <= 15 ? digits : "";
+}
+
 function datesAreClose(
   left: unknown,
   right: unknown,
@@ -319,7 +326,7 @@ async function findRemoteCustomerLive(
   profile: { name?: unknown; phone?: unknown; created_at?: unknown },
 ): Promise<string | null> {
   const rows = await fetchRemoteContactsLive(source);
-  const phone = normalizeContactPhone(profile.phone);
+  const phone = outboundContactPhone(profile.phone);
   const name = normalizeContactName(profile.name);
 
   let matches = phone
@@ -837,14 +844,14 @@ async function buildEventWrite(
           remoteId: Number(existingRemoteId),
           userId: Number(source.legacy_user_id),
           name: String(effective.name ?? data.name ?? "").trim(),
-          phone: String(effective.phone ?? data.phone ?? "").trim(),
+          phone: outboundContactPhone(effective.phone ?? data.phone),
           createdAt,
           updatedAt: String(effective.updated_at ?? updatedAt),
         })
         : buildContactCreate({
           userId: Number(source.legacy_user_id),
           name: String(effective.name ?? data.name ?? "").trim(),
-          phone: String(effective.phone ?? data.phone ?? "").trim(),
+          phone: outboundContactPhone(effective.phone ?? data.phone),
           createdAt,
           updatedAt: String(effective.updated_at ?? updatedAt),
         }),
