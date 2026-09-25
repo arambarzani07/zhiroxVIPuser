@@ -170,6 +170,29 @@ export default {
       return json(result);
     }
 
+    if (action === 'delete_general_payment') {
+      const generalPaymentId = String(body.general_payment_id ?? '').trim();
+      if (!generalPaymentId) return json({ error: 'invalid_input' }, 400);
+
+      const { data: result, error: deleteError } = await admin.rpc(
+        'delete_general_payment_service',
+        {
+          p_actor_id: userId,
+          p_general_payment_id: generalPaymentId,
+        },
+      );
+      if (deleteError || !result?.payment_deleted) {
+        return json(
+          {
+            error: deleteError?.message ?? 'payment_delete_failed',
+            code: deleteError?.code,
+          },
+          deleteError?.code === '42501' ? 403 : 500,
+        );
+      }
+      return json(result);
+    }
+
     if (action === 'restore') {
       const debtId = String(body.debt_id ?? '').trim();
       if (!debtId) return json({ error: 'invalid_input' }, 400);
