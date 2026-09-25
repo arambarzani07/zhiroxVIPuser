@@ -170,188 +170,262 @@ class _AutoUpdateGateState extends State<AutoUpdateGate>
         isDark ? AppDarkColors.textPrimary : const Color(0xFF101828);
     final secondaryText =
         isDark ? AppDarkColors.textSecondary : const Color(0xFF667085);
+    final mutedSurface = isDark
+        ? Colors.white.withValues(alpha: 0.045)
+        : const Color(0xFFF8FAFC);
 
     final card = Material(
       color: surface,
-      elevation: info.mandatory ? 16 : 10,
-      borderRadius: BorderRadius.circular(20),
+      elevation: info.mandatory ? 14 : 8,
+      shadowColor: Colors.black.withValues(alpha: isDark ? 0.36 : 0.12),
+      borderRadius: BorderRadius.circular(22),
       child: Container(
         width: double.infinity,
-        constraints: const BoxConstraints(maxWidth: 460),
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        constraints: const BoxConstraints(maxWidth: 430),
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(color: border),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(13),
+                    color: AppColors.primary.withValues(alpha: 0.11),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
                     Icons.system_update_alt_rounded,
                     color: AppColors.primary,
-                    size: 23,
+                    size: 21,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        info.isRollback
-                            ? 'گەڕاندنەوەی وەشان'
-                            : 'Auto Update Center',
-                        style: TextStyle(
-                          color: primaryText,
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              info.isRollback
+                                  ? 'گەڕاندنەوەی وەشان'
+                                  : 'Auto Update Center',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: primaryText,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: (info.isRollback
+                                      ? Colors.orange
+                                      : AppColors.primary)
+                                  .withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              info.isRollback ? 'پارێزراو' : 'نوێ',
+                              style: TextStyle(
+                                color: info.isRollback
+                                    ? Colors.orange.shade700
+                                    : AppColors.primary,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
                         info.isRollback
-                            ? 'وەشانی نوێ ناسازگارە؛ گەڕانەوە بۆ وەشانی پارێزراو پێویستە.'
+                            ? 'وەشانی نوێ ناسازگارە؛ گەڕانەوە پێویستە.'
                             : 'IPA ـی نوێ بۆ ZHIROX ${info.edition == 'owner' ? 'Owner' : 'User'} بەردەستە',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: secondaryText,
-                          fontSize: 11.5,
-                          height: 1.5,
+                          fontSize: 10.5,
+                          height: 1.35,
                         ),
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  tooltip: 'پشکنینەوە',
-                  onPressed: _checking ? null : _checkForUpdate,
-                  icon: _checking
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh_rounded, size: 20),
+                const SizedBox(width: 4),
+                SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'پشکنینەوە',
+                    onPressed: _checking ? null : _checkForUpdate,
+                    icon: _checking
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded, size: 19),
+                  ),
                 ),
                 if (!info.mandatory)
-                  IconButton(
-                    tooltip: 'دواتر',
-                    onPressed: _dismiss,
-                    icon: const Icon(Icons.close_rounded, size: 20),
+                  SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      tooltip: 'دواتر',
+                      onPressed: _dismiss,
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
                   ),
               ],
             ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.04)
-                    : const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildVersionCell(
-                      context,
-                      'ئێستا',
-                      'Build ${AppUpdateService.currentBuild}',
-                    ),
+            const SizedBox(height: 10),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                decoration: BoxDecoration(
+                  color: mutedSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: border.withValues(alpha: isDark ? 0.8 : 0.65),
                   ),
-                  Icon(Icons.arrow_back_rounded,
-                      size: 18, color: secondaryText),
-                  Expanded(
-                    child: _buildVersionCell(
-                      context,
-                      info.isRollback ? 'وەشانی پارێزراو' : 'نوێ',
-                      'v${info.version}+${info.latestBuild}',
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildVersionCell(
+                        context,
+                        'ئێستا',
+                        'Build ${AppUpdateService.currentBuild}',
+                      ),
                     ),
-                  ),
-                ],
+                    Container(
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 16,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildVersionCell(
+                        context,
+                        info.isRollback ? 'پارێزراو' : 'نوێ',
+                        'v${info.version}+${info.latestBuild}',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             if (info.notes.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: mutedSurface,
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 child: Text(
                   info.notes,
-                  maxLines: 3,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: secondaryText,
-                    fontSize: 11.5,
-                    height: 1.6,
+                    fontSize: 10.5,
+                    height: 1.45,
                   ),
                 ),
               ),
             ],
             if (_error != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 7),
               Text(
                 _error!,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Colors.red,
-                  fontSize: 11.5,
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ],
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                if (!info.mandatory) ...[
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _opening ? null : _dismiss,
-                      child: const Text('دواتر'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed: _opening ? null : _openDownload,
-                    icon: _opening
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.open_in_browser_rounded, size: 18),
-                    label: Text(
-                      _opening
-                          ? 'دەکرێتەوە...'
-                          : info.isRollback
-                              ? 'گەڕانەوە بۆ وەشانی پێشوو'
-                              : 'دابەزاندنی IPA',
-                    ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton.icon(
+                onPressed: _opening ? null : _openDownload,
+                icon: _opening
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.open_in_browser_rounded, size: 18),
+                label: Text(
+                  _opening
+                      ? 'دەکرێتەوە...'
+                      : info.isRollback
+                          ? 'گەڕانەوە بۆ وەشانی پێشوو'
+                          : 'دابەزاندنی IPA',
+                ),
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-              ],
+              ),
             ),
-            const SizedBox(height: 6),
+            if (!info.mandatory) ...[
+              const SizedBox(height: 3),
+              TextButton(
+                onPressed: _opening ? null : _dismiss,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                ),
+                child: const Text('دواتر'),
+              ),
+            ],
             Text(
-              'پشکنینی خۆکار هەر ٥ خولەک • دوای گەڕانەوە لە Safari دووبارە پشکنین دەکرێت.',
+              'پشکنینی خۆکار هەر ٥ خولەک • دوای Safari دووبارە پشکنین دەکرێت.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: secondaryText, fontSize: 9.5),
+              style: TextStyle(color: secondaryText, fontSize: 9),
             ),
           ],
         ),

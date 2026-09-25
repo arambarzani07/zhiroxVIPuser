@@ -384,118 +384,298 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final status = _status;
-    final canRevoke = status != null &&
-        (status.hasActiveLink || status.deviceCount > 0);
+    final canRevoke =
+        status != null && (status.hasActiveLink || status.deviceCount > 0);
+    final surface = isDark ? theme.colorScheme.surface : Colors.white;
+    final subtle = isDark
+        ? Colors.white.withValues(alpha: 0.045)
+        : const Color(0xFFF8FAFC);
+    final border = theme.colorScheme.outlineVariant.withValues(
+      alpha: isDark ? 0.8 : 0.72,
+    );
+
+    Widget metric({
+      required IconData icon,
+      required String text,
+      required Color accent,
+    }) {
+      return Expanded(
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 52),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: subtle,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 17, color: accent),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Card(
       margin: EdgeInsets.zero,
+      elevation: 0,
+      color: surface,
       clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: border),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.notifications_active_outlined,
-                  color: theme.colorScheme.primary,
+                Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(
+                    Icons.notifications_active_outlined,
+                    size: 20,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'ئاگادارکردنەوەی کڕیار',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'ئاگادارکردنەوەی کڕیار',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        status?.active == true
+                            ? 'پەیوەندی چالاکە و ئامێرەکان ئامادەن'
+                            : 'QR و پەیوەندی ئاگادارکردنەوە لێرە بەڕێوەببە',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10.5,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                if (!_loading && _error == null)
-                  IconButton(
-                    tooltip: 'نوێکردنەوە',
-                    onPressed: _busy ? null : _loadAll,
-                    icon: const Icon(Icons.refresh_rounded),
+                if (!_loading && _error == null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (status?.active == true
+                              ? Colors.green
+                              : theme.colorScheme.outline)
+                          .withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      status?.active == true ? 'چالاک' : 'ناچالاک',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        color: status?.active == true
+                            ? Colors.green.shade700
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ),
+                  const SizedBox(width: 2),
+                  SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      tooltip: 'نوێکردنەوە',
+                      onPressed: _busy ? null : _loadAll,
+                      icon: const Icon(Icons.refresh_rounded, size: 19),
+                    ),
+                  ),
+                ],
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 11),
             if (_loading)
               const Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 18),
-                  child: CircularProgressIndicator(),
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  ),
                 ),
               )
             else if (_error != null) ...[
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: theme.colorScheme.error),
+              Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.error.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: theme.colorScheme.error,
+                    fontSize: 11.5,
+                  ),
+                ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Align(
                 alignment: Alignment.center,
                 child: TextButton.icon(
                   onPressed: _busy ? null : _loadAll,
-                  icon: const Icon(Icons.refresh_rounded),
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
                   label: const Text('دووبارە هەوڵبدەوە'),
                 ),
               ),
             ] else ...[
-              if (status?.active == true) ...[
-                Text(
-                  'ئامێری چالاک: ${status!.deviceCount}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                if ((status.latestStatus ?? '').isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'دۆخی دوایین ناردن: ${status.latestStatus}',
-                    style: theme.textTheme.bodySmall,
+              Row(
+                children: [
+                  metric(
+                    icon: Icons.smartphone_rounded,
+                    text: 'ئامێری چالاک: ${status?.deviceCount ?? 0}',
+                    accent: Colors.green,
+                  ),
+                  const SizedBox(width: 8),
+                  metric(
+                    icon: Icons.qr_code_2_rounded,
+                    text: 'QR لینکی چالاک: ${status?.activeLinkCount ?? 0}',
+                    accent: theme.colorScheme.primary,
                   ),
                 ],
-              ] else
-                const Text(
-                  'هێشتا هیچ ئامێرێک پەیوەست نییە',
-                  textAlign: TextAlign.center,
-                ),
-              if ((status?.activeLinkCount ?? 0) > 0) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'QR لینکی چالاک: ${status!.activeLinkCount}',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
+              ),
+              if ((status?.latestStatus ?? '').isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: subtle,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        size: 16,
+                        color: Colors.green.shade700,
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          'دۆخی دوایین ناردن: ${status!.latestStatus}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
-              const SizedBox(height: 14),
-              FilledButton.icon(
-                onPressed: _busy ? null : _showQr,
-                icon: const Icon(Icons.qr_code_2_rounded),
-                label: const Text('QR ـی ئاگادارکردنەوە'),
+              if (status?.active != true &&
+                  (status?.activeLinkCount ?? 0) == 0) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'هێشتا هیچ ئامێرێک پەیوەست نییە',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 11),
+              SizedBox(
+                height: 44,
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : _showQr,
+                  icon: const Icon(Icons.qr_code_2_rounded, size: 19),
+                  label: const Text('QR ـی ئاگادارکردنەوە'),
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
               ),
               if (status?.active == true) ...[
-                const SizedBox(height: 8),
-                FilledButton.tonalIcon(
-                  onPressed: _busy ? null : _sendManual,
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('ناردنی ئاگاداری'),
+                const SizedBox(height: 7),
+                SizedBox(
+                  height: 42,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _busy ? null : _sendManual,
+                    icon: const Icon(Icons.send_rounded, size: 18),
+                    label: const Text('ناردنی ئاگاداری'),
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
                 ),
               ],
               if (canRevoke) ...[
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
+                const SizedBox(height: 3),
+                TextButton.icon(
                   onPressed: _busy ? null : _revokeAll,
-                  icon: const Icon(Icons.link_off_rounded),
+                  icon: const Icon(Icons.link_off_rounded, size: 17),
                   label: const Text('هەموو لینک و ئامێرەکان ڕابگرە'),
-                  style: OutlinedButton.styleFrom(
+                  style: TextButton.styleFrom(
                     foregroundColor: theme.colorScheme.error,
+                    visualDensity: VisualDensity.compact,
                   ),
                 ),
               ],
-              const SizedBox(height: 18),
-              const Divider(),
+              const SizedBox(height: 10),
+              Divider(height: 1, color: border),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -503,77 +683,128 @@ class _CustomerPushCardState extends State<CustomerPushCard> {
                     child: Text(
                       'مێژووی ئاگادارکردنەوەکان',
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'نوێکردنەوەی مێژوو',
-                    onPressed: _busy ? null : _loadHistory,
-                    icon: const Icon(Icons.refresh_rounded),
+                  if (_history.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsetsDirectional.only(end: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: subtle,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${_history.length}',
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      tooltip: 'نوێکردنەوەی مێژوو',
+                      onPressed: _busy ? null : _loadHistory,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                    ),
                   ),
                 ],
               ),
               if (_historyLoading)
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+                  padding: EdgeInsets.symmetric(vertical: 10),
                   child: Center(
                     child: SizedBox(
-                      width: 24,
-                      height: 24,
+                      width: 22,
+                      height: 22,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
                 )
               else if (_historyError != null)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 7),
                   child: Text(
                     _historyError!,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: theme.colorScheme.error),
+                    style: TextStyle(
+                      color: theme.colorScheme.error,
+                      fontSize: 11,
+                    ),
                   ),
                 )
               else if (_history.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
                     'هێشتا هیچ ئاگادارکردنەوەیەک تۆمار نەکراوە',
                     textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 10.5),
                   ),
                 )
               else
                 ..._history.take(10).map(
-                  (item) => Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: theme.colorScheme.outlineVariant,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
+                  (item) => Container(
+                    margin: const EdgeInsets.only(top: 6),
+                    decoration: BoxDecoration(
+                      color: subtle,
+                      border: Border.all(color: border),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      visualDensity: const VisualDensity(
+                        horizontal: -2,
+                        vertical: -2,
                       ),
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(_statusIcon(item.status)),
-                        title: Text(
-                          item.message?.trim().isNotEmpty == true
-                              ? item.message!
-                              : _eventLabel(item.eventType),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(_historyDetail(item)),
-                        trailing: item.canRetry && status?.active == true
-                            ? TextButton(
-                                onPressed: _busy
-                                    ? null
-                                    : () => _retryNotification(item),
-                                child: const Text('دووبارە ناردنەوە'),
-                              )
-                            : null,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 1,
                       ),
+                      leading: Icon(_statusIcon(item.status), size: 19),
+                      title: Text(
+                        item.message?.trim().isNotEmpty == true
+                            ? item.message!
+                            : _eventLabel(item.eventType),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        _historyDetail(item),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 9.5),
+                      ),
+                      trailing: item.canRetry && status?.active == true
+                          ? TextButton(
+                              onPressed: _busy
+                                  ? null
+                                  : () => _retryNotification(item),
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                ),
+                              ),
+                              child: const Text(
+                                'دووبارە ناردنەوە',
+                                style: TextStyle(fontSize: 10),
+                              ),
+                            )
+                          : null,
                     ),
                   ),
                 ),
