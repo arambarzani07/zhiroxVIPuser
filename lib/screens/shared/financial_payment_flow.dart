@@ -377,6 +377,7 @@ class FinancialPaymentFlow {
     required String createdByName,
     String? initialDebtId,
     double? initialStorageAmount,
+    bool customerWideOnly = false,
     String? referenceKind,
     String? referenceId,
   }) async {
@@ -394,6 +395,14 @@ class FinancialPaymentFlow {
         .toSet();
     final customerId = customerIds.length == 1 ? customerIds.first : '';
     final canPayGeneral = customerId.isNotEmpty;
+    if (customerWideOnly && !canPayGeneral) {
+      AppHelpers.showSnackBar(
+        context,
+        'ناسنامەی کڕیار پشتڕاست نەکرایەوە؛ پارەدانەوەی گشتی تۆمار ناکرێت.',
+        isError: true,
+      );
+      return false;
+    }
     final grossOpenBalance = openDebts.fold<double>(
       0,
       (sum, debt) => sum + debt.getDoubleValue('remaining'),
@@ -431,8 +440,11 @@ class FinancialPaymentFlow {
 
     final amountController = TextEditingController();
     final noteController = TextEditingController();
-    var selectedDebtId = canPayGeneral ? _allDebtsId : openDebts.first.id;
-    if (initialDebtId != null &&
+    var selectedDebtId = customerWideOnly
+        ? _allDebtsId
+        : (canPayGeneral ? _allDebtsId : openDebts.first.id);
+    if (!customerWideOnly &&
+        initialDebtId != null &&
         openDebts.any((debt) => debt.id == initialDebtId)) {
       selectedDebtId = initialDebtId;
     }
@@ -568,7 +580,54 @@ class FinancialPaymentFlow {
                     const SizedBox(height: 14),
                     _buildPaymentProgress(paymentStep, isDark),
                     const SizedBox(height: 16),
-                    if (canPayGeneral || openDebts.length > 1) ...[
+                    if (customerWideOnly) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: isDark ? 0.10 : 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.green.withValues(alpha: 0.22),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.account_balance_wallet_outlined,
+                              size: 19,
+                              color: Colors.green.shade700,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'پارەدانەوەی گشتی',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'بە هیچ قەرزێکی تاکەکەسی پەیوەست ناکرێت • ماوە: ${AppHelpers.formatCurrency(customerBalance)}',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      color: isDark
+                                          ? AppDarkColors.textSecondary
+                                          : const Color(0xFF667085),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ] else if (canPayGeneral || openDebts.length > 1) ...[
                       DropdownButtonFormField<String>(
                         initialValue: selectedDebtId,
                         isExpanded: true,
@@ -869,8 +928,11 @@ class FinancialPaymentFlow {
                                     customerId: customerId,
                                     amount: storageAmount,
                                     note: noteController.text.trim(),
-                                    referenceKind: referenceKind,
-                                    referenceId: referenceId,
+                                    // Customer-wide payments are intentionally
+                                    // independent ledger entries. Never attach them to
+                                    // an individual debt/reply reference.
+                                    referenceKind: null,
+                                    referenceId: null,
                                   );
                                   savedCustomerAmount =
                                       (result['amount'] as num?)?.toDouble() ?? storageAmount;
