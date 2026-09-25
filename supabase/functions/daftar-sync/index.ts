@@ -880,6 +880,35 @@ async function enqueueCreditLimitUpdateRollback(
   );
 }
 
+async function mappedGeneralPaymentTarget(
+  admin: any,
+  source: SyncSource,
+  remoteTransactionId: string,
+): Promise<string | null> {
+  const allocationSourceId = `${remoteTransactionId}:1`;
+  const { data: link, error: linkError } = await admin
+    .from("legacy_import_links")
+    .select("target_id")
+    .eq("admin_id", source.admin_id)
+    .eq("source_fingerprint", source.source_fingerprint)
+    .eq("entity_kind", "payment")
+    .eq("source_id", allocationSourceId)
+    .maybeSingle();
+  if (linkError) throw linkError;
+
+  const targetId = String(link?.target_id ?? "").trim();
+  if (!targetId) return null;
+
+  const { data: general, error: generalError } = await admin
+    .from("customer_general_payments")
+    .select("id")
+    .eq("id", targetId)
+    .eq("admin_id", source.admin_id)
+    .maybeSingle();
+  if (generalError) throw generalError;
+  return general ? targetId : null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1642,12 +1671,16 @@ Deno.serve(async (req) => {
           counters.reused_records++;
           continue;
         }
+
+        const generalPaymentTargetId = await mappedGeneralPaymentTarget(
+          admin,
+          source,
+          sourceTransactionId,
+        );
+
         // Outbound-created payments are mapped before the next inbound read
         // and intentionally start with a null hash. The first source snapshot
-        // confirms that mapping; replacing the local payment here would change
-        // its UUID and break receipts/references for an otherwise identical
-        // write. Later source edits have a non-null previous hash and follow
-        // the transactional remove/reallocate path below.
+        // confirms the mapping without replacing the local record.
         if (paymentMarker.payload_hash == null) {
           await upsertSeen(
             admin,
@@ -1657,9 +1690,62 @@ Deno.serve(async (req) => {
             null,
             payloadHash,
           );
+          if (generalPaymentTargetId) {
+            await upsertSeen(
+              admin,
+              source.id,
+              "payment_allocation",
+              `${sourceTransactionId}:1`,
+              generalPaymentTargetId,
+              payloadHash,
+            );
+          }
           counters.reused_records++;
           continue;
         }
+
+        // A Daftar PAYMENT created from ZHIROX's customer-wide ledger must
+        // stay customer-wide on remote edits. Updating it in place avoids
+        // converting the record into per-debt allocations on the next inbound
+        // snapshot.
+        if (generalPaymentTargetId) {
+          const { data: generalUpdated, error: generalUpdateError } =
+            await admin.rpc("apply_daftar_inbound_general_payment_update", {
+              p_admin_id: source.admin_id,
+              p_source_id: source.id,
+              p_remote_transaction_id: sourceTransactionId,
+              p_customer_id: customerId,
+              p_amount: transactionAmount,
+              p_note: String(transaction.note ?? ""),
+              p_occurred_at: occurredAt,
+            });
+          if (generalUpdateError || generalUpdated !== true) {
+            throw new Error(
+              `general_payment_update_failed:${sourceTransactionId}:${
+                generalUpdateError?.message ?? "target_missing"
+              }`,
+            );
+          }
+          await upsertSeen(
+            admin,
+            source.id,
+            "payment",
+            sourceTransactionId,
+            null,
+            payloadHash,
+          );
+          await upsertSeen(
+            admin,
+            source.id,
+            "payment_allocation",
+            `${sourceTransactionId}:1`,
+            generalPaymentTargetId,
+            payloadHash,
+          );
+          counters.updated_payments++;
+          continue;
+        }
+
         const { error: removeError } = await admin.rpc(
           "remove_daftar_inbound_payment",
           {
