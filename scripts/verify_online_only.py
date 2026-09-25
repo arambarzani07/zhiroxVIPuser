@@ -59,7 +59,22 @@ if '_validateSubscription(' not in auth:
     fail('lib/providers/auth_provider.dart: saved sessions must revalidate subscription state')
 
 
-add_debt = (LIB / 'screens/shared/add_debt_screen.dart').read_text(encoding='utf-8')
+add_debt_dir = LIB / 'screens/shared'
+add_debt_main_path = add_debt_dir / 'add_debt_screen.dart'
+add_debt_main = add_debt_main_path.read_text(encoding='utf-8')
+add_debt_part_paths = sorted(
+    path for path in add_debt_dir.glob('add_debt_*.dart')
+    if path != add_debt_main_path
+)
+add_debt = add_debt_main + '\n' + '\n'.join(
+    path.read_text(encoding='utf-8') for path in add_debt_part_paths
+)
+for marker in (
+    "part 'add_debt_items.dart';",
+    "part 'add_debt_customer_section.dart';",
+):
+    if marker not in add_debt_main:
+        fail(f'lib/screens/shared/add_debt_screen.dart: add-debt part wiring missing: {marker}')
 for marker in ('_customerLoadError', '_buildCustomerPicker', 'دووبارە هەوڵ بدە'):
     if marker not in add_debt:
         fail(f'lib/screens/shared/add_debt_screen.dart: fail-closed customer loading marker missing: {marker}')
