@@ -208,7 +208,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
       saveText: 'هەڵبژاردن',
     );
     if (!mounted || picked == null) return;
-    setState(() {
+    _setProfileState(() {
       _financialDateRange = picked;
       // A date range means "show the customer's financial activity in this
       // period". Reset a previous single-kind chip so debt and payment rows
@@ -220,7 +220,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
 
   void _applyFinancialQuickRange(FinancialQuickRange preset) {
     final resolved = resolveFinancialQuickRange(preset, DateTime.now());
-    setState(() {
+    _setProfileState(() {
       _financialDateRange = DateTimeRange(
         start: resolved.start,
         end: resolved.end,
@@ -238,7 +238,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
     }
     _financialSearchDebounce?.cancel();
     _financialSearchController.clear();
-    setState(() {
+    _setProfileState(() {
       _financialDateRange = null;
       _financialTypeFilter = 'all';
       _financialFiltersExpanded = false;
@@ -272,7 +272,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
         child: ChoiceChip(
           selected: selected,
           onSelected: (_) {
-            setState(() => _financialTypeFilter = value);
+            _setProfileState(() => _financialTypeFilter = value);
             unawaited(_hydrateFinancialHistoryForFilters());
           },
           avatar: Icon(
@@ -357,7 +357,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
               Expanded(
                 child: InkWell(
                   borderRadius: BorderRadius.circular(10),
-                  onTap: () => setState(
+                  onTap: () => _setProfileState(
                     () => _financialFiltersExpanded = !expanded,
                   ),
                   child: Padding(
@@ -457,7 +457,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
                   TextField(
                     controller: _financialSearchController,
                     onChanged: (_) {
-                      setState(() {});
+                      _setProfileState(() {});
                       _scheduleFinancialSearchHydration();
                     },
                     textInputAction: TextInputAction.search,
@@ -471,7 +471,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
                               onPressed: () {
                                 _financialSearchDebounce?.cancel();
                                 _financialSearchController.clear();
-                                setState(() {});
+                                _setProfileState(() {});
                               },
                               icon: const Icon(Icons.close_rounded, size: 16),
                             ),
@@ -1432,7 +1432,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
                     IconButton(
                       tooltip: 'لابردنی پەیوەندی',
                       visualDensity: VisualDensity.compact,
-                      onPressed: () => setState(() => _financialReplyTarget = null),
+                      onPressed: () => _setProfileState(() => _financialReplyTarget = null),
                       icon: const Icon(Icons.close_rounded, size: 16),
                     ),
                   ],
@@ -1501,7 +1501,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
     );
     if (result == true && mounted) {
       if (mounted && _financialReplyTarget != null) {
-        setState(() => _financialReplyTarget = null);
+        _setProfileState(() => _financialReplyTarget = null);
       }
       await _refreshFinancialData(autoJump: true);
     }
@@ -1598,7 +1598,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
     );
     if (!mounted || !saved) return;
     if (_financialReplyTarget != null) {
-      setState(() => _financialReplyTarget = null);
+      _setProfileState(() => _financialReplyTarget = null);
     }
     await _refreshFinancialData(autoJump: true);
   }
@@ -2414,7 +2414,7 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
     switch (action) {
       case 'reference':
         if (mounted) {
-          setState(() => _financialReplyTarget = item);
+          _setProfileState(() => _financialReplyTarget = item);
           _jumpToLatest();
         }
         break;
