@@ -45,6 +45,13 @@ type OutboxEvent = {
   last_error?: string | null;
 };
 
+function isGeneralPaymentSnapshot(
+  snapshot: Record<string, unknown>,
+): boolean {
+  return String(snapshot.payment_scope ?? "").trim().toLowerCase() === "general" ||
+    String(snapshot.source_table ?? "").trim() === "customer_general_payments";
+}
+
 function isCreditLimitRollback(event: OutboxEvent): boolean {
   const snapshot = event.payload_snapshot ?? {};
   return event.entity_kind === "debt" &&
@@ -896,6 +903,73 @@ async function buildEventWrite(
               new Date().toISOString(),
           ),
           note: String(effective.description ?? data.description ?? ""),
+        }),
+    };
+  }
+
+  if (event.entity_kind === "payment" && isGeneralPaymentSnapshot(snapshot)) {
+    const { data: generalPayment, error: generalPaymentError } = await admin
+      .from("customer_general_payments")
+      .select("id, admin_id, customer_id, amount, note, created_at")
+      .eq("id", event.entity_id)
+      .maybeSingle();
+    if (generalPaymentError) throw generalPaymentError;
+
+    const effective = Object.keys(snapshot).length > 0
+      ? snapshot
+      : (generalPayment ?? {});
+
+    if (!generalPayment || String(generalPayment.admin_id) !== source.admin_id) {
+      return { skip: "entity_missing" };
+    }
+
+    const customerId = String(
+      effective.customer_id ?? generalPayment?.customer_id ?? "",
+    ).trim();
+    if (!customerId) return { skip: "customer_missing" };
+
+    const contactId = await remoteLink(
+      admin,
+      source,
+      "customer",
+      customerId,
+    );
+    if (!contactId) {
+      await ensureCustomerOutbox(admin, source, customerId);
+      return { defer: "customer_mapping_pending" };
+    }
+
+    const transactionDate = String(
+      effective.transaction_date ??
+        generalPayment?.created_at ??
+        effective.created_at ??
+        new Date().toISOString(),
+    );
+    const amountValue = Number(
+      effective.amount ?? generalPayment?.amount ?? 0,
+    );
+    const note = String(effective.note ?? generalPayment?.note ?? "");
+
+    return {
+      request: event.operation === "update"
+        ? buildTransactionUpdate({
+          remoteId: Number(existingRemoteId),
+          userId: Number(source.legacy_user_id),
+          contactId: Number(contactId),
+          transactionType: "PAYMENT",
+          amount: amountValue,
+          currency: "IQD",
+          transactionDate,
+          note,
+        })
+        : buildTransactionCreate({
+          userId: Number(source.legacy_user_id),
+          contactId: Number(contactId),
+          transactionType: "PAYMENT",
+          amount: amountValue,
+          currency: "IQD",
+          transactionDate,
+          note,
         }),
     };
   }
