@@ -386,7 +386,8 @@ class CustomerDirectoryController extends ChangeNotifier {
       }
     } catch (error) {
       if (_disposed || generation != _generation) return;
-      if (!loadMore) _users = const [];
+      final restricted = PBService.isServiceRestrictionError(error);
+      if (!loadMore && !restricted) _users = const [];
       _loading = false;
       _loadingMore = false;
       final message = AppHelpers.backendErrorMessage(
@@ -441,9 +442,12 @@ class CustomerDirectoryController extends ChangeNotifier {
       if (_disposed || (generation != null && generation != _generation)) {
         return;
       }
-      _inbox = {};
-      _balances = {};
-      _balanceErrors = ids.toSet();
+      final restricted = PBService.isServiceRestrictionError(error);
+      if (!restricted) {
+        _inbox = {};
+        _balances = {};
+        _balanceErrors = ids.toSet();
+      }
       _inboxError = AppHelpers.backendErrorMessage(
         error,
         fallback: 'نەتوانرا پوختە و باڵانسی کڕیاران باربکرێت. دووبارە هەوڵ بدە.',
