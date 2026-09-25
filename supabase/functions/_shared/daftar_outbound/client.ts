@@ -160,7 +160,7 @@ export function buildTransactionUpdate(
 }
 
 export function buildDaftarDelete(
-  kind: "customer" | "debt" | "payment",
+  kind: "customer" | "debt" | "payment" | "general_payment",
   remoteIdValue: number,
 ): DaftarWriteRequest {
   const remoteId = positiveInteger(remoteIdValue, "remote_id");
