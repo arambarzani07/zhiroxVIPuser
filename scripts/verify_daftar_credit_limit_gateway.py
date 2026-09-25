@@ -3,7 +3,8 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 fn = (root / 'supabase/functions/daftar-credit-gateway/index.ts').read_text()
-migration = (root / 'supabase/migrations/20260920222500_daftar_credit_limit_gateway.sql').read_text()
+migration = (root / 'supabase/migrations/20260920222142_daftar_credit_limit_gateway_audit.sql').read_text()
+historical_marker = (root / 'supabase/migrations/20260920222500_daftar_credit_limit_gateway.sql').read_text()
 config = (root / 'supabase/config.toml').read_text()
 
 required_fn = [
@@ -35,6 +36,9 @@ for marker in [
     'revoke all on table public.daftar_credit_limit_gateway_events from public, anon, authenticated',
 ]:
     assert marker in migration.lower(), marker
+
+assert 'Historical migration marker.' in historical_marker
+assert '20260920222142_daftar_credit_limit_gateway_audit.sql' in historical_marker
 
 assert '[functions.daftar-credit-gateway]' in config
 assert 'verify_jwt = false' in config
