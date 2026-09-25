@@ -256,7 +256,6 @@ begin
   return v_result;
 end;
 $function$;
-
 CREATE OR REPLACE FUNCTION public.get_customer_directory_page(p_search text DEFAULT ''::text, p_limit integer DEFAULT 60, p_cursor_created_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_cursor_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE sql
@@ -427,7 +426,6 @@ AS $function$
   )
   from page_meta m;
 $function$;
-
 CREATE OR REPLACE FUNCTION public.get_customer_directory_page_filtered(p_search text DEFAULT ''::text, p_filter text DEFAULT 'all'::text, p_limit integer DEFAULT 60, p_cursor_created_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_cursor_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE sql
@@ -629,7 +627,6 @@ AS $function$
   )
   from page_meta m;
 $function$;
-
 CREATE OR REPLACE FUNCTION public.get_customer_inbox_rows(p_customer_ids uuid[])
  RETURNS jsonb
  LANGUAGE sql
