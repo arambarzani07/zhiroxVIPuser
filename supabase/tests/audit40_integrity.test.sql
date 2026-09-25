@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(52);
+select plan(54);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -436,6 +436,25 @@ select ok(
     pg_get_viewdef('private.zhirox_daftar_transactions_v1'::regclass, true)
   ) > 0,
   'Daftar transaction projection keeps only explicitly native local fallbacks'
+);
+
+
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'private.customer_unmirrored_general_paid_total(uuid)',
+    'EXECUTE'
+  ),
+  'authenticated dashboard callers can execute the private general-payment helper'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'private.customer_unmirrored_general_paid_total(uuid)',
+    'EXECUTE'
+  ),
+  'anonymous callers cannot execute the private general-payment helper'
 );
 
 select * from finish();
