@@ -1591,10 +1591,11 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
       createdByName: auth.userName,
       initialDebtId: initialDebtId,
       initialStorageAmount: initialAmount,
-      referenceKind: replyTarget == null
+      customerWideOnly: initialDebtId == null,
+      referenceKind: initialDebtId == null || replyTarget == null
           ? null
           : (replyTarget.isPayment ? 'payment' : 'debt'),
-      referenceId: replyTarget?.record.id,
+      referenceId: initialDebtId == null ? null : replyTarget?.record.id,
     );
     if (!mounted || !saved) return;
     if (_financialReplyTarget != null) {
@@ -1818,11 +1819,14 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
                         ),
                       ),
                     ],
-                    if (_financialReferenceSnapshot(record) != null) ...[
+                    if (!item.isGeneralPayment &&
+                        _financialReferenceSnapshot(record) != null) ...[
                       const SizedBox(height: 7),
                       _buildPersistentFinancialReference(record, color, isDark),
                     ],
-                    if (isPayment && relatedDebt != null) ...[
+                    if (isPayment &&
+                        !item.isGeneralPayment &&
+                        relatedDebt != null) ...[
                       const SizedBox(height: 7),
                       _buildPaymentDebtReference(relatedDebt, color, isDark),
                     ],
@@ -2254,7 +2258,11 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
   ) async {
     if (item.isSystem || !mounted) return;
 
-    final debt = item.isPayment ? item.relatedDebt : item.record;
+    // A general repayment is a customer-ledger entry, not a debt
+    // transaction. Even legacy rows must not expose debt actions/references.
+    final debt = item.isGeneralPayment
+        ? null
+        : (item.isPayment ? item.relatedDebt : item.record);
     final receiptPath = debt?.getStringValue('receipt_image').trim() ?? '';
     final auth = context.read<AuthProvider>();
     final action = await showModalBottomSheet<String>(
