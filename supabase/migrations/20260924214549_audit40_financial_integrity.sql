@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION private.get_customer_virtual_debt_balances(p_customer
  LANGUAGE sql
  STABLE SECURITY DEFINER
  SET search_path TO ''
-AS $function$
+AS $function$;
   with general_credit as (
     select coalesce(sum(g.amount), 0)::numeric as amount
     from public.customer_general_payments g
@@ -56,14 +56,14 @@ AS $function$
     end::numeric as applied_general_credit
   from ordered o
   cross join general_credit g;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.get_customer_effective_balance(p_customer_id uuid)
  RETURNS numeric
  LANGUAGE sql
  STABLE
  SET search_path TO ''
-AS $function$
+AS $function$;
   with official as (
     select o.balance_iqd
     from private.get_daftar_official_customer_totals(p_customer_id) o
@@ -90,14 +90,14 @@ AS $function$
     ) - coalesce((select amount from general_paid), 0),
     0
   )::numeric;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION private.customer_lifetime_paid_total(p_customer_id uuid)
  RETURNS numeric
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO ''
-AS $function$
+AS $function$;
 declare
   v_uid uuid := auth.uid();
   v_role text := private."current_role"();
@@ -136,14 +136,14 @@ begin
 
   return coalesce(v_specific, 0) + coalesce(v_general, 0);
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.record_customer_payment_service(p_actor_id uuid, p_customer_id uuid, p_amount numeric, p_note text DEFAULT ''::text, p_reference_kind text DEFAULT NULL::text, p_reference_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
-AS $function$
+AS $function$;
 declare
   v_role text;
   v_admin_id uuid;
@@ -284,14 +284,14 @@ begin
     'payments', '[]'::jsonb
   );
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.record_payment_service(p_actor_id uuid, p_debt_id uuid, p_amount numeric, p_note text DEFAULT ''::text, p_reference_kind text DEFAULT NULL::text, p_reference_id uuid DEFAULT NULL::uuid)
  RETURNS payments
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
-AS $function$
+AS $function$;
 declare
   v_role text;
   v_admin_id uuid;
@@ -475,14 +475,14 @@ begin
 
   return v_payment;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.delete_general_payment_service(p_actor_id uuid, p_general_payment_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
-AS $function$
+AS $function$;
 declare
   v_admin_id uuid;
   v_customer_id uuid;
@@ -543,7 +543,7 @@ begin
     'remaining', v_remaining
   );
 end;
-$function$
+$function$;
 
 revoke all on function private.get_customer_virtual_debt_balances(uuid)
   from public, anon;
