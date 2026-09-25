@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(28);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -217,6 +217,36 @@ select ok(
     'EXECUTE'
   ),
   'authenticated users cannot resolve Daftar dead letters directly'
+);
+
+select is(
+  (
+    with fk as (
+      select c.oid, c.conrelid, c.conkey
+      from pg_constraint c
+      join pg_class t on t.oid = c.conrelid
+      join pg_namespace n on n.oid = t.relnamespace
+      where c.contype = 'f'
+        and n.nspname = 'public'
+    )
+    select count(*)::bigint
+    from fk
+    where not exists (
+      select 1
+      from pg_index i
+      where i.indrelid = fk.conrelid
+        and i.indisvalid
+        and i.indisready
+        and i.indnkeyatts >= array_length(fk.conkey, 1)
+        and (
+          select array_agg(k.attnum order by k.ord)
+          from unnest(i.indkey::smallint[]) with ordinality k(attnum, ord)
+          where k.ord <= array_length(fk.conkey, 1)
+        ) = fk.conkey
+    )
+  ),
+  0::bigint,
+  'all public foreign keys have covering indexes'
 );
 
 select * from finish();
