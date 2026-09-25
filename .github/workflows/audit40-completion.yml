@@ -1,0 +1,112 @@
+name: Audit40 Completion Gate
+
+on:
+  push:
+    branches: [audit40-complete-20260925]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit40-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase and apply migrations
+        run: supabase start
+
+      - name: Run Audit40 pgTAP contract
+        run: supabase test db supabase/tests/audit40_integrity.test.sql
+
+      - name: Lint database functions
+        run: supabase db lint --level error
+
+  app:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Core policy verification
+        run: |
+          python3 scripts/verify_online_only.py
+          python3 scripts/verify_fib_payment_security.py
+          python3 scripts/verify_financial_event_tenant_isolation.py
+          python3 scripts/verify_customer_payment_totals.py
+          python3 scripts/verify_receipt_studio_governance.py
+          python3 scripts/verify_admin_dashboard_activity.py
+          python3 scripts/verify_debt_restore_admin.py
+          python3 scripts/verify_customer_push.py
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check changed Edge Functions
+        run: |
+          deno check supabase/functions/debt-restore-admin/index.ts
+          deno check supabase/functions/record-payment/index.ts
+          deno check supabase/functions/daftar-live-read/index.ts
+
+      - name: Analyze strictly
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Prepare user iOS identity
+        run: |
+          sed -i '' "s/com.karoxghafoor.zhirox/com.karoxghafoor.zhirox.user/g" ios/Runner.xcodeproj/project.pbxproj
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ZHIROX User" ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName zhirox_user" ios/Runner/Info.plist
+
+      - name: Prepare iOS 15 deployment target
+        run: |
+          sed -i '' "s/platform :ios, '13.0'/platform :ios, '15.0'/" ios/Podfile
+          sed -i '' "s/IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'/IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'/" ios/Podfile
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' ios/Runner.xcodeproj/project.pbxproj
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
+      - name: Wire CocoaPods xcconfig
+        run: |
+          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Debug.xcconfig
+          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Release.xcconfig
+
+      - name: Build unsigned iOS app
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=ZHIROX_APP_EDITION=user \
+            --dart-define=ZHIROX_BUILD_NUMBER=${GITHUB_RUN_NUMBER}
+
+      - name: Verify built identity
+        run: |
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "com.karoxghafoor.zhirox.user"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "ZHIROX User"
