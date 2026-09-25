@@ -211,8 +211,7 @@ begin
     'generated_at', now()
   );
 end;
-$function$
-
+$function$;
 
 revoke all on function public.read_customer_period_statement_service(date,date,text,text,text) from public, anon, authenticated;
 grant execute on function public.read_customer_period_statement_service(date,date,text,text,text) to service_role;
