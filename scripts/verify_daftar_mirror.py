@@ -20,6 +20,10 @@ assert '"daftar_mirror_contacts"' in worker
 assert '"daftar_mirror_transactions"' in worker
 assert 'source.mirror_bootstrapped_at' in worker
 assert 'contactsFetch = await fetchRows<LegacyContact>' in worker
+assert '.range(offset, offset + pageSize - 1)' in worker
+assert 'resolveAbsentTransactionDeadLetters' in worker
+assert 'source_transaction_absent_from_current_full_snapshot' in worker
+assert 'currentTransactionIds' in worker
 
 assert 'mirror_bootstrapped_at' in gateway
 assert 'source.mirror_bootstrapped_at' in gateway
