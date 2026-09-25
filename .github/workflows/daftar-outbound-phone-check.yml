@@ -1,0 +1,20 @@
+name: Daftar Outbound Phone Check
+
+on:
+  push:
+    branches: [daftar-outbound-contact-phone-fix]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check outbound sync
+        run: deno check supabase/functions/daftar-outbound-sync/index.ts
