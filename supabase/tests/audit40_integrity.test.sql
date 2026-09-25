@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(43);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -308,6 +308,59 @@ select ok(
     pg_get_functiondef('public.enqueue_daftar_outbound_mutation()'::regprocedure)
   ) > 0,
   'outbound mutation function transports general payments'
+);
+
+
+select ok(
+  to_regclass('private.zhirox_daftar_contacts_v1') is not null,
+  'Daftar-compatible contact projection exists'
+);
+
+select ok(
+  to_regclass('private.zhirox_daftar_transactions_v1') is not null,
+  'Daftar-compatible transaction projection exists'
+);
+
+select ok(
+  to_regprocedure('public.get_my_daftar_compatible_contacts(integer,integer)') is not null,
+  'tenant-scoped Daftar-compatible contact RPC exists'
+);
+
+select ok(
+  to_regprocedure('public.get_my_daftar_compatible_transactions(text,integer,integer)') is not null,
+  'tenant-scoped Daftar-compatible transaction RPC exists'
+);
+
+select ok(
+  to_regprocedure('public.get_my_daftar_compatible_summary()') is not null,
+  'Daftar-compatible summary RPC exists'
+);
+
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.get_my_daftar_compatible_contacts(integer,integer)',
+    'EXECUTE'
+  ),
+  'signed-in tenant users can read Daftar-compatible contacts'
+);
+
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'private.zhirox_daftar_contacts_v1',
+    'SELECT'
+  ),
+  'Daftar-compatible contact base view is not directly exposed'
+);
+
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'private.zhirox_daftar_transactions_v1',
+    'SELECT'
+  ),
+  'Daftar-compatible transaction base view is not directly exposed'
 );
 
 select * from finish();
