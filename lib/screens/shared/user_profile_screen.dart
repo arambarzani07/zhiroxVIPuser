@@ -161,6 +161,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     super.dispose();
   }
 
+  void _setProfileState(VoidCallback update) => setState(update);
+
   Future<void> _loadData() async {
     if (!mounted || _loadInFlight) return;
     _loadInFlight = true;
