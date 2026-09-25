@@ -408,6 +408,7 @@ class _UserListScreenState extends State<UserListScreen> {
         debts: openDebts,
         createdBy: auth.userId,
         createdByName: auth.userName,
+        customerWideOnly: true,
       );
       if (saved && mounted) {
         await _loadUsers(search: _searchController.text.trim());
