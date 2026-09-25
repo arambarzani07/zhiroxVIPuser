@@ -1079,7 +1079,7 @@ begin
 end;
 $function$;
 
-CREATE OR REPLACE FUNCTION public.set_my_telegram_credentials(text, text)
+CREATE OR REPLACE FUNCTION public.set_my_telegram_credentials(p_bot_token text, p_chat_id text)
  RETURNS void
  LANGUAGE plpgsql
  SET search_path TO ''
