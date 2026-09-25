@@ -1,0 +1,31 @@
+name: User Profile Account Refactor Check
+
+on:
+  push:
+    branches: [user-profile-account-refactor-20260925]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: user-profile-account-refactor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Get dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test
