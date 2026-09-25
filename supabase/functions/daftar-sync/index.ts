@@ -265,19 +265,58 @@ async function pruneMirrorRows(
   syncSourceId: string,
   presentIds: Set<string>,
 ) {
-  const { data, error } = await admin.from(table)
-    .select("source_id")
-    .eq("sync_source_id", syncSourceId);
-  if (error) throw error;
-  const missing = (data ?? [])
-    .map((row: { source_id: unknown }) => String(row.source_id))
-    .filter((id: string) => !presentIds.has(id));
+  const existingIds: string[] = [];
+  const pageSize = 1000;
+  for (let offset = 0;; offset += pageSize) {
+    const { data, error } = await admin.from(table)
+      .select("source_id")
+      .eq("sync_source_id", syncSourceId)
+      .order("source_id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const rows = data ?? [];
+    existingIds.push(
+      ...rows.map((row: { source_id: unknown }) => String(row.source_id)),
+    );
+    if (rows.length < pageSize) break;
+  }
+
+  const missing = existingIds.filter((id) => !presentIds.has(id));
   for (let offset = 0; offset < missing.length; offset += 250) {
     const { error: deleteError } = await admin.from(table)
       .delete()
       .eq("sync_source_id", syncSourceId)
       .in("source_id", missing.slice(offset, offset + 250));
     if (deleteError) throw deleteError;
+  }
+}
+
+async function resolveAbsentTransactionDeadLetters(
+  admin: any,
+  syncSourceId: string,
+  presentIds: Set<string>,
+) {
+  const { data, error } = await admin.from("daftar_sync_dead_letters")
+    .select("id, source_id, error_code")
+    .eq("sync_source_id", syncSourceId)
+    .is("resolved_at", null)
+    .eq("error_code", "unallocatable_payment")
+    .limit(1000);
+  if (error) throw error;
+
+  const resolvedAt = new Date().toISOString();
+  for (const row of data ?? []) {
+    const sourceId = String(row.source_id ?? "").trim();
+    if (!sourceId || presentIds.has(sourceId)) continue;
+    const { error: resolveError } = await admin.from("daftar_sync_dead_letters")
+      .update({
+        resolved_at: resolvedAt,
+        resolution_note:
+          "source_transaction_absent_from_current_full_snapshot",
+      })
+      .eq("id", row.id)
+      .is("resolved_at", null);
+    if (resolveError) throw resolveError;
   }
 }
 
@@ -1002,15 +1041,21 @@ Deno.serve(async (req) => {
       );
     }
     if (!transactionsFetch.notModified) {
+      const currentTransactionIds = new Set(
+        transactions
+          .filter((row) => !creditRejectedIds.has(String(row.id)))
+          .map((row) => String(row.id)),
+      );
       await pruneMirrorRows(
         admin,
         "daftar_mirror_transactions",
         source.id,
-        new Set(
-          transactions
-            .filter((row) => !creditRejectedIds.has(String(row.id)))
-            .map((row) => String(row.id)),
-        ),
+        currentTransactionIds,
+      );
+      await resolveAbsentTransactionDeadLetters(
+        admin,
+        source.id,
+        currentTransactionIds,
       );
     }
 
