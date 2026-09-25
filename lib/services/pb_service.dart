@@ -57,6 +57,17 @@ class PBService {
     return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
   }
 
+  static bool isServiceRestrictionError(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('402') ||
+        text.contains('payment required') ||
+        text.contains('service restriction') ||
+        text.contains('fair use') ||
+        text.contains('exceeded_egress') ||
+        text.contains('exceeded_db_size') ||
+        text.contains('quota exceeded');
+  }
+
   static bool _isRetryableAuthException(AuthException error) {
     final text = '${error.runtimeType} ${error.message}'.toLowerCase();
     return text.contains('retryable') ||
@@ -194,6 +205,9 @@ class PBService {
       }
       return user;
     } on AuthException catch (e) {
+      if (isServiceRestrictionError(e)) {
+        throw 'خزمەتگوزاری سێرڤەر کاتێک سنووردار کراوە. تکایە دواتر دووبارە هەوڵ بدە.';
+      }
       if (_isRetryableAuthException(e)) {
         throw SocketException('temporary authentication network failure');
       }
