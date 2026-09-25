@@ -20,7 +20,6 @@ as $function$
       and d.is_deleted = false
   );
 $function$;
-
 revoke all on function private.receipt_belongs_to_customer(text,uuid)
   from public, anon;
 grant execute on function private.receipt_belongs_to_customer(text,uuid)
