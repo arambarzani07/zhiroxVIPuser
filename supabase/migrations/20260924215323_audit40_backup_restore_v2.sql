@@ -35,8 +35,7 @@ begin
   end if;
   return '{}'::jsonb;
 end;
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION private.build_tenant_backup_snapshot(p_admin_id uuid)
  RETURNS jsonb
  LANGUAGE sql
@@ -127,8 +126,7 @@ AS $function$
       where v.admin_id = p_admin_id
     ), '[]'::jsonb)
   );
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION private.create_tenant_backup_impl(p_label text, p_type text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -174,8 +172,7 @@ begin
   );
   return backup_id;
 end;
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION private.create_tenant_backup_for_admin(p_admin_id uuid, p_label text DEFAULT 'Automatic daily backup'::text, p_type text DEFAULT 'automatic'::text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -234,8 +231,7 @@ begin
   );
   return backup_id;
 end;
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION private.verify_tenant_backup_for_admin(p_backup_id uuid, p_admin_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -463,8 +459,7 @@ begin
   where id=p_backup_id and admin_id=p_admin_id;
   return result;
 end;
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION private.restore_tenant_backup_impl(p_backup_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -754,8 +749,7 @@ exception when others then
   perform set_config('zhirox.backup_restore','off',true);
   raise;
 end;
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION private.get_tenant_export_impl()
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -774,8 +768,7 @@ begin
   snapshot:=private.build_tenant_backup_snapshot(tenant_id);
   return snapshot||jsonb_build_object('exported_at',now(),'export_version',2);
 end;
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION private.run_all_tenant_backups()
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -802,8 +795,7 @@ begin
     'scope','all_non_owner_admin_tenants'
   );
 end;
-$function$
-
+$function$;
 revoke all on function private.backup_snapshot_counts(jsonb)
   from public, anon, authenticated;
 revoke all on function private.build_tenant_backup_snapshot(uuid)
