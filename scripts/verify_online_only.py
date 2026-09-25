@@ -303,3 +303,525 @@ for marker in (
     'مامەڵە کۆنەکان باربکە',
     '_financialTimelineHasMore\n        ? const <String, double?>{}',
 ):
+    if marker not in profile:
+        fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat pagination marker missing: {marker}')
+load_data_match = re.search(
+    r'Future<void>\s+_loadData\(\)\s+async\s*\{(.*?)(?=\s*Future<void>\s+_subscribeFinancialRealtime)',
+    profile,
+    re.S,
+)
+if not load_data_match:
+    fail('lib/screens/shared/user_profile_screen.dart: _loadData pagination implementation not found')
+else:
+    load_body = load_data_match.group(1)
+    for forbidden in ('PBService.getDebts(', 'PBService.getPayments(', 'PBService.getFinancialEvents('):
+        if forbidden in load_body:
+            fail(f'lib/screens/shared/user_profile_screen.dart: initial customer load must not bulk-load history: {forbidden}')
+    for required in ('PBService.getCustomerFinanceSnapshot', 'PBService.getCustomerFinancialTimelinePage', 'limit: 50'):
+        if required not in load_body:
+            fail(f'lib/screens/shared/user_profile_screen.dart: initial paginated load marker missing: {required}')
+
+# Financial Chat Phase 4 must remain live-only and keep its integrated search,
+# date/type filters, debt references, receipt preview and statement/share action.
+for marker_name in (
+    '_financialSearchController',
+    '_financialDateRange',
+    "_financialTypeFilter = 'all'",
+    '_filterFinancialTimeline',
+    'showDateRangePicker',
+    '_buildPaymentDebtReference',
+    '_buildReceiptPreview',
+    'Image.network(',
+    'گەڕان و فلتەر',
+    'countActiveFinancialFilters',
+    'shouldExpandFinancialFilters',
+):
+    if marker_name not in profile:
+        fail(f'lib/screens/shared/user_profile_screen.dart: Financial Chat Phase 4 marker missing: {marker_name}')
+
+
+# Financial Chat must remain the single customer debt/payment workspace.
+customer_list_source = (ROOT / 'lib/screens/shared/user_list_screen.dart').read_text(encoding='utf-8')
+if 'openFinancialChat' not in profile:
+    fail('Customer profile must support direct Financial Chat entry')
+if "openFinancialChat: widget.role == 'customer'" not in customer_list_source:
+    fail('Customer list tap must open Financial Chat directly')
+if '_showPaymentDialog(RecordModel user)' in customer_list_source:
+    fail('Customer list must not duplicate payment recording outside Financial Chat')
+
+# Customer Inbox must batch summaries and avoid request storms from text search
+# or realtime financial-event bursts.
+for marker in (
+    'PBService.getCustomerInboxRows(customerIds)',
+    'Timer? _searchDebounce;',
+    '_scheduleCustomerSearch',
+    'Duration(milliseconds: 300)',
+    '_inboxRefreshInFlight',
+    '_inboxRefreshPending',
+    'markFinancialChatReadBestEffort',
+):
+    if marker not in customer_center_source:
+        fail(f'Customer Center performance marker missing: {marker}')
+if 'onChanged: (value) => _loadUsers(search: value)' in customer_center_source:
+    fail('Customer Center search must not query on every keypress')
+for marker in ('getCustomerInboxRows(', 'markFinancialChatRead('):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: Customer Inbox RPC marker missing: {marker}')
+
+inbox_schema = ROOT / 'supabase/migrations/20260911090854_add_financial_chat_inbox.sql'
+inbox_grants = ROOT / 'supabase/migrations/20260911093112_harden_financial_chat_inbox_grants.sql'
+for migration_path in (inbox_schema, inbox_grants):
+    if not migration_path.exists():
+        fail(f'{migration_path.relative_to(ROOT)}: Customer Inbox migration must be tracked')
+if inbox_grants.exists():
+    grants_source = inbox_grants.read_text(encoding='utf-8')
+    for marker in (
+        'revoke all on table public.financial_chat_reads from anon;',
+        'grant select, insert, update on table public.financial_chat_reads to authenticated;',
+        'revoke execute on function public.get_customer_inbox_rows(uuid[]) from public, anon;',
+        'revoke execute on function public.mark_financial_chat_read(uuid) from public, anon;',
+    ):
+        if marker not in grants_source:
+            fail(f'{inbox_grants.relative_to(ROOT)}: least-privilege marker missing: {marker}')
+# First-unread semantics must avoid both extremes: historical activity from
+# before Inbox launch must not flood users as unread, while the first new
+# activity after the viewer's effective baseline must not be silently hidden.
+inbox_first_unread = ROOT / 'supabase/migrations/20260911100158_baseline_customer_inbox_first_unread.sql'
+if not inbox_first_unread.exists():
+    fail(f'{inbox_first_unread.relative_to(ROOT)}: Customer Inbox first-unread migration must be tracked')
+else:
+    first_unread_source = inbox_first_unread.read_text(encoding='utf-8')
+    for marker in (
+        'with viewer_baseline as (',
+        "'2026-09-11 09:08:54+00'::timestamptz",
+        'when rd.last_read_at is not null then l.event_at > rd.last_read_at',
+        'else l.event_at > vb.baseline_at',
+        'cross join viewer_baseline vb',
+    ):
+        if marker not in first_unread_source:
+            fail(f'{inbox_first_unread.relative_to(ROOT)}: first-unread marker missing: {marker}')
+    if 'when rd.last_read_at is null then false' in first_unread_source:
+        fail(f'{inbox_first_unread.relative_to(ROOT)}: first activity after baseline must not be forced read')
+
+if 'DebtProvider' in customer_list_source:
+    fail('Customer list must not own debt/payment mutation logic')
+
+for marker in (
+    '_showFinancialTransactionActions',
+    'FinancialDocumentActions.openReceiptViewer(',
+    'FinancialDocumentActions.generateDebtInvoice(',
+    'onTap: () => _showFinancialTransactionActions(item)',
+):
+    if marker not in profile:
+        fail(f'Financial Chat Phase 6 marker missing: {marker}')
+for marker in (
+    'generateDebtInvoice(',
+    'receiptUrl(',
+    'openReceiptViewer(',
+    '_runOfficialAction(context, debt, action)',
+    'InteractiveViewer(',
+    'PBService.pb.getFileUrl(',
+):
+    if marker not in document_actions:
+        fail(f'lib/screens/shared/financial_document_actions.dart: shared document marker missing: {marker}')
+if 'PdfService.generateInvoice(' in document_actions:
+    fail('Receipts must not fall back to an unnumbered invoice.')
+for source_name, source in (
+    ('lib/screens/shared/user_profile_screen.dart', profile),
+    ('lib/screens/shared/debt_detail_screen.dart', debt_detail_source),
+):
+    if 'PdfService.generateInvoice(' in source:
+        fail(f'{source_name}: direct invoice generation duplicates shared document actions')
+    if 'InteractiveViewer(' in source:
+        fail(f'{source_name}: duplicate receipt viewer must not return')
+    if 'PBService.pb.getFileUrl(' in source:
+        fail(f'{source_name}: receipt URL resolution must stay centralized')
+
+
+# Financial Chat ledger intelligence, overdue visibility, targeted payment
+# and filter-aware PDF export must stay integrated in the customer chat.
+for marker in (
+    '_financialRunningBalances',
+    '_timelineAmountInIqd',
+    '_overdueDebtLabel',
+    'ماوەی هەژمار',
+    'پارە وەرگرتنەوەی تەواو',
+    'initialDebtId',
+    'initialAmount',
+    "case 'pay_full':",
+    '_generateFilteredFinancialChatStatement',
+    'PdfService.generateFinancialChatStatement',
+):
+    if marker not in profile:
+        fail(f'Financial Chat Phase 7 marker missing: {marker}')
+for marker in (
+    'FinancialPaymentFlow',
+    'initialStorageAmount',
+    "const Text('25%')",
+    "const Text('50%')",
+    "const Text('تەواو')",
+    '_storageToDisplay',
+    '_displayToStorage',
+):
+    if marker not in payment_flow:
+        fail(f'lib/screens/shared/financial_payment_flow.dart: shared payment marker missing: {marker}')
+pdf_source = (LIB / 'services/pdf_service.dart').read_text(encoding='utf-8')
+if 'generateFinancialChatStatement({' not in pdf_source:
+    fail('lib/services/pdf_service.dart: filter-aware Financial Chat PDF export missing')
+
+
+# Financial Chat reply/reference must be persisted server-side, not kept as
+# ephemeral UI-only state.
+profile_source = profile
+for marker in ('_financialReplyTarget', 'referenceKind:', 'referenceId:', 'reference_snapshot', 'وەک وەڵام / پەیوەستکردن'):
+    if marker not in profile_source:
+        fail(f'lib/screens/shared/user_profile_screen.dart: persistent Financial Chat reference marker missing: {marker}')
+for marker in ('referenceKind', 'referenceId', "'reference_kind'", "'reference_id'"):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: persistent financial reference marker missing: {marker}')
+record_payment_edge = ROOT / 'supabase/functions/record-payment/index.ts'
+if not record_payment_edge.exists():
+    fail('supabase/functions/record-payment/index.ts: persistent payment reference gateway missing')
+else:
+    record_payment_source = record_payment_edge.read_text(encoding='utf-8')
+    for marker in ('p_reference_kind', 'p_reference_id'):
+        if marker not in record_payment_source:
+            fail(f'supabase/functions/record-payment/index.ts: persistent payment reference marker missing: {marker}')
+for marker in ('referenceKind', 'referenceId'):
+    if marker not in add_debt:
+        fail(f'lib/screens/shared/add_debt_screen.dart: debt reference pass-through missing: {marker}')
+
+
+# Currency-safe financial totals: canonical amount/remaining/payment values are
+# stored in IQD; USD is display metadata and must never be multiplied twice.
+helpers_source = (LIB / 'utils/helpers.dart').read_text(encoding='utf-8')
+dashboard_source = (LIB / 'screens/customer/customer_dashboard.dart').read_text(encoding='utf-8')
+print_body = dashboard_source.split('Future<void> _printStatement() async {', 1)[-1].split('@override', 1)[0]
+if 'Navigator.pop' in print_body:
+    fail('Statement failures must not pop the customer dashboard route')
+for marker in ('if (_printingStatement || !mounted) return;', 'finally {', '_printingStatement = false'):
+    if marker not in print_body:
+        fail(f'Statement single-flight/retry marker missing: {marker}')
+for marker in (
+    'debtValueInIqd',
+    'storageAmountToDisplay',
+    'formatStoredFinancialAmount',
+    'debtSummaryInIqd',
+):
+    if marker not in helpers_source:
+        fail(f'lib/utils/helpers.dart: currency-safe finance marker missing: {marker}')
+for marker in (
+    '_financeTotalDebtIqd',
+    '_financeTotalRemainingIqd',
+    '_financeTotalPaidIqd',
+    '_financeSummaryComplete',
+    'AppHelpers.formatStoredFinancialAmount',
+    '_buildCurrencySummaryWarning',
+    '_showIncompleteCurrencySummaryMessage',
+):
+    if marker not in profile:
+        fail(f'lib/screens/shared/user_profile_screen.dart: currency-safe summary marker missing: {marker}')
+for marker in ('PBService.getCustomerFinanceSnapshot(auth.userId)', '_totalsComplete'):
+    if marker not in dashboard_source:
+        fail(f'lib/screens/customer/customer_dashboard.dart: currency-safe dashboard marker missing: {marker}')
+
+
+# One shared payment flow must own validation, currency conversion,
+# confirmation and the transactional payment write for both entry screens.
+for marker_name in (
+    'ماوەی پێش پارەدان',
+    'ماوەی دوای پارەدان',
+    'پێداچوونەوەی کۆتایی',
+    '_buildPaymentProgress',
+    '_buildInlineReview',
+    'PBService.createPayment(',
+):
+    if marker_name not in payment_flow:
+        fail(f'Shared payment flow marker missing: {marker_name}')
+for source_name, source in (
+    ('lib/screens/shared/user_profile_screen.dart', profile),
+    ('lib/screens/shared/debt_detail_screen.dart', debt_detail_source),
+):
+    if 'FinancialPaymentFlow.show(' not in source:
+        fail(f'{source_name}: must use FinancialPaymentFlow.show')
+    if 'PBService.createPayment(' in source:
+        fail(f'{source_name}: direct payment write duplicates the shared flow')
+if '_confirmFinancialPayment' in profile or '_buildPaymentConfirmationRow' in profile:
+    fail('Financial Chat must not retain a duplicate payment confirmation implementation')
+if '_buildQuickPayBtn' in debt_detail_source or 'DebtProvider>().addPayment' in debt_detail_source:
+    fail('Debt Detail must not retain its legacy duplicate payment form')
+
+
+
+
+# Legacy standalone debt workspace/provider must stay removed. Customer finance
+# now lives exclusively in Customer Profile -> Financial Chat.
+legacy_provider = LIB / 'providers/debt_provider.dart'
+legacy_debt_list = LIB / 'screens/shared/debt_list_screen.dart'
+if legacy_provider.exists():
+    fail('lib/providers/debt_provider.dart: legacy action-only wrapper must stay removed')
+if legacy_debt_list.exists():
+    fail('lib/screens/shared/debt_list_screen.dart: standalone debt workspace must stay removed')
+for dart_path in LIB.rglob('*.dart'):
+    source = dart_path.read_text(encoding='utf-8')
+    if 'DebtProvider' in source:
+        fail(f'{dart_path.relative_to(ROOT)}: DebtProvider must not return')
+    if 'DebtListScreen' in source:
+        fail(f'{dart_path.relative_to(ROOT)}: standalone DebtListScreen must not return')
+
+# Customer Inbox read receipts must be bounded by the last activity actually
+# observed by the viewer. Marking through server now() can swallow a new event
+# that arrives between tapping a chat and the read-receipt RPC completing.
+read_receipt_migration = ROOT / 'supabase/migrations/20260911094437_mark_financial_chat_read_through_timestamp.sql'
+if not read_receipt_migration.exists():
+    fail(f'{read_receipt_migration.relative_to(ROOT)}: race-safe read-receipt migration must be tracked')
+else:
+    read_receipt_source = read_receipt_migration.read_text(encoding='utf-8')
+    for marker in (
+        'mark_financial_chat_read_through',
+        'greatest(',
+        'least(coalesce(p_read_through, now()), now())',
+        'revoke all on function public.mark_financial_chat_read_through(uuid, timestamptz) from public, anon;',
+    ):
+        if marker not in read_receipt_source:
+            fail(f'{read_receipt_migration.relative_to(ROOT)}: read-receipt marker missing: {marker}')
+for marker in (
+    "'mark_financial_chat_read_through'",
+    'required DateTime readThrough',
+    "'p_read_through'",
+):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: race-safe read-receipt marker missing: {marker}')
+for marker in (
+    '_markFinancialChatReadBestEffort(user.id, readThrough)',
+    "inbox?['last_activity_at']",
+):
+    if marker not in customer_list_source:
+        fail(f'lib/screens/shared/user_list_screen.dart: bounded read-receipt marker missing: {marker}')
+if 'PBService.markFinancialChatRead(user.id)' in customer_list_source:
+    fail('lib/screens/shared/user_list_screen.dart: unbounded read receipt must not return')
+
+
+# A read receipt must never advance without a concrete activity timestamp that
+# the viewer actually observed. Null timestamps are fail-closed in both app and DB.
+seen_read_migration = ROOT / 'supabase/migrations/20260911095127_require_seen_timestamp_for_financial_chat_read.sql'
+if not seen_read_migration.exists():
+    fail(f'{seen_read_migration.relative_to(ROOT)}: seen-timestamp read migration must be tracked')
+else:
+    seen_read_source = seen_read_migration.read_text(encoding='utf-8')
+    for marker in (
+        'where p_read_through is not null',
+        'least(p_read_through, now())',
+        'greatest(',
+    ):
+        if marker not in seen_read_source:
+            fail(f'{seen_read_migration.relative_to(ROOT)}: fail-closed read marker missing: {marker}')
+for marker in ('required DateTime readThrough', 'readThrough.toUtc().toIso8601String()'):
+    if marker not in pb:
+        fail(f'lib/services/pb_service.dart: required read-through marker missing: {marker}')
+if 'if (readThrough == null) return;' not in customer_directory_controller_source:
+    fail('Customer Directory controller: missing null read-through fail-closed guard')
+
+
+# Customer-list async loads must ignore stale failures and preserve the active
+# search query when connectivity returns.
+if 'if (_disposed || generation != _generation) return;' not in customer_directory_controller_source:
+    fail('Customer Directory controller: stale customer-list failures must be generation-guarded')
+if 'if (online && mounted) _loadUsers();' in customer_center_source:
+    fail('Customer Center reconnect must not discard the active customer search')
+if 'unawaited(load(search: _search));' not in customer_directory_controller_source:
+    fail('Customer Directory controller: reconnect/search-preserving reload marker missing')
+
+# User mobile client must not expose System Owner admin-management APIs.
+for forbidden in (
+    'static Future<RecordModel> registerAdmin(',
+    'static Future<Map<String, dynamic>> getAdminsPage(',
+    'static Future<void> renewAdminSubscription(',
+    'static Future<void> deleteAdminWithData(',
+):
+    if forbidden in pb:
+        fail(f'lib/services/pb_service.dart: User source must not expose owner API: {forbidden}')
+
+# Shared backend migrations remain tracked and security-hardened even though
+# the User mobile client does not call these owner-only RPCs.
+admin_rpc_migration = ROOT / 'supabase/migrations/20260911102326_system_owner_admin_management_rpcs.sql'
+if not admin_rpc_migration.exists():
+    fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner admin-management migration must be tracked')
+else:
+    admin_rpc_source = admin_rpc_migration.read_text(encoding='utf-8').lower()
+    for marker in (
+        'security definer',
+        'p.is_system_owner = true',
+        'a.is_system_owner = false',
+        'get_system_owner_admins_page',
+        'renew_system_owner_admin_subscription',
+        'revoke all on function public.get_system_owner_admins_page(integer, integer) from public, anon;',
+        'revoke all on function public.renew_system_owner_admin_subscription(uuid, integer) from public, anon;',
+    ):
+        if marker not in admin_rpc_source:
+            fail(f'{admin_rpc_migration.relative_to(ROOT)}: System Owner RPC security marker missing: {marker}')
+
+# Shared backend secure admin deletion must remain JWT-verified and Owner-scoped.
+secure_delete_edge = ROOT / 'supabase/functions/delete-account/index.ts'
+if not secure_delete_edge.exists():
+    fail('supabase/functions/delete-account/index.ts: secure admin deletion Edge Function must be tracked')
+else:
+    secure_delete_source = secure_delete_edge.read_text(encoding='utf-8')
+    for marker in (
+        'requesterProfile.is_system_owner !== true',
+        'target.role !== "admin"',
+        'target.is_system_owner === true',
+        'admin.auth.admin.deleteUser(userId)',
+        'admin.auth.admin.deleteUser(targetId)',
+        'admin.storage.from("receipts").remove(batch)',
+    ):
+        if marker not in secure_delete_source:
+            fail(f'supabase/functions/delete-account/index.ts: secure deletion marker missing: {marker}')
+    for forbidden in (
+        '.from("payments").delete()',
+        '.from("debts").delete()',
+        '.from("notifications").delete()',
+    ):
+        if forbidden in secure_delete_source:
+            fail(f'supabase/functions/delete-account/index.ts: relational cleanup must stay FK-cascade driven, found {forbidden}')
+
+# Owner/User edition separation and privileged account-admin guards.
+edition = os.environ.get('GITHUB_REF_NAME', '')
+login_source = (LIB / 'screens/auth/login_screen.dart').read_text(encoding='utf-8')
+account_admin_edge = ROOT / 'supabase/functions/account-admin/index.ts'
+if not account_admin_edge.exists():
+    fail('supabase/functions/account-admin/index.ts: account-admin production source must be tracked')
+else:
+    account_admin_source = account_admin_edge.read_text(encoding='utf-8')
+    for required in (
+        'requesterProfile?.is_system_owner',
+        'requesterProfile.active !== true',
+        'system_owner_required',
+        'admin.auth.getUser(token)',
+    ):
+        if required not in account_admin_source:
+            fail(f'supabase/functions/account-admin/index.ts: privileged account guard missing: {required}')
+
+if edition == 'owner-source':
+    for required in (
+        "package:zhirox/screens/auth/admin_management_screen.dart",
+        "getBoolValue('is_system_owner')",
+        'return const AdminManagementScreen()',
+    ):
+        if required not in main:
+            fail(f'lib/main.dart: Owner System Owner routing marker missing: {required}')
+    if 'RegisterAdminScreen' in login_source or 'register_admin_screen.dart' in login_source:
+        fail('lib/screens/auth/login_screen.dart: Owner logged-out login must not open RegisterAdminScreen directly')
+    owner_management = (LIB / 'screens/auth/admin_management_screen.dart').read_text(encoding='utf-8')
+    for required in (
+        '_showCreateAdminDialog',
+        "context.read<AuthProvider>().logout()",
+        'PBService.registerAdmin(',
+    ):
+        if required not in owner_management:
+            fail(f'lib/screens/auth/admin_management_screen.dart: Owner management marker missing: {required}')
+elif edition == 'user-source':
+    if 'RegisterAdminScreen' in login_source or 'register_admin_screen.dart' in login_source:
+        fail('lib/screens/auth/login_screen.dart: User edition must never route to RegisterAdminScreen')
+    for required in (
+        '_showOwnerContactDialog',
+        'تەنها لەلایەن خاوەن سیستەمەوە درووست دەکرێت.',
+    ):
+        if required not in login_source:
+            fail(f'lib/screens/auth/login_screen.dart: User owner-contact marker missing: {required}')
+
+# User-edition Owner isolation must remain enforced.
+for forbidden_path in (
+    ROOT / 'lib/screens/auth/admin_management_screen.dart',
+    ROOT / 'lib/screens/auth/register_admin_screen.dart',
+):
+    if forbidden_path.exists():
+        fail(f'{forbidden_path.relative_to(ROOT)}: owner-only screen must not ship in User source')
+if 'AdminManagementScreen' in main:
+    fail('lib/main.dart: User source must not reference AdminManagementScreen')
+for marker in (
+    "auth.user?.getBoolValue('is_system_owner') ?? false",
+    'ئەم هەژمارە بۆ ZHIROX Owner ـە',
+    'ئەپی User دەسەڵاتی خاوەن سیستەم نادات.',
+):
+    if marker not in main:
+        fail(f'lib/main.dart: User owner-isolation marker missing: {marker}')
+
+# User AuthProvider must not expose admin registration.
+auth_provider_source = (LIB / 'providers/auth_provider.dart').read_text(encoding='utf-8')
+for forbidden in (
+    'Future<void> registerAdmin(',
+    'PBService.registerAdmin(',
+):
+    if forbidden in auth_provider_source:
+        fail(f'lib/providers/auth_provider.dart: User source must not expose admin registration: {forbidden}')
+
+
+# Account Edge Function privilege boundaries.
+# Admin account lifecycle is Owner-only: creation is guarded by account-admin,
+# while destructive admin deletion must stay centralized in delete-account.
+update_account_edge = ROOT / 'supabase/functions/update-account/index.ts'
+if not update_account_edge.exists():
+    fail('supabase/functions/update-account/index.ts: production update-account source must be tracked')
+else:
+    update_account_source = update_account_edge.read_text(encoding='utf-8')
+    for required in (
+        'await isOperational(admin, requester)',
+        'sameTenantMember',
+        'target.role === "employee" || target.role === "customer"',
+        'targetAuthData',
+        'previousAuthMetadata',
+        'Object.hasOwn(update, "phone")',
+    ):
+        if required not in update_account_source:
+            fail(f'supabase/functions/update-account/index.ts: account hardening marker missing: {required}')
+    allowlist_area = update_account_source.split('const selfFields', 1)[-1].split('const allowed', 1)[0]
+    for forbidden in ('"role",', '"is_system_owner",', '"admin_id",'):
+        if forbidden in allowlist_area:
+            fail(f'supabase/functions/update-account/index.ts: privileged profile field entered update allowlist: {forbidden}')
+
+if account_admin_edge.exists():
+    account_admin_source = account_admin_edge.read_text(encoding='utf-8')
+    if 'admin_delete_requires_dedicated_endpoint' not in account_admin_source:
+        fail('supabase/functions/account-admin/index.ts: admin deletion must be routed to delete-account')
+    if 'const { data: tenantUsers }' in account_admin_source:
+        fail('supabase/functions/account-admin/index.ts: duplicate admin cascade deletion must stay removed')
+
+payment_screen = LIB / 'screens/admin/subscription_payment_screen.dart'
+fib_edge = ROOT / 'supabase/functions/fib-subscription-payment/index.ts'
+fib_migration = ROOT / 'supabase/migrations/20260911170000_add_fib_subscription_payments.sql'
+for path in (payment_screen, fib_edge, fib_migration):
+    if not path.exists():
+        fail(f'{path.relative_to(ROOT)}: FIB subscription payment component missing')
+if payment_screen.exists():
+    source = payment_screen.read_text(encoding='utf-8')
+    for marker in ('پارەدان بە FIB', 'PBService.createFibSubscriptionPayment', 'PBService.checkFibSubscriptionPayment'):
+        if marker not in source:
+            fail(f'lib/screens/admin/subscription_payment_screen.dart: FIB marker missing: {marker}')
+
+# Employee-aware debts/payments RLS calls this private helper while the query
+# runs as `authenticated`. Revoking EXECUTE makes normal dashboard and customer
+# balance reads fail with SQLSTATE 42501.
+employee_rls_migration = (
+    ROOT / 'supabase/migrations/20260912130000_enforce_employee_permissions.sql'
+)
+if not employee_rls_migration.exists():
+    fail('employee permission RLS migration must be tracked')
+else:
+    employee_rls_source = employee_rls_migration.read_text(encoding='utf-8')
+    if not re.search(
+        r'grant\s+execute\s+on\s+function\s+'
+        r'private\.employee_has_permission\s*\(\s*text\s*\)\s+'
+        r'to\s+authenticated\s*;',
+        employee_rls_source,
+        re.I,
+    ):
+        fail('authenticated must be able to evaluate employee-aware RLS policies')
+
+if violations:
+    print('ONLINE-ONLY POLICY FAILED')
+    for item in violations:
+        print(f' - {item}')
+    sys.exit(1)
+
+print('Online-only policy verification passed.')
