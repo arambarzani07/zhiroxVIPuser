@@ -2,6 +2,14 @@
 -- Generated from project hsoyfbtpvwfmjokudznx; schema only, no user or business rows.
 create schema if not exists private;
 
+create table if not exists private.telegram_credentials (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  bot_token text not null,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null,
+  chat_id text default ''::text not null
+);
+
 create table if not exists public.profiles (
   id uuid not null,
   name text default ''::text not null,
@@ -927,6 +935,12 @@ begin
 end;
 $function$;
 
+drop trigger if exists telegram_credentials_set_updated_at
+  on private.telegram_credentials;
+create trigger telegram_credentials_set_updated_at
+before update on private.telegram_credentials
+for each row execute function private.set_updated_at();
+
 CREATE OR REPLACE FUNCTION private.validate_profile_admin_link()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1187,6 +1201,7 @@ grant DELETE, INSERT, SELECT, UPDATE on table public.notifications to authentica
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on table public.notifications to service_role;
 grant DELETE, INSERT, SELECT, UPDATE on table public.payments to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on table public.payments to service_role;
+grant SELECT, INSERT, UPDATE on table private.telegram_credentials to authenticated;
 grant SELECT on table public.profiles to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on table public.profiles to service_role;
 
