@@ -32,7 +32,7 @@ jobs:
 
       - name: Start local Supabase
         if: github.ref_name == 'user-source'
-        run: supabase start
+        run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
 
       - name: Run Audit40 database regression
         if: github.ref_name == 'user-source'
