@@ -221,7 +221,7 @@ extension _AddDebtCustomerSection on _AddDebtScreenState {
         );
       }).toList(),
       onChanged: widget.debt == null
-          ? (v) => setState(() => _selectedCustomerId = v)
+          ? (v) => _setDebtEntryState(() => _selectedCustomerId = v)
           : null,
       validator: (v) => v == null ? 'کڕیارێک هەڵبژێرە' : null,
     );
@@ -287,7 +287,7 @@ extension _AddDebtCustomerSection on _AddDebtScreenState {
                 ),
                 IconButton(
                   tooltip: 'دووبارە هەوڵ بدە',
-                  onPressed: () => setState(() {}),
+                  onPressed: () => _setDebtEntryState(() {}),
                   icon: const Icon(Icons.refresh_rounded, size: 19),
                 ),
               ],
