@@ -24,6 +24,7 @@ import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/widgets/customer_push_card.dart';
 
 part 'user_profile_financial_chat.dart';
+part 'user_profile_financial_tools.dart';
 part 'user_profile_employee_management.dart';
 
 class UserProfileScreen extends StatefulWidget {
