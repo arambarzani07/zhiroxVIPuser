@@ -1,0 +1,17 @@
+name: Online Only Part-Aware Check
+
+on:
+  push:
+    branches: [online-only-part-aware-20260925]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify online-only policy
+        run: python3 scripts/verify_online_only.py
