@@ -1968,6 +1968,16 @@ Deno.serve(async (req) => {
       );
     }
 
+    const { data: deadLetterRecovery, error: deadLetterRecoveryError } =
+      await admin.rpc("resolve_daftar_recovered_dead_letters", {
+        p_source_id: source.id,
+      });
+    if (deadLetterRecoveryError) {
+      throw new Error(
+        `dead_letter_recovery_failed:${deadLetterRecoveryError.message}`,
+      );
+    }
+
     const allowInboundSync = source.sync_mode === "zhirox_primary" &&
       source.inbound_sync_enabled === true;
 
@@ -1999,6 +2009,7 @@ Deno.serve(async (req) => {
       customer_identity_reconciliation: customerIdentityReconciliation,
       reconciliation,
       cutover_rehearsal: cutoverRehearsal,
+      dead_letter_recovery: deadLetterRecovery,
       failover_readiness: failoverReadiness,
     };
 
