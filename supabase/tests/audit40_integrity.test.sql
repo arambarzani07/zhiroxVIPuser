@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(31);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -247,6 +247,31 @@ select is(
   ),
   0::bigint,
   'all public foreign keys have covering indexes'
+);
+
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.resolve_daftar_recovered_dead_letters(uuid)',
+    'EXECUTE'
+  ),
+  'service role can resolve recovered Daftar dead letters'
+);
+
+select ok(
+  position(
+    'resolved_after_clean_reconciliation' in
+    pg_get_functiondef('public.resolve_daftar_recovered_dead_letters(uuid)'::regprocedure)
+  ) > 0,
+  'reconciliation dead letters resolve only after a later clean reconciliation'
+);
+
+select ok(
+  position(
+    'resolved_after_passing_cutover_rehearsal' in
+    pg_get_functiondef('public.resolve_daftar_recovered_dead_letters(uuid)'::regprocedure)
+  ) > 0,
+  'cutover dead letters resolve only after a later passing rehearsal'
 );
 
 select * from finish();
