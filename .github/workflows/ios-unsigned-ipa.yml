@@ -28,7 +28,7 @@ jobs:
         if: github.ref_name == 'user-source'
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.117.0
 
       - name: Start local Supabase
         if: github.ref_name == 'user-source'
