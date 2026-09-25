@@ -12,8 +12,7 @@ AS $function$
   from public.debts d
   left join lateral private.get_customer_virtual_debt_balances(d.customer_id) v on v.debt_id=d.id
   where d.id=p_debt_id and d.is_deleted=false limit 1
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION private.refresh_customer_installments_effective(p_customer_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -49,8 +48,7 @@ begin
     or (r.cumulative_amount>r.schedule_paid+0.02 and i.paid_at is not null)
   );
 end
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION private.close_installments_when_debt_paid()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -63,8 +61,7 @@ begin
   end if;
   return new;
 end
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION private.refresh_installments_after_general_payment()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -82,8 +79,7 @@ begin
   end if;
   return new;
 end
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_customer_finance_snapshot(p_customer_id uuid)
  RETURNS jsonb
  LANGUAGE sql
@@ -128,8 +124,7 @@ AS $function$
     'general_payment_policy','account_credit_no_debt_mutation'
   )
   from summary s cross join local_paid lp cross join general_paid gp cross join open_debts o
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION public.enqueue_customer_due_reminders_service()
  RETURNS integer
  LANGUAGE plpgsql
@@ -184,8 +179,7 @@ begin
   get diagnostics v_inserted=row_count;
   return v_inserted;
 end
-$function$
-
+$function$;
 CREATE OR REPLACE FUNCTION public.enqueue_customer_installment_reminders_service()
  RETURNS integer
  LANGUAGE plpgsql
@@ -233,8 +227,7 @@ begin
   get diagnostics v_inserted=row_count;
   return v_inserted;
 end
-$function$
-
+$function$;
 revoke all on function private.get_effective_debt_remaining(uuid)
   from public, anon;
 grant execute on function private.get_effective_debt_remaining(uuid)
