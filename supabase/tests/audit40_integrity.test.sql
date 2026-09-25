@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(19);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -120,6 +120,47 @@ select ok(
     pg_get_functiondef('private.build_tenant_backup_snapshot(uuid)'::regprocedure)
   ) > 0,
   'tenant backups use snapshot version 2'
+);
+
+select ok(
+  to_regprocedure('private.get_effective_installment_remaining(uuid)') is not null,
+  'partial installment credit projection exists'
+);
+
+select ok(
+  position(
+    'general_payment_policy' in
+    pg_get_functiondef('public.get_customer_finance_snapshot(uuid)'::regprocedure)
+  ) > 0,
+  'finance snapshot declares account-credit policy'
+);
+
+select ok(
+  position(
+    'get_customer_virtual_debt_balances' in
+    pg_get_functiondef('public.get_admin_dashboard_snapshot()'::regprocedure)
+  ) > 0,
+  'dashboard pending count is general-credit aware'
+);
+
+select ok(
+  position(
+    'get_effective_installment_remaining' in
+    pg_get_functiondef(
+      'public.read_customer_portal_due_summary_service(text,text,text)'::regprocedure
+    )
+  ) > 0,
+  'customer portal due summary honors partial account credit'
+);
+
+select ok(
+  position(
+    'get_effective_installment_remaining' in
+    pg_get_functiondef(
+      'public.enqueue_customer_installment_reminders_service()'::regprocedure
+    )
+  ) > 0,
+  'installment reminders honor partial account credit'
 );
 
 select * from finish();
