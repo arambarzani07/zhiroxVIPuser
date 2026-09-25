@@ -46,7 +46,6 @@ as $function$
   from calc c
   limit 1
 $function$;
-
 revoke all on function private.get_effective_installment_remaining(uuid)
   from public, anon;
 grant execute on function private.get_effective_installment_remaining(uuid)
@@ -216,7 +215,6 @@ begin
   return coalesce(v_summary, '{}'::jsonb);
 end;
 $function$;
-
 CREATE OR REPLACE FUNCTION public.enqueue_customer_installment_reminders_service()
  RETURNS integer
  LANGUAGE plpgsql
