@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -57,7 +58,7 @@ class SupabasePBCompat {
     if (filename.startsWith('http://') || filename.startsWith('https://')) {
       return Uri.parse(filename);
     }
-    return Uri.parse(_client.storage.from('receipts').getPublicUrl(filename));
+    throw StateError('receipt_url_not_signed');
   }
 
   Future<void> subscribe(
@@ -676,6 +677,11 @@ class SupabaseCollectionCompat {
     try {
       raw['receipt_image_path'] =
           await _client.storage.from('receipts').createSignedUrl(path, 3600);
-    } catch (_) {}
+      raw['receipt_image_unavailable'] = false;
+    } catch (error) {
+      raw['receipt_image_path'] = '';
+      raw['receipt_image_unavailable'] = true;
+      debugPrint('Receipt signed URL unavailable: $error');
+    }
   }
 }

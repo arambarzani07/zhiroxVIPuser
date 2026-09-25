@@ -139,18 +139,24 @@ end;
 $$;
 revoke all on function private.run_daftar_sync_reconciliation(uuid) from public,anon,authenticated;
 
-do $$
+do $reconcile_cron$
 declare v_jobid bigint;
 begin
   select jobid into v_jobid from cron.job where jobname='daftar-sync-reconcile-account-28' limit 1;
   if v_jobid is not null then perform cron.unschedule(v_jobid); end if;
-  perform cron.schedule('daftar-sync-reconcile-account-28','17 * * * *',$cron$
-    select private.run_daftar_sync_reconciliation(
-      (select id from public.daftar_sync_sources where legacy_user_id=28 limit 1)
-    );
-  $cron$);
+  if exists (
+    select 1 from public.daftar_sync_sources where legacy_user_id=28
+  ) then
+    perform cron.schedule('daftar-sync-reconcile-account-28','17 * * * *',$cron$
+      select private.run_daftar_sync_reconciliation(
+        (select id from public.daftar_sync_sources where legacy_user_id=28 limit 1)
+      );
+    $cron$);
+  else
+    raise notice 'Daftar account 28 source absent; skipping reconciliation cron on fresh install';
+  end if;
 end
-$$;
+$reconcile_cron$;
 
 -- 3) Scalable, checksummed tenant backups.
 alter table public.tenant_backups
@@ -292,16 +298,22 @@ $$;
 revoke all on function private.run_scheduled_tenant_backup(uuid) from public,anon,authenticated;
 grant execute on function private.run_scheduled_tenant_backup(uuid) to service_role;
 
-do $$
+do $backup_cron$
 declare v_jobid bigint;
 begin
   select jobid into v_jobid from cron.job where jobname='daily-tenant-backup-account-28' limit 1;
   if v_jobid is not null then perform cron.unschedule(v_jobid); end if;
-  perform cron.schedule('daily-tenant-backup-account-28','30 2 * * *',$cron$
-    select private.run_scheduled_tenant_backup((select admin_id from public.daftar_sync_sources where legacy_user_id=28 limit 1));
-  $cron$);
+  if exists (
+    select 1 from public.daftar_sync_sources where legacy_user_id=28
+  ) then
+    perform cron.schedule('daily-tenant-backup-account-28','30 2 * * *',$cron$
+      select private.run_scheduled_tenant_backup((select admin_id from public.daftar_sync_sources where legacy_user_id=28 limit 1));
+    $cron$);
+  else
+    raise notice 'Daftar account 28 source absent; skipping tenant backup cron on fresh install';
+  end if;
 end
-$$;
+$backup_cron$;
 
 -- 4) Transactional bulk restore with strict normal-operation guards.
 create or replace function private.guard_debt_financial_state()

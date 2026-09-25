@@ -2,6 +2,14 @@
 -- Generated from project hsoyfbtpvwfmjokudznx; schema only, no user or business rows.
 create schema if not exists private;
 
+create table if not exists private.telegram_credentials (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  bot_token text not null,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null,
+  chat_id text default ''::text not null
+);
+
 create table if not exists public.profiles (
   id uuid not null,
   name text default ''::text not null,
@@ -88,6 +96,54 @@ create table if not exists public.financial_events (
   metadata jsonb default '{}'::jsonb not null,
   created_at timestamp with time zone default now() not null
 );
+
+-- Primary keys must exist before any foreign key below references them.
+-- Keep these bootstrap constraints early so a fresh local/project install is
+-- reproducible instead of depending on pre-existing production state.
+do $pk$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.profiles'::regclass and conname='profiles_pkey'
+  ) then
+    alter table public.profiles add constraint profiles_pkey primary key (id);
+  end if;
+end $pk$;
+
+do $pk$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.debts'::regclass and conname='debts_pkey'
+  ) then
+    alter table public.debts add constraint debts_pkey primary key (id);
+  end if;
+end $pk$;
+
+do $pk$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.payments'::regclass and conname='payments_pkey'
+  ) then
+    alter table public.payments add constraint payments_pkey primary key (id);
+  end if;
+end $pk$;
+
+do $pk$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.notifications'::regclass and conname='notifications_pkey'
+  ) then
+    alter table public.notifications add constraint notifications_pkey primary key (id);
+  end if;
+end $pk$;
+
+do $pk$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid='public.financial_events'::regclass and conname='financial_events_pkey'
+  ) then
+    alter table public.financial_events add constraint financial_events_pkey primary key (id);
+  end if;
+end $pk$;
 
 do $$ begin
   if not exists (
@@ -879,6 +935,12 @@ begin
 end;
 $function$;
 
+drop trigger if exists telegram_credentials_set_updated_at
+  on private.telegram_credentials;
+create trigger telegram_credentials_set_updated_at
+before update on private.telegram_credentials
+for each row execute function private.set_updated_at();
+
 CREATE OR REPLACE FUNCTION private.validate_profile_admin_link()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -921,7 +983,7 @@ AS $function$
   where tc.user_id = auth.uid();
 $function$;
 
-CREATE OR REPLACE FUNCTION public.get_telegram_credentials_for_service(uuid)
+CREATE OR REPLACE FUNCTION public.get_telegram_credentials_for_service(p_user_id uuid)
  RETURNS TABLE(bot_token text, chat_id text)
  LANGUAGE sql
  SECURITY DEFINER
@@ -1017,7 +1079,7 @@ begin
 end;
 $function$;
 
-CREATE OR REPLACE FUNCTION public.set_my_telegram_credentials(text, text)
+CREATE OR REPLACE FUNCTION public.set_my_telegram_credentials(p_bot_token text, p_chat_id text)
  RETURNS void
  LANGUAGE plpgsql
  SET search_path TO ''
@@ -1139,6 +1201,7 @@ grant DELETE, INSERT, SELECT, UPDATE on table public.notifications to authentica
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on table public.notifications to service_role;
 grant DELETE, INSERT, SELECT, UPDATE on table public.payments to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on table public.payments to service_role;
+grant SELECT, INSERT, UPDATE on table private.telegram_credentials to authenticated;
 grant SELECT on table public.profiles to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on table public.profiles to service_role;
 
@@ -1158,4 +1221,3 @@ grant execute on function public.set_my_telegram_credentials(text, text) to auth
 grant execute on function public.set_my_telegram_credentials(text, text) to service_role;
 
 insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types) values ('receipts','receipts',false,10485760,array['image/jpeg','image/png','image/webp','application/pdf']::text[]) on conflict (id) do update set name=excluded.name, public=excluded.public, file_size_limit=excluded.file_size_limit, allowed_mime_types=excluded.allowed_mime_types;
-

@@ -107,7 +107,8 @@ begin
   limit 1;
 
   if v_admin_id is null then
-    raise exception 'Kanichnar admin account was not found';
+    raise notice 'Kanichnar admin account not present; skipping tenant-specific Daftar sync provisioning';
+    return;
   end if;
 
   select coalesce(max(source_id::bigint), 0) into v_contact_checkpoint
@@ -164,26 +165,38 @@ begin
 end;
 $$;
 
-select cron.schedule(
-  'daftar-live-sync-account-28',
-  '*/10 * * * *',
-  $cron$
-  select net.http_post(
-    url := 'https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/daftar-sync',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'x-daftar-sync-secret', (
-        select decrypted_secret from vault.decrypted_secrets
-        where name = 'daftar_sync_account_28_trigger' limit 1
-      )
-    ),
-    body := jsonb_build_object(
-      'source_id', (
-        select id from public.daftar_sync_sources
-        where legacy_user_id = 28 and enabled = true limit 1
-      )
-    ),
-    timeout_milliseconds := 120000
-  );
-  $cron$
-);
+do $schedule$
+begin
+  if exists (
+    select 1
+    from public.daftar_sync_sources
+    where legacy_user_id = 28 and enabled = true
+  ) then
+    perform cron.schedule(
+      'daftar-live-sync-account-28',
+      '*/10 * * * *',
+      $cron$
+      select net.http_post(
+        url := 'https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/daftar-sync',
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'x-daftar-sync-secret', (
+            select decrypted_secret from vault.decrypted_secrets
+            where name = 'daftar_sync_account_28_trigger' limit 1
+          )
+        ),
+        body := jsonb_build_object(
+          'source_id', (
+            select id from public.daftar_sync_sources
+            where legacy_user_id = 28 and enabled = true limit 1
+          )
+        ),
+        timeout_milliseconds := 120000
+      );
+      $cron$
+    );
+  else
+    raise notice 'Daftar account 28 sync source absent; skipping cron provisioning';
+  end if;
+end
+$schedule$;

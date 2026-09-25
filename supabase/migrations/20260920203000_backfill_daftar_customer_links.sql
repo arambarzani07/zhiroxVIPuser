@@ -21,7 +21,8 @@ begin
   limit 1;
 
   if v_source_id is null or v_admin_id is null then
-    raise exception 'daftar_source_not_available';
+    raise notice 'Daftar account 28 source absent; skipping historical customer-link backfill';
+    return;
   end if;
 
   create temporary table tmp_daftar_customer_link_map

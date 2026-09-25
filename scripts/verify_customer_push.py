@@ -325,8 +325,13 @@ assert 'AdminNotificationsScreen' in settings_text, 'manager notification center
 
 
 # Customer portal notification history
-portal_history_migration = ROOT / 'supabase/migrations/20260918103000_customer_push_portal_notification_history.sql'
-assert portal_history_migration.exists(), 'customer portal notification history migration missing'
+portal_history_candidates = sorted(
+    (ROOT / 'supabase/migrations').glob('*_customer_push_portal_notification_history.sql')
+)
+assert len(portal_history_candidates) == 1, (
+    'customer portal notification history migration must exist exactly once'
+)
+portal_history_migration = portal_history_candidates[0]
 portal_history_schema = portal_history_migration.read_text(errors='ignore')
 assert 'read_customer_push_notification_history_service' in portal_history_schema, 'customer portal notification history RPC missing'
 public_push_text = (ROOT / 'supabase/functions/customer-push/index.ts').read_text(errors='ignore')

@@ -62,6 +62,39 @@ revoke insert, update, delete on table public.customer_general_payments from aut
 grant select on table public.customer_general_payments to authenticated;
 grant all on table public.customer_general_payments to service_role;
 
+-- Bootstrap this projection before SQL-language functions below reference it.
+CREATE OR REPLACE FUNCTION public.get_customer_effective_balance(p_customer_id uuid)
+ RETURNS numeric
+ LANGUAGE sql
+ STABLE
+ SET search_path TO ''
+AS $function$
+  with official as (
+    select o.balance_iqd
+    from private.get_daftar_official_customer_totals(p_customer_id) o
+    limit 1
+  ),
+  local_balance as (
+    select coalesce(sum(d.remaining), 0)::numeric as amount
+    from public.debts d
+    where d.customer_id = p_customer_id
+      and d.is_deleted = false
+      and d.remaining > 0
+  ),
+  general_paid as (
+    select coalesce(sum(g.amount), 0)::numeric as amount
+    from public.customer_general_payments g
+    where g.customer_id = p_customer_id
+  )
+  select greatest(
+    coalesce((select balance_iqd from official),
+             (select amount from local_balance),
+             0)
+    - coalesce((select amount from general_paid), 0),
+    0
+  )::numeric;
+$function$;
+
 
 CREATE OR REPLACE FUNCTION private.customer_lifetime_paid_total(p_customer_id uuid)
  RETURNS numeric

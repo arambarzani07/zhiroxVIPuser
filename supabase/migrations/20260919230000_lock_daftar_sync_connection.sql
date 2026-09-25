@@ -166,10 +166,27 @@ revoke all on function public.guard_daftar_sync_account_28()
   from public, anon, authenticated;
 grant execute on function public.guard_daftar_sync_account_28() to service_role;
 
-select cron.schedule(
-  'daftar-sync-guardian-account-28',
-  '* * * * *',
-  'select public.guard_daftar_sync_account_28();'
-);
-
-select public.guard_daftar_sync_account_28();
+do $bootstrap_guardian$
+begin
+  if exists (
+    select 1
+    from public.daftar_sync_sources
+    where legacy_user_id = 28
+      and source_fingerprint = 'daftar-live-account-28-v1'
+  ) then
+    if not exists (
+      select 1 from cron.job
+      where jobname = 'daftar-sync-guardian-account-28'
+    ) then
+      perform cron.schedule(
+        'daftar-sync-guardian-account-28',
+        '* * * * *',
+        'select public.guard_daftar_sync_account_28();'
+      );
+    end if;
+    perform public.guard_daftar_sync_account_28();
+  else
+    raise notice 'Daftar account 28 source absent; skipping guardian bootstrap on fresh install';
+  end if;
+end
+$bootstrap_guardian$;

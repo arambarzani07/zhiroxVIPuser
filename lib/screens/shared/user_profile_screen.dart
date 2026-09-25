@@ -1319,7 +1319,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   double? _timelineAmountInIqd(_ProfileTimelineItem item) {
     if (item.isSystem) return 0;
-    // Debt and payment amounts share one canonical base IQD storage unit.
+    if (item.isGeneralPayment) {
+      return item.record.getDoubleValue('amount');
+    }
+
+    final debt = item.isPayment ? item.relatedDebt : item.record;
+    final currency = debt?.getStringValue('currency').trim().toUpperCase() ?? 'IQD';
+    final dollarRate = debt?.getDoubleValue('dollar_rate') ?? 0;
+
+    // Current writes use IQD as the canonical storage unit. Some legacy USD
+    // rows predate that rule and have no conversion rate; mixing those raw USD
+    // values into an IQD running balance would be financially incorrect.
+    if (currency == 'USD' && dollarRate <= 0) return null;
     return item.record.getDoubleValue('amount');
   }
 
@@ -1910,7 +1921,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 kind: item.kind,
                 amount: item.isSystem
                     ? 0
-                    : item.record.getDoubleValue('amount'),
+                    : (_timelineAmountInIqd(item) ?? double.nan),
                 date: item.date,
               ),
             ),
@@ -2732,6 +2743,65 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (mounted) await _refreshFinancialData();
   }
 
+  Future<void> _deleteFinancialPayment(
+    _ProfileTimelineItem item,
+  ) async {
+    if (!item.isPayment || !mounted) return;
+    final isGeneral = item.isGeneralPayment;
+    final amount = item.record.getDoubleValue('amount');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          isGeneral
+              ? 'پارەدانەوەی گشتی بسڕدرێتەوە؟'
+              : 'پارە وەرگرتنەوە بسڕدرێتەوە؟',
+        ),
+        content: Text(
+          '${AppHelpers.formatCurrency(amount)} دەسڕدرێتەوە و باڵانسی کڕیار لە سێرڤەرەوە دووبارە هەژمار دەکرێتەوە. ئەم کردارە لە Audit Log تۆمار دەبێت.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('پاشگەزبوونەوە'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('سڕینەوە'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    try {
+      if (isGeneral) {
+        await PBService.deleteGeneralPayment(item.record.id);
+      } else {
+        await PBService.deletePayment(item.record.id);
+      }
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        isGeneral
+            ? 'پارەدانەوەی گشتی سڕایەوە و باڵانس نوێ کرایەوە'
+            : 'پارە وەرگرتنەوە سڕایەوە و باڵانس نوێ کرایەوە',
+      );
+      await _refreshFinancialData(showError: true);
+    } catch (error) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          error,
+          fallback: 'سڕینەوەی پارەدانەوە سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+        ),
+        isError: true,
+      );
+    }
+  }
+
   Future<void> _showFinancialPaymentSheet(
     AuthProvider auth, {
     String? initialDebtId,
@@ -3516,6 +3586,31 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                   onTap: () => Navigator.pop(sheetContext, 'pay_full'),
                 ),
+              if (auth.userRole == 'admin' && item.isPayment)
+                ListTile(
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  leading: const Icon(
+                    Icons.delete_outline_rounded,
+                    size: 19,
+                    color: Colors.red,
+                  ),
+                  title: Text(
+                    item.isGeneralPayment
+                        ? 'سڕینەوەی پارەدانەوەی گشتی'
+                        : 'سڕینەوەی پارە وەرگرتنەوە',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.red,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'باڵانسی کڕیار دووبارە هەژمار دەکرێتەوە',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  onTap: () => Navigator.pop(sheetContext, 'delete_payment'),
+                ),
               if (receiptPath.isNotEmpty)
                 ListTile(
                   dense: true,
@@ -3558,6 +3653,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             initialAmount: debt.getDoubleValue('remaining'),
           );
         }
+        break;
+      case 'delete_payment':
+        await _deleteFinancialPayment(item);
         break;
       case 'receipt':
         if (debt != null && receiptPath.isNotEmpty) {

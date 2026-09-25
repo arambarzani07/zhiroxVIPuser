@@ -1,3 +1,28 @@
+alter table public.profiles
+  add column if not exists subscription_plan text;
+
+do $subscription_plan_constraint$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.profiles'::regclass
+      and conname = 'profiles_subscription_plan_check'
+  ) then
+    alter table public.profiles
+      add constraint profiles_subscription_plan_check
+      check (
+        (
+          role = 'admin'
+          and subscription_plan in ('monthly','quarterly','semiannual','annual','custom')
+        )
+        or (role <> 'admin' and subscription_plan is null)
+        or is_system_owner = true
+      );
+  end if;
+end
+$subscription_plan_constraint$;
+
 create table if not exists public.subscription_payments (
   id uuid primary key default gen_random_uuid(),
   admin_id uuid not null references public.profiles(id) on delete cascade,

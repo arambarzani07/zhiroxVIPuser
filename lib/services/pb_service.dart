@@ -756,7 +756,11 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     return 'image/jpeg';
   }
 
-  static Future<String> _uploadReceipt(String sourcePath, String createdBy) async {
+  static Future<String> _uploadReceipt(
+    String sourcePath,
+    String createdBy,
+    String customerId,
+  ) async {
     await ensureInitialized();
     final creator = await getUser(createdBy);
     final tenantId = creator.getStringValue('role') == 'admin'
@@ -764,7 +768,11 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
         : creator.getStringValue('admin_id');
     if (tenantId.isEmpty) throw Exception('tenant not found');
     final ext = sourcePath.contains('.') ? sourcePath.substring(sourcePath.lastIndexOf('.')) : '.jpg';
-    final storagePath = '$tenantId/${DateTime.now().microsecondsSinceEpoch}$ext';
+    if (customerId.trim().isEmpty) {
+      throw Exception('customer not found');
+    }
+    final storagePath =
+        '$tenantId/${customerId.trim()}/${DateTime.now().microsecondsSinceEpoch}$ext';
     final bytes = await File(sourcePath).readAsBytes();
     await client.storage.from('receipts').uploadBinary(
       storagePath,
@@ -795,7 +803,11 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
   }) async {
     String receiptPath = '';
     if (receiptImagePath != null && receiptImagePath.isNotEmpty) {
-      receiptPath = await _uploadReceipt(receiptImagePath, createdBy);
+      receiptPath = await _uploadReceipt(
+        receiptImagePath,
+        createdBy,
+        customerId,
+      );
     }
 
     final body = <String, dynamic>{
@@ -1063,6 +1075,25 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
       final response = await client.functions.invoke(
         'debt-restore-admin',
         body: {'action': 'delete_payment', 'payment_id': id},
+      );
+      final data = response.data;
+      if (data is! Map || data['payment_deleted'] != true) {
+        throw _functionError(data);
+      }
+    } on FunctionsException catch (e) {
+      throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
+    }
+  }
+
+  static Future<void> deleteGeneralPayment(String id) async {
+    await ensureInitialized();
+    try {
+      final response = await client.functions.invoke(
+        'debt-restore-admin',
+        body: {
+          'action': 'delete_general_payment',
+          'general_payment_id': id,
+        },
       );
       final data = response.data;
       if (data is! Map || data['payment_deleted'] != true) {

@@ -45,7 +45,8 @@ begin
   limit 1;
 
   if v_admin_id is null or v_sync_source_id is null then
-    raise exception 'Daftar account 28 target was not found';
+    raise notice 'Daftar account 28 target absent; skipping production reconciliation on fresh install';
+    return;
   end if;
 
   select count(*) into v_debt_count

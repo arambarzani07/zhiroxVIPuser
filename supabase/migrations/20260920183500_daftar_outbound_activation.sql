@@ -105,7 +105,8 @@ begin
   limit 1;
 
   if v_source_id is null then
-    raise exception 'daftar_outbound_activation_safety_gate_failed';
+    raise notice 'Daftar account 28 is not provisioned or not ready; skipping outbound activation seed';
+    return;
   end if;
 
   update public.daftar_sync_sources
