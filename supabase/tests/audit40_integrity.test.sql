@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(20);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -161,6 +161,14 @@ select ok(
     )
   ) > 0,
   'installment reminders honor partial account credit'
+);
+
+select ok(
+  position(
+    '<> ''USD''' in
+    pg_get_functiondef('private.get_customer_virtual_debt_balances(uuid)'::regprocedure)
+  ) > 0,
+  'general IQD credit does not consume legacy raw-USD debt'
 );
 
 select * from finish();
