@@ -462,6 +462,7 @@ class PBService {
     required String newPassword,
   }) async {
     await ensureInitialized();
+    _requireStrongPassword(newPassword);
     if (client.auth.currentUser?.id != userId) {
       throw Exception('دەسەڵاتی گۆڕینی ئەم وشەی نهێنییەت نییە');
     }
