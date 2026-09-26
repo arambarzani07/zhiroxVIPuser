@@ -32,6 +32,20 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      - name: Test recovery import parser
+        run: |
+          flutter test test/local_recovery_import_test.dart
+          flutter test test/legacy_import_json_test.dart
+          flutter test test/legacy_import_csv_test.dart
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check recovery import Edge Function
+        run: deno check supabase/functions/legacy-import/index.ts
+
       - name: Preserve ZHIROX User app identity
         run: |
           sed -i '' "s/com.karoxghafoor.zhirox/com.karoxghafoor.zhirox.user/g" ios/Runner.xcodeproj/project.pbxproj
