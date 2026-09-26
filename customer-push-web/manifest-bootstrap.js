@@ -8,7 +8,7 @@ const fragmentToken = new URLSearchParams(
 const token = queryToken || fragmentToken;
 const validToken = /^[a-f0-9]{64}$/.test(token);
 const manifestHref = validToken
-  ? `https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push-manifest?token=${encodeURIComponent(token)}`
+  ? `https://madoflmbretqghqbqaak.supabase.co/functions/v1/customer-push-manifest?token=${encodeURIComponent(token)}`
   : './manifest.webmanifest';
 
 document.write(
