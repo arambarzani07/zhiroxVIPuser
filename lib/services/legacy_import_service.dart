@@ -877,6 +877,76 @@ class LegacyImportService {
     return left.sourceId.compareTo(right.sourceId);
   }
 
+  static void _ensureUniqueSourceIds(
+    List<Map<String, dynamic>> rows,
+    String label,
+  ) {
+    final seen = <String>{};
+    final duplicates = <String>{};
+    for (final row in rows) {
+      final id = (row['source_id'] ?? '').toString().trim();
+      if (id.isEmpty) continue;
+      if (!seen.add(id)) duplicates.add(id);
+    }
+    if (duplicates.isNotEmpty) {
+      throw Exception('$label source ID دووبارەی تێدایە');
+    }
+  }
+
+  static void _validateBundleReferences({
+    required List<Map<String, dynamic>> customers,
+    required List<Map<String, dynamic>> debts,
+    required List<Map<String, dynamic>> payments,
+  }) {
+    _ensureUniqueSourceIds(customers, 'کڕیار');
+    _ensureUniqueSourceIds(debts, 'قەرز');
+    _ensureUniqueSourceIds(payments, 'پارەدانەوە');
+
+    final customerIds = customers
+        .map((row) => (row['source_id'] ?? '').toString().trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final debtIds = debts
+        .map((row) => (row['source_id'] ?? '').toString().trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    final phones = <String>{};
+    for (final row in customers) {
+      final phone = (row['phone'] ?? row['source_phone'] ?? '')
+          .toString()
+          .replaceAll(RegExp(r'\s+'), '')
+          .trim();
+      if (phone.isNotEmpty && !phones.add(phone)) {
+        throw Exception('ژمارە مۆبایلی دووبارە لە فایلەکەدا هەیە');
+      }
+    }
+
+    for (final debt in debts) {
+      final customerId = (debt['customer_source_id'] ?? '').toString().trim();
+      if (!customerIds.contains(customerId)) {
+        throw Exception('قەرزێک بە کڕیارێکی نەدۆزراوەوە بەستراوە');
+      }
+    }
+
+    for (final payment in payments) {
+      final scope =
+          (payment['payment_scope'] ?? 'debt').toString().trim().toLowerCase();
+      if (scope == 'general') {
+        final customerId =
+            (payment['customer_source_id'] ?? '').toString().trim();
+        if (!customerIds.contains(customerId)) {
+          throw Exception('پارەدانەوەیەک بە کڕیارێکی نەدۆزراوەوە بەستراوە');
+        }
+      } else {
+        final debtId = (payment['debt_source_id'] ?? '').toString().trim();
+        if (!debtIds.contains(debtId)) {
+          throw Exception('پارەدانەوەیەک بە قەرزێکی نەدۆزراوەوە بەستراوە');
+        }
+      }
+    }
+  }
+
   static LegacyImportBundle _buildBundle({
     required String fileName,
     required String fingerprint,
@@ -907,6 +977,12 @@ class LegacyImportService {
     })) {
       throw Exception('هەندێک پارەدان mapping یان بڕی دروستیان نییە');
     }
+
+    _validateBundleReferences(
+      customers: customers,
+      debts: debts,
+      payments: payments,
+    );
 
     return LegacyImportBundle(
       fileName: fileName,
