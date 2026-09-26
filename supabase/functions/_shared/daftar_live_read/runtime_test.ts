@@ -323,7 +323,7 @@ Deno.test("primary mode serves local ZHIROX data without live validation", async
         live_read_stale_after_seconds: 300,
         last_success_at: "2026-09-20T00:01:00Z",
         sync_mode: "zhirox_primary",
-        enabled: false,
+        enabled: true,
       }),
       ensureFresh: async () => {
         validations++;
