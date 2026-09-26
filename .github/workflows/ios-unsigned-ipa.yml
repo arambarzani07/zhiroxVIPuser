@@ -238,6 +238,10 @@ jobs:
                     supabase/functions/customer-push-events \
                     supabase/functions/record-payment
 
+      - name: Check customer portal Edge Function
+        if: github.ref_name == 'user-source'
+        run: deno check supabase/functions/customer-push-link/index.ts
+
       - name: Check payment correction Edge Function
         if: github.ref_name == 'user-source'
         run: deno check supabase/functions/debt-restore-admin/index.ts
