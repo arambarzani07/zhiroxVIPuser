@@ -288,7 +288,7 @@ class LegacyImportService {
     final dynamic decoded;
     try {
       decoded = jsonDecode(
-        utf8.decode(bytes, allowMalformed: false).replaceFirst('\\ufeff', ''),
+        utf8.decode(bytes, allowMalformed: false).replaceFirst('\ufeff', ''),
       );
     } catch (_) {
       throw Exception('invalid_json');
@@ -313,7 +313,7 @@ class LegacyImportService {
     final dynamic decoded;
     try {
       decoded = jsonDecode(
-        utf8.decode(bytes, allowMalformed: false).replaceFirst('\\ufeff', ''),
+        utf8.decode(bytes, allowMalformed: false).replaceFirst('\ufeff', ''),
       );
     } catch (_) {
       throw Exception('invalid_recovery_json');
