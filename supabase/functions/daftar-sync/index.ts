@@ -351,6 +351,8 @@ async function resolveAbsentTransactionDeadLetters(
       last_missing_at: now,
     });
 
+    // Two-snapshot invariant: while missingCount < 2 the transaction remains
+    // a candidate only; resolution starts once the second miss is observed.
     if (missingCount >= 2) {
       resolveIds.push(row.id);
       clearIds.add(row.sourceId);
