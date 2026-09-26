@@ -63,7 +63,7 @@ $function$;
 create or replace function public.initial_owner_bootstrap_open()
 returns boolean
 language sql
-security definer
+security invoker
 stable
 set search_path = ''
 as $function$
@@ -72,7 +72,7 @@ as $function$
   );
 $function$;
 
-revoke all on function public.claim_initial_system_owner(text,text) from public;
+revoke all on function public.claim_initial_system_owner(text,text) from public, anon;
 grant execute on function public.claim_initial_system_owner(text,text) to authenticated;
 grant execute on function public.claim_initial_system_owner(text,text) to service_role;
 
