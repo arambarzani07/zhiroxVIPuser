@@ -34,11 +34,12 @@ function isStrongPassword(value: string): boolean {
     "password123!",
     "password1234!",
     "qwerty123456!",
-    "1234567890aA!",
+    "1234567890aa!",
     "zhirox123456!",
   ];
   return !blocked.includes(normalized);
 }
+
 
 function chunks<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -46,6 +47,30 @@ function chunks<T>(items: T[], size: number): T[][] {
     out.push(items.slice(index, index + size));
   }
   return out;
+}
+
+const subscriptionPlanDays: Record<string, number> = {
+  monthly: 30,
+  quarterly: 90,
+  semiannual: 180,
+  annual: 365,
+};
+
+function resolveSubscriptionPlan(body: any): {
+  plan: string;
+  days: number;
+} | null {
+  const fallbackPlan = body.days != null || body.subscription_days != null
+    ? "custom"
+    : "monthly";
+  const plan = String(body.subscription_plan ?? fallbackPlan).trim().toLowerCase();
+  if (Object.hasOwn(subscriptionPlanDays, plan)) {
+    return { plan, days: subscriptionPlanDays[plan] };
+  }
+  if (plan !== "custom") return null;
+  const days = Math.round(Number(body.subscription_days ?? body.days));
+  if (!Number.isFinite(days) || days < 1 || days > 3650) return null;
+  return { plan, days };
 }
 
 async function isOperational(admin: any, profile: any): Promise<boolean> {
@@ -238,10 +263,14 @@ Deno.serve(async (req) => {
         return json({ error: authError?.message ?? "auth_create_failed" }, 400);
       }
 
-      const requestedDays = Math.round(Number(body.subscription_days ?? 30));
-      const subscriptionDays = role === "admin"
-        ? Math.min(3650, Math.max(1, requestedDays || 30))
-        : 0;
+      const resolvedSubscription = role === "admin"
+        ? resolveSubscriptionPlan(body)
+        : null;
+      if (role === "admin" && !resolvedSubscription) {
+        await admin.auth.admin.deleteUser(authData.user.id);
+        return json({ error: "invalid_subscription_plan" }, 400);
+      }
+      const subscriptionDays = resolvedSubscription?.days ?? 0;
       const subscriptionEnd = role === "admin"
         ? new Date(Date.now() + subscriptionDays * 86400000).toISOString()
         : null;
@@ -266,6 +295,7 @@ Deno.serve(async (req) => {
         can_edit_debts: canEditDebts,
         can_send_notifications: canSendNotifications,
         subscription_end: subscriptionEnd,
+        subscription_plan: resolvedSubscription?.plan ?? null,
         is_system_owner: false,
       };
 
@@ -304,7 +334,7 @@ Deno.serve(async (req) => {
       const { data: admins, count, error } = await admin
         .from("profiles")
         .select(
-          "id,name,phone,role,market_name,subscription_end,approved,active,is_system_owner,created_at,updated_at",
+          "id,name,phone,role,market_name,subscription_end,subscription_plan,approved,active,is_system_owner,created_at,updated_at",
           { count: "exact" },
         )
         .eq("role", "admin")
@@ -314,30 +344,12 @@ Deno.serve(async (req) => {
         .range(from, from + perPage - 1);
       if (error) return json({ error: error.message }, 400);
 
-      const adminIds = (admins ?? []).map((row: any) => row.id);
-      const counts = new Map<string, { employee: number; customer: number }>();
-      if (adminIds.length > 0) {
-        const { data: members, error: membersError } = await admin
-          .from("profiles")
-          .select("admin_id,role")
-          .in("admin_id", adminIds)
-          .in("role", ["employee", "customer"]);
-        if (membersError) return json({ error: membersError.message }, 400);
-        for (const member of members ?? []) {
-          const current = counts.get(member.admin_id) ?? { employee: 0, customer: 0 };
-          if (member.role === "employee") current.employee += 1;
-          if (member.role === "customer") current.customer += 1;
-          counts.set(member.admin_id, current);
-        }
-      }
-
+      // System Owner receives platform/account metadata only. Tenant member
+      // counts are deliberately excluded because internal market content is
+      // outside the Owner privacy boundary.
       const totalItems = count ?? 0;
       return json({
-        admins: (admins ?? []).map((row: any) => ({
-          admin: row,
-          employee_count: counts.get(row.id)?.employee ?? 0,
-          customer_count: counts.get(row.id)?.customer ?? 0,
-        })),
+        admins: (admins ?? []).map((row: any) => ({ admin: row })),
         total_items: totalItems,
         total_pages: Math.max(1, Math.ceil(totalItems / perPage)),
         page,
@@ -349,8 +361,8 @@ Deno.serve(async (req) => {
         return json({ error: "system_owner_required" }, 403);
       }
       const adminId = String(body.admin_id ?? "").trim();
-      const days = Math.round(Number(body.days));
-      if (!adminId || !Number.isFinite(days) || days < 1 || days > 3650) {
+      const resolvedSubscription = resolveSubscriptionPlan(body);
+      if (!adminId || !resolvedSubscription) {
         return json({ error: "invalid_input" }, 400);
       }
       const { data: target, error: targetError } = await admin
@@ -369,15 +381,19 @@ Deno.serve(async (req) => {
       const base = Number.isFinite(parsedEnd) && parsedEnd > Date.now()
         ? parsedEnd
         : Date.now();
-      const subscriptionEnd = new Date(base + days * 86400000).toISOString();
+      const subscriptionEnd = new Date(
+        base + resolvedSubscription.days * 86400000,
+      ).toISOString();
       const { error: updateError } = await admin
         .from("profiles")
-        .update({ subscription_end: subscriptionEnd })
+        .update({
+          subscription_end: subscriptionEnd,
+          subscription_plan: resolvedSubscription.plan,
+        })
         .eq("id", adminId);
       if (updateError) return json({ error: updateError.message }, 400);
       return json({ subscription_end: subscriptionEnd });
     }
-
 
     if (action === "reset_password") {
       const targetId = String(body.user_id ?? "").trim();
@@ -401,12 +417,16 @@ Deno.serve(async (req) => {
         return json({ error: "self_password_change_requires_old_password" }, 403);
       }
 
-      const isOwner = requesterProfile.is_system_owner === true;
+      const isOwnerAdminTarget =
+        requesterProfile.is_system_owner === true && target.role === "admin";
       const isTenantAdmin =
         requesterProfile.role === "admin" &&
+        requesterProfile.is_system_owner !== true &&
         (target.role === "employee" || target.role === "customer") &&
         target.admin_id === requester.id;
-      if (!isOwner && !isTenantAdmin) return json({ error: "forbidden" }, 403);
+      if (!isOwnerAdminTarget && !isTenantAdmin) {
+        return json({ error: "forbidden" }, 403);
+      }
 
       const { error } = await admin.auth.admin.updateUserById(targetId, {
         password: newPassword,
@@ -439,12 +459,16 @@ Deno.serve(async (req) => {
         return json({ error: "admin_delete_requires_dedicated_endpoint" }, 409);
       }
 
-      const isOwner = requesterProfile.is_system_owner === true;
+      const isOwnerAdminTarget =
+        requesterProfile.is_system_owner === true && target.role === "admin";
       const isTenantAdmin =
         requesterProfile.role === "admin" &&
+        requesterProfile.is_system_owner !== true &&
         (target.role === "employee" || target.role === "customer") &&
         target.admin_id === requester.id;
-      if (!isOwner && !isTenantAdmin) return json({ error: "forbidden" }, 403);
+      if (!isOwnerAdminTarget && !isTenantAdmin) {
+        return json({ error: "forbidden" }, 403);
+      }
 
       // Public relational data is intentionally FK-driven: profile deletion
       // cascades customer debt/payment/read state and SET NULLs creator fields.
