@@ -1092,7 +1092,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                     validator: (v) {
                       if (v == null || v.isEmpty) return 'وشەی نهێنی بنووسە';
-                      if (v.length < 8) return 'لانی کەم ٨ پیت دەبێت';
+                      if (v.length < 12 ||
+                          !RegExp(r'[a-z]').hasMatch(v) ||
+                          !RegExp(r'[A-Z]').hasMatch(v) ||
+                          !RegExp(r'[0-9]').hasMatch(v) ||
+                          !RegExp(r'[^A-Za-z0-9]').hasMatch(v)) {
+                        return 'لانیکەم ١٢ پیت + پیتی گەورە/بچووک + ژمارە + هێما';
+                      }
                       return null;
                     },
                   ),
