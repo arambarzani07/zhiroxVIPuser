@@ -56,3 +56,29 @@ jobs:
 
       - name: Build recovery iOS app
         run: flutter build ios --release --no-codesign --dart-define=ZHIROX_APP_EDITION=user
+
+      - name: Verify recovery app identity
+        run: |
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "com.karoxghafoor.zhirox.user"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "ZHIROX User"
+
+      - name: Package recovery IPA
+        run: |
+          set -euo pipefail
+          rm -rf Payload ZHIROX-User-Recovery.ipa
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          find Payload -type d -name _CodeSignature -prune -exec rm -rf {} \;
+          find Payload -type f -name CodeResources -delete
+          find Payload -type f -name embedded.mobileprovision -delete
+          xattr -cr Payload || true
+          /usr/bin/zip -qry ZHIROX-User-Recovery.ipa Payload
+          unzip -t ZHIROX-User-Recovery.ipa
+
+      - name: Upload recovery IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: zhirox-user-recovery-ipa
+          path: ZHIROX-User-Recovery.ipa
+          if-no-files-found: error
+          retention-days: 7
