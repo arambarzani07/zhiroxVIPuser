@@ -617,15 +617,41 @@ class PBService {
     Map<String, dynamic>? cursor,
   }) async {
     await ensureInitialized();
-    final envelope = await DaftarLiveReadService.invokeMap(
-      'customer_directory',
-      {
-        'search': search.trim(),
-        'limit': limit.clamp(1, 100),
-        'cursor': ?cursor,
-      },
-    );
-    final data = envelope.data;
+
+    Map<String, dynamic> data;
+    try {
+      final envelope = await DaftarLiveReadService.invokeMap(
+        'customer_directory',
+        {
+          'search': search.trim(),
+          'limit': limit.clamp(1, 100),
+          'cursor': ?cursor,
+        },
+      );
+      data = envelope.data;
+    } catch (_) {
+      final params = <String, dynamic>{
+        'p_search': search.trim(),
+        'p_filter': 'all',
+        'p_limit': limit.clamp(1, 100),
+      };
+      final cursorCreatedAt = cursor?['created_at']?.toString() ?? '';
+      final cursorId = cursor?['id']?.toString() ?? '';
+      if (cursorCreatedAt.isNotEmpty && cursorId.isNotEmpty) {
+        params['p_cursor_created_at'] = cursorCreatedAt;
+        params['p_cursor_id'] = cursorId;
+      }
+
+      final raw = await client.rpc(
+        'get_customer_directory_page_filtered',
+        params: params,
+      );
+      if (raw is! Map) {
+        throw const FormatException('invalid customer directory page');
+      }
+      data = Map<String, dynamic>.from(raw);
+    }
+
     final users = <RecordModel>[];
     final inbox = <String, Map<String, dynamic>>{};
     final seenUserIds = <String>{};
