@@ -50,6 +50,33 @@ class PBService {
     return completer.future;
   }
 
+  static bool _isStrongPassword(String value) {
+    if (value.length < 12) return false;
+    if (!RegExp(r'[a-z]').hasMatch(value) ||
+        !RegExp(r'[A-Z]').hasMatch(value) ||
+        !RegExp(r'[0-9]').hasMatch(value) ||
+        !RegExp(r'[^A-Za-z0-9]').hasMatch(value)) {
+      return false;
+    }
+    final normalized = value.toLowerCase();
+    const blocked = <String>{
+      'password123!',
+      'password1234!',
+      'qwerty123456!',
+      '1234567890aa!',
+      'zhirox123456!',
+    };
+    return !blocked.contains(normalized);
+  }
+
+  static void _requireStrongPassword(String value) {
+    if (!_isStrongPassword(value)) {
+      throw Exception(
+        'وشەی نهێنی لانیکەم ١٢ پیت بێت و پیتی گەورە/بچووک، ژمارە و هێمای تایبەت تێدابێت',
+      );
+    }
+  }
+
   static String _sanitize(String value) {
     return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
   }
@@ -115,6 +142,8 @@ class PBService {
         return 'سڕینەوەی هەژماری بەڕێوەبەر سەرکەوتوو نەبوو';
       case 'invalid_input':
         return 'زانیارییەکان تەواو یان دروست نین';
+      case 'weak_password':
+        return 'وشەی نهێنی لانیکەم ١٢ پیت بێت و پیتی گەورە/بچووک، ژمارە و هێمای تایبەت تێدابێت';
       case 'fib_not_configured':
         return 'پارەدانی FIB هێشتا لەلایەن خاوەنی سیستەمەوە چالاک نەکراوە';
       case 'fib_auth_failed':
@@ -160,6 +189,7 @@ class PBService {
     required String password,
   }) async {
     await ensureInitialized();
+    _requireStrongPassword(password);
     if (!await initialOwnerBootstrapOpen()) {
       throw 'bootstrap_closed';
     }
@@ -1354,6 +1384,7 @@ class PBService {
     required String newPassword,
   }) async {
     await ensureInitialized();
+    _requireStrongPassword(newPassword);
     if (client.auth.currentUser?.id != userId) {
       throw Exception('دەسەڵاتی گۆڕینی ئەم وشەی نهێنییەت نییە');
     }
@@ -1375,9 +1406,7 @@ class PBService {
     required String newPassword,
   }) async {
     await ensureInitialized();
-    if (newPassword.length < 8) {
-      throw Exception('وشەی نهێنی لانیکەم ٨ پیت بێت');
-    }
+    _requireStrongPassword(newPassword);
     try {
       final response = await client.functions.invoke(
         'account-admin',
