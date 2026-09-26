@@ -80,6 +80,41 @@ Deno.test("rejects unsupported operation without fallback", async () => {
   assertEquals(response.status, 400);
 });
 
+Deno.test("market without Daftar source reads its own local directory", async () => {
+  let validations = 0;
+  const response = await handleDaftarLiveRead(
+    authenticatedReadRequest("customer_directory", {}),
+    runtimeDeps({
+      loadSource: async () => null,
+      ensureFresh: async () => {
+        validations++;
+        throw new Error("must not contact Daftar");
+      },
+      localRead: async () => ({ items: [], total_count: 0, has_more: false }),
+    }),
+  );
+  const body = await responseJson(response);
+  assertEquals(response.status, 200);
+  assertEquals(body.source, "zhirox_primary");
+  assertEquals(body.data.items, []);
+  assertEquals(validations, 0);
+});
+
+Deno.test("market without Daftar source retains customer scope checks", async () => {
+  const response = await handleDaftarLiveRead(
+    authenticatedReadRequest("customer_directory", {}),
+    runtimeDeps({
+      loadViewer: async () => ({
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        role: "customer",
+        tenantId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      }),
+      loadSource: async () => null,
+    }),
+  );
+  assertEquals(response.status, 403);
+});
+
 Deno.test("live validation success returns local normalized DTO as source live", async () => {
   const response = await handleDaftarLiveRead(
     authenticatedReadRequest("customer_finance_snapshot", {
