@@ -244,9 +244,17 @@ class _InitialOwnerSetupScreenState extends State<InitialOwnerSetupScreen> {
                                     ),
                                   ),
                                 ),
-                                validator: (value) => value == null || value.length < 12
-                                    ? 'لانیکەم ١٢ پیت/ژمارە'
-                                    : null,
+                                validator: (value) {
+                                  final v = value ?? '';
+                                  if (v.length < 12 ||
+                                      !RegExp(r'[a-z]').hasMatch(v) ||
+                                      !RegExp(r'[A-Z]').hasMatch(v) ||
+                                      !RegExp(r'[0-9]').hasMatch(v) ||
+                                      !RegExp(r'[^A-Za-z0-9]').hasMatch(v)) {
+                                    return 'لانیکەم ١٢ پیت + پیتی گەورە/بچووک + ژمارە + هێما';
+                                  }
+                                  return null;
+                                },
                               ),
                               const SizedBox(height: 12),
                               TextFormField(
