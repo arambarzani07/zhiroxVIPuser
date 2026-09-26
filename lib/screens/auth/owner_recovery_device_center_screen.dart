@@ -262,10 +262,17 @@ class _OwnerRecoveryDeviceCenterScreenState
               ),
               FilledButton(
                 onPressed: () {
-                  if (pass.text.length < 8) {
+                  final password = pass.text;
+                  final strongPassword = password.length >= 12 &&
+                      password.length <= 128 &&
+                      RegExp(r'[a-z]').hasMatch(password) &&
+                      RegExp(r'[A-Z]').hasMatch(password) &&
+                      RegExp(r'[0-9]').hasMatch(password) &&
+                      RegExp(r'[^A-Za-z0-9]').hasMatch(password);
+                  if (!strongPassword) {
                     AppHelpers.showSnackBar(
                       context,
-                      'وشەی نهێنی لانیکەم ٨ پیت بێت.',
+                      'وشەی نهێنی لانیکەم ١٢ پیت، پیتی گەورە و بچووک، ژمارە و هێمایەک بێت.',
                       isError: true,
                     );
                     return;
