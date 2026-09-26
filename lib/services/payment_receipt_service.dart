@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:zhirox/services/pdf_brand_color.dart';
 import 'package:zhirox/services/receipt_document_service.dart';
 import 'package:zhirox/services/receipt_settings_service.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -27,15 +28,6 @@ class PaymentReceiptService {
 
   static String _r(String value) => KurdishReshaper.convert(value);
 
-  static PdfColor _brandColor(String hex) {
-    final clean = hex.replaceAll('#', '');
-    final value = int.tryParse(clean, radix: 16) ?? 0x0F766E;
-    return PdfColor(
-      ((value >> 16) & 0xff) / 255,
-      ((value >> 8) & 0xff) / 255,
-      (value & 0xff) / 255,
-    );
-  }
 
   static String _label(String key, String mode) {
     const labels = <String, List<String>>{
@@ -199,7 +191,7 @@ class PaymentReceiptService {
           )
         : PdfPageFormat.a4;
     final baseFontSize = (is58 ? 6.8 : is80 ? 8.2 : 10.0) * active.fontScale;
-    final brand = _brandColor(active.primaryColor);
+    final brand = receiptBrandColor(active.primaryColor);
     final modern = active.templateFor('payment') == 'modern';
     final phone = active.phone.trim().isNotEmpty
         ? active.phone.trim()
