@@ -215,7 +215,7 @@ assert 'overflow-x: hidden' in styles_text, 'portal must guard narrow-screen hor
 
 app_js = (web / 'app.js').read_text(errors='ignore')
 assert (
-    'https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push'
+    'https://madoflmbretqghqbqaak.supabase.co/functions/v1/customer-push'
     in app_js
 ), 'customer push PWA must use the Supabase JSON API'
 for secret_name in (
@@ -279,7 +279,7 @@ assert 'apple-touch-icon.png' in manifest_text, 'token-aware install manifest mu
 headers = (web / '_headers').read_text(errors='ignore')
 assert 'Referrer-Policy: no-referrer' in headers
 assert 'Cache-Control: no-store' in headers
-assert 'https://hsoyfbtpvwfmjokudznx.supabase.co' in headers
+assert 'https://madoflmbretqghqbqaak.supabase.co' in headers
 assert 'Service-Worker-Allowed: /' in headers
 
 print('customer push policy verified')
