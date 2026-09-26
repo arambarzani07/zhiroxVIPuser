@@ -145,6 +145,68 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "audit_customers") {
+      const rows = Array.isArray(body.rows) ? body.rows : [];
+      if (rows.length === 0 || rows.length > 100) {
+        return json({ error: "invalid_batch" }, 400);
+      }
+
+      const issues: Array<Record<string, unknown>> = [];
+      for (const raw of rows) {
+        const sourceId = String(raw.source_id ?? raw.legacy_customer_id ?? "").trim();
+        const name = String(raw.name ?? "").trim();
+        if (!sourceId || !name) {
+          issues.push({ code: "invalid_customer_row", source_id: sourceId });
+          continue;
+        }
+
+        const previous = await findPreviousTarget(admin, adminId, "customer", sourceId);
+        if (previous.conflict) {
+          issues.push({ code: "source_id_conflict", source_id: sourceId });
+          continue;
+        }
+        if (previous.targetId) {
+          const { data: previousCustomer } = await admin
+            .from("profiles")
+            .select("id,role,admin_id")
+            .eq("id", previous.targetId)
+            .maybeSingle();
+          if (
+            !previousCustomer ||
+            previousCustomer.role !== "customer" ||
+            previousCustomer.admin_id !== adminId
+          ) {
+            issues.push({ code: "source_id_conflict", source_id: sourceId });
+            continue;
+          }
+        }
+
+        const phone = String(raw.phone ?? raw.source_phone ?? "").trim();
+        if (!phone) continue;
+        const { data: existingProfile, error: existingError } = await admin
+          .from("profiles")
+          .select("id,role,admin_id")
+          .eq("phone", phone)
+          .maybeSingle();
+        if (existingError) {
+          return json({ error: existingError.message }, 400);
+        }
+        if (
+          existingProfile &&
+          (existingProfile.role !== "customer" ||
+            existingProfile.admin_id !== adminId)
+        ) {
+          issues.push({
+            code: "phone_collision",
+            source_id: sourceId,
+            phone,
+          });
+        }
+      }
+
+      return json({ ok: issues.length === 0, issues });
+    }
+
     const fingerprint = String(body.source_fingerprint ?? "").trim();
     if (!fingerprint || fingerprint.length < 16) {
       return json({ error: "invalid_fingerprint" }, 400);
