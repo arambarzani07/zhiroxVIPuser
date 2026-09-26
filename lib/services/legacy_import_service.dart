@@ -470,7 +470,7 @@ class LegacyImportService {
           .toString()
           .trim();
       if (value.isEmpty || DateTime.tryParse(value) == null) {
-        throw Exception('invalid_recovery_date:' + sourceId);
+        throw Exception('invalid_recovery_date:$sourceId');
       }
       return value;
     }
@@ -487,16 +487,16 @@ class LegacyImportService {
           (row['customer_id'] ?? row['customer'] ?? '').toString().trim();
       if (customerSourceId.isEmpty ||
           !customerRecords.containsKey(customerSourceId)) {
-        throw Exception('recovery_customer_missing_for_debt:' + sourceId);
+        throw Exception('recovery_customer_missing_for_debt:$sourceId');
       }
       final amount = _money(row['amount']);
       if (amount <= 0) {
-        throw Exception('invalid_recovery_debt_amount:' + sourceId);
+        throw Exception('invalid_recovery_debt_amount:$sourceId');
       }
       final remaining =
           row.containsKey('remaining') ? _money(row['remaining']) : amount;
       if (remaining < -0.009 || remaining > amount + 0.009) {
-        throw Exception('invalid_recovery_remaining:' + sourceId);
+        throw Exception('invalid_recovery_remaining:$sourceId');
       }
       final rawCurrency =
           (row['currency'] ?? 'IQD').toString().trim().toUpperCase();
@@ -523,7 +523,7 @@ class LegacyImportService {
       final sourceId = entry.key;
       final amount = _money(row['amount']);
       if (amount <= 0) {
-        throw Exception('invalid_recovery_payment_amount:' + sourceId);
+        throw Exception('invalid_recovery_payment_amount:$sourceId');
       }
       final occurredAt = validOccurredAt(row, sourceId);
       final scope =
@@ -541,7 +541,7 @@ class LegacyImportService {
             .trim();
         if (customerSourceId.isEmpty ||
             !customerRecords.containsKey(customerSourceId)) {
-          throw Exception('recovery_customer_missing_for_payment:' + sourceId);
+          throw Exception('recovery_customer_missing_for_payment:$sourceId');
         }
         generalPaidIqd = _roundMoney(generalPaidIqd + amount);
         payments.add({
@@ -556,7 +556,7 @@ class LegacyImportService {
       }
 
       if (!debtRecords.containsKey(debtSourceId)) {
-        throw Exception('recovery_debt_missing_for_payment:' + sourceId);
+        throw Exception('recovery_debt_missing_for_payment:$sourceId');
       }
       recoveredDebtPayments[debtSourceId] = _roundMoney(
         (recoveredDebtPayments[debtSourceId] ?? 0) + amount,
@@ -579,12 +579,9 @@ class LegacyImportService {
           _roundMoney(recoveredDebtPayments[debtId] ?? 0);
       if ((expectedPaid - recoveredPaid).abs() > 0.02) {
         throw Exception(
-          'recovery_payment_history_incomplete:' +
-              debtId +
-              ':expected=' +
-              expectedPaid.toStringAsFixed(2) +
-              ':found=' +
-              recoveredPaid.toStringAsFixed(2),
+          'recovery_payment_history_incomplete:$debtId'
+          ':expected=${expectedPaid.toStringAsFixed(2)}'
+          ':found=${recoveredPaid.toStringAsFixed(2)}',
         );
       }
     }
