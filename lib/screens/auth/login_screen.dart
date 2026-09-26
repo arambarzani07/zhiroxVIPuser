@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/auth/register_customer_screen.dart';
+import 'package:zhirox/screens/auth/initial_owner_setup_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 
@@ -78,21 +79,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _openAdminRegistration() {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('هەژماری بەڕێوەبەر'),
-        content: const Text(
-          'بۆ دروستکردنی هەژماری بەڕێوەبەر، سەرەتا بە هەژماری خاوەن سیستەم بچۆ ژوورەوە. دوای چوونەژوورەوە، لە پەڕەی بەڕێوەبردنی بەڕێوەبەران هەژماری نوێ دروست بکە.',
-          style: TextStyle(height: 1.6),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('باشە'),
-          ),
-        ],
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const InitialOwnerSetupScreen()),
     );
   }
 
@@ -211,17 +200,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                   TextFormField(
                                     controller: _phoneController,
                                     enabled: !auth.isLoading,
-                                    keyboardType: TextInputType.phone,
+                                    keyboardType: TextInputType.emailAddress,
                                     textInputAction: TextInputAction.next,
                                     autofillHints: const [AutofillHints.telephoneNumber],
                                     textDirection: TextDirection.ltr,
                                     decoration: const InputDecoration(
-                                      labelText: 'ژمارە مۆبایل',
-                                      hintText: '07xxxxxxxxx',
+                                      labelText: 'ئیمەیل یان ژمارە مۆبایل',
+                                      hintText: 'name@example.com یان 07xxxxxxxxx',
                                       prefixIcon: Icon(Icons.phone_iphone_rounded),
                                     ),
                                     validator: (value) => value == null || value.trim().isEmpty
-                                        ? 'ژمارە مۆبایل بنووسە'
+                                        ? 'ئیمەیل یان ژمارە مۆبایل بنووسە'
                                         : null,
                                   ),
                                   const SizedBox(height: 12),
@@ -285,7 +274,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               onPressed: auth.isLoading ? null : _openAdminRegistration,
                               icon: const Icon(Icons.admin_panel_settings_outlined, size: 19),
                               label: const Text(
-                                'دروستکردنی هەژماری بەڕێوەبەر',
+                                'دامەزراندنی یەکەم خاوەن',
                                 style: TextStyle(fontWeight: FontWeight.w700),
                               ),
                               style: OutlinedButton.styleFrom(
