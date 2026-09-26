@@ -52,7 +52,11 @@ async function findPreviousTarget(
     .limit(20);
   if (error) throw error;
 
-  const targetIds = [...new Set((data ?? []).map((row: { target_id: string }) => row.target_id))];
+  const targetIds: string[] = [
+    ...new Set<string>(
+      (data ?? []).map((row: { target_id: string }) => row.target_id),
+    ),
+  ];
   return {
     targetId: targetIds.length === 1 ? targetIds[0] : null,
     conflict: targetIds.length > 1,
