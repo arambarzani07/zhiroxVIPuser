@@ -1319,9 +1319,9 @@ Deno.serve(async (req) => {
     }
     let delta = [...deltaById.values()]
       .sort((a, b) => Number(a.id) - Number(b.id))
-      // Keep one invocation below the Edge runtime wall-clock limit. The
-      // checkpoint advances monotonically, so later cron runs drain the rest.
-      .slice(0, 5);
+      // Process a bounded batch and persist the checkpoint each run.
+      // The initial large import must remain below the Edge wall-clock limit.
+      .slice(0, 25);
     const hasMoreTransactions = deltaById.size > delta.length;
 
     const { data: seenContactRows, error: seenContactError } = await admin
