@@ -58,7 +58,7 @@ async function findPreviousTarget(
     ),
   ];
   return {
-    targetId: targetIds.length === 1 ? targetIds[0] : null,
+    targetId: targetIds.length === 1 ? (targetIds[0] ?? null) : null,
     conflict: targetIds.length > 1,
   };
 }
