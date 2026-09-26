@@ -595,6 +595,9 @@ class LegacyImportService {
         expectedBalanceIqd += debtRemaining[debtId] ?? 0;
       }
     }
+    if (generalPaidIqd > expectedBalanceIqd + 0.02) {
+      throw Exception('recovery_general_payment_exceeds_gross_balance');
+    }
     expectedBalanceIqd = _roundMoney(
       (expectedBalanceIqd - generalPaidIqd)
           .clamp(0, double.infinity)
