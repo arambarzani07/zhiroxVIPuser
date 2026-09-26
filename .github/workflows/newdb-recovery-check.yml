@@ -32,6 +32,12 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      - name: Preserve ZHIROX User app identity
+        run: |
+          sed -i '' "s/com.karoxghafoor.zhirox/com.karoxghafoor.zhirox.user/g" ios/Runner.xcodeproj/project.pbxproj
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ZHIROX User" ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName zhirox_user" ios/Runner/Info.plist
+
       - name: Prepare iOS 15 deployment target
         run: |
           sed -i '' "s/platform :ios, '13.0'/platform :ios, '15.0'/" ios/Podfile
