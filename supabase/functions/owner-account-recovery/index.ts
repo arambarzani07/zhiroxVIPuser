@@ -74,7 +74,10 @@ Deno.serve(async (req) => {
     const newPassword = String(body.new_password ?? "");
     const reason = String(body.reason ?? "").trim().slice(0, 500);
 
-    if (!adminId || newPassword.length < 8 || newPassword.length > 128) {
+    const strongPassword = newPassword.length >= 12 && newPassword.length <= 128 &&
+      /[a-z]/.test(newPassword) && /[A-Z]/.test(newPassword) &&
+      /[0-9]/.test(newPassword) && /[^A-Za-z0-9]/.test(newPassword);
+    if (!adminId || !strongPassword) {
       return json({ error: "invalid_input" }, 400);
     }
 
