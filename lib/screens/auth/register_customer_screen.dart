@@ -404,8 +404,12 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
                             if (value == null || value.isEmpty) {
                               return 'وشەی نهێنی بنووسە';
                             }
-                            if (value.length < 8) {
-                              return 'وشەی نهێنی لانیکەم ٨ پیت بێت';
+                            if (value.length < 12 ||
+                                !RegExp(r'[a-z]').hasMatch(value) ||
+                                !RegExp(r'[A-Z]').hasMatch(value) ||
+                                !RegExp(r'[0-9]').hasMatch(value) ||
+                                !RegExp(r'[^A-Za-z0-9]').hasMatch(value)) {
+                              return 'لانیکەم ١٢ پیت + گەورە/بچووک + ژمارە + هێما';
                             }
                             return null;
                           },
