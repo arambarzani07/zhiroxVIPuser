@@ -25,8 +25,9 @@ assert 'resolveAbsentTransactionDeadLetters' in worker
 assert 'source_transaction_absent_from_two_consecutive_full_snapshots' in worker
 assert 'currentTransactionIds' in worker
 assert 'daftar_inbound_missing_candidates' in worker
-assert 'const missingCount = Number(existing?.missing_count ?? 0) + 1' in worker
-assert 'if (missingCount < 2) continue' in worker
+assert 'const missingCount = (candidateMap.get(row.sourceId) ?? 0) + 1' in worker
+assert 'if (missingCount >= 2)' in worker
+assert 'resolveIds.push(row.id)' in worker
 
 assert 'mirror_bootstrapped_at' in gateway
 assert 'source.mirror_bootstrapped_at' in gateway
