@@ -1234,7 +1234,7 @@ Deno.serve(async (req) => {
     const newContacts = contacts
       .filter((row) => Number(row.id) > Number(source!.last_contact_id))
       .sort((a, b) => Number(a.id) - Number(b.id))
-      .slice(0, 250);
+      .slice(0, 20);
     const seenTransactionRows: Array<{
       entity_kind: unknown;
       source_id: unknown;
@@ -1342,7 +1342,8 @@ Deno.serve(async (req) => {
     if (!contactsFetch.notModified) {
       for (const contact of contacts) {
         const hash = await sha256Hex(JSON.stringify(contact));
-        if (seenContactHashes.get(String(contact.id)) !== hash) {
+        if (seenContactHashes.has(String(contact.id)) &&
+            seenContactHashes.get(String(contact.id)) !== hash) {
           changedContactIds.add(Number(contact.id));
         }
       }
@@ -2152,6 +2153,9 @@ Deno.serve(async (req) => {
         ...newContacts.map((row) => Number(row.id)),
       )
       : Number(source.last_contact_id);
+    const hasMoreContacts = contacts.some((row) =>
+      Number(row.id) > newContactCheckpoint
+    );
     const newTransactionCheckpoint = delta.length > 0
       ? Math.max(
         Number(source.last_transaction_id),
@@ -2227,7 +2231,9 @@ Deno.serve(async (req) => {
     await admin.from("daftar_sync_sources").update({
       last_contact_id: newContactCheckpoint,
       last_transaction_id: newTransactionCheckpoint,
-      contacts_etag: contactsFetch.etag ?? source.contacts_etag ?? null,
+      contacts_etag: hasMoreContacts
+        ? null
+        : contactsFetch.etag ?? source.contacts_etag ?? null,
       transactions_etag: hasMoreTransactions
         ? null
         : transactionsFetch.etag ?? source.transactions_etag ?? null,
