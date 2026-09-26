@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(54);
+select plan(58);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -455,6 +455,49 @@ select ok(
     'EXECUTE'
   ),
   'anonymous callers cannot execute the private general-payment helper'
+);
+
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.claim_initial_system_owner(text,text)',
+    'EXECUTE'
+  ),
+  'anonymous users cannot claim the initial System Owner'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.claim_initial_system_owner(text,text)',
+    'EXECUTE'
+  ),
+  'signed-in users cannot reuse the closed System Owner bootstrap'
+);
+
+select ok(
+  exists (
+    select 1
+    from information_schema.columns
+    where table_schema='public'
+      and table_name='profiles'
+      and column_name='password_reset_required'
+      and data_type='boolean'
+  ),
+  'imported-customer password reset state is present'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.proname='list_active_markets'
+      and p.prosecdef=false
+  ),
+  'public market directory remains SECURITY INVOKER'
 );
 
 select * from finish();
