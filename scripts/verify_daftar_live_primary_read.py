@@ -37,7 +37,9 @@ assert 'legacy_user_id' in entrypoint
 assert 'live_read_mode' in entrypoint
 assert '.eq("admin_id", tenantId)' in entrypoint
 assert '.eq("enabled", true)' in entrypoint
-assert '.eq("sync_mode", "zhirox_primary")' in entrypoint
+assert 'return data;' in entrypoint
+assert 'if (!source || source.enabled === false' in runtime
+assert '"zhirox_primary"' in runtime
 assert '.eq("legacy_user_id", 28)' not in entrypoint
 assert '.eq("source_fingerprint", "daftar-live-account-28-v1")' not in entrypoint
 assert '"zhirox_primary"' in types
