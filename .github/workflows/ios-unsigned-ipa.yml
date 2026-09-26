@@ -238,6 +238,10 @@ jobs:
         if: github.ref_name == 'user-source'
         run: deno check supabase/functions/debt-restore-admin/index.ts
 
+      - name: Check Telegram notification Edge Function
+        if: github.ref_name == 'user-source'
+        run: deno check supabase/functions/send-telegram/index.ts
+
       - name: Test Daftar live-read policy
         if: github.ref_name == 'user-source'
         run: deno test supabase/functions/_shared/daftar_live_read/policy_test.ts
