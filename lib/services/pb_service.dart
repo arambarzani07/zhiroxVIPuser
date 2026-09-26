@@ -147,6 +147,48 @@ class PBService {
 
   // ==================== Auth ====================
 
+  static Future<bool> initialOwnerBootstrapOpen() async {
+    await ensureInitialized();
+    final raw = await client.rpc('initial_owner_bootstrap_open');
+    return raw == true;
+  }
+
+  static Future<bool> registerInitialSystemOwner({
+    required String name,
+    required String email,
+    required String phone,
+    required String password,
+  }) async {
+    await ensureInitialized();
+    if (!await initialOwnerBootstrapOpen()) {
+      throw 'bootstrap_closed';
+    }
+
+    final response = await client.auth.signUp(
+      email: email.trim(),
+      password: password,
+      data: {
+        'name': name.trim(),
+        'phone': phone.trim(),
+        'bootstrap_owner_request': true,
+      },
+    );
+    if (response.user == null) throw 'signup_failed';
+
+    if (response.session == null) {
+      return false;
+    }
+
+    await client.rpc(
+      'claim_initial_system_owner',
+      params: {
+        'p_name': name.trim(),
+        'p_phone': phone.trim(),
+      },
+    );
+    return true;
+  }
+
   static Future<RecordModel> login(String phone, String password) async {
     await ensureInitialized();
     final cleanPhone = phone.trim();
@@ -162,7 +204,25 @@ class PBService {
       final authUser = response.user;
       if (authUser == null) throw Exception('invalid login');
 
-      final user = await getUser(authUser.id);
+      RecordModel user;
+      try {
+        user = await getUser(authUser.id);
+      } catch (_) {
+        final metadata = authUser.userMetadata ?? const <String, dynamic>{};
+        final wantsBootstrap = metadata['bootstrap_owner_request'] == true;
+        if (!wantsBootstrap || !await initialOwnerBootstrapOpen()) rethrow;
+
+        final bootstrapName = (metadata['name'] ?? '').toString().trim();
+        final bootstrapPhone = (metadata['phone'] ?? '').toString().trim();
+        await client.rpc(
+          'claim_initial_system_owner',
+          params: {
+            'p_name': bootstrapName,
+            'p_phone': bootstrapPhone,
+          },
+        );
+        user = await getUser(authUser.id);
+      }
       final role = user.getStringValue('role');
 
       if (!user.getBoolValue('active')) {
