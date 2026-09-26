@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/utils/owner_date_time.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -25,11 +26,6 @@ class _OwnerPolicyComplianceCenterScreenState
   int _asInt(dynamic value) =>
       value is num ? value.toInt() : int.tryParse('${value ?? 0}') ?? 0;
 
-  String _date(dynamic value) {
-    final parsed = DateTime.tryParse('${value ?? ''}');
-    if (parsed == null) return '—';
-    return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
-  }
 
   String _policyLabel(String key) => switch (key) {
         'terms' => 'مەرجەکانی خزمەتگوزاری',
@@ -580,7 +576,7 @@ class _OwnerPolicyComplianceCenterScreenState
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${_policyLabel(key)} • وەشان $version • ${_date(doc['published_at'])}',
+                  '${_policyLabel(key)} • وەشان $version • ${ownerDateTime(doc['published_at'])}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -656,7 +652,7 @@ class _OwnerPolicyComplianceCenterScreenState
                 textDirection: TextDirection.ltr,
               ),
               Text(
-                _date(admin['last_acceptance_at']),
+                ownerDateTime(admin['last_acceptance_at']),
                 style: Theme.of(context).textTheme.bodySmall,
                 textDirection: TextDirection.ltr,
               ),

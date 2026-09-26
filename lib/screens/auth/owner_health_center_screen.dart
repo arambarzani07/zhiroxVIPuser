@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/utils/owner_date_time.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -25,11 +26,6 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
   double _asDouble(dynamic value) =>
       value is num ? value.toDouble() : double.tryParse('${value ?? 0}') ?? 0;
 
-  String _date(dynamic value) {
-    final parsed = DateTime.tryParse('${value ?? ''}');
-    if (parsed == null) return '—';
-    return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
-  }
 
   String _money(dynamic value) {
     final n = _asDouble(value);
@@ -219,19 +215,19 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                             _row(
                               Icons.backup_outlined,
                               'کۆتا پاشەکەوت',
-                              _date(_health['latest_backup_at']),
+                              ownerDateTime(_health['latest_backup_at']),
                               null,
                             ),
                             _row(
                               Icons.system_update_alt_rounded,
                               'کۆتا ڕێکخستنی نوێکردنەوە',
-                              _date(_health['latest_update_config_at']),
+                              ownerDateTime(_health['latest_update_config_at']),
                               null,
                             ),
                             _row(
                               Icons.history_rounded,
                               'کۆتا کرداری خاوەنی سیستەم',
-                              _date(_health['latest_owner_action_at']),
+                              ownerDateTime(_health['latest_owner_action_at']),
                               null,
                             ),
                             _row(
@@ -285,7 +281,7 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 trailing: Text(
-                                  _date(item['created_at']),
+                                  ownerDateTime(item['created_at']),
                                   style: Theme.of(context).textTheme.bodySmall,
                                   textDirection: TextDirection.ltr,
                                 ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/utils/owner_date_time.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -21,11 +22,6 @@ class _OwnerDomainCenterScreenState extends State<OwnerDomainCenterScreen> {
   int _asInt(dynamic value) =>
       value is num ? value.toInt() : int.tryParse('${value ?? 0}') ?? 0;
 
-  String _date(dynamic value) {
-    final parsed = DateTime.tryParse('${value ?? ''}');
-    if (parsed == null) return '—';
-    return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
-  }
 
   @override
   void initState() {
@@ -320,7 +316,7 @@ class _OwnerDomainCenterScreenState extends State<OwnerDomainCenterScreen> {
                 _mini(Icons.dns_outlined, 'DNS: ${_dnsLabel(dns)}'),
                 _mini(Icons.lock_outline_rounded, 'HTTPS: ${_httpsLabel(https)}'),
                 _mini(Icons.http_rounded, 'HTTP: ${item['last_http_status'] ?? '—'}'),
-                _mini(Icons.history_rounded, _date(item['last_checked_at'])),
+                _mini(Icons.history_rounded, ownerDateTime(item['last_checked_at'])),
               ],
             ),
           ],

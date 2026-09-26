@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/utils/owner_date_time.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -23,11 +24,6 @@ class _OwnerRecoveryDeviceCenterScreenState
   int _asInt(dynamic value) =>
       value is num ? value.toInt() : int.tryParse('${value ?? 0}') ?? 0;
 
-  String _date(dynamic value) {
-    final parsed = DateTime.tryParse('${value ?? ''}');
-    if (parsed == null) return '—';
-    return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
-  }
 
   @override
   void initState() {
@@ -547,7 +543,7 @@ class _OwnerRecoveryDeviceCenterScreenState
               const SizedBox(width: 12),
               _mini(
                 Icons.history_rounded,
-                'کۆتا گەڕاندنەوە: ${_date(item['last_recovery_at'])}',
+                'کۆتا گەڕاندنەوە: ${ownerDateTime(item['last_recovery_at'])}',
               ),
             ],
           ),
@@ -607,7 +603,7 @@ class _OwnerRecoveryDeviceCenterScreenState
                   Text(
                     '${device['platform'] ?? 'unknown'} • '
                     'وەشان ${device['app_version'] ?? 'unknown'} • '
-                    '${_date(device['last_seen_at'])}',
+                    '${ownerDateTime(device['last_seen_at'])}',
                     style: Theme.of(context).textTheme.bodySmall,
                     textDirection: TextDirection.ltr,
                   ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/utils/owner_date_time.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -26,11 +27,6 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
   double _asDouble(dynamic value) =>
       value is num ? value.toDouble() : double.tryParse('${value ?? 0}') ?? 0;
 
-  String _date(dynamic value) {
-    final parsed = DateTime.tryParse('${value ?? ''}');
-    if (parsed == null) return '—';
-    return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
-  }
 
   String _priorityLabel(String value) => switch (value) {
         'low' => 'نزم',
@@ -504,11 +500,11 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
               _mini(Icons.workspace_premium_outlined, _tierLabel(tier)),
               _mini(
                 Icons.timer_outlined,
-                'وەڵام: ${_date(item['response_due_at'])}',
+                'وەڵام: ${ownerDateTime(item['response_due_at'])}',
               ),
               _mini(
                 Icons.event_available_outlined,
-                'چارەسەر: ${_date(item['resolution_due_at'])}',
+                'چارەسەر: ${ownerDateTime(item['resolution_due_at'])}',
               ),
               if ((item['app_version'] ?? '').toString().isNotEmpty)
                 _mini(

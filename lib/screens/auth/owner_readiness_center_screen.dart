@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/utils/owner_date_time.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -23,11 +24,6 @@ class _OwnerReadinessCenterScreenState
   int _asInt(dynamic value) =>
       value is num ? value.toInt() : int.tryParse('${value ?? 0}') ?? 0;
 
-  String _date(dynamic value) {
-    final parsed = DateTime.tryParse('${value ?? ''}');
-    if (parsed == null) return '—';
-    return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
-  }
 
   String _lifecycleLabel(String value) => switch (value) {
         'trial' => 'تاقیکردنەوە',
@@ -402,19 +398,19 @@ class _OwnerReadinessCenterScreenState
                 Icons.system_update_outlined,
                 'ئەپ',
                 '${item['latest_app_version'] ?? 'unknown'} • '
-                    '${_date(item['latest_device_seen_at'])}',
+                    '${ownerDateTime(item['latest_device_seen_at'])}',
               ),
               _detailRow(
                 context,
                 Icons.backup_outlined,
                 'کۆتا پاشەکەوت',
-                _date(item['latest_backup_at']),
+                ownerDateTime(item['latest_backup_at']),
               ),
               _detailRow(
                 context,
                 Icons.verified_outlined,
                 'کۆتا پشتڕاستکردنەوە',
-                _date(item['last_verified_at']),
+                ownerDateTime(item['last_verified_at']),
               ),
               _detailRow(
                 context,

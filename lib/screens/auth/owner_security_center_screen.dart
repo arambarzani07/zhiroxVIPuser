@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/utils/owner_date_time.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -23,11 +24,6 @@ class _OwnerSecurityCenterScreenState
   int _asInt(dynamic value) =>
       value is num ? value.toInt() : int.tryParse('${value ?? 0}') ?? 0;
 
-  String _date(dynamic value) {
-    final parsed = DateTime.tryParse('${value ?? ''}');
-    if (parsed == null) return '—';
-    return DateFormat('yyyy/MM/dd HH:mm').format(parsed.toLocal());
-  }
 
   @override
   void initState() {
@@ -358,11 +354,11 @@ class _OwnerSecurityCenterScreenState
               ),
               _mini(
                 Icons.event_available_outlined,
-                'چوونەژوورەوە: ${_date(item['last_sign_in_at'])}',
+                'چوونەژوورەوە: ${ownerDateTime(item['last_sign_in_at'])}',
               ),
               _mini(
                 Icons.history_rounded,
-                'دانیشتن: ${_date(item['last_session_at'])}',
+                'دانیشتن: ${ownerDateTime(item['last_session_at'])}',
               ),
               _mini(
                 Icons.rule_rounded,
