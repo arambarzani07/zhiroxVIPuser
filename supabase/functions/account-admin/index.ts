@@ -389,6 +389,14 @@ Deno.serve(async (req) => {
         password: newPassword,
       });
       if (error) return json({ error: error.message }, 400);
+
+      const { error: profileUpdateError } = await admin
+        .from("profiles")
+        .update({ password_reset_required: false })
+        .eq("id", targetId);
+      if (profileUpdateError) {
+        return json({ error: profileUpdateError.message }, 400);
+      }
       return json({ ok: true });
     }
 
