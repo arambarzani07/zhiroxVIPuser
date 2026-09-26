@@ -17,7 +17,8 @@ function envJsonKey(name: string): string | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    return parsed.default ?? Object.values(parsed)[0] ?? null;
+    const value = parsed.default ?? Object.values(parsed)[0];
+    return typeof value === "string" ? value : null;
   } catch (_) {
     return raw;
   }
@@ -299,12 +300,18 @@ Deno.serve(async (req) => {
       }
 
       if (imported > 0) {
-        await admin.rpc("increment_legacy_import_progress", {
-          p_job_id: job.id,
-          p_customers: imported,
-          p_debts: 0,
-          p_payments: 0,
-        }).catch(() => null);
+        const { error: progressError } = await admin.rpc(
+          "increment_legacy_import_progress",
+          {
+            p_job_id: job.id,
+            p_customers: imported,
+            p_debts: 0,
+            p_payments: 0,
+          },
+        );
+        if (progressError) {
+          console.warn("legacy_import_progress_update_failed", progressError.message);
+        }
         const { data: links } = await admin
           .from("legacy_import_links")
           .select("source_id", { count: "exact", head: true })
