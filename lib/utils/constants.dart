@@ -116,7 +116,3 @@ class SupabaseConfig {
       'sb_publishable_RKhrmsR7hHRmrOVl7kvXhQ_vfsgM6N1';
 }
 
-// Compatibility alias retained so older files do not need a broad rename.
-class PBConfig {
-  static const String baseUrl = SupabaseConfig.url;
-}
