@@ -1,7 +1,7 @@
 export const CUSTOMER_PUSH_LINK_BASE_PATH = "/functions/v1/customer-push-link";
 export const CUSTOMER_PUSH_STATIC_URL = "https://push.zhirox.com/";
 const CUSTOMER_PUSH_RUNTIME_PATH = "/customer-push-link";
-const CUSTOMER_PUSH_API_URL = "https://hsoyfbtpvwfmjokudznx.supabase.co/functions/v1/customer-push";
+const CUSTOMER_PUSH_API_URL = "https://madoflmbretqghqbqaak.supabase.co/functions/v1/customer-push";
 
 const securityHeaders: Record<string, string> = {
   "Referrer-Policy": "no-referrer",
