@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:zhirox/utils/owner_date_time.dart';
-import 'package:intl/intl.dart' hide TextDirection;
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
