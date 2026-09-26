@@ -23,6 +23,23 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function isStrongPassword(value: string): boolean {
+  if (value.length < 12) return false;
+  if (!/[a-z]/.test(value) || !/[A-Z]/.test(value) || !/[0-9]/.test(value)) {
+    return false;
+  }
+  if (!/[^A-Za-z0-9]/.test(value)) return false;
+  const normalized = value.toLowerCase();
+  const blocked = [
+    "password123!",
+    "password1234!",
+    "qwerty123456!",
+    "1234567890aA!",
+    "zhirox123456!",
+  ];
+  return !blocked.includes(normalized);
+}
+
 function chunks<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
@@ -99,8 +116,11 @@ Deno.serve(async (req) => {
       // public customer registrations never get to spoof created_by.
       const createdBy = requester?.id ?? null;
 
-      if (!phone || password.length < 8 || !name) {
+      if (!phone || !name) {
         return json({ error: "invalid_input" }, 400);
+      }
+      if (!isStrongPassword(password)) {
+        return json({ error: "weak_password" }, 400);
       }
       if (!["admin", "employee", "customer"].includes(role)) {
         return json({ error: "invalid_role" }, 400);
@@ -362,8 +382,11 @@ Deno.serve(async (req) => {
     if (action === "reset_password") {
       const targetId = String(body.user_id ?? "").trim();
       const newPassword = String(body.new_password ?? "");
-      if (!targetId || newPassword.length < 8) {
+      if (!targetId) {
         return json({ error: "invalid_input" }, 400);
+      }
+      if (!isStrongPassword(newPassword)) {
+        return json({ error: "weak_password" }, 400);
       }
 
       const { data: target, error: targetError } = await admin
