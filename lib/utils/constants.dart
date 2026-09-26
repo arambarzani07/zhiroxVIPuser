@@ -106,9 +106,9 @@ class AppStrings {
 }
 
 class SupabaseConfig {
-  static const String url = 'https://hsoyfbtpvwfmjokudznx.supabase.co';
+  static const String url = 'https://madoflmbretqghqbqaak.supabase.co';
   static const String publishableKey =
-      'sb_publishable_EU2ZhecxlnsvNMQkk76x2A_X-jF6aOr';
+      'sb_publishable_RKhrmsR7hHRmrOVl7kvXhQ_vfsgM6N1';
 }
 
 // Compatibility alias retained so older files do not need a broad rename.
