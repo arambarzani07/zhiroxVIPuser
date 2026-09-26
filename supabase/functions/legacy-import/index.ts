@@ -347,6 +347,7 @@ Deno.serve(async (req) => {
             debt_limit: safeAmount(raw.debt_limit ?? 0),
             debt_duration: Math.max(1, Number(raw.debt_duration ?? 30) | 0),
             is_system_owner: false,
+            password_reset_required: true,
           });
           if (insertProfileError) {
             await admin.auth.admin.deleteUser(customerId);
