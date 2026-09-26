@@ -427,10 +427,34 @@ Deno.serve(async (req) => {
       if (rows.length === 0 || rows.length > 150) return json({ error: "invalid_batch" }, 400);
       let imported = 0;
       let reused = 0;
+
       for (const raw of rows) {
-        const sourceId = String(raw.source_id ?? `${raw.legacy_transaction_id ?? ""}:${raw.allocation_part ?? "1"}`).trim();
-        const debtSourceId = String(raw.debt_source_id ?? raw.legacy_debt_transaction_id ?? raw.debt_legacy_transaction_id ?? "").trim();
-        if (!sourceId || !debtSourceId) return json({ error: "invalid_payment_row" }, 400);
+        const sourceId = String(
+          raw.source_id ??
+            `${raw.legacy_transaction_id ?? ""}:${raw.allocation_part ?? "1"}`,
+        ).trim();
+        const debtSourceId = String(
+          raw.debt_source_id ??
+            raw.legacy_debt_transaction_id ??
+            raw.debt_legacy_transaction_id ??
+            "",
+        ).trim();
+        const paymentScope = String(
+          raw.payment_scope ?? (debtSourceId ? "debt" : "general"),
+        ).trim().toLowerCase();
+        const customerSourceId = String(
+          raw.customer_source_id ?? raw.legacy_customer_id ?? "",
+        ).trim();
+
+        if (!sourceId || (paymentScope !== "debt" && paymentScope !== "general")) {
+          return json({ error: "invalid_payment_row", source_id: sourceId }, 400);
+        }
+        if (paymentScope === "debt" && !debtSourceId) {
+          return json({ error: "invalid_payment_row", source_id: sourceId }, 400);
+        }
+        if (paymentScope === "general" && !customerSourceId) {
+          return json({ error: "invalid_general_payment_row", source_id: sourceId }, 400);
+        }
 
         const { data: existingLink } = await admin.from("legacy_import_links")
           .select("target_id")
@@ -438,21 +462,113 @@ Deno.serve(async (req) => {
           .eq("entity_kind", "payment").eq("source_id", sourceId).maybeSingle();
         if (existingLink) continue;
 
-        const { data: debtLink } = await admin.from("legacy_import_links")
-          .select("target_id")
-          .eq("admin_id", adminId).eq("source_fingerprint", fingerprint)
-          .eq("entity_kind", "debt").eq("source_id", debtSourceId).maybeSingle();
-        if (!debtLink) return json({ error: "debt_mapping_missing", source_id: sourceId, debt_source_id: debtSourceId }, 409);
-
-        const paymentId = crypto.randomUUID();
         const amount = safeAmount(raw.amount);
-        const occurredAt = String(raw.occurred_at ?? raw.created_at ?? new Date().toISOString());
+        if (amount <= 0) {
+          return json({ error: "invalid_amount", source_id: sourceId }, 400);
+        }
+        const occurredAt = String(
+          raw.occurred_at ?? raw.created_at ?? new Date().toISOString(),
+        );
         const note = String(raw.note ?? "");
 
         const previous = await findPreviousTarget(admin, adminId, "payment", sourceId);
         if (previous.conflict) {
-          return json({ error: "source_id_conflict", entity_kind: "payment", source_id: sourceId }, 409);
+          return json({
+            error: "source_id_conflict",
+            entity_kind: "payment",
+            source_id: sourceId,
+          }, 409);
         }
+
+        if (paymentScope === "general") {
+          const { data: customerLink } = await admin.from("legacy_import_links")
+            .select("target_id")
+            .eq("admin_id", adminId).eq("source_fingerprint", fingerprint)
+            .eq("entity_kind", "customer").eq("source_id", customerSourceId)
+            .maybeSingle();
+          if (!customerLink) {
+            return json({
+              error: "customer_mapping_missing",
+              source_id: sourceId,
+              customer_source_id: customerSourceId,
+            }, 409);
+          }
+
+          if (previous.targetId) {
+            const { data: previousGeneral } = await admin
+              .from("customer_general_payments")
+              .select("id, admin_id, customer_id, amount, note, created_at, created_by")
+              .eq("id", previous.targetId)
+              .maybeSingle();
+            const matches = previousGeneral
+              && previousGeneral.admin_id === adminId
+              && previousGeneral.customer_id === customerLink.target_id
+              && previousGeneral.created_by === adminId
+              && safeAmount(previousGeneral.amount) === amount
+              && String(previousGeneral.note ?? "") === note
+              && sameInstant(previousGeneral.created_at, occurredAt);
+            if (!matches) {
+              return json({
+                error: "source_id_conflict",
+                entity_kind: "payment",
+                payment_scope: "general",
+                source_id: sourceId,
+              }, 409);
+            }
+            await addFingerprintLink(
+              admin,
+              adminId,
+              fingerprint,
+              "payment",
+              sourceId,
+              previous.targetId,
+            );
+            imported++;
+            reused++;
+            continue;
+          }
+
+          const { data: generalPaymentId, error: generalPaymentError } =
+            await admin.rpc("legacy_import_apply_general_payment", {
+              p_admin_id: adminId,
+              p_customer_id: customerLink.target_id,
+              p_source_fingerprint: fingerprint,
+              p_source_id: sourceId,
+              p_amount: amount,
+              p_note: note,
+              p_created_at: occurredAt,
+            });
+          if (generalPaymentError || !generalPaymentId) {
+            return json({
+              error: generalPaymentError?.message ?? "general_payment_import_failed",
+              source_id: sourceId,
+            }, 400);
+          }
+
+          const { error: linkError } = await admin.from("legacy_import_links").insert({
+            admin_id: adminId,
+            source_fingerprint: fingerprint,
+            entity_kind: "payment",
+            source_id: sourceId,
+            target_id: generalPaymentId,
+          });
+          if (linkError) return json({ error: linkError.message }, 400);
+          imported++;
+          continue;
+        }
+
+        const { data: debtLink } = await admin.from("legacy_import_links")
+          .select("target_id")
+          .eq("admin_id", adminId).eq("source_fingerprint", fingerprint)
+          .eq("entity_kind", "debt").eq("source_id", debtSourceId).maybeSingle();
+        if (!debtLink) {
+          return json({
+            error: "debt_mapping_missing",
+            source_id: sourceId,
+            debt_source_id: debtSourceId,
+          }, 409);
+        }
+
         if (previous.targetId) {
           const { data: previousPayment } = await admin.from("payments")
             .select("id, debt_id, amount, note, created_at, created_by")
@@ -465,14 +581,27 @@ Deno.serve(async (req) => {
             && String(previousPayment.note ?? "") === note
             && sameInstant(previousPayment.created_at, occurredAt);
           if (!matches) {
-            return json({ error: "source_id_conflict", entity_kind: "payment", source_id: sourceId }, 409);
+            return json({
+              error: "source_id_conflict",
+              entity_kind: "payment",
+              payment_scope: "debt",
+              source_id: sourceId,
+            }, 409);
           }
-          await addFingerprintLink(admin, adminId, fingerprint, "payment", sourceId, previous.targetId);
+          await addFingerprintLink(
+            admin,
+            adminId,
+            fingerprint,
+            "payment",
+            sourceId,
+            previous.targetId,
+          );
           imported++;
           reused++;
           continue;
         }
 
+        const paymentId = crypto.randomUUID();
         const { error: paymentError } = await admin.rpc("legacy_import_apply_payment", {
           p_admin_id: adminId,
           p_debt_id: debtLink.target_id,
@@ -481,7 +610,10 @@ Deno.serve(async (req) => {
           p_note: note,
           p_created_at: occurredAt,
         });
-        if (paymentError) return json({ error: paymentError.message, source_id: sourceId }, 400);
+        if (paymentError) {
+          return json({ error: paymentError.message, source_id: sourceId }, 400);
+        }
+
         const { error: linkError } = await admin.from("legacy_import_links").insert({
           admin_id: adminId,
           source_fingerprint: fingerprint,
@@ -492,10 +624,16 @@ Deno.serve(async (req) => {
         if (linkError) return json({ error: linkError.message }, 400);
         imported++;
       }
+
       const { count } = await admin.from("legacy_import_links")
         .select("source_id", { count: "exact", head: true })
-        .eq("admin_id", adminId).eq("source_fingerprint", fingerprint).eq("entity_kind", "payment");
-      await admin.from("legacy_import_jobs").update({ imported_payments: count ?? 0, updated_at: new Date().toISOString() }).eq("id", job.id);
+        .eq("admin_id", adminId)
+        .eq("source_fingerprint", fingerprint)
+        .eq("entity_kind", "payment");
+      await admin.from("legacy_import_jobs").update({
+        imported_payments: count ?? 0,
+        updated_at: new Date().toISOString(),
+      }).eq("id", job.id);
       return json({ ok: true, imported, reused, total_imported: count ?? 0 });
     }
 
@@ -507,24 +645,59 @@ Deno.serve(async (req) => {
         .eq("source_fingerprint", fingerprint)
         .eq("entity_kind", "debt");
       if (debtLinksError) return json({ error: debtLinksError.message }, 400);
-      const ids = (debtLinks ?? []).map((r) => r.target_id);
-      let balance = 0;
-      for (let i = 0; i < ids.length; i += 500) {
+
+      const debtIds = (debtLinks ?? []).map((row: { target_id: string }) => row.target_id);
+      let grossBalanceIqd = 0;
+      for (let i = 0; i < debtIds.length; i += 500) {
         const { data: debts, error } = await admin.from("debts")
           .select("remaining, currency")
-          .in("id", ids.slice(i, i + 500))
+          .in("id", debtIds.slice(i, i + 500))
           .eq("is_deleted", false);
         if (error) return json({ error: error.message }, 400);
         for (const debt of debts ?? []) {
-          if ((debt.currency ?? "IQD") === "IQD") balance += Number(debt.remaining ?? 0);
+          if (String(debt.currency ?? "IQD").toUpperCase() === "IQD") {
+            grossBalanceIqd += Number(debt.remaining ?? 0);
+          }
         }
       }
-      balance = Math.round(balance * 100) / 100;
+
+      const { data: paymentLinks, error: paymentLinksError } = await admin
+        .from("legacy_import_links")
+        .select("target_id")
+        .eq("admin_id", adminId)
+        .eq("source_fingerprint", fingerprint)
+        .eq("entity_kind", "payment");
+      if (paymentLinksError) return json({ error: paymentLinksError.message }, 400);
+
+      const paymentTargetIds = (paymentLinks ?? [])
+        .map((row: { target_id: string }) => row.target_id);
+      let generalPaidIqd = 0;
+      for (let i = 0; i < paymentTargetIds.length; i += 500) {
+        const ids = paymentTargetIds.slice(i, i + 500);
+        if (ids.length === 0) continue;
+        const { data: generalPayments, error } = await admin
+          .from("customer_general_payments")
+          .select("amount")
+          .eq("admin_id", adminId)
+          .in("id", ids);
+        if (error) return json({ error: error.message }, 400);
+        for (const payment of generalPayments ?? []) {
+          generalPaidIqd += Number(payment.amount ?? 0);
+        }
+      }
+
+      const grossRounded = Math.round(grossBalanceIqd * 100) / 100;
+      const generalRounded = Math.round(generalPaidIqd * 100) / 100;
+      const balance = Math.round(
+        Math.max(grossRounded - generalRounded, 0) * 100,
+      ) / 100;
       const expected = Number(job.expected_balance_iqd ?? 0);
-      const countsOk = Number(job.imported_customers) === Number(job.expected_customers)
+      const countsOk =
+        Number(job.imported_customers) === Number(job.expected_customers)
         && Number(job.imported_debts) === Number(job.expected_debts)
         && Number(job.imported_payments) === Number(job.expected_payments);
       const balanceOk = Math.abs(balance - expected) < 0.01;
+
       if (!countsOk || !balanceOk) {
         await admin.from("legacy_import_jobs").update({
           status: "failed",
@@ -532,17 +705,34 @@ Deno.serve(async (req) => {
           last_error: !countsOk ? "count_mismatch" : "balance_mismatch",
           updated_at: new Date().toISOString(),
         }).eq("id", job.id);
-        return json({ error: !countsOk ? "count_mismatch" : "balance_mismatch", verified_balance_iqd: balance, job }, 409);
+        return json({
+          error: !countsOk ? "count_mismatch" : "balance_mismatch",
+          verified_balance_iqd: balance,
+          gross_balance_iqd: grossRounded,
+          general_paid_iqd: generalRounded,
+          job,
+        }, 409);
       }
-      const { data: completed, error } = await admin.from("legacy_import_jobs").update({
-        status: "completed",
-        verified_balance_iqd: balance,
-        last_error: null,
-        updated_at: new Date().toISOString(),
-        completed_at: new Date().toISOString(),
-      }).eq("id", job.id).select().single();
+
+      const { data: completed, error } = await admin.from("legacy_import_jobs")
+        .update({
+          status: "completed",
+          verified_balance_iqd: balance,
+          last_error: null,
+          updated_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", job.id)
+        .select()
+        .single();
       if (error) return json({ error: error.message }, 400);
-      return json({ ok: true, job: completed, verified_balance_iqd: balance });
+      return json({
+        ok: true,
+        job: completed,
+        verified_balance_iqd: balance,
+        gross_balance_iqd: grossRounded,
+        general_paid_iqd: generalRounded,
+      });
     }
 
     return json({ error: "unsupported_action" }, 400);
