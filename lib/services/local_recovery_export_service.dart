@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cross_file/cross_file.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -125,7 +124,7 @@ class LocalRecoveryExportService {
       'identity': <String, dynamic>{
         if (storedUserId != null && storedUserId.trim().isNotEmpty)
           'user_id': storedUserId.trim(),
-        if (storedUserData != null) 'user_data': storedUserData,
+        'user_data': ?storedUserData,
       },
       'cache': cache,
       'summary': <String, dynamic>{
