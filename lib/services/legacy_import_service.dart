@@ -340,7 +340,7 @@ class LegacyImportService {
       if (value is List) {
         return value
             .whereType<Map>()
-            .map(_stringKeyedMap)
+            .map((row) => _stringKeyedMap(row))
             .toList(growable: false);
       }
       final single = asMap(value);
@@ -596,7 +596,9 @@ class LegacyImportService {
       }
     }
     expectedBalanceIqd = _roundMoney(
-      (expectedBalanceIqd - generalPaidIqd).clamp(0, double.infinity),
+      (expectedBalanceIqd - generalPaidIqd)
+          .clamp(0, double.infinity)
+          .toDouble(),
     );
 
     return _buildBundle(
