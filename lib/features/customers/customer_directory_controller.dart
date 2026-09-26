@@ -38,20 +38,6 @@ abstract class CustomerDirectoryGateway {
 class PBServiceCustomerDirectoryGateway implements CustomerDirectoryGateway {
   const PBServiceCustomerDirectoryGateway();
 
-  RecordModel _customerRecord(Map<String, dynamic> row) {
-    final phone = row['phone']?.toString() ?? '';
-    return RecordModel.fromJson({
-      ...row,
-      'id': row['id']?.toString() ?? '',
-      'collectionId': '',
-      'collectionName': 'users',
-      'email': phone.isEmpty ? '' : '$phone@zhirox.local',
-      'created': row['created_at']?.toString() ?? '',
-      'updated':
-          row['updated_at']?.toString() ?? row['created_at']?.toString() ?? '',
-    });
-  }
-
   @override
   Future<Map<String, dynamic>> getCustomerPage({
     required String search,
@@ -96,7 +82,7 @@ class PBServiceCustomerDirectoryGateway implements CustomerDirectoryGateway {
       for (final item in items) {
         if (item is! Map) continue;
         final row = Map<String, dynamic>.from(item);
-        final user = _customerRecord(row);
+        final user = PBService.profileRecord(row);
         users.add(user);
         inbox[user.id] = {
           'customer_id': user.id,

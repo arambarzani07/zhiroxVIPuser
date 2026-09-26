@@ -111,7 +111,7 @@ class PBService {
         text.contains('too many requests');
   }
 
-  static RecordModel _profileRecord(Map<String, dynamic> row) {
+  static RecordModel profileRecord(Map<String, dynamic> row) {
     final phone = row['phone']?.toString() ?? '';
     return RecordModel.fromJson({
       ...row,
@@ -186,7 +186,7 @@ class PBService {
       if (data is! Map || data['user'] is! Map) {
         throw _functionError(data);
       }
-      return _profileRecord(Map<String, dynamic>.from(data['user'] as Map));
+      return profileRecord(Map<String, dynamic>.from(data['user'] as Map));
     } on FunctionsException catch (e) {
       throw _functionError(e.details ?? e.reasonPhrase ?? e.status);
     }
@@ -360,7 +360,7 @@ class PBService {
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
     return rows
-        .map((row) => _profileRecord({
+        .map((row) => profileRecord({
               ...row,
               'role': 'admin',
               'approved': true,
@@ -539,7 +539,7 @@ class PBService {
     if (raw is! List) throw const FormatException('invalid pinned customers');
     return raw
         .whereType<Map>()
-        .map((row) => _profileRecord(Map<String, dynamic>.from(row)))
+        .map((row) => profileRecord(Map<String, dynamic>.from(row)))
         .toList(growable: false);
   }
 
@@ -580,7 +580,7 @@ class PBService {
         if (raw is! List) throw const FormatException('invalid profile search');
         for (final item in raw) {
           if (item is Map) {
-            users.add(_profileRecord(Map<String, dynamic>.from(item)));
+            users.add(profileRecord(Map<String, dynamic>.from(item)));
           }
         }
         if (raw.length < pageSize) break;
@@ -602,7 +602,7 @@ class PBService {
           .order('id', ascending: false)
           .range(offset, offset + pageSize - 1);
       final page = (raw as List)
-          .map((row) => _profileRecord(Map<String, dynamic>.from(row as Map)))
+          .map((row) => profileRecord(Map<String, dynamic>.from(row as Map)))
           .toList(growable: false);
       users.addAll(page);
       if (page.length < pageSize) break;
@@ -660,7 +660,7 @@ class PBService {
       for (final item in items) {
         if (item is! Map) continue;
         final row = Map<String, dynamic>.from(item);
-        final user = _profileRecord(row);
+        final user = profileRecord(row);
         if (user.id.isEmpty || !seenUserIds.add(user.id)) continue;
         users.add(user);
         inbox[user.id] = {
@@ -1441,11 +1441,11 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     final expand = <String, dynamic>{};
     if (customerRaw is Map) {
       expand['customer'] =
-          _profileRecord(Map<String, dynamic>.from(customerRaw)).toJson();
+          profileRecord(Map<String, dynamic>.from(customerRaw)).toJson();
     }
     if (creatorRaw is Map) {
       expand['created_by'] =
-          _profileRecord(Map<String, dynamic>.from(creatorRaw)).toJson();
+          profileRecord(Map<String, dynamic>.from(creatorRaw)).toJson();
     }
     if (expand.isNotEmpty) json['expand'] = expand;
     return RecordModel.fromJson(json);
@@ -1463,7 +1463,7 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     }
     if (creatorRaw is Map) {
       expand['created_by'] =
-          _profileRecord(Map<String, dynamic>.from(creatorRaw)).toJson();
+          profileRecord(Map<String, dynamic>.from(creatorRaw)).toJson();
     }
     if (expand.isNotEmpty) json['expand'] = expand;
     return RecordModel.fromJson(json);
@@ -1654,9 +1654,9 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     final json = _debtRecordFromRaw(row).toJson();
     json['expand'] = <String, dynamic>{
       if (customer is Map)
-        'customer': _profileRecord(Map<String, dynamic>.from(customer)).toJson(),
+        'customer': profileRecord(Map<String, dynamic>.from(customer)).toJson(),
       if (createdBy is Map)
-        'created_by': _profileRecord(Map<String, dynamic>.from(createdBy)).toJson(),
+        'created_by': profileRecord(Map<String, dynamic>.from(createdBy)).toJson(),
     };
     return RecordModel.fromJson(json);
   }
