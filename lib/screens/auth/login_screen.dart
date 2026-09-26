@@ -4,7 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/auth/register_customer_screen.dart';
-import 'package:zhirox/services/local_recovery_export_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 
@@ -20,7 +19,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  bool _isExportingRecovery = false;
 
   @override
   void dispose() {
@@ -70,30 +68,6 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       AppHelpers.showSnackBar(context, _friendlyLoginError(e), isError: true);
-    }
-  }
-
-  Future<void> _exportLocalRecovery() async {
-    if (_isExportingRecovery) return;
-    setState(() => _isExportingRecovery = true);
-    try {
-      final result = await LocalRecoveryExportService.exportAndShare();
-      if (!mounted) return;
-      AppHelpers.showSnackBar(
-        context,
-        result.cacheKeys == 0
-            ? 'هیچ داتای cache ـی کۆن نەدۆزرایەوە.'
-            : 'فایلی ڕزگارکردن درووست کرا: ${result.cacheKeys} بەشی cache.',
-      );
-    } catch (_) {
-      if (!mounted) return;
-      AppHelpers.showSnackBar(
-        context,
-        'نەتوانرا فایلی ڕزگارکردن درووست بکرێت.',
-        isError: true,
-      );
-    } finally {
-      if (mounted) setState(() => _isExportingRecovery = false);
     }
   }
 
@@ -477,31 +451,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             const SizedBox(height: 14),
-                            OutlinedButton.icon(
-                              onPressed: auth.isLoading || _isExportingRecovery
-                                  ? null
-                                  : _exportLocalRecovery,
-                              icon: _isExportingRecovery
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : const Icon(Icons.restore_page_outlined, size: 19),
-                              label: Text(
-                                _isExportingRecovery
-                                    ? 'ئامادەکردنی فایل...'
-                                    : 'ڕزگارکردنی داتای کۆن لە ئامێر',
-                                style: const TextStyle(fontWeight: FontWeight.w700),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size(double.infinity, 46),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
                             OutlinedButton.icon(
                               onPressed: auth.isLoading ? null : _showOwnerContactDialog,
                               icon: const Icon(Icons.admin_panel_settings_outlined, size: 19),
