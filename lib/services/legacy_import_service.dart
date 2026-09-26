@@ -1012,6 +1012,22 @@ class LegacyImportService {
     LegacyImportBundle bundle, {
     required void Function(int done, int total, String phase) onProgress,
   }) async {
+    await preflight();
+
+    for (var i = 0; i < bundle.customers.length; i += 80) {
+      final end = (i + 80 < bundle.customers.length)
+          ? i + 80
+          : bundle.customers.length;
+      final audit = await _invoke(
+        'audit_customers',
+        extra: {'rows': bundle.customers.sublist(i, end)},
+      );
+      final issues = audit['issues'];
+      if (audit['ok'] != true || (issues is List && issues.isNotEmpty)) {
+        throw Exception('dry_run_failed: $issues');
+      }
+    }
+
     await start(bundle);
     final total = bundle.customers.length + bundle.debts.length + bundle.payments.length;
     var done = 0;
