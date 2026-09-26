@@ -1,0 +1,52 @@
+name: New DB Recovery Check
+
+on:
+  push:
+    branches: [newdb-user]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: newdb-recovery-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  recovery-build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Prepare iOS 15 deployment target
+        run: |
+          sed -i '' "s/platform :ios, '13.0'/platform :ios, '15.0'/" ios/Podfile
+          sed -i '' "s/IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'/IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'/" ios/Podfile
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' ios/Runner.xcodeproj/project.pbxproj
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
+      - name: Wire CocoaPods xcconfig
+        run: |
+          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Debug.xcconfig
+          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Release.xcconfig
+
+      - name: Build recovery iOS app
+        run: flutter build ios --release --no-codesign --dart-define=ZHIROX_APP_EDITION=user
