@@ -70,7 +70,8 @@ for marker in (
     assert marker in client, marker
 
 assert "set_config('zhirox.daftar_inbound', 'on', true)" in migration
-assert 'if (count >= 2) confirmed.push(sourceId)' in inbound
+assert 'missing_count: (existing.get(sourceId) ?? 0) + 1' in inbound
+assert '.filter((row) => row.missing_count >= 2)' in inbound
 assert 'request.method === "DELETE" && response.status === 404' in outbound
 assert 'customer_auth_sync_skipped' in inbound
 assert 'customer_auth_lookup_failed' not in inbound
