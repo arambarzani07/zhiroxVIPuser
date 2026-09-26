@@ -121,7 +121,6 @@ Deno.serve(async (req) => {
           )
           .eq("admin_id", tenantId)
           .eq("enabled", true)
-          .eq("sync_mode", "zhirox_primary")
           .maybeSingle();
         if (error) throw new Error("source_lookup_failed");
         return data;
