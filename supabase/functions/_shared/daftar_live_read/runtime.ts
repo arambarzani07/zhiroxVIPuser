@@ -166,13 +166,12 @@ export async function handleDaftarLiveRead(
   } catch (_) {
     return json({ error: "source_lookup_failed" }, 503);
   }
-  if (!source) return json({ error: "daftar_source_not_available" }, 404);
-  if (Number(source.legacy_user_id) !== 28) {
-    return json({ error: "daftar_source_not_available" }, 404);
-  }
-
-  const asOf = String(source.last_success_at ?? source.mirror_last_full_at ?? "") || null;
-  const staleAfter = Number(source.live_read_stale_after_seconds ?? 300);
+  // Markets without an active Daftar integration read their own ZHIROX data.
+  // Authorization and tenant isolation remain enforced by the user's RLS token.
+  const asOf = source
+    ? String(source.last_success_at ?? source.mirror_last_full_at ?? "") || null
+    : null;
+  const staleAfter = Number(source?.live_read_stale_after_seconds ?? 300);
   const stale = isMirrorStale(asOf, staleAfter, deps.now());
 
   const materialize = async (
@@ -186,8 +185,8 @@ export async function handleDaftarLiveRead(
   ): Promise<Response> => {
     try {
       const data = await deps.localRead(operation, params, viewer);
-      await bestEffortEvent(deps, {
-        sync_source_id: source!.id,
+      if (source) await bestEffortEvent(deps, {
+        sync_source_id: source.id,
         viewer_id: viewer.id,
         operation,
         result_source: resultSource,
@@ -216,6 +215,10 @@ export async function handleDaftarLiveRead(
       return json({ error: "local_read_failed" }, 500);
     }
   };
+
+  if (!source || source.enabled === false || Number(source.legacy_user_id) !== 28) {
+    return await materialize("zhirox_primary", null, null, null);
+  }
 
   const syncMode = String(source.sync_mode ?? "mirror");
   if (syncMode === "zhirox_primary") {
