@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/widgets/app_design.dart';
 
@@ -24,14 +23,12 @@ class ZhiroxAppShell extends StatelessWidget {
     required this.pages,
     required this.destinations,
     required this.onSelected,
-    this.showConnectivity = true,
   }) : assert(pages.length == destinations.length);
 
   final int index;
   final List<Widget> pages;
   final List<ZhiroxDestination> destinations;
   final ValueChanged<int> onSelected;
-  final bool showConnectivity;
 
   @override
   Widget build(BuildContext context) {
@@ -42,15 +39,6 @@ class ZhiroxAppShell extends StatelessWidget {
           Positioned.fill(
             child: IndexedStack(index: index, children: pages),
           ),
-          if (showConnectivity)
-            const PositionedDirectional(
-              top: 8,
-              end: 12,
-              child: SafeArea(
-                bottom: false,
-                child: ZhiroxConnectivityPill(),
-              ),
-            ),
         ],
       ),
       bottomNavigationBar: DecoratedBox(
@@ -200,67 +188,6 @@ class _ZhiroxNavButton extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class ZhiroxConnectivityPill extends StatelessWidget {
-  const ZhiroxConnectivityPill({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<bool>(
-      stream: ConnectivityService.instance.statusStream,
-      initialData: ConnectivityService.instance.isOnline,
-      builder: (context, snapshot) {
-        final online = snapshot.data ?? true;
-        final color = online ? AppColors.success : AppColors.danger;
-        return IgnorePointer(
-          child: AnimatedContainer(
-            duration: AppMotion.fast,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerLowest
-                  .withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(color: color.withValues(alpha: 0.22)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.045),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  online ? 'Live' : 'Offline',
-                  textDirection: TextDirection.ltr,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }
