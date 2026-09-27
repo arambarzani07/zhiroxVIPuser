@@ -1,0 +1,58 @@
+name: Encrypted external database backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 2 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: user-source
+      - name: Check backup configuration
+        id: config
+        env:
+          BACKUP_URL: ${{ secrets.ZHIROX_BACKUP_DB_URL }}
+          BACKUP_KEY: ${{ secrets.ZHIROX_BACKUP_KEY_B64 }}
+        run: |
+          if [[ -n "$BACKUP_URL" && -n "$BACKUP_KEY" ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'Encrypted external backup is waiting for repository secrets ZHIROX_BACKUP_DB_URL and ZHIROX_BACKUP_KEY_B64.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Dump production database (temporary runner only)
+        if: steps.config.outputs.ready == 'true'
+        env:
+          ZHIROX_BACKUP_DB_URL: ${{ secrets.ZHIROX_BACKUP_DB_URL }}
+        run: |
+          mkdir -m 700 -p "$RUNNER_TEMP/zhirox-backup"
+          docker run --rm --network host \
+            --env ZHIROX_BACKUP_DB_URL \
+            -v "$RUNNER_TEMP/zhirox-backup:/backup" postgres:17 \
+            sh -c 'pg_dump --format=custom --no-owner --no-acl --file=/backup/database.dump "$ZHIROX_BACKUP_DB_URL" && pg_restore --list /backup/database.dump >/dev/null'
+      - name: Encrypt, authenticate and remove plaintext
+        if: steps.config.outputs.ready == 'true'
+        env:
+          ZHIROX_BACKUP_KEY_B64: ${{ secrets.ZHIROX_BACKUP_KEY_B64 }}
+        run: |
+          python -m pip install 'cryptography==46.0.3'
+          python scripts/encrypt_external_backup.py "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/database.zhxb"
+          python scripts/verify_external_backup.py "$RUNNER_TEMP/zhirox-backup/database.zhxb" "$RUNNER_TEMP/zhirox-backup/verified.dump"
+          cmp "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/verified.dump"
+          shred -u "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/verified.dump"
+      - name: Upload encrypted archive
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: zhirox-db-${{ github.run_id }}
+          path: ${{ runner.temp }}/zhirox-backup/database.zhxb
+          if-no-files-found: error
+          retention-days: 30
