@@ -590,7 +590,7 @@ class CustomerDirectoryController extends ChangeNotifier {
     } catch (error) {
       if (_disposed || generation != _generation) return;
       final restricted = PBService.isServiceRestrictionError(error);
-      if (!loadMore && !restricted) _users = const [];
+      if (!loadMore && restricted) _users = const [];
       _loading = false;
       _loadingMore = false;
       final message = AppHelpers.backendErrorMessage(
