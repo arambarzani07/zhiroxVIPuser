@@ -371,7 +371,7 @@ class CustomerDirectoryController extends ChangeNotifier {
           filter: _filter,
           limit: 60,
           cursor: loadMore ? _nextCursor : null,
-        );
+        ));
         users = List<RecordModel>.from(page['items'] as List);
         pageInbox = Map<String, Map<String, dynamic>>.from(
           page['inbox'] as Map,
