@@ -23,6 +23,20 @@ class FakeDirectoryGateway implements CustomerDirectoryGateway {
   final List<String> markedRead = [];
 
   @override
+  Future<Map<String, dynamic>> getSortedCustomerPage({
+    required String search,
+    required String filter,
+    required String sort,
+    required int limit,
+    Map<String, dynamic>? cursor,
+  }) => getCustomerPage(
+        search: search,
+        filter: filter,
+        limit: limit,
+        cursor: cursor,
+      );
+
+  @override
   Future<Map<String, dynamic>> getCustomerPage({
     required String search,
     required String filter,
