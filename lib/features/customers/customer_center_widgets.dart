@@ -16,7 +16,8 @@ class CustomerCenterHeader extends StatelessWidget {
     this.canAdd = false,
     this.onAdd,
     this.showFilters = false,
-    this.selectedFilters = const {'all'},
+    this.selectedFilters,
+    this.selectedFilter = 'all',
     this.onFilterSelected,
   });
 
@@ -30,7 +31,8 @@ class CustomerCenterHeader extends StatelessWidget {
   final bool canAdd;
   final VoidCallback? onAdd;
   final bool showFilters;
-  final Set<String> selectedFilters;
+  final Set<String>? selectedFilters;
+  final String selectedFilter;
   final ValueChanged<String>? onFilterSelected;
 
   @override
@@ -164,7 +166,7 @@ class CustomerCenterHeader extends StatelessWidget {
                       const SizedBox(width: 7),
                       ...CustomerDirectoryController.filterLabels.entries.map(
                         (entry) {
-                          final selected = selectedFilters.contains(entry.key);
+                          final selected = (selectedFilters ?? {selectedFilter}).contains(entry.key);
                           return Padding(
                             padding: const EdgeInsetsDirectional.only(end: 7),
                             child: FilterChip(
@@ -275,7 +277,7 @@ class CustomerDirectoryCard extends StatelessWidget {
   const CustomerDirectoryCard({
     super.key,
     required this.customerId,
-    required this.index,
+    this.index = 0,
     required this.name,
     required this.displayName,
     required this.phone,
