@@ -371,7 +371,7 @@ class CustomerDirectoryController extends ChangeNotifier {
   String? _inboxError;
   Map<String, dynamic>? _nextCursor;
   Set<String> _filters = {};
-  String _sort = 'last_activity_desc';
+  String _sort = 'newest';
   int _amount = 100000;
   int _days = 30;
   String _search = '';
