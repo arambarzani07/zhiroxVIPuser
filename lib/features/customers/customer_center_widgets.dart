@@ -16,7 +16,7 @@ class CustomerCenterHeader extends StatelessWidget {
     this.canAdd = false,
     this.onAdd,
     this.showFilters = false,
-    this.selectedFilter = 'all',
+    this.selectedFilters = const {'all'},
     this.onFilterSelected,
   });
 
@@ -30,7 +30,7 @@ class CustomerCenterHeader extends StatelessWidget {
   final bool canAdd;
   final VoidCallback? onAdd;
   final bool showFilters;
-  final String selectedFilter;
+  final Set<String> selectedFilters;
   final ValueChanged<String>? onFilterSelected;
 
   @override
@@ -164,24 +164,22 @@ class CustomerCenterHeader extends StatelessWidget {
                       const SizedBox(width: 7),
                       ...CustomerDirectoryController.filterLabels.entries.map(
                         (entry) {
-                          final selected = entry.key == selectedFilter;
+                          final selected = selectedFilters.contains(entry.key);
                           return Padding(
                             padding: const EdgeInsetsDirectional.only(end: 7),
-                            child: ChoiceChip(
+                            child: FilterChip(
                               label: Text(entry.value),
                               selected: selected,
                               onSelected: (_) => onFilterSelected?.call(entry.key),
-                              showCheckmark: false,
+                              showCheckmark: true,
+                              checkmarkColor: scheme.primary,
                               selectedColor: Colors.white,
-                              backgroundColor:
-                                  Colors.white.withValues(alpha: 0.14),
+                              backgroundColor: scheme.primaryContainer,
                               side: BorderSide(
-                                color: Colors.white.withValues(
-                                  alpha: selected ? 0.95 : 0.38,
-                                ),
+                                color: selected ? Colors.white : scheme.onPrimaryContainer,
                               ),
                               labelStyle: TextStyle(
-                                color: selected ? scheme.primary : Colors.white,
+                                color: selected ? scheme.primary : scheme.onPrimaryContainer,
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -277,6 +275,7 @@ class CustomerDirectoryCard extends StatelessWidget {
   const CustomerDirectoryCard({
     super.key,
     required this.customerId,
+    required this.index,
     required this.name,
     required this.displayName,
     required this.phone,
@@ -298,6 +297,7 @@ class CustomerDirectoryCard extends StatelessWidget {
   });
 
   final String customerId;
+  final int index;
   final String name;
   final String displayName;
   final String phone;
@@ -356,7 +356,7 @@ class CustomerDirectoryCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Text(
-                    name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+                    '$index',
                     style: TextStyle(
                       color: scheme.primary,
                       fontWeight: FontWeight.w900,
