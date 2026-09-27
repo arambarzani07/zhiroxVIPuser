@@ -18,6 +18,8 @@ class CustomerCenterHeader extends StatelessWidget {
     this.showFilters = false,
     this.selectedFilter = 'all',
     this.onFilterSelected,
+    this.selectedSort = 'newest',
+    this.onSortSelected,
   });
 
   final String title;
@@ -32,6 +34,8 @@ class CustomerCenterHeader extends StatelessWidget {
   final bool showFilters;
   final String selectedFilter;
   final ValueChanged<String>? onFilterSelected;
+  final String selectedSort;
+  final ValueChanged<String>? onSortSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -152,48 +156,82 @@ class CustomerCenterHeader extends StatelessWidget {
               ),
               if (showFilters) ...[
                 const SizedBox(height: AppSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(AppDesign.radiusSmall),
-                    border: Border.all(color: scheme.outlineVariant),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.tune_rounded, color: scheme.primary, size: 19),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedFilter,
-                            isExpanded: true,
-                            dropdownColor: scheme.surface,
-                            icon: Icon(Icons.keyboard_arrow_down_rounded,
-                                color: scheme.primary),
-                            style: TextStyle(
-                              color: scheme.onSurface,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
-                            items: CustomerDirectoryController.filterLabels.entries
-                                .map((entry) => DropdownMenuItem<String>(
-                                      value: entry.key,
-                                      child: Text(entry.value),
-                                    ))
-                                .toList(),
-                            onChanged: (value) {
-                              if (value != null) onFilterSelected?.call(value);
-                            },
-                          ),
-                        ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DirectorySelector(
+                        label: 'فلتەر',
+                        value: selectedFilter,
+                        options: CustomerDirectoryController.filterLabels,
+                        onChanged: onFilterSelected,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _DirectorySelector(
+                        label: 'ڕیزکردن',
+                        value: selectedSort,
+                        options: CustomerDirectoryController.sortLabels,
+                        onChanged: onSortSelected,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DirectorySelector extends StatelessWidget {
+  const _DirectorySelector({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String value;
+  final Map<String, String> options;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(AppDesign.radiusSmall),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          key: ValueKey('directory-$label'),
+          value: value,
+          isExpanded: true,
+          dropdownColor: scheme.surface,
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: scheme.primary),
+          style: TextStyle(color: scheme.onSurface, fontSize: 12,
+              fontWeight: FontWeight.w700),
+          selectedItemBuilder: (context) => options.entries.map((entry) =>
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text('$label: ${entry.value}', maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            ),
+          ).toList(),
+          items: options.entries.map((entry) => DropdownMenuItem<String>(
+            value: entry.key,
+            child: Text(entry.value, overflow: TextOverflow.ellipsis),
+          )).toList(),
+          onChanged: (value) {
+            if (value != null) onChanged?.call(value);
+          },
         ),
       ),
     );
