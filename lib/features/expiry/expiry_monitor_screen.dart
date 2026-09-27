@@ -19,6 +19,8 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
   Map<String, List<Map<String, dynamic>>> _arrivalsByProduct = {};
   final _search = TextEditingController();
   bool _loading = true;
+  int? _importCompleted;
+  int? _importTotal;
   String? _error;
   String _filter = 'active';
 
@@ -44,6 +46,8 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
     final adminId = context.read<AuthProvider>().adminId;
     setState(() {
       _loading = true;
+      _importCompleted = null;
+      _importTotal = null;
       _error = null;
     });
     try {
@@ -271,23 +275,16 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
   }
 
   Future<void> _import() async {
+    var completed = 0;
+    var total = 0;
     try {
       final preview = await ExpiryCatalogService.pickFile();
       if (preview == null || !mounted) return;
-      int code = 0;
-      int name = preview.headers.length > 1 ? 1 : 0;
-      int? barcode;
-      int? category;
-      for (var i = 0; i < preview.headers.length; i++) {
-        final h = preview.headers[i].toLowerCase();
-        if (h.contains('barcode') || h.contains('بارکۆد')) {
-          barcode = i;
-        } else if (h.contains('code') || h.contains('کۆد')) {
-          code = i;
-        }
-        if (h.contains('name') || h.contains('ناو')) name = i;
-        if (h.contains('category') || h.contains('جۆر')) category = i;
-      }
+      final suggested = preview.suggestedColumns();
+      int code = suggested.code;
+      int name = suggested.name;
+      int? barcode = suggested.barcode;
+      int? category = suggested.category;
       String? issue;
       final shouldImport = await showDialog<bool>(
         context: context,
@@ -398,8 +395,19 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
         barcodeColumn: barcode,
         categoryColumn: category,
       );
-      setState(() => _loading = true);
-      final count = await ExpiryCatalogService.importProducts(rows);
+      total = rows.length;
+      setState(() {
+        _loading = true;
+        _importCompleted = 0;
+        _importTotal = total;
+      });
+      final count = await ExpiryCatalogService.importProducts(
+        rows,
+        onProgress: (done, _) {
+          completed = done;
+          if (mounted) setState(() => _importCompleted = done);
+        },
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -411,16 +419,16 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
       await _load();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _importCompleted = null;
+        _importTotal = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            error is FormatException
-                ? error.message
-                : AppHelpers.backendErrorMessage(
-                    error,
-                    fallback: 'هاوردەکردنی فایل سەرکەوتوو نەبوو.',
-                  ),
+            '${completed > 0 ? '$completed لە $total کاڵا پاشەکەوت کرا. دووبارە هەمان فایل هاوردە بکە بۆ تەواوکردنی. ' : ''}'
+            '${error is FormatException ? error.message : AppHelpers.backendErrorMessage(error, fallback: 'هاوردەکردنی فایل سەرکەوتوو نەبوو.')}',
           ),
         ),
       );
@@ -583,21 +591,53 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
     }).toList();
     // The most urgent open expiry is shown first, even if the product was
     // imported later than the rest of the catalogue.
-    items.sort((a, b) {
-      int nearest(Map<String, dynamic> p) {
-        final dates = _forProduct('${p['id']}', includeResolved: false);
-        if (dates.isEmpty) return 999999;
-        return dates
-            .map(
-              (e) =>
-                  _day(e['expiry_date'])?.difference(todayOnly).inDays ??
-                  999999,
-            )
-            .reduce((x, y) => x < y ? x : y);
-      }
-
-      return nearest(a).compareTo(nearest(b));
-    });
+    final nearest = <String, int>{};
+    for (final arrival in _arrivals) {
+      if (arrival['resolved_at'] != null) continue;
+      final id = '${arrival['product_id']}';
+      final days = _day(arrival['expiry_date'])?.difference(todayOnly).inDays;
+      if (days != null && days < (nearest[id] ?? 999999)) nearest[id] = days;
+    }
+    items.sort(
+      (a, b) => (nearest['${a['id']}'] ?? 999999).compareTo(
+        nearest['${b['id']}'] ?? 999999,
+      ),
+    );
+    final header = <Widget>[
+      Text(
+        'بەسەرچوو: $expired · نزیکە: $urgent · کاڵا: ${_products.length}',
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
+      const SizedBox(height: 8),
+      const Text(
+        'ئەم بەشە تەنها بەروار چاودێری دەکات؛ بڕ و فرۆشتن حساب ناکات.',
+      ),
+      TextField(
+        controller: _search,
+        decoration: const InputDecoration(
+          prefixIcon: Icon(Icons.search),
+          hintText: 'گەڕان بە ناو، کۆد یان بارکۆد',
+        ),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        children: [
+          for (final entry in {
+            'active': 'هەموو',
+            'expired': 'بەسەرچوو',
+            'soon': '٣٠ ڕۆژ',
+            'unrecorded': 'بەروار نییە',
+          }.entries)
+            ChoiceChip(
+              label: Text(entry.value),
+              selected: _filter == entry.key,
+              onSelected: (_) => setState(() => _filter = entry.key),
+            ),
+        ],
+      ),
+      const SizedBox(height: 8),
+    ];
     return Scaffold(
       appBar: AppBar(
         title: const Text('چاودێری کاڵا'),
@@ -609,7 +649,7 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
           ),
           if (widget.canManage)
             IconButton(
-              onPressed: _import,
+              onPressed: _importTotal == null ? _import : null,
               tooltip: 'هاوردەکردنی CSV / XLSX',
               icon: const Icon(Icons.upload_file),
             ),
@@ -623,7 +663,26 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
             )
           : null,
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_importTotal case final total?) ...[
+                    Text('هاوردەکردن: ${_importCompleted ?? 0} / $total کاڵا'),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: 220,
+                      child: LinearProgressIndicator(
+                        value: total == 0
+                            ? null
+                            : (_importCompleted ?? 0) / total,
+                      ),
+                    ),
+                  ] else
+                    const CircularProgressIndicator(),
+                ],
+              ),
+            )
           : _error != null
           ? Center(
               child: Column(
@@ -637,75 +696,45 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
                 ],
               ),
             )
-          : ListView(
+          : ListView.builder(
               padding: const EdgeInsets.all(16),
-              children: [
-                Text(
-                  'بەسەرچوو: $expired · نزیکە: $urgent · کاڵا: ${_products.length}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'ئەم بەشە تەنها بەروار چاودێری دەکات؛ بڕ و فرۆشتن حساب ناکات.',
-                ),
-                TextField(
-                  controller: _search,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'گەڕان بە ناو، کۆد یان بارکۆد',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final entry in {
-                      'active': 'هەموو',
-                      'expired': 'بەسەرچوو',
-                      'soon': '٣٠ ڕۆژ',
-                      'unrecorded': 'بەروار نییە',
-                    }.entries)
-                      ChoiceChip(
-                        label: Text(entry.value),
-                        selected: _filter == entry.key,
-                        onSelected: (_) => setState(() => _filter = entry.key),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (_products.isEmpty)
-                  const Padding(
+              itemCount: header.length + (_products.isEmpty ? 1 : items.length),
+              itemBuilder: (context, index) {
+                if (index < header.length) return header[index];
+                if (_products.isEmpty) {
+                  return const Padding(
                     padding: EdgeInsets.all(32),
                     child: Center(
                       child: Text(
                         'فایلی کاڵاکانی کاشێر هاوردە بکە بۆ دەستپێکردن.',
                       ),
                     ),
+                  );
+                }
+                final product = items[index - header.length];
+                return Card(
+                  child: ListTile(
+                    title: Text('${product['name']}'),
+                    subtitle: Text(() {
+                      final dates = _forProduct(
+                        '${product['id']}',
+                        includeResolved: false,
+                      );
+                      if (dates.isEmpty) return 'هێشتا بەروار تۆمار نەکراوە';
+                      final next = dates.first;
+                      final days = _days(next['expiry_date']);
+                      return 'نزیکترین بەروار: ${next['expiry_date']}'
+                          '${days == null
+                              ? ''
+                              : days < 0
+                              ? ' · بەسەرچووە'
+                              : ' · $days ڕۆژ ماوە'}';
+                    }()),
+                    trailing: const Icon(Icons.chevron_left),
+                    onTap: () => _details(product),
                   ),
-                for (final product in items)
-                  Card(
-                    child: ListTile(
-                      title: Text('${product['name']}'),
-                      subtitle: Text(() {
-                        final dates = _forProduct(
-                          '${product['id']}',
-                          includeResolved: false,
-                        );
-                        if (dates.isEmpty) return 'هێشتا بەروار تۆمار نەکراوە';
-                        final next = dates.first;
-                        final days = _days(next['expiry_date']);
-                        return 'نزیکترین بەروار: ${next['expiry_date']}'
-                            '${days == null
-                                ? ''
-                                : days < 0
-                                ? ' · بەسەرچووە'
-                                : ' · $days ڕۆژ ماوە'}';
-                      }()),
-                      trailing: const Icon(Icons.chevron_left),
-                      onTap: () => _details(product),
-                    ),
-                  ),
-              ],
+                );
+              },
             ),
     );
   }

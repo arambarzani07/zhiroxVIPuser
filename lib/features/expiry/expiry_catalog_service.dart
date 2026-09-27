@@ -13,6 +13,40 @@ class ExpiryImportPreview {
   final List<List<String>> rows;
   final String filename;
 
+  ({int code, int name, int? barcode, int? category}) suggestedColumns() {
+    var code = 0;
+    var name = headers.length > 1 ? 1 : 0;
+    int? barcode;
+    int? category;
+    var explicitCode = false;
+    for (var i = 0; i < headers.length; i++) {
+      final header = headers[i].trim().toLowerCase();
+      if (header == 'barcode' ||
+          header == 'بارکۆد' ||
+          header == 'product_barcode' ||
+          header == 'item_barcode') {
+        barcode = i;
+      } else if (header == 'code' ||
+          header == 'product_code' ||
+          header == 'item_code' ||
+          header == 'external_code' ||
+          header == 'sku' ||
+          header == 'کۆد') {
+        code = i;
+        explicitCode = true;
+      }
+      if (header == 'name' ||
+          header == 'product_name' ||
+          header == 'item_name' ||
+          header == 'ناو') {
+        name = i;
+      }
+      if (header == 'category' || header == 'جۆر') category = i;
+    }
+    if (!explicitCode && barcode != null) code = barcode;
+    return (code: code, name: name, barcode: barcode, category: category);
+  }
+
   List<Map<String, String>> products({
     required int codeColumn,
     required int nameColumn,
@@ -29,8 +63,10 @@ class ExpiryImportPreview {
         'کۆدی کاڵا و ناوی کاڵا دەبێت دوو ستوونی جیا بن.',
       );
     }
-    if (rows.length > 10000) {
-      throw const FormatException('هەر فایلێک دەبێت ١٠٠٠٠ کاڵا یان کەمتر بێت.');
+    if (rows.length > 100000) {
+      throw const FormatException(
+        'هەر فایلێک دەبێت ١٠٠٠٠٠ کاڵا یان کەمتر بێت.',
+      );
     }
     final seenCodes = <String>{};
     final seenBarcodes = <String, String>{};
@@ -68,6 +104,15 @@ class ExpiryImportPreview {
 
 class ExpiryCatalogService {
   ExpiryCatalogService._();
+
+  static const importBatchSize = 1000;
+
+  static Iterable<List<T>> importBatches<T>(List<T> rows) sync* {
+    for (var start = 0; start < rows.length; start += importBatchSize) {
+      final end = (start + importBatchSize).clamp(0, rows.length);
+      yield rows.sublist(start, end);
+    }
+  }
 
   // XLSX is a ZIP of XML files. Read values only; never evaluate formulas,
   // macros, relationships to external resources, or any cashier stock field.
@@ -216,14 +261,28 @@ class ExpiryCatalogService {
   }
 
   static Future<Map<String, dynamic>> importProducts(
-    List<Map<String, String>> rows,
-  ) async {
+    List<Map<String, String>> rows, {
+    void Function(int completed, int total)? onProgress,
+  }) async {
     await PBService.ensureInitialized();
-    final result = await PBService.client.rpc(
-      'import_expiry_products',
-      params: {'p_rows': rows},
-    );
-    return Map<String, dynamic>.from(result as Map);
+    if (rows.isEmpty) throw const FormatException('هیچ کاڵایەک نییە.');
+    var inserted = 0;
+    var updated = 0;
+    var completed = 0;
+    for (final batch in importBatches(rows)) {
+      final result = Map<String, dynamic>.from(
+        await PBService.client.rpc(
+              'import_expiry_products',
+              params: {'p_rows': batch},
+            )
+            as Map,
+      );
+      inserted += (result['inserted'] as num).toInt();
+      updated += (result['updated'] as num).toInt();
+      completed += batch.length;
+      onProgress?.call(completed, rows.length);
+    }
+    return {'inserted': inserted, 'updated': updated};
   }
 
   static Future<void> addArrival({
