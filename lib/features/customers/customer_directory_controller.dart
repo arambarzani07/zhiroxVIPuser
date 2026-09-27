@@ -181,7 +181,7 @@ class CustomerDirectoryController extends ChangeNotifier {
   String? _loadError;
   String? _inboxError;
   Map<String, dynamic>? _nextCursor;
-  final Set<String> _filters = {'all'};
+  String _filter = 'all';
   String _search = '';
   int _generation = 0;
 
@@ -203,8 +203,7 @@ class CustomerDirectoryController extends ChangeNotifier {
   int get totalUsers => _totalUsers;
   String? get loadError => _loadError;
   String? get inboxError => _inboxError;
-  Set<String> get filters => Set.unmodifiable(_filters);
-  String get filter => _filters.contains('all') ? 'all' : (_filters.toList()..sort()).join(',');
+  String get filter => _filter;
   String get search => _search;
   bool get isCustomerDirectory => role == 'customer';
 
@@ -253,14 +252,8 @@ class CustomerDirectoryController extends ChangeNotifier {
   }
 
   Future<void> selectFilter(String value) async {
-    if (!filterLabels.containsKey(value)) return;
-    if (value == 'all') {
-      _filters..clear()..add('all');
-    } else {
-      _filters.remove('all');
-      if (!_filters.add(value)) _filters.remove(value);
-      if (_filters.isEmpty) _filters.add('all');
-    }
+    if (!filterLabels.containsKey(value) || value == _filter) return;
+    _filter = value;
     _safeNotify();
     await load(search: _search);
   }
@@ -310,7 +303,7 @@ class CustomerDirectoryController extends ChangeNotifier {
       if (isCustomerDirectory) {
         final page = await gateway.getCustomerPage(
           search: requestedSearch,
-          filter: filter,
+          filter: _filter,
           limit: 60,
           cursor: loadMore ? _nextCursor : null,
         );
@@ -322,7 +315,7 @@ class CustomerDirectoryController extends ChangeNotifier {
         hasMore = page['hasMore'] == true;
         nextCursor = page['nextCursor'] as Map<String, dynamic>?;
 
-        if (!loadMore && _filters.contains('all')) {
+        if (!loadMore && _filter == 'all') {
           final pinned =
               await gateway.getPinnedCustomers(search: requestedSearch);
           if (pinned.isNotEmpty) {
