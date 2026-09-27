@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:zhirox/features/customers/customer_directory_snapshot.dart';
 import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -229,9 +230,12 @@ class CustomerDirectoryController extends ChangeNotifier {
     required this.role,
     required this.adminId,
     CustomerDirectoryGateway? gateway,
+    CustomerDirectorySnapshotStore? snapshotStore,
+    this.snapshotUserId = '',
     this.observeConnectivity = true,
     this.subscribeRealtime = true,
-  }) : gateway = gateway ?? const PBServiceCustomerDirectoryGateway();
+  }) : gateway = gateway ?? const PBServiceCustomerDirectoryGateway(),
+       snapshotStore = snapshotStore ?? const SecureCustomerDirectorySnapshotStore();
 
   static const Map<String, String> sortLabels = {
     'last_activity_desc': 'دوایین مامەڵە سەرەتا',
@@ -355,6 +359,8 @@ class CustomerDirectoryController extends ChangeNotifier {
   final String role;
   final String adminId;
   final CustomerDirectoryGateway gateway;
+  final CustomerDirectorySnapshotStore snapshotStore;
+  final String snapshotUserId;
   final bool observeConnectivity;
   final bool subscribeRealtime;
 
@@ -364,6 +370,8 @@ class CustomerDirectoryController extends ChangeNotifier {
   Map<String, Map<String, dynamic>> _inbox = const {};
 
   bool _loading = true;
+  DateTime? _lastUpdatedAt;
+  bool _showingSnapshot = false;
   bool _loadingMore = false;
   bool _hasMore = false;
   int _totalUsers = 0;
@@ -390,6 +398,8 @@ class CustomerDirectoryController extends ChangeNotifier {
   Set<String> get balanceErrors => _balanceErrors;
   Map<String, Map<String, dynamic>> get inbox => _inbox;
   bool get isLoading => _loading;
+  DateTime? get lastUpdatedAt => _lastUpdatedAt;
+  bool get showingSnapshot => _showingSnapshot;
   bool get isLoadingMore => _loadingMore;
   bool get hasMore => _hasMore;
   int get totalUsers => _totalUsers;
@@ -413,6 +423,25 @@ class CustomerDirectoryController extends ChangeNotifier {
     }
     if (isCustomerDirectory && subscribeRealtime) {
       unawaited(_subscribeInboxRealtime());
+    }
+    if (isCustomerDirectory && snapshotUserId.isNotEmpty && adminId.isNotEmpty) {
+      final snapshot = await snapshotStore.read(snapshotUserId, adminId);
+      if (_disposed) return;
+      if (snapshot != null) {
+        _users = snapshot.users;
+        _inbox = snapshot.inbox;
+        _balances = {
+          for (final user in snapshot.users)
+            if (snapshot.inbox[user.id]?['remaining'] != null)
+              user.id: _number(snapshot.inbox[user.id]?['remaining']),
+        };
+        _totalUsers = snapshot.totalItems;
+        _hasMore = snapshot.hasMore;
+        _nextCursor = snapshot.nextCursor;
+        _lastUpdatedAt = snapshot.updatedAt;
+        _showingSnapshot = true;
+        _safeNotify();
+      }
     }
     await load();
   }
@@ -580,9 +609,24 @@ class CustomerDirectoryController extends ChangeNotifier {
         _inboxError = null;
       }
 
+      if (!loadMore && isCustomerDirectory) {
+        _lastUpdatedAt = DateTime.now();
+        _showingSnapshot = false;
+      }
       _loading = false;
       _loadingMore = false;
       _safeNotify();
+
+      if (!loadMore && isCustomerDirectory &&
+          requestedSearch.isEmpty && _filters.isEmpty && _sort == 'newest' &&
+          snapshotUserId.isNotEmpty && adminId.isNotEmpty) {
+        unawaited(snapshotStore.write(snapshotUserId, adminId,
+          CustomerDirectorySnapshot(
+            users: _users, inbox: _inbox, totalItems: _totalUsers,
+            hasMore: _hasMore, nextCursor: _nextCursor,
+            updatedAt: _lastUpdatedAt!,
+          )).catchError((Object _) {}));
+      }
 
       if (!loadMore && isCustomerDirectory && _users.isNotEmpty) {
         unawaited(refreshInbox(generation: generation));
@@ -590,7 +634,13 @@ class CustomerDirectoryController extends ChangeNotifier {
     } catch (error) {
       if (_disposed || generation != _generation) return;
       final restricted = PBService.isServiceRestrictionError(error);
-      if (!loadMore && restricted) _users = const [];
+      if (!loadMore && restricted) {
+        _users = const [];
+        _showingSnapshot = false;
+        if (snapshotUserId.isNotEmpty && adminId.isNotEmpty) {
+          unawaited(snapshotStore.clear(snapshotUserId, adminId).catchError((Object _) {}));
+        }
+      }
       _loading = false;
       _loadingMore = false;
       final message = AppHelpers.backendErrorMessage(
