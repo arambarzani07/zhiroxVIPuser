@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:zhirox/features/expiry/expiry_monitor_screen.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -205,6 +206,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
         role: 'customer',
         adminId: auth.userId,
       ),
+      const ExpiryMonitorScreen(
+        key: ValueKey('expiry-monitor'),
+        canManage: true,
+      ),
       AdminSettingsScreen(
         key: ValueKey('settings_${auth.userId}'),
         pendingCount: pendingNavCount,
@@ -232,6 +237,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
           label: 'کڕیار',
           icon: Icons.people_outline_rounded,
           selectedIcon: Icons.people_rounded,
+        ),
+        const ZhiroxDestination(
+          label: 'کاڵا',
+          icon: Icons.inventory_2_outlined,
+          selectedIcon: Icons.inventory_2_rounded,
         ),
         ZhiroxDestination(
           label: 'زیاتر',
@@ -359,8 +369,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     GestureDetector(
                       onTap: () {
                         setState(() {
-                          _currentIndex = 2;
-                          _visitedTabs.add(2);
+                          _currentIndex = 3;
+                          _visitedTabs.add(3);
                         });
                       },
                       child: Padding(

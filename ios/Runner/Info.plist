@@ -67,7 +67,7 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs camera access to take receipt photos for debt records.</string>
+	<string>Camera access is used to scan product barcodes and attach receipt photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs photo library access to select receipt images for debt records.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

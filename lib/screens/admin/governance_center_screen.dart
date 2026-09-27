@@ -495,6 +495,8 @@ class _PermissionDialogState extends State<PermissionDialog> {
     'can_view_financial_reports': 'بینینی ڕاپۆرتی دارایی',
     'can_export_data': 'Exportکردنی داتا',
     'can_send_notifications': 'ناردنی ئاگادارکردنەوە',
+    'can_view_expiry': 'بینینی چاودێری بەرواری کاڵا',
+    'can_manage_expiry': 'هاوردەکردن و تۆمارکردنی بەرواری کاڵا',
   };
   late final Map<String, bool> values;
 
