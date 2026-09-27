@@ -15,6 +15,7 @@ void main() {
     addTearDown(controller.dispose);
     var search = '';
     var filter = '';
+    var sort = '';
     var addCount = 0;
 
     await tester.pumpWidget(
@@ -32,6 +33,7 @@ void main() {
           showFilters: true,
           selectedFilter: 'all',
           onFilterSelected: (value) => filter = value,
+          onSortSelected: (value) => sort = value,
         ),
       ),
     );
@@ -40,11 +42,17 @@ void main() {
     await tester.enterText(find.byType(TextField), 'ئارام');
     expect(search, 'ئارام');
 
-    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.tap(find.byKey(const ValueKey('directory-فلتەر')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('قەرزدار').last);
     await tester.pumpAndSettle();
     expect(filter, 'with_debt');
+
+    await tester.tap(find.byKey(const ValueKey('directory-ڕیزکردن')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('گەورەترین قەرزی ماوە').last);
+    await tester.pumpAndSettle();
+    expect(sort, 'balance_high');
 
     await tester.tap(find.byTooltip('زیادکردن'));
     expect(addCount, 1);
