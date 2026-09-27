@@ -71,7 +71,7 @@ class _UserListScreenState extends State<UserListScreen> {
   Map<String, Map<String, dynamic>> get _customerInbox => _directory.inbox;
   bool get _hasMoreUsers => _directory.hasMore;
   int get _totalUsers => _directory.totalUsers;
-  String get _customerFilter => _directory.filter;
+  Set<String> get _customerFilters => _directory.filters;
   String get _customerSort => _directory.sort;
 
   void _onScroll() {
@@ -97,8 +97,8 @@ class _UserListScreenState extends State<UserListScreen> {
     _directory.scheduleSearch(value);
   }
 
-  void _selectCustomerFilter(String value) {
-    unawaited(_directory.selectFilter(value));
+  void _selectCustomerFilters(Set<String> values, int amount, int days) {
+    unawaited(_directory.selectFilters(values, amount: amount, days: days));
   }
 
   void _selectCustomerSort(String value) {
@@ -298,8 +298,10 @@ class _UserListScreenState extends State<UserListScreen> {
       canAdd: canAdd,
       onAdd: canAdd ? _showAddDialog : null,
       showFilters: widget.role == 'customer',
-      selectedFilter: _customerFilter,
-      onFilterSelected: _selectCustomerFilter,
+      selectedFilters: _customerFilters,
+      onFiltersSelected: _selectCustomerFilters,
+      amount: _directory.amount,
+      days: _directory.days,
       selectedSort: _customerSort,
       onSortSelected: _selectCustomerSort,
     );
