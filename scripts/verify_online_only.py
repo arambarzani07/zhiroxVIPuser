@@ -12,8 +12,9 @@ def fail(message: str) -> None:
     violations.append(message)
 
 
-# SharedPreferences may persist only UI/security preferences. Business data must
-# always come from the live backend in this online-only app.
+# SharedPreferences may persist only UI/security preferences. Live backend data is
+# authoritative; the protected, account-scoped first-page directory preview is
+# display-only while a fresh network request runs. Offline mutations stay blocked.
 allowed_shared_preferences = {
     Path('lib/providers/auth_provider.dart'),
     Path('lib/providers/theme_provider.dart'),
