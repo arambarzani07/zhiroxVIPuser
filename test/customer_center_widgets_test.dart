@@ -45,11 +45,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('filter-with_debt')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('filter-active')));
+    await tester.tap(find.byKey(const ValueKey('filter-overdue')));
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('جێبەجێکردن'));
     await tester.pumpAndSettle();
-    expect(filters, {'with_debt', 'active'});
+    expect(filters, {'with_debt', 'overdue'});
 
     await tester.tap(find.byKey(const ValueKey('directory-ڕیزکردن')));
     await tester.pumpAndSettle();
