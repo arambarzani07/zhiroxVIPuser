@@ -71,7 +71,7 @@ class _UserListScreenState extends State<UserListScreen> {
   Map<String, Map<String, dynamic>> get _customerInbox => _directory.inbox;
   bool get _hasMoreUsers => _directory.hasMore;
   int get _totalUsers => _directory.totalUsers;
-  String get _customerFilter => _directory.filter;
+  Set<String> get _customerFilters => _directory.filters;
 
   void _onScroll() {
     if (widget.role != 'customer' ||
@@ -252,7 +252,7 @@ class _UserListScreenState extends State<UserListScreen> {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) =>
-                          _buildUserCard(_users[index], auth),
+                          _buildUserCard(_users[index], auth, index + 1),
                       childCount: _users.length,
                     ),
                   ),
@@ -293,7 +293,7 @@ class _UserListScreenState extends State<UserListScreen> {
       canAdd: canAdd,
       onAdd: canAdd ? _showAddDialog : null,
       showFilters: widget.role == 'customer',
-      selectedFilter: _customerFilter,
+      selectedFilters: _customerFilters,
       onFilterSelected: _selectCustomerFilter,
     );
   }
@@ -835,6 +835,7 @@ class _UserListScreenState extends State<UserListScreen> {
   Widget _buildUserCard(
     RecordModel user,
     AuthProvider auth,
+    int index,
   ) {
     final name = user.getStringValue('name');
     final phoneTail = _customerPhoneTail(user);
@@ -847,6 +848,7 @@ class _UserListScreenState extends State<UserListScreen> {
 
     return CustomerDirectoryCard(
       customerId: user.id,
+      index: index,
       name: name,
       displayName: displayName,
       phone: user.getStringValue('phone'),
