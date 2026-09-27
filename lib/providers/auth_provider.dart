@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zhirox/services/pb_service.dart';
+import 'package:zhirox/features/customers/customer_directory_snapshot.dart';
 
 class AuthProvider extends ChangeNotifier {
   RecordModel? _user;
@@ -393,6 +394,14 @@ class AuthProvider extends ChangeNotifier {
       await PBService.pb.collection('notifications').unsubscribe();
     } catch (_) {}
 
+    if (current != null) {
+      final tenantId = current.getStringValue('role') == 'admin'
+          ? current.id : current.getStringValue('admin_id');
+      try {
+        await const SecureCustomerDirectorySnapshotStore()
+            .clear(current.id, tenantId);
+      } catch (_) {}
+    }
     await PBService.logout();
     await _clearLocalUser();
     if (!_disposed) notifyListeners();
