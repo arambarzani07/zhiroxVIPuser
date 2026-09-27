@@ -1589,7 +1589,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Text(
                   [
                     if (isByEmployee && creatorName.isNotEmpty) creatorName,
-                    AppHelpers.formatDate(date),
+                    AppHelpers.formatDateTime(date),
                   ].join('  •  '),
                   softWrap: true,
                   style: TextStyle(
