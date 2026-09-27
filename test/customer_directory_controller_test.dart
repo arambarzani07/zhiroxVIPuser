@@ -37,6 +37,21 @@ class FakeDirectoryGateway implements CustomerDirectoryGateway {
       );
 
   @override
+  Future<Map<String, dynamic>> getAdvancedCustomerPage({
+    required String search,
+    required Set<String> filters,
+    required String sort,
+    required int limit,
+    required int amount,
+    required int days,
+    Map<String, dynamic>? cursor,
+  }) => getCustomerPage(
+    search: search,
+    filter: filters.isEmpty ? 'all' : filters.join(','),
+    limit: limit, cursor: cursor,
+  );
+
+  @override
   Future<Map<String, dynamic>> getCustomerPage({
     required String search,
     required String filter,
