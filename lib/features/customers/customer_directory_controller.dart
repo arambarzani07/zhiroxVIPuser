@@ -17,6 +17,19 @@ abstract class CustomerDirectoryGateway {
     Map<String, dynamic>? cursor,
   });
 
+  Future<Map<String, dynamic>> getSortedCustomerPage({
+    required String search,
+    required String filter,
+    required String sort,
+    required int limit,
+    Map<String, dynamic>? cursor,
+  }) => getCustomerPage(
+    search: search,
+    filter: filter,
+    limit: limit,
+    cursor: cursor,
+  );
+
   Future<List<RecordModel>> getUsers({
     required String role,
     required String search,
@@ -70,6 +83,32 @@ class PBServiceCustomerDirectoryGateway implements CustomerDirectoryGateway {
       'get_customer_directory_page_filtered',
       params: params,
     );
+    return _decodeCustomerPage(raw);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getSortedCustomerPage({
+    required String search,
+    required String filter,
+    required String sort,
+    required int limit,
+    Map<String, dynamic>? cursor,
+  }) async {
+    await PBService.ensureInitialized();
+    final raw = await PBService.client.rpc(
+      'get_customer_directory_page_sorted',
+      params: {
+        'p_search': search.trim(),
+        'p_filter': filter,
+        'p_sort': sort,
+        'p_limit': limit.clamp(1, 100),
+        'p_offset': int.tryParse('${cursor?['offset'] ?? 0}') ?? 0,
+      },
+    );
+    return _decodeCustomerPage(raw);
+  }
+
+  Map<String, dynamic> _decodeCustomerPage(dynamic raw) {
     if (raw is! Map) {
       throw const FormatException('invalid customer directory page');
     }
@@ -155,6 +194,15 @@ class CustomerDirectoryController extends ChangeNotifier {
     this.subscribeRealtime = true,
   }) : gateway = gateway ?? const PBServiceCustomerDirectoryGateway();
 
+  static const Map<String, String> sortLabels = {
+    'newest': 'نوێترین کڕیار',
+    'oldest': 'کۆنترین کڕیار',
+    'recent_activity': 'دوایین مامەڵە',
+    'name': 'ناو',
+    'balance_high': 'گەورەترین قەرزی ماوە',
+    'balance_low': 'بچووکترین قەرزی ماوە',
+  };
+
   static const Map<String, String> filterLabels = {
     'all': 'هەموو',
     'with_debt': 'قەرزدار',
@@ -182,6 +230,7 @@ class CustomerDirectoryController extends ChangeNotifier {
   String? _inboxError;
   Map<String, dynamic>? _nextCursor;
   String _filter = 'all';
+  String _sort = 'newest';
   String _search = '';
   int _generation = 0;
 
@@ -204,6 +253,7 @@ class CustomerDirectoryController extends ChangeNotifier {
   String? get loadError => _loadError;
   String? get inboxError => _inboxError;
   String get filter => _filter;
+  String get sort => _sort;
   String get search => _search;
   bool get isCustomerDirectory => role == 'customer';
 
@@ -258,6 +308,13 @@ class CustomerDirectoryController extends ChangeNotifier {
     await load(search: _search);
   }
 
+  Future<void> selectSort(String value) async {
+    if (!sortLabels.containsKey(value) || value == _sort) return;
+    _sort = value;
+    _safeNotify();
+    await load(search: _search);
+  }
+
   Future<void> refresh() => load(search: _search);
 
   Future<void> loadMore() => load(search: _search, loadMore: true);
@@ -301,8 +358,16 @@ class CustomerDirectoryController extends ChangeNotifier {
       Map<String, dynamic>? nextCursor;
 
       if (isCustomerDirectory) {
-        final page = await gateway.getCustomerPage(
+        final page = await (_sort == 'newest'
+            ? gateway.getCustomerPage(
+                search: requestedSearch,
+                filter: _filter,
+                limit: 60,
+                cursor: loadMore ? _nextCursor : null,
+              )
+            : gateway.getSortedCustomerPage(
           search: requestedSearch,
+          sort: _sort,
           filter: _filter,
           limit: 60,
           cursor: loadMore ? _nextCursor : null,
@@ -315,7 +380,7 @@ class CustomerDirectoryController extends ChangeNotifier {
         hasMore = page['hasMore'] == true;
         nextCursor = page['nextCursor'] as Map<String, dynamic>?;
 
-        if (!loadMore && _filter == 'all') {
+        if (!loadMore && _filter == 'all' && _sort == 'newest') {
           final pinned =
               await gateway.getPinnedCustomers(search: requestedSearch);
           if (pinned.isNotEmpty) {
