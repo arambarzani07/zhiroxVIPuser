@@ -82,6 +82,7 @@ class _FinancialChatRenderEntry {
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
   RecordModel? _user;
+  Map<String, dynamic> _mergeGroup = const {};
   // Timeline records contain only server pages already loaded into Financial Chat.
   List<RecordModel> _debts = [];
   List<RecordModel> _payments = [];
@@ -177,7 +178,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     try {
       final user = await PBService.getUser(widget.userId);
+      if (!mounted) return;
       final role = user.getStringValue('role');
+      if (role == 'customer' && context.read<AuthProvider>().userRole == 'admin') {
+        try {
+          final raw = await PBService.client.rpc('get_my_customer_merge_group',
+              params: {'p_customer_id': widget.userId});
+          if (raw is Map) _mergeGroup = Map<String, dynamic>.from(raw);
+        } catch (_) {
+          // Existing profiles still work while the new migration is rolled out.
+        }
+      }
 
       List<RecordModel> debts = [];
       List<RecordModel> payments = [];
@@ -1047,6 +1058,140 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   // ── Customer Body ──
   // ═══════════════════════════════════════════
 
+  Future<void> _mergeDuplicateIdentity() async {
+    try {
+      final raw = await PBService.client.rpc('find_my_duplicate_customers',
+          params: {'p_customer_id': widget.userId});
+      if (!mounted) return;
+      final candidates = raw is List
+          ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e))
+              .where((e) => e['already_linked'] != true).toList()
+          : <Map<String, dynamic>>[];
+      if (candidates.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('کڕیارێکی هاوشێوە بە ناو یان ژمارە نەدۆزرایەوە.'),
+        ));
+        return;
+      }
+      final selected = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('یەکخستنی ناسنامەی دووبارە'),
+          content: SizedBox(
+            width: 360,
+            child: ListView(shrinkWrap: true, children: [
+              const Text('تۆمار و مامەڵەکانی هەر کڕیارێک لە ناسنامەی خۆیدا دەمێننەوە.'),
+              for (final item in candidates)
+                ListTile(
+                  title: Text(item['name']?.toString() ?? ''),
+                  subtitle: Text(item['phone']?.toString() ?? ''),
+                  onTap: () => Navigator.pop(ctx, item),
+                ),
+            ]),
+          ),
+        ),
+      );
+      if (selected == null || !mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('پشتڕاستکردنەوە'),
+          content: Text('دڵنیایت ${selected['name']} هەمان کڕیارە؟ '
+              'قەرز و پارەدانەوەکان ناگوازرێنەوە و ناسنامەکان دەتوانرێت دواتر جیابکرێنەوە.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('پاشگەزبوونەوە')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('یەکخستن')),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      await PBService.client.rpc('merge_my_duplicate_customer', params: {
+        'p_canonical_id': widget.userId,
+        'p_duplicate_id': selected['id'],
+      });
+      if (!mounted) return;
+      await _loadData();
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppHelpers.backendErrorMessage(error,
+            fallback: 'یەکخستنی ناسنامە سەرکەوتوو نەبوو.')),
+      ));
+    }
+  }
+
+  Future<void> _unmergeIdentity(String duplicateId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('جیابوونەوەی ناسنامە'),
+        content: const Text('داتای دارایی ناگۆڕێت. دڵنیایت؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('پاشگەزبوونەوە')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('جیاکردنەوە')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await PBService.client.rpc('unmerge_my_duplicate_customer',
+          params: {'p_duplicate_id': duplicateId});
+      if (mounted) await _loadData();
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppHelpers.backendErrorMessage(error,
+            fallback: 'جیابوونەوە سەرکەوتوو نەبوو.')),
+      ));
+    }
+  }
+
+  Widget _buildMergedIdentityCard() {
+    final raw = _mergeGroup['customers'];
+    final members = raw is List
+        ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+    final canonical = _mergeGroup['canonical_id']?.toString();
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Card(child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('ناسنامە پەیوەستکراوەکان',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            if (members.length > 1) ...[
+              Text('کۆی ماوەی گرووپ بە دینار: '
+                  '${AppHelpers.formatCurrency((_mergeGroup['total_remaining_iqd'] as num?)?.toDouble() ?? 0)}'),
+              const Text('مێژووی هەر ناسنامەیەک لە پەڕەی خۆی دەپارێزرێت.'),
+              for (final member in members)
+                ListTile(
+                  dense: true,
+                  title: Text(member['name']?.toString() ?? ''),
+                  subtitle: Text('ماوە: ${member['remaining_iqd'] ?? 0} د.ع'),
+                  onTap: member['id']?.toString() == widget.userId ? null : () =>
+                    Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => UserProfileScreen(userId: member['id'].toString()),
+                    )),
+                  trailing: canonical == widget.userId && member['id']?.toString() != canonical
+                      ? IconButton(
+                          tooltip: 'جیاکردنەوە',
+                          icon: const Icon(Icons.link_off_rounded),
+                          onPressed: () => _unmergeIdentity(member['id'].toString()),
+                        )
+                      : null,
+                ),
+            ],
+            if (canonical == widget.userId)
+              TextButton.icon(
+                onPressed: _mergeDuplicateIdentity,
+                icon: const Icon(Icons.merge_rounded),
+                label: const Text('پەیوەستکردنی ناسنامەی دووبارە'),
+              ),
+          ]),
+        )),
+      ),
+    );
+  }
+
   List<Widget> _buildCustomerBody() {
     final totalDebt = _financeTotalDebtIqd;
     final totalRemaining = _financeTotalRemainingIqd;
@@ -1055,6 +1200,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final auth = context.read<AuthProvider>();
 
     final overview = <Widget>[
+      if (auth.userRole == 'admin') _buildMergedIdentityCard(),
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),

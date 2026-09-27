@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/admin/admin_settings_screen.dart';
+import 'package:zhirox/screens/admin/daftar_sync_dashboard_screen.dart';
 import 'package:zhirox/screens/shared/debt_detail_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -37,6 +38,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Timer? _dashboardRealtimeDebounce;
   bool _dashboardRealtimeRefreshPending = false;
   String _recentActivityFilter = 'debt';
+  List<Map<String, dynamic>> _syncAlerts = const [];
 
   @override
   void initState() {
@@ -163,6 +165,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
     String? loadError;
     try {
       freshStats = await PBService.getDashboardStats(adminId: auth.userId);
+      try {
+        final alerts = await PBService.client.rpc('get_my_daftar_sync_alerts');
+        if (alerts is List && mounted) {
+          _syncAlerts = alerts.whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row)).toList();
+        }
+      } catch (_) {
+        // The dashboard remains usable while the alert migration is being deployed.
+      }
     } catch (error) {
       loadError = AppHelpers.backendErrorMessage(
         error,
@@ -289,6 +300,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
         slivers: [
           SliverList(
             delegate: SliverChildListDelegate([
+        if (_syncAlerts.any((item) => item['acknowledged_at'] == null))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Card(
+              color: Colors.orange.shade50,
+              child: ListTile(
+                leading: const Icon(Icons.sync_problem_rounded, color: Colors.deepOrange),
+                title: const Text('پەیوەندی Daftar پێویستی بە پشکنینە'),
+                subtitle: Text('${_syncAlerts.where((item) => item['acknowledged_at'] == null).length} ئاگادارکردنەوەی چالاک'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => const DaftarSyncDashboardScreen(),
+                )),
+              ),
+            ),
+          ),
         // ───── Gradient Header with Stats (fixed) ─────
         Container(
               decoration: BoxDecoration(
