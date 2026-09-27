@@ -16,9 +16,11 @@ class CustomerCenterHeader extends StatelessWidget {
     this.canAdd = false,
     this.onAdd,
     this.showFilters = false,
-    this.selectedFilter = 'all',
-    this.onFilterSelected,
-    this.selectedSort = 'newest',
+    this.selectedFilters = const {},
+    this.onFiltersSelected,
+    this.amount = 100000,
+    this.days = 30,
+    this.selectedSort = 'last_activity_desc',
     this.onSortSelected,
   });
 
@@ -32,10 +34,111 @@ class CustomerCenterHeader extends StatelessWidget {
   final bool canAdd;
   final VoidCallback? onAdd;
   final bool showFilters;
-  final String selectedFilter;
-  final ValueChanged<String>? onFilterSelected;
+  final Set<String> selectedFilters;
+  final void Function(Set<String>, int, int)? onFiltersSelected;
+  final int amount;
+  final int days;
   final String selectedSort;
   final ValueChanged<String>? onSortSelected;
+
+  void _showFilterSheet(BuildContext context) {
+    final selected = <String>{...selectedFilters};
+    final amountController = TextEditingController(text: '$amount');
+    final daysController = TextEditingController(text: '$days');
+    String query = '';
+    showModalBottomSheet<void>(
+      context: context, isScrollControlled: true, useSafeArea: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, update) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: SizedBox(
+            height: MediaQuery.sizeOf(sheetContext).height * 0.78,
+            child: Column(children: [
+              const SizedBox(height: 12),
+              Text('فلتەرەکان', style: Theme.of(sheetContext).textTheme.titleLarge),
+              Padding(padding: const EdgeInsets.all(12), child: TextField(
+                decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'گەڕان لە فلتەرەکان'),
+                onChanged: (value) => update(() => query = value.trim()),
+              )),
+              Expanded(child: ListView(children: [
+                for (final group in CustomerDirectoryController.filterGroups.entries) ...[
+                  if (group.value.any((key) => CustomerDirectoryController.filterLabels[key]!.contains(query)))
+                    Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                      child: Text(group.key, style: Theme.of(sheetContext).textTheme.titleMedium)),
+                  for (final key in group.value)
+                    if (CustomerDirectoryController.filterLabels[key]!.contains(query))
+                      CheckboxListTile(
+                        key: ValueKey('filter-$key'),
+                        title: Text(CustomerDirectoryController.filterLabels[key]!),
+                        value: selected.contains(key),
+                        onChanged: (checked) => update(() {
+                          if (key == 'all') { selected.clear(); return; }
+                          if (checked == true) { selected.add(key); } else { selected.remove(key); }
+                        }),
+                      ),
+                ],
+                if (selected.any((key) => key.endsWith('_amount')))
+                  Padding(padding: const EdgeInsets.all(12), child: TextField(
+                    controller: amountController, keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'بڕی دیاریکراو (دینار)'),
+                  )),
+                if (selected.any((key) => key.endsWith('_days')))
+                  Padding(padding: const EdgeInsets.all(12), child: TextField(
+                    controller: daysController, keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'ژمارەی ڕۆژ'),
+                  )),
+              ])),
+              Padding(padding: const EdgeInsets.all(12), child: Row(children: [
+                TextButton(onPressed: () => update(selected.clear), child: const Text('پاککردنەوە')),
+                const Spacer(),
+                FilledButton(onPressed: () {
+                  onFiltersSelected?.call(selected,
+                    int.tryParse(amountController.text) ?? amount,
+                    int.tryParse(daysController.text) ?? days);
+                  Navigator.pop(sheetContext);
+                }, child: Text('جێبەجێکردن (${selected.length})')),
+              ])),
+            ]),
+          ),
+        ),
+      ),
+    ).whenComplete(() { amountController.dispose(); daysController.dispose(); });
+  }
+
+  void _showSortSheet(BuildContext context) {
+    String query = '';
+    showModalBottomSheet<void>(
+      context: context, isScrollControlled: true, useSafeArea: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, update) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: SizedBox(height: MediaQuery.sizeOf(sheetContext).height * 0.78,
+            child: Column(children: [
+              const SizedBox(height: 12),
+              Text('ڕیزکردن', style: Theme.of(sheetContext).textTheme.titleLarge),
+              Padding(padding: const EdgeInsets.all(12), child: TextField(
+                decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'گەڕان لە ڕیزکردن'),
+                onChanged: (value) => update(() => query = value.trim()),
+              )),
+              Expanded(child: ListView(children: [
+                for (final group in CustomerDirectoryController.sortGroups.entries) ...[
+                  if (group.value.any((key) => CustomerDirectoryController.sortLabels[key]!.contains(query)))
+                    Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                      child: Text(group.key, style: Theme.of(sheetContext).textTheme.titleMedium)),
+                  for (final key in group.value)
+                    if (CustomerDirectoryController.sortLabels[key]!.contains(query))
+                      ListTile(key: ValueKey('sort-$key'),
+                        title: Text(CustomerDirectoryController.sortLabels[key]!),
+                        trailing: selectedSort == key ? const Icon(Icons.check_rounded) : null,
+                        onTap: () { onSortSelected?.call(key); Navigator.pop(sheetContext); }),
+                ],
+              ])),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -159,20 +262,18 @@ class CustomerCenterHeader extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: _DirectorySelector(
-                        label: 'فلتەر',
-                        value: selectedFilter,
-                        options: CustomerDirectoryController.filterLabels,
-                        onChanged: onFilterSelected,
+                      child: _DirectoryControlButton(
+                        label: 'فلتەر', icon: Icons.tune_rounded,
+                        badge: selectedFilters.length,
+                        onPressed: () => _showFilterSheet(context),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: _DirectorySelector(
-                        label: 'ڕیزکردن',
-                        value: selectedSort,
-                        options: CustomerDirectoryController.sortLabels,
-                        onChanged: onSortSelected,
+                      child: _DirectoryControlButton(
+                        label: 'ڕیزکردن', icon: Icons.sort_rounded,
+                        badge: 0,
+                        onPressed: () => _showSortSheet(context),
                       ),
                     ),
                   ],
@@ -186,53 +287,27 @@ class CustomerCenterHeader extends StatelessWidget {
   }
 }
 
-class _DirectorySelector extends StatelessWidget {
-  const _DirectorySelector({
-    required this.label,
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
+class _DirectoryControlButton extends StatelessWidget {
+  const _DirectoryControlButton({required this.label, required this.icon,
+    required this.badge, required this.onPressed});
   final String label;
-  final String value;
-  final Map<String, String> options;
-  final ValueChanged<String>? onChanged;
-
+  final IconData icon;
+  final int badge;
+  final VoidCallback onPressed;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppDesign.radiusSmall),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          key: ValueKey('directory-$label'),
-          value: value,
-          isExpanded: true,
-          dropdownColor: scheme.surface,
-          icon: Icon(Icons.keyboard_arrow_down_rounded, color: scheme.primary),
-          style: TextStyle(color: scheme.onSurface, fontSize: 12,
-              fontWeight: FontWeight.w700),
-          selectedItemBuilder: (context) => options.entries.map((entry) =>
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text('$label: ${entry.value}', maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-            ),
-          ).toList(),
-          items: options.entries.map((entry) => DropdownMenuItem<String>(
-            value: entry.key,
-            child: Text(entry.value, overflow: TextOverflow.ellipsis),
-          )).toList(),
-          onChanged: (value) {
-            if (value != null) onChanged?.call(value);
-          },
-        ),
+    return OutlinedButton.icon(
+      key: ValueKey('directory-$label'),
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      label: Text(badge > 0 ? '$label ($badge)' : label,
+        maxLines: 1, overflow: TextOverflow.ellipsis),
+      style: OutlinedButton.styleFrom(
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        side: BorderSide(color: scheme.outlineVariant),
+        minimumSize: const Size.fromHeight(48),
       ),
     );
   }
