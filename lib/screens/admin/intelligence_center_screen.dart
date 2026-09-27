@@ -68,6 +68,8 @@ class _IntelligenceCenterScreenState extends State<IntelligenceCenterScreen> {
         return 'ماوەی بەشداریکردن تەواو بووە.';
       case 'ai_not_configured':
         return 'AI provider هێشتا لە سێرڤەر چالاک نەکراوە.';
+      case 'openai_credit_balance_exhausted':
+        return 'باڵانسی OpenAI API تەواو بووە؛ پێویستە لە هەژماری OpenAI API باڵانس زیاد بکرێت.';
       default:
         if (code.startsWith('openai_')) {
           return 'خزمەتگوزاری AI کاتییەکە بەردەست نییە؛ دووبارە هەوڵ بدە.';
