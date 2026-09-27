@@ -436,7 +436,7 @@ class CustomerDirectoryCard extends StatelessWidget {
   final bool balanceUnavailable;
   final int openDebtCount;
   final bool canManage;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final List<CustomerCardAction> actions;
 
