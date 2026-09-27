@@ -280,10 +280,13 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
       int? category;
       for (var i = 0; i < preview.headers.length; i++) {
         final h = preview.headers[i].toLowerCase();
-        if (h.contains('barcode') || h.contains('بارکۆد')) barcode = i;
+        if (h.contains('barcode') || h.contains('بارکۆد')) {
+          barcode = i;
+        } else if (h.contains('code') || h.contains('کۆد')) {
+          code = i;
+        }
         if (h.contains('name') || h.contains('ناو')) name = i;
         if (h.contains('category') || h.contains('جۆر')) category = i;
-        if (h.contains('code') || h.contains('کۆد')) code = i;
       }
       String? issue;
       final shouldImport = await showDialog<bool>(
