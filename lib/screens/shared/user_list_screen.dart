@@ -41,6 +41,7 @@ class _UserListScreenState extends State<UserListScreen> {
     _directory = CustomerDirectoryController(
       role: widget.role,
       adminId: resolvedAdminId,
+      snapshotUserId: auth.userId,
     )..addListener(_onDirectoryChanged);
     _scrollController.addListener(_onScroll);
     unawaited(_directory.initialize());
@@ -315,6 +316,8 @@ class _UserListScreenState extends State<UserListScreen> {
       amount: _directory.amount,
       days: _directory.days,
       selectedSort: _customerSort,
+      lastUpdatedAt: _directory.lastUpdatedAt,
+      showingSnapshot: _directory.showingSnapshot,
       onSortSelected: _selectCustomerSort,
     );
   }
