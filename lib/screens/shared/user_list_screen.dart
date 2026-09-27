@@ -867,6 +867,7 @@ class _UserListScreenState extends State<UserListScreen> {
         _hasSameNamePeer(user) && phoneTail.isNotEmpty ? '$name · $phoneTail' : name;
     final inbox = _customerInbox[user.id];
     final canManageCustomer = widget.role == 'customer' &&
+        !_directory.isLoading && !_directory.showingSnapshot &&
         (auth.userRole == 'admin' || auth.userRole == 'employee');
     final balance = _balances[user.id] ?? 0;
 
@@ -888,7 +889,8 @@ class _UserListScreenState extends State<UserListScreen> {
       balanceUnavailable: _balanceErrors.contains(user.id),
       openDebtCount: (inbox?['open_debt_count'] as num?)?.toInt() ?? 0,
       canManage: canManageCustomer,
-      onTap: () => _openUserProfile(user),
+      onTap: _directory.isLoading || _directory.showingSnapshot
+          ? null : () => _openUserProfile(user),
       onLongPress: canManageCustomer && auth.userRole == 'admin'
           ? () => _showCustomerPrioritySheet(user, auth)
           : null,
