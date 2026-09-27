@@ -21,6 +21,8 @@ class CustomerCenterHeader extends StatelessWidget {
     this.amount = 100000,
     this.days = 30,
     this.selectedSort = 'newest',
+    this.lastUpdatedAt,
+    this.showingSnapshot = false,
     this.onSortSelected,
   });
 
@@ -39,6 +41,8 @@ class CustomerCenterHeader extends StatelessWidget {
   final int amount;
   final int days;
   final String selectedSort;
+  final DateTime? lastUpdatedAt;
+  final bool showingSnapshot;
   final ValueChanged<String>? onSortSelected;
 
   void _showFilterSheet(BuildContext context) {
@@ -258,6 +262,14 @@ class CustomerCenterHeader extends StatelessWidget {
                 ),
               ),
               if (showFilters) ...[
+                if (lastUpdatedAt != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '${showingSnapshot ? 'داتای پارێزراو • ' : ''}دوا نوێکردنەوە: ${lastUpdatedAt!.toLocal().day}/${lastUpdatedAt!.toLocal().month} ${lastUpdatedAt!.toLocal().hour.toString().padLeft(2, '0')}:${lastUpdatedAt!.toLocal().minute.toString().padLeft(2, '0')}',
+                    style: const TextStyle(color: Colors.white, fontSize: 11,
+                      fontWeight: FontWeight.w700),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.sm),
                 Row(
                   children: [
