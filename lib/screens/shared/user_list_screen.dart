@@ -71,7 +71,7 @@ class _UserListScreenState extends State<UserListScreen> {
   Map<String, Map<String, dynamic>> get _customerInbox => _directory.inbox;
   bool get _hasMoreUsers => _directory.hasMore;
   int get _totalUsers => _directory.totalUsers;
-  Set<String> get _customerFilters => _directory.filters;
+  String get _customerFilter => _directory.filter;
 
   void _onScroll() {
     if (widget.role != 'customer' ||
@@ -293,7 +293,7 @@ class _UserListScreenState extends State<UserListScreen> {
       canAdd: canAdd,
       onAdd: canAdd ? _showAddDialog : null,
       showFilters: widget.role == 'customer',
-      selectedFilters: _customerFilters,
+      selectedFilter: _customerFilter,
       onFilterSelected: _selectCustomerFilter,
     );
   }
