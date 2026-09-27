@@ -508,15 +508,22 @@ class CustomerDirectoryController extends ChangeNotifier {
       Map<String, dynamic>? nextCursor;
 
       if (isCustomerDirectory) {
-        final page = await gateway.getAdvancedCustomerPage(
-          search: requestedSearch,
-          filters: _filters,
-          sort: _sort,
-          limit: 60,
-          amount: _amount,
-          days: _days,
-          cursor: loadMore ? _nextCursor : null,
-        );
+        final page = await (_filters.isEmpty && _sort == 'newest'
+            ? gateway.getCustomerPage(
+                search: requestedSearch,
+                filter: 'all',
+                limit: 60,
+                cursor: loadMore ? _nextCursor : null,
+              )
+            : gateway.getAdvancedCustomerPage(
+                search: requestedSearch,
+                filters: _filters,
+                sort: _sort,
+                limit: 60,
+                amount: _amount,
+                days: _days,
+                cursor: loadMore ? _nextCursor : null,
+              ));
         users = List<RecordModel>.from(page['items'] as List);
         pageInbox = Map<String, Map<String, dynamic>>.from(
           page['inbox'] as Map,
