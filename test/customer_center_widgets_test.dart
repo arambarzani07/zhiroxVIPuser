@@ -53,6 +53,8 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('directory-ڕیزکردن')));
     await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'گەورەترین قەرزی ماوە');
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('sort-balance_high')));
     await tester.pumpAndSettle();
     expect(sort, 'balance_high');
