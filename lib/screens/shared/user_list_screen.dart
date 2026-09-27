@@ -235,7 +235,11 @@ class _UserListScreenState extends State<UserListScreen> {
                 onRetry: () => unawaited(_directory.refreshInbox()),
               ),
             ),
-          _isLoading
+          if (_isLoading && _users.isNotEmpty)
+            const SliverToBoxAdapter(
+              child: LinearProgressIndicator(minHeight: 3),
+            ),
+          _isLoading && _users.isEmpty
               ? const SliverFillRemaining(
                   child: AppAsyncStateView(
                     state: AppAsyncState.loading,
@@ -243,7 +247,7 @@ class _UserListScreenState extends State<UserListScreen> {
                     child: SizedBox.shrink(),
                   ),
                 )
-              : _loadError != null
+              : _loadError != null && _users.isEmpty
               ? SliverFillRemaining(child: _buildLoadErrorState())
               : _users.isEmpty
               ? SliverFillRemaining(child: _buildEmptyState())
@@ -262,6 +266,14 @@ class _UserListScreenState extends State<UserListScreen> {
                     ),
                   ),
                 ),
+
+          if (_loadError != null && _users.isNotEmpty)
+            SliverToBoxAdapter(
+              child: CustomerInboxWarning(
+                message: _loadError!,
+                onRetry: () => unawaited(_directory.refresh()),
+              ),
+            ),
 
           if (_isLoadingMore)
             const SliverToBoxAdapter(
