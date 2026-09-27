@@ -72,6 +72,7 @@ class _UserListScreenState extends State<UserListScreen> {
   bool get _hasMoreUsers => _directory.hasMore;
   int get _totalUsers => _directory.totalUsers;
   String get _customerFilter => _directory.filter;
+  String get _customerSort => _directory.sort;
 
   void _onScroll() {
     if (widget.role != 'customer' ||
@@ -98,6 +99,10 @@ class _UserListScreenState extends State<UserListScreen> {
 
   void _selectCustomerFilter(String value) {
     unawaited(_directory.selectFilter(value));
+  }
+
+  void _selectCustomerSort(String value) {
+    unawaited(_directory.selectSort(value));
   }
 
   String _inboxTimeLabel(Map<String, dynamic>? row) {
@@ -295,6 +300,8 @@ class _UserListScreenState extends State<UserListScreen> {
       showFilters: widget.role == 'customer',
       selectedFilter: _customerFilter,
       onFilterSelected: _selectCustomerFilter,
+      selectedSort: _customerSort,
+      onSortSelected: _selectCustomerSort,
     );
   }
 
