@@ -20,7 +20,7 @@ class CustomerCenterHeader extends StatelessWidget {
     this.onFiltersSelected,
     this.amount = 100000,
     this.days = 30,
-    this.selectedSort = 'last_activity_desc',
+    this.selectedSort = 'newest',
     this.onSortSelected,
   });
 
