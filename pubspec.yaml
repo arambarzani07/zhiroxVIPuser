@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
   provider: ^6.1.5+1
   shared_preferences: ^2.5.4
+  flutter_secure_storage: 10.0.0
   cupertino_icons: ^1.0.8
   # Kept temporarily as a local RecordModel compatibility type while all
   # backend/network operations are served by Supabase.
