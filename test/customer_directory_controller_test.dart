@@ -182,6 +182,8 @@ class FakeSnapshotStore implements CustomerDirectorySnapshotStore {
 }
 
 class DelayedDirectoryGateway extends FakeDirectoryGateway {
+  @override
+  Future<List<RecordModel>> getPinnedCustomers({required String search}) async => [];
   final completer = Completer<Map<String, dynamic>>();
   @override
   Future<Map<String, dynamic>> getCustomerPage({
