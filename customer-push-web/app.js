@@ -1,4 +1,5 @@
 'use strict';
+// Production portal uses the current ZHIROX backend; publish after backend migration.
 
 const API_URL = 'https://madoflmbretqghqbqaak.supabase.co/functions/v1/customer-push';
 const LINK_TOKEN_KEY = 'zhirox_push_link_token';
