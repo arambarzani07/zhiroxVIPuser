@@ -115,10 +115,12 @@ class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
           params: {'p_alert_id': id});
       await _load(silent: true);
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(AppHelpers.backendErrorMessage(error,
-            fallback: 'نەتوانرا ئاگادارکردنەوەکە تۆمار بکرێت.')),
-      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppHelpers.backendErrorMessage(error,
+              fallback: 'نەتوانرا ئاگادارکردنەوەکە تۆمار بکرێت.')),
+        ));
+      }
     }
   }
 

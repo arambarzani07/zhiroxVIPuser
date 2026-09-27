@@ -1112,10 +1112,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (!mounted) return;
       await _loadData();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(AppHelpers.backendErrorMessage(error,
-            fallback: 'یەکخستنی ناسنامە سەرکەوتوو نەبوو.')),
-      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppHelpers.backendErrorMessage(error,
+              fallback: 'یەکخستنی ناسنامە سەرکەوتوو نەبوو.')),
+        ));
+      }
     }
   }
 
@@ -1137,10 +1139,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           params: {'p_duplicate_id': duplicateId});
       if (mounted) await _loadData();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(AppHelpers.backendErrorMessage(error,
-            fallback: 'جیابوونەوە سەرکەوتوو نەبوو.')),
-      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppHelpers.backendErrorMessage(error,
+              fallback: 'جیابوونەوە سەرکەوتوو نەبوو.')),
+        ));
+      }
     }
   }
 

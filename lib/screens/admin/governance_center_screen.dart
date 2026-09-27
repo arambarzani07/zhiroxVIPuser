@@ -110,8 +110,10 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
         auditHasMore = page.length == auditPageSize;
       });
     } catch (e) {
-      if (mounted) toast(AppHelpers.backendErrorMessage(e,
-          fallback: 'گەڕان لە تۆماری چاودێری سەرکەوتوو نەبوو.'), bad: true);
+      if (mounted) {
+        toast(AppHelpers.backendErrorMessage(e,
+            fallback: 'گەڕان لە تۆماری چاودێری سەرکەوتوو نەبوو.'), bad: true);
+      }
     } finally {
       if (mounted) setState(() => auditLoading = false);
     }
@@ -144,9 +146,11 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
           query = query.lt('occurred_at', end.toUtc().toIso8601String());
         }
         final safe = auditSearch.text.trim().replaceAll(RegExp(r'[,()]'), '');
-        if (safe.isNotEmpty) query = query.or(
-          'entity_id.ilike.%$safe%,action.ilike.%$safe%,entity_type.ilike.%$safe%',
-        );
+        if (safe.isNotEmpty) {
+          query = query.or(
+            'entity_id.ilike.%$safe%,action.ilike.%$safe%,entity_type.ilike.%$safe%',
+          );
+        }
         final page = rows(await query.order('occurred_at', ascending: false)
             .range(offset, offset + chunkSize - 1));
         all.addAll(page);
@@ -165,8 +169,10 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       await file.writeAsString(content.toString());
       await Share.shareXFiles([XFile(file.path)]);
     } catch (e) {
-      if (mounted) toast(AppHelpers.backendErrorMessage(e,
-          fallback: 'هەناردەکردنی تۆماری چاودێری سەرکەوتوو نەبوو.'), bad: true);
+      if (mounted) {
+        toast(AppHelpers.backendErrorMessage(e,
+            fallback: 'هەناردەکردنی تۆماری چاودێری سەرکەوتوو نەبوو.'), bad: true);
+      }
     }
   }
 
