@@ -17,7 +17,6 @@ class _ShellHostState extends State<_ShellHost> {
     return MaterialApp(
       home: ZhiroxAppShell(
         index: index,
-        showConnectivity: false,
         pages: const [
           Center(child: Text('home-page')),
           Center(child: Text('customers-page')),
@@ -57,6 +56,7 @@ void main() {
     expect(find.text('کڕیار'), findsOneWidget);
     expect(find.text('زیاتر'), findsOneWidget);
     expect(find.text('4'), findsOneWidget);
+    expect(find.text('Live'), findsNothing);
 
     await tester.tap(find.text('کڕیار'));
     await tester.pumpAndSettle();
