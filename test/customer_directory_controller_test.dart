@@ -190,9 +190,9 @@ void main() {
     addTearDown(controller.dispose);
 
     await controller.initialize();
-    await controller.selectFilter('with_debt');
+    await controller.selectFilters({'with_debt'});
 
-    expect(controller.filter, 'with_debt');
+    expect(controller.filters, {'with_debt'});
     expect(gateway.lastFilter, 'with_debt');
     expect(controller.users.single.id, 'debt-only');
 
