@@ -30,6 +30,19 @@ abstract class CustomerDirectoryGateway {
     cursor: cursor,
   );
 
+  Future<Map<String, dynamic>> getAdvancedCustomerPage({
+    required String search,
+    required Set<String> filters,
+    required String sort,
+    required int limit,
+    required int amount,
+    required int days,
+    Map<String, dynamic>? cursor,
+  }) => getSortedCustomerPage(
+    search: search, filter: filters.join(','), sort: sort,
+    limit: limit, cursor: cursor,
+  );
+
   Future<List<RecordModel>> getUsers({
     required String role,
     required String search,
@@ -103,6 +116,32 @@ class PBServiceCustomerDirectoryGateway implements CustomerDirectoryGateway {
         'p_sort': sort,
         'p_limit': limit.clamp(1, 100),
         'p_offset': int.tryParse('${cursor?['offset'] ?? 0}') ?? 0,
+      },
+    );
+    return _decodeCustomerPage(raw);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getAdvancedCustomerPage({
+    required String search,
+    required Set<String> filters,
+    required String sort,
+    required int limit,
+    required int amount,
+    required int days,
+    Map<String, dynamic>? cursor,
+  }) async {
+    await PBService.ensureInitialized();
+    final raw = await PBService.client.rpc(
+      'get_customer_directory_page_advanced',
+      params: {
+        'p_search': search.trim(),
+        'p_filter': filters.isEmpty ? 'all' : filters.join(','),
+        'p_sort': sort,
+        'p_limit': limit.clamp(1, 100),
+        'p_offset': int.tryParse('${cursor?['offset'] ?? 0}') ?? 0,
+        'p_amount': amount,
+        'p_days': days,
       },
     );
     return _decodeCustomerPage(raw);
@@ -195,20 +234,122 @@ class CustomerDirectoryController extends ChangeNotifier {
   }) : gateway = gateway ?? const PBServiceCustomerDirectoryGateway();
 
   static const Map<String, String> sortLabels = {
+    'last_activity_desc': 'دوایین مامەڵە سەرەتا',
+    'last_activity_asc': 'کۆنترین دوا مامەڵە سەرەتا',
     'newest': 'نوێترین کڕیار',
     'oldest': 'کۆنترین کڕیار',
-    'recent_activity': 'دوایین مامەڵە',
-    'name': 'ناو',
+    'last_debt_newest': 'دوایین قەرز سەرەتا',
+    'last_debt_oldest': 'کۆنترین دوا قەرز سەرەتا',
+    'last_payment_newest': 'دوایین پارەدانەوە سەرەتا',
+    'last_payment_oldest': 'کۆنترین دوا پارەدانەوە سەرەتا',
+    'first_activity_newest': 'نوێترین یەکەم مامەڵە',
+    'first_activity_oldest': 'کۆنترین یەکەم مامەڵە',
+    'profile_updated_newest': 'نوێترین گۆڕانی پرۆفایل',
+    'days_since_activity_high': 'زۆرترین ڕۆژ بەبێ مامەڵە',
+    'days_since_activity_low': 'کەمترین ڕۆژ بەبێ مامەڵە',
+    'days_since_payment_high': 'زۆرترین ڕۆژ بەبێ پارەدانەوە',
+    'days_since_payment_low': 'کەمترین ڕۆژ بەبێ پارەدانەوە',
+    'name_asc': 'ناو: ئەلف بۆ یێ',
+    'name_desc': 'ناو: یێ بۆ ئەلف',
     'balance_high': 'گەورەترین قەرزی ماوە',
     'balance_low': 'بچووکترین قەرزی ماوە',
+    'loan_total_high': 'زۆرترین کۆی قەرزی وەرگیراو',
+    'loan_total_low': 'کەمترین کۆی قەرزی وەرگیراو',
+    'open_count_high': 'زۆرترین قەرزی کراوە',
+    'open_count_low': 'کەمترین قەرزی کراوە',
+    'last_debt_amount_high': 'بەرزترین بڕی دوا قەرز',
+    'last_debt_amount_low': 'نزمترین بڕی دوا قەرز',
+    'max_debt_high': 'گەورەترین مامەڵەی قەرز',
+    'max_debt_low': 'بچووکترین گەورەترین قەرز',
+    'month_loan_high': 'زۆرترین قەرزی ئەم مانگە',
+    'avg_debt_high': 'بەرزترین تێکڕای قەرز',
+    'avg_debt_low': 'نزمترین تێکڕای قەرز',
+    'payment_total_high': 'زۆرترین کۆی پارەدانەوە',
+    'payment_total_low': 'کەمترین کۆی پارەدانەوە',
+    'last_payment_amount_high': 'بەرزترین دوا پارەدانەوە',
+    'last_payment_amount_low': 'نزمترین دوا پارەدانەوە',
+    'max_payment_high': 'گەورەترین مامەڵەی پارەدانەوە',
+    'max_payment_low': 'بچووکترین گەورەترین پارەدانەوە',
+    'month_payment_high': 'زۆرترین پارەدانەوەی ئەم مانگە',
+    'avg_payment_high': 'بەرزترین تێکڕای پارەدانەوە',
+    'avg_payment_low': 'نزمترین تێکڕای پارەدانەوە',
+    'payment_ratio_high': 'زۆرترین ڕێژەی پارەدانەوە',
+    'payment_ratio_low': 'کەمترین ڕێژەی پارەدانەوە',
+    'transaction_count_high': 'زۆرترین مامەڵە',
+    'transaction_count_low': 'کەمترین مامەڵە',
   };
-
   static const Map<String, String> filterLabels = {
-    'all': 'هەموو',
+    'all': 'هەموو کڕیاران',
     'with_debt': 'قەرزدار',
     'debt_free': 'بێ قەرز',
-    'active': 'چالاک',
-    'inactive': 'ناچالاک',
+    'overdue': 'قەرزی دواکەوتوو',
+    'fully_paid': 'قەرزی بە تەواوی دراوە',
+    'partially_paid': 'بەشێک لە قەرزی دراوە',
+    'paid_with_debt': 'پارەدانەوەی هەیە و قەرزدارە',
+    'debt_no_payment': 'قەرزدارە و پارەی نەداوە',
+    'multiple_open_debts': 'زیاتر لە یەک قەرزی کراوە',
+    'more_than_3_open': 'زیاتر لە ٣ قەرزی کراوە',
+    'no_open_debt': 'هیچ قەرزی کراوەی نییە',
+    'balance_over_100k': 'قەرزی ماوەی سەروو ١٠٠ هەزار',
+    'balance_over_1m': 'قەرزی ماوەی سەروو ١ ملیۆن',
+    'balance_over_amount': 'قەرزی ماوەی سەروو بڕی دیاریکراو',
+    'balance_under_amount': 'قەرزی ماوەی خوار بڕی دیاریکراو',
+    'debt_growth_month': 'قەرزی ئەم مانگە زیاتر لە پارەدانەوەیە',
+    'debt_decrease_month': 'پارەدانەوەی ئەم مانگە زیاتر لە قەرزە',
+    'has_payment': 'پارەدانەوەی هەیە',
+    'no_payment': 'هەرگیز پارەی نەداوەتەوە',
+    'today_payment': 'پارەدانەوەی ئەمڕۆ',
+    'payment_week': 'پارەدانەوەی ٧ ڕۆژی ڕابردوو',
+    'payment_this_month': 'پارەدانەوەی ئەم مانگە',
+    'no_payment_this_month': 'بێ پارەدانەوەی ئەم مانگە',
+    'no_payment_30': 'بێ پارەدانەوە بۆ ٣٠ ڕۆژ',
+    'payment_within_days': 'پارەدانەوە لە ماوەی دیاریکراو',
+    'payment_outside_days': 'بێ پارەدانەوە لە ماوەی دیاریکراو',
+    'active': 'هەژماری چالاک',
+    'inactive': 'هەژماری ناچالاک',
+    'no_transactions': 'بێ مامەڵە',
+    'today_activity': 'مامەڵەی ئەمڕۆ',
+    'today_debt': 'قەرزی نوێی ئەمڕۆ',
+    'new_this_month': 'کڕیاری نوێی ئەم مانگە',
+    'no_debt_this_month': 'بێ قەرزی نوێی ئەم مانگە',
+    'inactive_30': 'بێ مامەڵە بۆ ٣٠ ڕۆژ',
+    'inactive_90': 'بێ مامەڵە بۆ ٩٠ ڕۆژ',
+    'activity_within_days': 'مامەڵە لە ماوەی دیاریکراو',
+    'activity_outside_days': 'بێ مامەڵە لە ماوەی دیاریکراو',
+    'both_week': 'قەرز و پارەدانەوە لە ٧ ڕۆژدا',
+    'one_transaction': 'تەنها یەک مامەڵە',
+    'last_debt': 'دوا مامەڵەی قەرز',
+    'last_payment': 'دوا مامەڵەی پارەدانەوە',
+    'last_payment_after_debt': 'دوا پارەدانەوە دوای دوا قەرز',
+    'last_debt_after_payment': 'دوا قەرز دوای دوا پارەدانەوە',
+    'vip': 'کڕیاری VIP',
+    'no_phone': 'بێ ژمارە تەلەفۆن',
+    'has_phone': 'ژمارە تەلەفۆنی هەیە',
+    'missing_names': 'ناوی باوک یان باپیری نییە',
+    'incomplete_profile': 'زانیاریی ناتەواو',
+    'duplicate_name': 'ناوی دووبارە',
+    'duplicate_phone': 'ژمارەی دووبارە',
+    'has_note': 'تێبینیی هەیە',
+    'loan_only': 'تەنها قەرزی هەیە',
+    'payment_only': 'تەنها پارەدانەوەی هەیە',
+    'currency_iqd': 'مامەڵەی دینار',
+    'currency_usd': 'مامەڵەی دۆلار',
+    'both_currencies': 'هەردوو دراوەکە',
+  };
+  static const Map<String, List<String>> filterGroups = {
+    'هەموو': ['all'],
+    'قەرز': ['with_debt', 'debt_free', 'overdue', 'fully_paid', 'partially_paid', 'paid_with_debt', 'debt_no_payment', 'multiple_open_debts', 'more_than_3_open', 'no_open_debt', 'balance_over_100k', 'balance_over_1m', 'balance_over_amount', 'balance_under_amount', 'debt_growth_month', 'debt_decrease_month'],
+    'پارەدانەوە': ['has_payment', 'no_payment', 'today_payment', 'payment_week', 'payment_this_month', 'no_payment_this_month', 'no_payment_30', 'payment_within_days', 'payment_outside_days'],
+    'چالاکی و کات': ['active', 'inactive', 'no_transactions', 'today_activity', 'today_debt', 'new_this_month', 'no_debt_this_month', 'inactive_30', 'inactive_90', 'activity_within_days', 'activity_outside_days', 'both_week', 'one_transaction', 'last_debt', 'last_payment', 'last_payment_after_debt', 'last_debt_after_payment'],
+    'زانیاری': ['vip', 'no_phone', 'has_phone', 'missing_names', 'incomplete_profile', 'duplicate_name', 'duplicate_phone', 'has_note'],
+    'جۆری مامەڵە': ['loan_only', 'payment_only', 'currency_iqd', 'currency_usd', 'both_currencies'],
+  };
+  static const Map<String, List<String>> sortGroups = {
+    'کات': ['last_activity_desc', 'last_activity_asc', 'newest', 'oldest', 'last_debt_newest', 'last_debt_oldest', 'last_payment_newest', 'last_payment_oldest', 'first_activity_newest', 'first_activity_oldest', 'profile_updated_newest', 'days_since_activity_high', 'days_since_activity_low', 'days_since_payment_high', 'days_since_payment_low'],
+    'ناو': ['name_asc', 'name_desc'],
+    'قەرز': ['balance_high', 'balance_low', 'loan_total_high', 'loan_total_low', 'open_count_high', 'open_count_low', 'last_debt_amount_high', 'last_debt_amount_low', 'max_debt_high', 'max_debt_low', 'month_loan_high', 'avg_debt_high', 'avg_debt_low'],
+    'پارەدانەوە': ['payment_total_high', 'payment_total_low', 'last_payment_amount_high', 'last_payment_amount_low', 'max_payment_high', 'max_payment_low', 'month_payment_high', 'avg_payment_high', 'avg_payment_low', 'payment_ratio_high', 'payment_ratio_low'],
+    'ژمارە': ['transaction_count_high', 'transaction_count_low'],
   };
 
   final String role;
@@ -229,8 +370,10 @@ class CustomerDirectoryController extends ChangeNotifier {
   String? _loadError;
   String? _inboxError;
   Map<String, dynamic>? _nextCursor;
-  String _filter = 'all';
-  String _sort = 'newest';
+  Set<String> _filters = {};
+  String _sort = 'last_activity_desc';
+  int _amount = 100000;
+  int _days = 30;
   String _search = '';
   int _generation = 0;
 
@@ -252,7 +395,9 @@ class CustomerDirectoryController extends ChangeNotifier {
   int get totalUsers => _totalUsers;
   String? get loadError => _loadError;
   String? get inboxError => _inboxError;
-  String get filter => _filter;
+  Set<String> get filters => Set.unmodifiable(_filters);
+  int get amount => _amount;
+  int get days => _days;
   String get sort => _sort;
   String get search => _search;
   bool get isCustomerDirectory => role == 'customer';
@@ -301,9 +446,14 @@ class CustomerDirectoryController extends ChangeNotifier {
     await load(search: '');
   }
 
-  Future<void> selectFilter(String value) async {
-    if (!filterLabels.containsKey(value) || value == _filter) return;
-    _filter = value;
+  Future<void> selectFilters(Set<String> values, {int? amount, int? days}) async {
+    final selected = values.where((v) => v != 'all' && filterLabels.containsKey(v)).toSet();
+    final nextAmount = (amount ?? _amount).clamp(1, 1000000000000);
+    final nextDays = (days ?? _days).clamp(1, 3650);
+    if (setEquals(selected, _filters) && nextAmount == _amount && nextDays == _days) return;
+    _filters = selected;
+    _amount = nextAmount;
+    _days = nextDays;
     _safeNotify();
     await load(search: _search);
   }
@@ -358,20 +508,15 @@ class CustomerDirectoryController extends ChangeNotifier {
       Map<String, dynamic>? nextCursor;
 
       if (isCustomerDirectory) {
-        final page = await (_sort == 'newest'
-            ? gateway.getCustomerPage(
-                search: requestedSearch,
-                filter: _filter,
-                limit: 60,
-                cursor: loadMore ? _nextCursor : null,
-              )
-            : gateway.getSortedCustomerPage(
+        final page = await gateway.getAdvancedCustomerPage(
           search: requestedSearch,
+          filters: _filters,
           sort: _sort,
-          filter: _filter,
           limit: 60,
+          amount: _amount,
+          days: _days,
           cursor: loadMore ? _nextCursor : null,
-        ));
+        );
         users = List<RecordModel>.from(page['items'] as List);
         pageInbox = Map<String, Map<String, dynamic>>.from(
           page['inbox'] as Map,
@@ -380,7 +525,7 @@ class CustomerDirectoryController extends ChangeNotifier {
         hasMore = page['hasMore'] == true;
         nextCursor = page['nextCursor'] as Map<String, dynamic>?;
 
-        if (!loadMore && _filter == 'all' && _sort == 'newest') {
+        if (!loadMore && _filters.isEmpty && _sort == 'newest') {
           final pinned =
               await gateway.getPinnedCustomers(search: requestedSearch);
           if (pinned.isNotEmpty) {
