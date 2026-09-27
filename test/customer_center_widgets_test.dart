@@ -40,8 +40,10 @@ void main() {
     await tester.enterText(find.byType(TextField), 'ئارام');
     expect(search, 'ئارام');
 
-    await tester.tap(find.text('قەرزدار'));
-    await tester.pump();
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('قەرزدار').last);
+    await tester.pumpAndSettle();
     expect(filter, 'with_debt');
 
     await tester.tap(find.byTooltip('زیادکردن'));
