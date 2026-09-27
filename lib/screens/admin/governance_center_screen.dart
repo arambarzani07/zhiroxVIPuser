@@ -22,6 +22,13 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
   List<Map<String, dynamic>> employees = [];
   List<Map<String, dynamic>> logs = [];
   List<Map<String, dynamic>> backups = [];
+  final auditSearch = TextEditingController();
+  String? auditActor;
+  DateTime? auditFrom;
+  DateTime? auditTo;
+  bool auditHasMore = false;
+  bool auditLoading = false;
+  static const auditPageSize = 100;
 
   @override
   void initState() {
@@ -32,6 +39,7 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
 
   @override
   void dispose() {
+    auditSearch.dispose();
     tabs.dispose();
     super.dispose();
   }
@@ -51,9 +59,6 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
         client.from('profiles').select(
           'id,name,phone,active,employee_permissions!employee_permissions_employee_id_fkey(*)',
         ).eq('role', 'employee').eq('admin_id', uid).order('name'),
-        client.from('audit_logs').select(
-          'id,actor_id,action,entity_type,entity_id,changed_fields,occurred_at',
-        ).order('occurred_at', ascending: false).limit(200),
         client.from('tenant_backups').select(
           'id,label,backup_type,record_counts,created_at,expires_at',
         ).order('created_at', ascending: false).limit(50),
@@ -61,9 +66,9 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       if (!mounted) return;
       setState(() {
         employees = rows(result[0]);
-        logs = rows(result[1]);
-        backups = rows(result[2]);
+        backups = rows(result[1]);
       });
+      await loadAudit(reset: true);
     } catch (e) {
       if (mounted) {
         setState(() => error = AppHelpers.backendErrorMessage(
@@ -73,6 +78,101 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       }
     } finally {
       if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> loadAudit({bool reset = false}) async {
+    if (auditLoading) return;
+    setState(() => auditLoading = true);
+    try {
+      final start = reset ? 0 : logs.length;
+      var query = PBService.client.from('audit_logs').select(
+        'id,actor_id,action,entity_type,entity_id,changed_fields,occurred_at',
+      );
+      if (auditActor != null) query = query.eq('actor_id', auditActor!);
+      if (auditFrom != null) {
+        query = query.gte('occurred_at', auditFrom!.toUtc().toIso8601String());
+      }
+      if (auditTo != null) {
+        final end = DateTime(auditTo!.year, auditTo!.month, auditTo!.day + 1);
+        query = query.lt('occurred_at', end.toUtc().toIso8601String());
+      }
+      final term = auditSearch.text.trim();
+      if (term.isNotEmpty) {
+        final safe = term.replaceAll(RegExp(r'[,()]'), '');
+        query = query.or('entity_id.ilike.%$safe%,action.ilike.%$safe%,entity_type.ilike.%$safe%');
+      }
+      final page = rows(await query.order('occurred_at', ascending: false)
+          .range(start, start + auditPageSize - 1));
+      if (!mounted) return;
+      setState(() {
+        logs = reset ? page : [...logs, ...page];
+        auditHasMore = page.length == auditPageSize;
+      });
+    } catch (e) {
+      if (mounted) {
+        toast(AppHelpers.backendErrorMessage(e,
+            fallback: 'گەڕان لە تۆماری چاودێری سەرکەوتوو نەبوو.'), bad: true);
+      }
+    } finally {
+      if (mounted) setState(() => auditLoading = false);
+    }
+  }
+
+  Future<void> pickAuditDate({required bool from}) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: (from ? auditFrom : auditTo) ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (date == null) return;
+    setState(() { if (from) { auditFrom = date; } else { auditTo = date; } });
+    await loadAudit(reset: true);
+  }
+
+  Future<void> exportAuditCsv() async {
+    try {
+      final all = <Map<String, dynamic>>[];
+      const chunkSize = 500;
+      for (var offset = 0; ; offset += chunkSize) {
+        var query = PBService.client.from('audit_logs').select(
+          'actor_id,action,entity_type,entity_id,occurred_at',
+        );
+        if (auditActor != null) query = query.eq('actor_id', auditActor!);
+        if (auditFrom != null) query = query.gte('occurred_at', auditFrom!.toUtc().toIso8601String());
+        if (auditTo != null) {
+          final end = DateTime(auditTo!.year, auditTo!.month, auditTo!.day + 1);
+          query = query.lt('occurred_at', end.toUtc().toIso8601String());
+        }
+        final safe = auditSearch.text.trim().replaceAll(RegExp(r'[,()]'), '');
+        if (safe.isNotEmpty) {
+          query = query.or(
+            'entity_id.ilike.%$safe%,action.ilike.%$safe%,entity_type.ilike.%$safe%',
+          );
+        }
+        final page = rows(await query.order('occurred_at', ascending: false)
+            .range(offset, offset + chunkSize - 1));
+        all.addAll(page);
+        if (page.length < chunkSize) break;
+      }
+      String csv(dynamic value) => '"${(value ?? '').toString().replaceAll('"', '""')}"';
+      final content = StringBuffer('\uFEFFبەروار,کاربەر,کردار,جۆر,ناسنامە\n');
+      for (final row in all) {
+        content.writeln([
+          row['occurred_at'], row['actor_id'], row['action'],
+          row['entity_type'], row['entity_id'],
+        ].map(csv).join(','));
+      }
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/zhirox-audit-${DateTime.now().millisecondsSinceEpoch}.csv');
+      await file.writeAsString(content.toString());
+      await Share.shareXFiles([XFile(file.path)]);
+    } catch (e) {
+      if (mounted) {
+        toast(AppHelpers.backendErrorMessage(e,
+            fallback: 'هەناردەکردنی تۆماری چاودێری سەرکەوتوو نەبوو.'), bad: true);
+      }
     }
   }
 
@@ -262,20 +362,61 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
   );
 
   Widget auditTab() => RefreshIndicator(
-    onRefresh: load,
-    child: ListView.separated(
+    onRefresh: () => loadAudit(reset: true),
+    child: ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: logs.length,
-      separatorBuilder: (_, __) => const Divider(),
-      itemBuilder: (_, i) {
-        final log = logs[i];
-        return ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.history, size: 18)),
-          title: Text(actionName((log['action'] ?? '').toString()) + ' • ' + (log['entity_type'] ?? '').toString()),
-          subtitle: Text('ID: ' + (log['entity_id'] ?? '').toString() + '\n' + (log['occurred_at'] ?? '').toString()),
-          isThreeLine: true,
-        );
-      },
+      children: [
+        TextField(
+          controller: auditSearch,
+          decoration: const InputDecoration(labelText: 'گەڕان بە کردار یان ناسنامە', prefixIcon: Icon(Icons.search)),
+          onSubmitted: (_) => loadAudit(reset: true),
+        ),
+        DropdownButton<String?>(
+          value: auditActor,
+          isExpanded: true,
+          items: [
+            const DropdownMenuItem<String?>(value: null, child: Text('هەموو کاربەران')),
+            for (final person in employees)
+              DropdownMenuItem<String?>(value: person['id'].toString(), child: Text((person['name'] ?? person['id']).toString())),
+          ],
+          onChanged: (value) { setState(() => auditActor = value); loadAudit(reset: true); },
+        ),
+        Wrap(spacing: 8, children: [
+          TextButton.icon(
+            onPressed: () => pickAuditDate(from: true),
+            icon: const Icon(Icons.date_range),
+            label: Text(auditFrom == null ? 'لە بەروار' : '${auditFrom!.year}/${auditFrom!.month}/${auditFrom!.day}'),
+          ),
+          TextButton.icon(
+            onPressed: () => pickAuditDate(from: false),
+            icon: const Icon(Icons.date_range),
+            label: Text(auditTo == null ? 'تا بەروار' : '${auditTo!.year}/${auditTo!.month}/${auditTo!.day}'),
+          ),
+          TextButton(
+            onPressed: () { setState(() { auditFrom = null; auditTo = null; auditActor = null; auditSearch.clear(); }); loadAudit(reset: true); },
+            child: const Text('پاککردنەوەی پاڵاوتن'),
+          ),
+          TextButton.icon(
+            onPressed: exportAuditCsv,
+            icon: const Icon(Icons.file_download_outlined),
+            label: const Text('هەناردەکردنی CSV'),
+          ),
+        ]),
+        for (var i = 0; i < logs.length; i++) ...[
+          if (i > 0) const Divider(),
+          ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.history, size: 18)),
+            title: Text(actionName((logs[i]['action'] ?? '').toString()) + ' • ' + (logs[i]['entity_type'] ?? '').toString()),
+            subtitle: Text('ناسنامە: ' + (logs[i]['entity_id'] ?? '').toString() + '\n' + (logs[i]['occurred_at'] ?? '').toString()),
+            isThreeLine: true,
+          ),
+        ],
+        if (auditHasMore) TextButton(
+          onPressed: auditLoading ? null : () => loadAudit(),
+          child: const Text('زیاتر پیشان بدە'),
+        ),
+        if (auditLoading) const Center(child: CircularProgressIndicator()),
+      ],
     ),
   );
 

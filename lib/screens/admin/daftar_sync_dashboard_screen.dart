@@ -15,6 +15,7 @@ class DaftarSyncDashboardScreen extends StatefulWidget {
 
 class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
   Map<String, dynamic> _data = const {};
+  List<Map<String, dynamic>> _alerts = const [];
   bool _loading = true;
   bool _syncing = false;
   String? _error;
@@ -52,9 +53,14 @@ class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
     try {
       await PBService.ensureInitialized();
       final raw = await PBService.client.rpc('get_my_daftar_sync_dashboard');
+      List<Map<String, dynamic>> alerts = const [];
+      try {
+        alerts = _rows(await PBService.client.rpc('get_my_daftar_sync_alerts'));
+      } catch (_) { /* An older deployment may not have the alert migration. */ }
       if (!mounted) return;
       setState(() {
         _data = _map(raw);
+        _alerts = alerts;
         _error = null;
       });
     } catch (error) {
@@ -102,6 +108,29 @@ class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
       if (mounted) setState(() => _syncing = false);
     }
   }
+
+  Future<void> _acknowledgeAlert(String id) async {
+    try {
+      await PBService.client.rpc('acknowledge_my_daftar_sync_alert',
+          params: {'p_alert_id': id});
+      await _load(silent: true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppHelpers.backendErrorMessage(error,
+              fallback: 'نەتوانرا ئاگادارکردنەوەکە تۆمار بکرێت.')),
+        ));
+      }
+    }
+  }
+
+  String _alertLabel(String kind) => switch (kind) {
+    'failures' => 'شکستی دووبارەی Sync',
+    'stale' => 'دواکەوتنی هاوتاکردن',
+    'dead_letters' => 'هەڵەی چارەسەرنەکراو',
+    'outbound' => 'گۆڕانکاریی نەنێردراو',
+    _ => 'کێشەی پەیوەندی',
+  };
 
   String _date(dynamic value) {
     final parsed = DateTime.tryParse(value?.toString() ?? '');
@@ -177,6 +206,25 @@ class _DaftarSyncDashboardScreenState extends State<DaftarSyncDashboardScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (_alerts.isNotEmpty) ...[
+                    const AppSectionHeader(title: 'ئاگادارکردنەوەی پەیوەندی'),
+                    const SizedBox(height: 8),
+                    AppSurface(child: Column(children: [
+                      for (final alert in _alerts)
+                        ListTile(
+                          leading: const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                          title: Text(_alertLabel(alert['kind']?.toString() ?? '')),
+                          subtitle: Text(_date(alert['first_seen_at'])),
+                          trailing: alert['acknowledged_at'] != null
+                              ? const Icon(Icons.done)
+                              : TextButton(
+                                  onPressed: () => _acknowledgeAlert(alert['id'].toString()),
+                                  child: const Text('بینرا'),
+                                ),
+                        ),
+                    ])),
+                    const SizedBox(height: 14),
+                  ],
                   AppSurface(
                     child: Column(
                       children: [

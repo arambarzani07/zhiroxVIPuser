@@ -42,6 +42,10 @@ jobs:
         if: github.ref_name == 'user-source'
         run: supabase test db supabase/tests/audit40_integrity.test.sql
 
+      - name: Run operational gap regression
+        if: github.ref_name == 'user-source'
+        run: supabase test db supabase/tests/operational_gaps.test.sql
+
   build-ios:
     needs: database-regression
     runs-on: macos-latest
