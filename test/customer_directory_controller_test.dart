@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:zhirox/features/customers/customer_directory_controller.dart';
+import 'package:zhirox/features/customers/customer_directory_snapshot.dart';
 
 RecordModel record(String id, String name) => RecordModel.fromJson({
       'id': id,
@@ -165,7 +167,65 @@ class FakeDirectoryGateway implements CustomerDirectoryGateway {
   }
 }
 
+class FakeSnapshotStore implements CustomerDirectorySnapshotStore {
+  FakeSnapshotStore(this.preview);
+  final CustomerDirectorySnapshot preview;
+  CustomerDirectorySnapshot? saved;
+  @override
+  Future<CustomerDirectorySnapshot?> read(String userId, String tenantId) async =>
+      userId == 'viewer' && tenantId == 'admin' ? preview : null;
+  @override
+  Future<void> write(String userId, String tenantId,
+      CustomerDirectorySnapshot snapshot) async { saved = snapshot; }
+  @override
+  Future<void> clear(String userId, String tenantId) async { saved = null; }
+}
+
+class DelayedDirectoryGateway extends FakeDirectoryGateway {
+  final completer = Completer<Map<String, dynamic>>();
+  @override
+  Future<Map<String, dynamic>> getCustomerPage({
+    required String search, required String filter, required int limit,
+    Map<String, dynamic>? cursor,
+  }) => completer.future;
+}
+
 void main() {
+  test('protected preview is shown before a live directory response', () async {
+    final oldTime = DateTime.now().subtract(const Duration(minutes: 2));
+    final store = FakeSnapshotStore(CustomerDirectorySnapshot(
+      users: [record('saved', 'پێشوو')],
+      inbox: {'saved': {'remaining': 42}},
+      totalItems: 1, hasMore: false, nextCursor: null,
+      updatedAt: oldTime,
+    ));
+    final gateway = DelayedDirectoryGateway();
+    final controller = CustomerDirectoryController(
+      role: 'customer', adminId: 'admin', snapshotUserId: 'viewer',
+      gateway: gateway, snapshotStore: store,
+      observeConnectivity: false, subscribeRealtime: false,
+    );
+    addTearDown(controller.dispose);
+    final pending = controller.initialize();
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.users.single.id, 'saved');
+    expect(controller.showingSnapshot, isTrue);
+    expect(controller.lastUpdatedAt, oldTime);
+    expect(controller.isLoading, isTrue);
+
+    gateway.completer.complete({
+      'items': [record('live', 'نوێ')],
+      'inbox': <String, Map<String, dynamic>>{'live': {'remaining': 55}},
+      'totalItems': 1, 'hasMore': false, 'nextCursor': null,
+    });
+    await pending;
+    expect(controller.users.single.id, 'live');
+    expect(controller.showingSnapshot, isFalse);
+    expect(controller.isLoading, isFalse);
+    expect(controller.lastUpdatedAt!.isAfter(oldTime), isTrue);
+    expect(store.saved?.users.single.id, 'live');
+  });
+
   test('customer controller merges pinned rows and paginates without duplicates',
       () async {
     final gateway = FakeDirectoryGateway();
