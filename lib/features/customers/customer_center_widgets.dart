@@ -16,7 +16,6 @@ class CustomerCenterHeader extends StatelessWidget {
     this.canAdd = false,
     this.onAdd,
     this.showFilters = false,
-    this.selectedFilters,
     this.selectedFilter = 'all',
     this.onFilterSelected,
   });
@@ -31,7 +30,6 @@ class CustomerCenterHeader extends StatelessWidget {
   final bool canAdd;
   final VoidCallback? onAdd;
   final bool showFilters;
-  final Set<String>? selectedFilters;
   final String selectedFilter;
   final ValueChanged<String>? onFilterSelected;
 
@@ -154,43 +152,41 @@ class CustomerCenterHeader extends StatelessWidget {
               ),
               if (showFilters) ...[
                 const SizedBox(height: AppSpacing.sm),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerLowest,
+                    borderRadius: BorderRadius.circular(AppDesign.radiusSmall),
+                    border: Border.all(color: scheme.outlineVariant),
+                  ),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.tune_rounded,
-                        color: Colors.white70,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 7),
-                      ...CustomerDirectoryController.filterLabels.entries.map(
-                        (entry) {
-                          final selected = (selectedFilters ?? {selectedFilter}).contains(entry.key);
-                          return Padding(
-                            padding: const EdgeInsetsDirectional.only(end: 7),
-                            child: FilterChip(
-                              label: Text(entry.value),
-                              selected: selected,
-                              onSelected: (_) => onFilterSelected?.call(entry.key),
-                              showCheckmark: true,
-                              checkmarkColor: scheme.primary,
-                              selectedColor: Colors.white,
-                              backgroundColor: scheme.primaryContainer,
-                              side: BorderSide(
-                                color: selected ? Colors.white : scheme.onPrimaryContainer,
-                              ),
-                              labelStyle: TextStyle(
-                                color: selected ? scheme.primary : scheme.onPrimaryContainer,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w800,
-                              ),
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
+                      Icon(Icons.tune_rounded, color: scheme.primary, size: 19),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedFilter,
+                            isExpanded: true,
+                            dropdownColor: scheme.surface,
+                            icon: Icon(Icons.keyboard_arrow_down_rounded,
+                                color: scheme.primary),
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
                             ),
-                          );
-                        },
+                            items: CustomerDirectoryController.filterLabels.entries
+                                .map((entry) => DropdownMenuItem<String>(
+                                      value: entry.key,
+                                      child: Text(entry.value),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) onFilterSelected?.call(value);
+                            },
+                          ),
+                        ),
                       ),
                     ],
                   ),
