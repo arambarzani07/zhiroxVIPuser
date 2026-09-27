@@ -14,7 +14,7 @@ void main() {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
     var search = '';
-    var filter = '';
+    var filters = <String>{};
     var sort = '';
     var addCount = 0;
 
@@ -31,8 +31,7 @@ void main() {
           canAdd: true,
           onAdd: () => addCount++,
           showFilters: true,
-          selectedFilter: 'all',
-          onFilterSelected: (value) => filter = value,
+          onFiltersSelected: (values, amount, days) => filters = values,
           onSortSelected: (value) => sort = value,
         ),
       ),
@@ -44,13 +43,17 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('directory-فلتەر')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('قەرزدار').last);
+    await tester.tap(find.byKey(const ValueKey('filter-with_debt')));
     await tester.pumpAndSettle();
-    expect(filter, 'with_debt');
+    await tester.tap(find.byKey(const ValueKey('filter-active')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('جێبەجێکردن'));
+    await tester.pumpAndSettle();
+    expect(filters, {'with_debt', 'active'});
 
     await tester.tap(find.byKey(const ValueKey('directory-ڕیزکردن')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('گەورەترین قەرزی ماوە').last);
+    await tester.tap(find.byKey(const ValueKey('sort-balance_high')));
     await tester.pumpAndSettle();
     expect(sort, 'balance_high');
 
