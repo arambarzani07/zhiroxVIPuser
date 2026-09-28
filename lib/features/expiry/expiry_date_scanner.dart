@@ -25,6 +25,9 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   bool _starting = false;
   bool _disposed = false;
   DateTime? _lastFrame;
+  DateTime? _focusReadyAt;
+  Offset _focusPoint = const Offset(0.5, 0.5);
+  double _zoom = 1;
 
   @override
   void initState() {
@@ -87,6 +90,9 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       _description = description;
       _camera = controller;
       setState(() => _error = null);
+      // The small print is often held close to the lens. Ask the camera to
+      // focus at the label before handing frames to text recognition.
+      await _focus(const Offset(0.5, 0.5));
       await controller.startImageStream(_readFrame);
     } catch (_) {
       await _release();
@@ -95,6 +101,36 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       }
     } finally {
       _starting = false;
+    }
+  }
+
+  Future<void> _focus(Offset point) async {
+    final camera = _camera;
+    if (camera == null || !camera.value.isInitialized) return;
+    _focusReadyAt = DateTime.now().add(const Duration(milliseconds: 700));
+    if (mounted) setState(() => _focusPoint = point);
+    try {
+      await camera.setFocusMode(FocusMode.auto);
+      await camera.setFocusPoint(point);
+      await camera.setExposurePoint(point);
+    } on CameraException {
+      // Some lenses do not expose point focus. Continuous autofocus remains
+      // available, and the user can still move the package farther away.
+    }
+  }
+
+  Future<void> _setZoom(double requested) async {
+    final camera = _camera;
+    if (camera == null || !camera.value.isInitialized) return;
+    try {
+      final min = await camera.getMinZoomLevel();
+      final max = await camera.getMaxZoomLevel();
+      final level = requested.clamp(min, max);
+      await camera.setZoomLevel(level);
+      if (mounted) setState(() => _zoom = level);
+      await _focus(_focusPoint);
+    } on CameraException {
+      // Leave the current zoom intact when unsupported by the device.
     }
   }
 
@@ -142,6 +178,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     if (_disposed ||
         _busy ||
         _candidates.isNotEmpty ||
+        (_focusReadyAt != null && now.isBefore(_focusReadyAt!)) ||
         (_lastFrame != null &&
             now.difference(_lastFrame!).inMilliseconds < 500)) {
       return;
@@ -182,9 +219,12 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     if (camera != null &&
         camera.value.isInitialized &&
         !camera.value.isStreamingImages) {
+      await _focus(_focusPoint);
       await camera.startImageStream(_readFrame);
     } else if (camera == null) {
       await _start();
+    } else {
+      await _focus(_focusPoint);
     }
   }
 
@@ -206,7 +246,39 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
         children: [
           Expanded(
             child: camera != null && camera.value.isInitialized
-                ? CameraPreview(camera)
+                ? LayoutBuilder(
+                    builder: (context, constraints) => GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (tap) => unawaited(
+                        _focus(
+                          Offset(
+                            (tap.localPosition.dx / constraints.maxWidth).clamp(
+                              0.0,
+                              1.0,
+                            ),
+                            (tap.localPosition.dy / constraints.maxHeight)
+                                .clamp(0.0, 1.0),
+                          ),
+                        ),
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned.fill(child: CameraPreview(camera)),
+                          Positioned(
+                            left: constraints.maxWidth * _focusPoint.dx - 18,
+                            top: constraints.maxHeight * _focusPoint.dy - 18,
+                            child: const IgnorePointer(
+                              child: Icon(
+                                Icons.center_focus_strong,
+                                color: Colors.white,
+                                size: 36,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 : Center(
                     child: _error == null
                         ? const CircularProgressIndicator()
@@ -220,8 +292,29 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'بەرواری EXP لە بەرامبەر کامێرا ڕابگرە؛ پێش پاشەکەوتکردن پشتڕاستی بکەرەوە.',
+                    'دەقەکە ١٥–٢٠ سم لە کامێرا دوور ڕابگرە و لەسەر بەرواری EXP تێپ بکە تا فوکەس بکرێت. پێش پاشەکەوتکردن پشتڕاستی بکەرەوە.',
                   ),
+                  if (_candidates.isEmpty)
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('١×'),
+                          selected: _zoom < 1.5,
+                          onSelected: (_) => unawaited(_setZoom(1)),
+                        ),
+                        ChoiceChip(
+                          label: const Text('٢× · بۆ دەقی بچووک'),
+                          selected: _zoom >= 1.5,
+                          onSelected: (_) => unawaited(_setZoom(2)),
+                        ),
+                        IconButton(
+                          tooltip: 'دووبارە فوکەس بکە',
+                          onPressed: () => unawaited(_focus(_focusPoint)),
+                          icon: const Icon(Icons.center_focus_strong),
+                        ),
+                      ],
+                    ),
                   if (_candidates.isEmpty)
                     TextButton.icon(
                       onPressed: _retry,
