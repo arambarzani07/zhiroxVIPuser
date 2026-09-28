@@ -19,13 +19,17 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     with WidgetsBindingObserver {
   CameraController? _camera;
   CameraDescription? _description;
+  List<CameraDescription> _backCameras = const [];
+  CameraDescription? _selectedCamera;
   final _recognizer = TextRecognizer(script: TextRecognitionScript.latin);
   List<DateTime> _candidates = const [];
   String? _error;
   String _recognizedPreview = '';
   bool _busy = false;
   bool _starting = false;
+  bool _switching = false;
   bool _disposed = false;
+  int _cameraGeneration = 0;
   DateTime? _lastFrame;
   DateTime? _focusReadyAt;
   Offset _focusPoint = const Offset(0.5, 0.5);
@@ -51,6 +55,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   }
 
   Future<void> _release() async {
+    _cameraGeneration++;
     final camera = _camera;
     _camera = null;
     if (camera != null) {
@@ -68,19 +73,58 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       if (cameras.isEmpty) {
         throw CameraException('no_camera', 'No camera');
       }
-      final description = cameras.firstWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.back,
-        orElse: () => cameras.first,
+      _backCameras = cameras
+          .where((camera) => camera.lensDirection == CameraLensDirection.back)
+          .toList();
+      final closeLens = _backCameras.where(
+        (camera) => camera.lensType == CameraLensType.ultraWide,
       );
-      final controller = CameraController(
-        description,
-        ResolutionPreset.veryHigh,
-        enableAudio: false,
-        imageFormatGroup: Platform.isAndroid
-            ? ImageFormatGroup.nv21
-            : ImageFormatGroup.bgra8888,
-      );
-      await controller.initialize();
+      // The ultra-wide lens can focus closer than the main lens on supported
+      // iPhones. Use it for small expiry stamps, with the main lens as fallback.
+      final preferred =
+          _selectedCamera ??
+          (Platform.isIOS && closeLens.isNotEmpty
+              ? closeLens.first
+              : (_backCameras.isEmpty ? cameras.first : _backCameras.first));
+      final alternatives = [
+        preferred,
+        ..._backCameras.where(
+          (camera) =>
+              camera.name != preferred.name &&
+              camera.lensType == CameraLensType.wide,
+        ),
+        ..._backCameras.where(
+          (camera) =>
+              camera.name != preferred.name &&
+              camera.lensType != CameraLensType.wide,
+        ),
+      ];
+      CameraController? controller;
+      CameraDescription? description;
+      for (final candidate in alternatives) {
+        final attempt = CameraController(
+          candidate,
+          ResolutionPreset.veryHigh,
+          enableAudio: false,
+          imageFormatGroup: Platform.isAndroid
+              ? ImageFormatGroup.nv21
+              : ImageFormatGroup.bgra8888,
+        );
+        try {
+          await attempt.initialize();
+          controller = attempt;
+          description = candidate;
+          break;
+        } catch (_) {
+          await attempt.dispose();
+        }
+      }
+      if (controller == null || description == null) {
+        throw CameraException(
+          'no_supported_camera',
+          'No supported back camera',
+        );
+      }
       if (_disposed ||
           !mounted ||
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused ||
@@ -90,10 +134,12 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
         return;
       }
       _description = description;
+      _selectedCamera = description;
       _camera = controller;
       setState(() => _error = null);
-      // The small print is often held close to the lens. Ask the camera to
-      // focus at the label before handing frames to text recognition.
+      // Framing at 2x lets the user hold a small label farther from the lens,
+      // where autofocus has a better chance of resolving it.
+      await _setZoom(2);
       await _focus(const Offset(0.5, 0.5));
       await controller.startImageStream(_readFrame);
     } catch (_) {
@@ -113,11 +159,39 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     if (mounted) setState(() => _focusPoint = point);
     try {
       await camera.setFocusMode(FocusMode.auto);
-      await camera.setFocusPoint(point);
-      await camera.setExposurePoint(point);
+      if (camera.value.focusPointSupported) {
+        await camera.setFocusPoint(point);
+      }
     } on CameraException {
-      // Some lenses do not expose point focus. Continuous autofocus remains
-      // available, and the user can still move the package farther away.
+      // Keep the camera running if point autofocus is unavailable.
+    }
+    try {
+      if (camera.value.exposurePointSupported) {
+        await camera.setExposurePoint(point);
+      }
+    } on CameraException {
+      // Exposure metering at the center is optional.
+    }
+  }
+
+  Future<void> _switchLens(CameraDescription description) async {
+    if (_switching || _starting || _description?.name == description.name)
+      return;
+    _switching = true;
+    _selectedCamera = description;
+    try {
+      await _release();
+      if (mounted && !_disposed) {
+        setState(() {
+          _recognizedPreview = '';
+          _error = null;
+          _zoom = 1;
+          _lastFrame = null;
+        });
+        await _start();
+      }
+    } finally {
+      _switching = false;
     }
   }
 
@@ -208,12 +282,13 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     }
     _busy = true;
     _lastFrame = now;
-    unawaited(_recognize(input));
+    unawaited(_recognize(input, _cameraGeneration));
   }
 
-  Future<void> _recognize(InputImage input) async {
+  Future<void> _recognize(InputImage input, int generation) async {
     try {
       final text = await _recognizer.processImage(input);
+      if (generation != _cameraGeneration) return;
       if (mounted && !_disposed) {
         final preview = text.text.replaceAll(RegExp(r'\s+'), ' ').trim();
         if (preview != _recognizedPreview) {
@@ -328,8 +403,34 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'تەنها بەرواری E یان EXP بخەرە ناو چوارچێوە. ئەگەر تار بوو لەسەر بەروارەکە تێپ بکە. پێش پاشەکەوتکردن پشتڕاستی بکەرەوە.',
+                    'تەنها بەرواری E یان EXP بخەرە ناو چوارچێوە. ئەگەر تارە، کاڵاکە کەمێک دوورتر بگرە و لەسەر بەروارەکە تێپ بکە. پێش پاشەکەوتکردن پشتڕاستی بکەرەوە.',
                   ),
+                  if (_candidates.isEmpty &&
+                      _backCameras.any(
+                        (lens) => lens.lensType == CameraLensType.ultraWide,
+                      ) &&
+                      _backCameras.any(
+                        (lens) => lens.lensType == CameraLensType.wide,
+                      ))
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final lens in _backCameras.where(
+                          (lens) =>
+                              lens.lensType == CameraLensType.ultraWide ||
+                              lens.lensType == CameraLensType.wide,
+                        ))
+                          ChoiceChip(
+                            label: Text(
+                              lens.lensType == CameraLensType.ultraWide
+                                  ? 'نزیک · ماکرۆ'
+                                  : 'ئاسایی',
+                            ),
+                            selected: _description?.name == lens.name,
+                            onSelected: (_) => unawaited(_switchLens(lens)),
+                          ),
+                      ],
+                    ),
                   if (_candidates.isEmpty)
                     Wrap(
                       spacing: 8,
