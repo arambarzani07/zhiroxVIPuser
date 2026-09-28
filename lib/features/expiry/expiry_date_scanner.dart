@@ -397,8 +397,9 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     if (_capturing ||
         camera == null ||
         !camera.value.isInitialized ||
-        _photoPath != null)
+        _photoPath != null) {
       return;
+    }
     setState(() {
       _capturing = true;
       _error = null;
@@ -406,7 +407,9 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     // Invalidate OCR callbacks from the stream before switching to a JPEG.
     _cameraGeneration++;
     try {
-      if (camera.value.isStreamingImages) await camera.stopImageStream();
+      if (camera.value.isStreamingImages) {
+        await camera.stopImageStream();
+      }
       // The same recognizer cannot process a stream frame and a photo at once.
       while (_busy && mounted && identical(_camera, camera)) {
         await Future<void>.delayed(const Duration(milliseconds: 80));
