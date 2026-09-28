@@ -105,8 +105,9 @@ class ExpiryDateParser {
       final expiryMark = _expiry.allMatches(line).lastOrNull;
       if (_made.hasMatch(line) &&
           expiryMark == null &&
-          !_gs1Expiry.hasMatch(line))
+          !_gs1Expiry.hasMatch(line)) {
         continue;
+      }
       // When production and expiry share a line, do not propose the
       // production date as an expiry candidate.
       final dateText = expiryMark == null
