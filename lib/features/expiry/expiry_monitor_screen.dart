@@ -20,6 +20,9 @@ class ExpiryMonitorScreen extends StatefulWidget {
 }
 
 class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
+  bool get _mobileFeatures => !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+       defaultTargetPlatform == TargetPlatform.android);
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _arrivals = [];
   Map<String, List<Map<String, dynamic>>> _arrivalsByProduct = {};
@@ -73,7 +76,7 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
         }
         _loading = false;
       });
-      if (!kIsWeb) {
+      if (_mobileFeatures) {
         unawaited(_syncReminders(adminId, auth.userId, arrivals));
       }
     } catch (error) {
@@ -228,7 +231,7 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
                   controller: lookup,
                   decoration: InputDecoration(
                     labelText: 'بارکۆد یان کۆدی کاڵا',
-                    suffixIcon: IconButton(
+                    suffixIcon: _mobileFeatures ? IconButton(
                       tooltip: 'سکانکردنی بارکۆد',
                       icon: const Icon(Icons.qr_code_scanner),
                       onPressed: () async {
@@ -240,7 +243,7 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
                           formError = null;
                         });
                       },
-                    ),
+                    ) : null,
                   ),
                   onChanged: (text) => refresh(() {
                     product = _findProduct(text);
@@ -279,7 +282,7 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
                     }
                   },
                 ),
-                if (!kIsWeb)
+                if (_mobileFeatures)
                   OutlinedButton.icon(
                     icon: const Icon(Icons.document_scanner_outlined),
                     label: const Text('خوێندنەوەی بەروار بە کامێرا'),
@@ -704,7 +707,7 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
       const Text(
         'ئەم بەشە تەنها بەروار چاودێری دەکات؛ بڕ و فرۆشتن حساب ناکات.',
       ),
-      if (!kIsWeb)
+      if (_mobileFeatures)
         SwitchListTile.adaptive(
           title: const Text('ئاگادارکردنەوەی بەسەرچوونی کاڵا'),
           subtitle: Text(
