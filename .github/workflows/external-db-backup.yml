@@ -1,6 +1,10 @@
 name: Encrypted external database backup
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/external-db-backup.yml'
   workflow_dispatch:
   schedule:
     - cron: '15 2 * * *'
@@ -21,8 +25,23 @@ jobs:
           BACKUP_URL: ${{ secrets.ZHIROX_BACKUP_DB_URL }}
           BACKUP_KEY: ${{ secrets.ZHIROX_BACKUP_KEY_B64 }}
         run: |
-          test -n "$BACKUP_URL" || { echo 'Missing ZHIROX_BACKUP_DB_URL'; exit 1; }
-          test -n "$BACKUP_KEY" || { echo 'Missing ZHIROX_BACKUP_KEY_B64'; exit 1; }
+          if [[ -z "$BACKUP_URL" || -z "$BACKUP_KEY" ]]; then
+            echo "::error::Encrypted backup is not configured. Set ZHIROX_BACKUP_DB_URL and ZHIROX_BACKUP_KEY_B64 as repository Actions secrets."
+            exit 1
+          fi
+          if [[ "$BACKUP_URL" != *"madoflmbretqghqbqaak"* ]]; then
+            echo "::error::Backup URL does not identify the production project."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import base64, os
+          try:
+              key = base64.b64decode(os.environ['BACKUP_KEY'], validate=True)
+          except Exception:
+              raise SystemExit('::error::Backup key must be base64 encoded')
+          if len(key) != 32:
+              raise SystemExit('::error::Backup key must encode exactly 32 bytes')
+          PY
       - name: Dump production database (temporary runner only)
         env:
           ZHIROX_BACKUP_DB_URL: ${{ secrets.ZHIROX_BACKUP_DB_URL }}
@@ -40,6 +59,7 @@ jobs:
           python scripts/encrypt_external_backup.py "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/database.zhxb"
           python scripts/verify_external_backup.py "$RUNNER_TEMP/zhirox-backup/database.zhxb" "$RUNNER_TEMP/zhirox-backup/verified.dump"
           cmp "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/verified.dump"
+          docker run --rm -v "$RUNNER_TEMP/zhirox-backup:/backup:ro" postgres:17 pg_restore --list /backup/verified.dump >/dev/null
           shred -u "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/verified.dump"
       - name: Upload encrypted archive
         uses: actions/upload-artifact@v4
@@ -48,3 +68,10 @@ jobs:
           path: ${{ runner.temp }}/zhirox-backup/database.zhxb
           if-no-files-found: error
           retention-days: 30
+      - name: Confirm encrypted backup artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/zhirox-backup/database.zhxb"
+          echo 'Encrypted backup created and verified; GitHub artifact upload completed.' >> "$GITHUB_STEP_SUMMARY"
