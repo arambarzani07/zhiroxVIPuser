@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:zhirox/features/expiry/expiry_date_parser.dart';
+import 'package:zhirox/features/expiry/expiry_frame_crop.dart';
 
 class ExpiryDateScanner extends StatefulWidget {
   const ExpiryDateScanner({super.key});
@@ -163,13 +164,25 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     final imageRotation = InputImageRotationValue.fromRawValue(rotation);
     if (format == null || imageRotation == null) return null;
     final plane = image.planes.first;
-    return InputImage.fromBytes(
+    final cropped = ExpiryFrameCrop.crop(
       bytes: plane.bytes,
+      width: image.width,
+      height: image.height,
+      bytesPerRow: plane.bytesPerRow,
+      bgra: Platform.isIOS,
+      quarterTurn:
+          image.width > image.height &&
+          (camera.value.deviceOrientation == DeviceOrientation.portraitUp ||
+              camera.value.deviceOrientation == DeviceOrientation.portraitDown),
+    );
+    if (cropped == null) return null;
+    return InputImage.fromBytes(
+      bytes: cropped.bytes,
       metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
+        size: Size(cropped.width.toDouble(), cropped.height.toDouble()),
         rotation: imageRotation,
         format: format,
-        bytesPerRow: plane.bytesPerRow,
+        bytesPerRow: cropped.bytesPerRow,
       ),
     );
   }
@@ -185,7 +198,14 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       return;
     }
     final input = _input(frame);
-    if (input == null) return;
+    if (input == null) {
+      if (mounted && _error == null) {
+        setState(
+          () => _error = 'فۆرماتی وێنەی کامێرا بۆ خوێندنەوە بەردەست نییە.',
+        );
+      }
+      return;
+    }
     _busy = true;
     _lastFrame = now;
     unawaited(_recognize(input));
@@ -194,7 +214,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   Future<void> _recognize(InputImage input) async {
     try {
       final text = await _recognizer.processImage(input);
-      if (mounted && !_disposed && text.text.isNotEmpty) {
+      if (mounted && !_disposed) {
         final preview = text.text.replaceAll(RegExp(r'\s+'), ' ').trim();
         if (preview != _recognizedPreview) {
           setState(() => _recognizedPreview = preview);
@@ -261,17 +281,25 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                         _focus(
                           Offset(
                             (tap.localPosition.dx / constraints.maxWidth).clamp(
-                              0.0,
-                              1.0,
+                              ExpiryFrameCrop.left,
+                              ExpiryFrameCrop.right,
                             ),
                             (tap.localPosition.dy / constraints.maxHeight)
-                                .clamp(0.0, 1.0),
+                                .clamp(
+                                  ExpiryFrameCrop.top,
+                                  ExpiryFrameCrop.bottom,
+                                ),
                           ),
                         ),
                       ),
                       child: Stack(
                         children: [
                           Positioned.fill(child: CameraPreview(camera)),
+                          const Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(painter: _DateGuidePainter()),
+                            ),
+                          ),
                           Positioned(
                             left: constraints.maxWidth * _focusPoint.dx - 18,
                             top: constraints.maxHeight * _focusPoint.dy - 18,
@@ -300,7 +328,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'دەقەکە ١٥–٢٠ سم لە کامێرا دوور ڕابگرە و لەسەر بەرواری EXP تێپ بکە تا فوکەس بکرێت. پێش پاشەکەوتکردن پشتڕاستی بکەرەوە.',
+                    'تەنها بەرواری E یان EXP بخەرە ناو چوارچێوە. ئەگەر تار بوو لەسەر بەروارەکە تێپ بکە. پێش پاشەکەوتکردن پشتڕاستی بکەرەوە.',
                   ),
                   if (_candidates.isEmpty)
                     Wrap(
@@ -325,10 +353,12 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                     ),
                   if (_candidates.isEmpty && _recognizedPreview.isNotEmpty)
                     Text(
-                      'دەقی خوێندراو: $_recognizedPreview',
+                      'دەقی ناو چوارچێوە: $_recognizedPreview',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                  if (_candidates.isEmpty && _error != null)
+                    Text(_error!, style: const TextStyle(color: Colors.orange)),
                   if (_candidates.isEmpty)
                     TextButton.icon(
                       onPressed: _retry,
@@ -358,4 +388,42 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       ),
     );
   }
+}
+
+class _DateGuidePainter extends CustomPainter {
+  const _DateGuidePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final frame = Rect.fromLTRB(
+      size.width * ExpiryFrameCrop.left,
+      size.height * ExpiryFrameCrop.top,
+      size.width * ExpiryFrameCrop.right,
+      size.height * ExpiryFrameCrop.bottom,
+    );
+    final shade = Paint()..color = const Color(0x88000000);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, frame.top), shade);
+    canvas.drawRect(
+      Rect.fromLTRB(0, frame.bottom, size.width, size.height),
+      shade,
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(0, frame.top, frame.left, frame.bottom),
+      shade,
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(frame.right, frame.top, size.width, frame.bottom),
+      shade,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(frame, const Radius.circular(12)),
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _DateGuidePainter oldDelegate) => false;
 }
