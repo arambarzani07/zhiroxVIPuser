@@ -105,9 +105,17 @@ class NotificationService {
     );
   }
 
-  static Future<void> cancelExpiry(int id) async {
+  static Future<void> cancelExpirySchedules({
+    required int firstId,
+    required int limit,
+  }) async {
     await init();
-    await _plugin.cancel(id);
+    final pending = await _plugin.pendingNotificationRequests();
+    for (final notice in pending) {
+      if (notice.id >= firstId && notice.id < firstId + limit) {
+        await _plugin.cancel(notice.id);
+      }
+    }
   }
 
   /// Show debt created notification

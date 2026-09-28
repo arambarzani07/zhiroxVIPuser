@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:zhirox/services/notification_service.dart';
 
 class ExpiryReminder {
@@ -15,14 +15,13 @@ class ExpiryReminderService {
   // iOS keeps at most 64 pending notifications for an app. Leave capacity
   // for its other features, and aggregate products due on the same day.
   static const maxScheduledDays = 40;
-  static const _scheduledIdsKey = 'expiry_scheduled_notification_ids';
+  static const _storage = FlutterSecureStorage();
 
   static String _enabledKey(String tenant, String user) =>
       'expiry_reminders_${tenant}_$user';
 
   static Future<bool> enabled(String tenant, String user) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_enabledKey(tenant, user)) ?? true;
+    return await _storage.read(key: _enabledKey(tenant, user)) != 'false';
   }
 
   static List<ExpiryReminder> plan(
@@ -53,13 +52,10 @@ class ExpiryReminderService {
   }
 
   static Future<void> clearDeviceSchedules() async {
-    final prefs = await SharedPreferences.getInstance();
-    final ids = prefs.getStringList(_scheduledIdsKey) ?? const <String>[];
-    for (final raw in ids) {
-      final id = int.tryParse(raw);
-      if (id != null) await NotificationService.cancelExpiry(id);
-    }
-    await prefs.remove(_scheduledIdsKey);
+    await NotificationService.cancelExpirySchedules(
+      firstId: _notificationBase,
+      limit: maxScheduledDays,
+    );
   }
 
   static Future<int> refresh({
@@ -71,21 +67,19 @@ class ExpiryReminderService {
     if (!await enabled(tenant, user) ||
         !await NotificationService.isPermissionGranted())
       return 0;
-    final prefs = await SharedPreferences.getInstance();
-    final scheduled = <String>[];
+    var scheduled = 0;
     try {
       for (final reminder in plan(arrivals, DateTime.now())) {
-        final id = _notificationBase + scheduled.length;
+        final id = _notificationBase + scheduled;
         await NotificationService.scheduleExpiry(
           id: id,
           when: reminder.when,
           body:
               '${reminder.count} بەرواری کاڵا نزیک دەبنەوە؛ بەشی چاودێری کاڵا بپشکنە.',
         );
-        scheduled.add('$id');
-        await prefs.setStringList(_scheduledIdsKey, scheduled);
+        scheduled++;
       }
-      return scheduled.length;
+      return scheduled;
     } catch (_) {
       await clearDeviceSchedules();
       rethrow;
@@ -103,12 +97,13 @@ class ExpiryReminderService {
         'مۆڵەتی ئاگادارکردنەوە لە ڕێکخستنەکانی ئامێر چالاک بکە.',
       );
     }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_enabledKey(tenant, user), value);
+    await _storage.write(key: _enabledKey(tenant, user), value: '$value');
     try {
       return await refresh(tenant: tenant, user: user, arrivals: arrivals);
     } catch (_) {
-      if (value) await prefs.setBool(_enabledKey(tenant, user), false);
+      if (value) {
+        await _storage.write(key: _enabledKey(tenant, user), value: 'false');
+      }
       rethrow;
     }
   }
