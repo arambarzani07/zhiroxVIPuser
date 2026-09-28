@@ -10,6 +10,9 @@ class ExpiryDateParser {
   static final _monthYear = RegExp(
     r'(?<![\d/.-])(\d{1,2})\s*[/.-]\s*(\d{2,4})(?!\d)',
   );
+  // Many packages print "EXP07 2026" without a separator. Only parse the
+  // spaced variant when an expiry label is present, to exclude stock codes.
+  static final _spacedMonthYear = RegExp(r'(?<!\d)(\d{1,2})\s+(20\d{2})(?!\d)');
   static final _yearMonth = RegExp(
     r'(?<!\d)(20\d{2})\s*[/.-]\s*(\d{1,2})(?![/.-]\d|\d)',
   );
@@ -34,7 +37,7 @@ class ExpiryDateParser {
     caseSensitive: false,
   );
   static final _expiry = RegExp(
-    r'\b(exp|exd|expiry|expires|expiration|best\s*before|use\s*by|bbe|bbd?|bbs)\b|'
+    r'\b(exp|exd|expiry|expires|expiration|best\s*before|use\s*by|bbe|bbd?|bbs)(?=\b|\d)|'
     r'(?<![a-z])e\s*[:：.]?\s*(?=\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|$)|'
     r'انتهاء|الانتهاء|الصلاحية|صالح\s*لغاية|بەسەرچوون',
     caseSensitive: false,
@@ -61,10 +64,19 @@ class ExpiryDateParser {
 
   static String _digits(String raw) {
     const local = '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹';
-    return raw.replaceAllMapped(RegExp('[$local]'), (m) {
+    final digits = raw.replaceAllMapped(RegExp('[$local]'), (m) {
       final offset = local.indexOf(m[0]!);
       return '${offset % 10}';
     });
+    // Printed EXP07 is sometimes recognized as EXPO7. Correct O only in
+    // this tightly constrained month/year context; never alter product names.
+    return digits.replaceAllMapped(
+      RegExp(
+        r'\b(EXP|EXD|BBE|BBD|BB)\s*O(?=[1-9]\s+20\d{2}\b)',
+        caseSensitive: false,
+      ),
+      (match) => '${match[1]}0',
+    );
   }
 
   static DateTime? _valid(int year, int month, int day) {
@@ -112,6 +124,23 @@ class ExpiryDateParser {
       int.parse(match[2]!),
       int.parse(match[1]!),
     );
+  }
+
+  /// A month/year stamp has no printed day. Callers should explain that its
+  /// suggested expiry is the final calendar day of the printed month.
+  static bool isMonthYearOnly(String text) {
+    for (final line in _digits(text).split(RegExp(r'[\r\n]+'))) {
+      final label = _expiry.allMatches(line).lastOrNull;
+      if (label == null) continue;
+      final after = line.substring(label.end);
+      if ((_monthYear.hasMatch(after) || _spacedMonthYear.hasMatch(after)) &&
+          !_fullNumeric.hasMatch(after) &&
+          !_dayMonthName.hasMatch(after) &&
+          !_monthNameDay.hasMatch(after)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static List<DateTime> candidates(String text) {
@@ -277,7 +306,10 @@ class ExpiryDateParser {
       // A package may print only a month and year. Its expiry is the last
       // calendar day of that month. Require an expiry label to avoid prices.
       if (preferred && !hasFullDate) {
-        for (final match in _monthYear.allMatches(dateText)) {
+        for (final match in [
+          ..._monthYear.allMatches(dateText),
+          ..._spacedMonthYear.allMatches(dateText),
+        ]) {
           final year = _year(match[2]!);
           final month = int.parse(match[1]!);
           if (year >= 2000 && year <= 2100 && month >= 1 && month <= 12) {

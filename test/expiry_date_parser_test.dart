@@ -29,6 +29,23 @@ void main() {
     );
   });
 
+  test('recognizes attached EXP month and narrow OCR O/zero confusion', () {
+    for (final printed in [
+      'PROD 2023 EXP07 2026',
+      'GLYSOLID BRSR344 FR? 2023 EXPO7 2026',
+      'EXP 07 2026',
+      'EXD07 2026',
+    ]) {
+      expect(ExpiryDateParser.printedDateKind(printed), 'expiry');
+      expect(ExpiryDateParser.candidates(printed), [DateTime(2026, 7, 31)]);
+      expect(ExpiryDateParser.isMonthYearOnly(printed), isTrue);
+    }
+    expect(ExpiryDateParser.candidates('PROD 07 2023'), isEmpty);
+    expect(ExpiryDateParser.candidates('LOT 07 2026'), isEmpty);
+    expect(ExpiryDateParser.candidates('EXPO8 PRODUCT'), isEmpty);
+    expect(ExpiryDateParser.isMonthYearOnly('EXP 28/07/2026'), isFalse);
+  });
+
   test('recognizes type and prioritizes the labelled expiry on packaging', () {
     expect(
       ExpiryDateParser.printedDateKind('MFG 01/07/2026\nEXP 28/12/2026'),

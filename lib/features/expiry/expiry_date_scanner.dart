@@ -31,6 +31,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   String? _photoPath;
   String? _printedDateKind;
   String? _photoScopeMessage;
+  bool _monthYearOnly = false;
   bool _capturing = false;
   bool _busy = false;
   bool _starting = false;
@@ -472,6 +473,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       setState(() {
         _photoPath = selectedPhoto;
         _printedDateKind = kind;
+        _monthYearOnly = ExpiryDateParser.isMonthYearOnly(recognizedText);
         _photoScopeMessage = useCrop
             ? 'تەنها ناو چوارچێوەکە سکان کرا.'
             : 'لە ناو چوارچێوە بەرواری پشتڕاستکراو نەدۆزرایەوە؛ تەواوی وێنەکە خوێندرایەوە. بەروارەکە لەسەر پاکەتەکە بپشکنە.';
@@ -583,6 +585,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       _photoPath = null;
       _printedDateKind = null;
       _photoScopeMessage = null;
+      _monthYearOnly = false;
       _dateObservations.clear();
       _framesWithDates = 0;
       _error = null;
@@ -869,6 +872,11 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                         Text(
                           _photoScopeMessage!,
                           style: const TextStyle(color: Colors.orange),
+                        ),
+                      if (_monthYearOnly)
+                        const Text(
+                          'لەسەر کاڵاکە تەنها مانگ و ساڵ نووسراوە؛ ڕۆژی پێشنیارکراو کۆتا ڕۆژی ئەو مانگەیە.',
+                          style: TextStyle(color: Colors.orange),
                         ),
                       if (_recognizedPreview.isNotEmpty)
                         Text(
