@@ -29,8 +29,11 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   bool _starting = false;
   bool _switching = false;
   bool _disposed = false;
+  bool _torchOn = false;
+  int _emptyScans = 0;
   int _cameraGeneration = 0;
   DateTime? _lastFrame;
+  DateTime? _lastAutoRefocus;
   DateTime? _focusReadyAt;
   Offset _focusPoint = const Offset(0.5, 0.5);
   double _zoom = 1;
@@ -58,6 +61,8 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     _cameraGeneration++;
     final camera = _camera;
     _camera = null;
+    _torchOn = false;
+    _emptyScans = 0;
     if (camera != null) {
       try {
         await camera.dispose();
@@ -188,6 +193,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
           _error = null;
           _zoom = 1;
           _lastFrame = null;
+          _lastAutoRefocus = null;
         });
         await _start();
       }
@@ -208,6 +214,22 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       await _focus(_focusPoint);
     } on CameraException {
       // Leave the current zoom intact when unsupported by the device.
+    }
+  }
+
+  Future<void> _toggleTorch() async {
+    final camera = _camera;
+    if (camera == null || !camera.value.isInitialized) return;
+    final enabled = !_torchOn;
+    try {
+      await camera.setFlashMode(enabled ? FlashMode.torch : FlashMode.off);
+      if (mounted && identical(_camera, camera)) {
+        setState(() => _torchOn = enabled);
+      }
+    } on CameraException {
+      if (mounted) {
+        setState(() => _error = 'چرای کامێرا لەم ئامێرەدا بەردەست نییە.');
+      }
     }
   }
 
@@ -294,6 +316,23 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
         final preview = text.text.replaceAll(RegExp(r'\s+'), ' ').trim();
         if (preview != _recognizedPreview) {
           setState(() => _recognizedPreview = preview);
+        }
+        if (preview.isEmpty && _candidates.isEmpty) {
+          _emptyScans++;
+          final now = DateTime.now();
+          if (_emptyScans >= 4 &&
+              (_lastAutoRefocus == null ||
+                  now.difference(_lastAutoRefocus!) >
+                      const Duration(seconds: 8))) {
+            _lastAutoRefocus = now;
+            _emptyScans = 0;
+            // Retry the guide center after several unreadable frames, without
+            // repeatedly interrupting continuous autofocus while it settles.
+            await _focus(const Offset(0.5, 0.5));
+            if (generation != _cameraGeneration) return;
+          }
+        } else {
+          _emptyScans = 0;
         }
       }
       final dates = ExpiryDateParser.candidates(text.text);
@@ -450,6 +489,15 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                           tooltip: 'دووبارە فوکەس بکە',
                           onPressed: () => unawaited(_focus(_focusPoint)),
                           icon: const Icon(Icons.center_focus_strong),
+                        ),
+                        IconButton(
+                          tooltip: _torchOn
+                              ? 'چرای کامێرا بکوژێنەوە'
+                              : 'چرای کامێرا هەڵبکە',
+                          onPressed: () => unawaited(_toggleTorch()),
+                          icon: Icon(
+                            _torchOn ? Icons.flash_on : Icons.flash_off,
+                          ),
                         ),
                       ],
                     ),
