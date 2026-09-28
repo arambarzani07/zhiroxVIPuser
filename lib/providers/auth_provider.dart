@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -138,13 +139,16 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _clearLocalUser() async {
-    try {
-      await ExpiryReminderService.clearDeviceSchedules();
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        await ExpiryReminderService.clearDeviceSchedules();
+      } catch (_) {}
+    }
     _user = null;
   }
 
   Future<void> _refreshExpiryReminders() async {
+    if (kIsWeb) return;
     if (userRole != 'admin' && userRole != 'employee') return;
     final tenant = adminId;
     final actor = userId;

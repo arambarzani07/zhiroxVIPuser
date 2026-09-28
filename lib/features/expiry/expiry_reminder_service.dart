@@ -65,8 +65,9 @@ class ExpiryReminderService {
   }) async {
     await clearDeviceSchedules();
     if (!await enabled(tenant, user) ||
-        !await NotificationService.isPermissionGranted())
+        !await NotificationService.isPermissionGranted()) {
       return 0;
+    }
     var scheduled = 0;
     try {
       for (final reminder in plan(arrivals, DateTime.now())) {

@@ -102,6 +102,8 @@ class NotificationService {
       tz.TZDateTime.from(when.toUtc(), tz.UTC),
       details,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
