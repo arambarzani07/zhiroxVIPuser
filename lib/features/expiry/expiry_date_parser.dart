@@ -30,17 +30,17 @@ class ExpiryDateParser {
     caseSensitive: false,
   );
   static final _bestBefore = RegExp(
-    r'\b(best\s*before|bbd?|bbs)\b|يفضل\s*قبل|باشترە\s*پێش',
+    r'\b(best\s*before|bbe|bbd?|bbs)\b|يفضل\s*قبل|باشترە\s*پێش',
     caseSensitive: false,
   );
   static final _expiry = RegExp(
-    r'\b(exp|expiry|expires|expiration|best\s*before|use\s*by|bbd?|bbs)\b|'
+    r'\b(exp|exd|expiry|expires|expiration|best\s*before|use\s*by|bbe|bbd?|bbs)\b|'
     r'(?<![a-z])e\s*[:：.]?\s*(?=\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|$)|'
-    r'انتهاء|الانتهاء|الصلاحية|بەسەرچوون',
+    r'انتهاء|الانتهاء|الصلاحية|صالح\s*لغاية|بەسەرچوون',
     caseSensitive: false,
   );
   static final _made = RegExp(
-    r'\b(mfg|mfd|manufactur\w*|production|prod)\b|'
+    r'\b(mfg|mfd|manufactur\w*|production|prod|packed\s*on|pkd)\b|'
     r'(?<![a-z])p\s*[:：.]?\s*(?=\d|$)|'
     r'انتاج|الإنتاج|صنع|بەرهەمهێنان',
     caseSensitive: false,
@@ -49,9 +49,13 @@ class ExpiryDateParser {
   /// A printed production date must never be presented as an expiry date.
   static String printedDateKind(String text) {
     final normalized = _digits(text);
-    if (_expiry.hasMatch(normalized) || _gs1Expiry.hasMatch(normalized)) {
-      return _bestBefore.hasMatch(normalized) ? 'best_before' : 'expiry';
+    final marks = _expiry.allMatches(normalized).toList();
+    if (marks.isNotEmpty) {
+      return _bestBefore.hasMatch(marks.last.group(0)!)
+          ? 'best_before'
+          : 'expiry';
     }
+    if (_gs1Expiry.hasMatch(normalized)) return 'expiry';
     return _made.hasMatch(normalized) ? 'production' : 'unlabelled';
   }
 

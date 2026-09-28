@@ -14,6 +14,21 @@ void main() {
     expect(ExpiryDateParser.candidates('P 01 07 2026'), isEmpty);
   });
 
+  test('additional printed expiry labels and date types', () {
+    expect(ExpiryDateParser.printedDateKind('BBE 12/2026'), 'best_before');
+    expect(ExpiryDateParser.candidates('BBE 12/2026'), [
+      DateTime(2026, 12, 31),
+    ]);
+    expect(ExpiryDateParser.candidates('PKD 01/07/2026'), isEmpty);
+    expect(ExpiryDateParser.candidates('EXD 28/12/2026'), [
+      DateTime(2026, 12, 28),
+    ]);
+    expect(
+      ExpiryDateParser.printedDateKind('BBE 10/2026\nEXP 28/12/2026'),
+      'expiry',
+    );
+  });
+
   test('recognizes type and prioritizes the labelled expiry on packaging', () {
     expect(
       ExpiryDateParser.printedDateKind('MFG 01/07/2026\nEXP 28/12/2026'),

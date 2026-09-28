@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +30,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   String _recognizedPreview = '';
   String? _photoPath;
   String? _printedDateKind;
+  String? _photoScopeMessage;
   bool _capturing = false;
   bool _busy = false;
   bool _starting = false;
@@ -406,6 +408,8 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     });
     // Invalidate OCR callbacks from the stream before switching to a JPEG.
     _cameraGeneration++;
+    String? originalPath;
+    String? cropPath;
     try {
       if (camera.value.isStreamingImages) {
         await camera.stopImageStream();
@@ -416,21 +420,62 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       }
       if (!mounted || !identical(_camera, camera)) return;
       final photo = await camera.takePicture();
-      final recognized = await _recognizer.processImage(
-        InputImage.fromFilePath(photo.path),
-      );
-      if (!mounted || !identical(_camera, camera)) {
-        unawaited(File(photo.path).delete().then((_) {}, onError: (_) {}));
-        return;
+      originalPath = photo.path;
+      File? crop;
+      try {
+        crop = await _cropDatePhoto(photo.path);
+        cropPath = crop.path;
+      } catch (_) {
+        // The uncropped photo remains available when a device cannot decode
+        // the JPEG or allocate the cropped image.
       }
-      final kind = ExpiryDateParser.printedDateKind(recognized.text);
+      final croppedText = crop == null
+          ? ''
+          : (await _recognizer.processImage(
+              InputImage.fromFilePath(crop.path),
+            )).text;
+      final croppedKind = ExpiryDateParser.printedDateKind(croppedText);
+      final croppedDates = ExpiryDateParser.candidates(croppedText);
+      final preferCrop =
+          croppedDates.isNotEmpty &&
+          (croppedKind == 'expiry' || croppedKind == 'best_before');
+      final fullText = preferCrop
+          ? ''
+          : (await _recognizer.processImage(
+              InputImage.fromFilePath(photo.path),
+            )).text;
+      final fullKind = ExpiryDateParser.printedDateKind(fullText);
+      final fullDates = ExpiryDateParser.candidates(fullText);
+      final useCrop =
+          preferCrop ||
+          (croppedDates.isNotEmpty &&
+              fullDates.isEmpty &&
+              croppedKind != 'production');
+      final recognizedText = useCrop ? croppedText : fullText;
+      final selectedPhoto = useCrop && crop != null ? crop.path : photo.path;
+      final kind = useCrop ? croppedKind : fullKind;
       final dates = kind == 'production'
           ? <DateTime>[]
-          : ExpiryDateParser.candidates(recognized.text);
+          : (useCrop ? croppedDates : fullDates);
+      if (selectedPhoto != photo.path) {
+        unawaited(_deleteFile(photo.path));
+        originalPath = null;
+      }
+      if (crop != null && selectedPhoto != crop.path) {
+        unawaited(_deleteFile(crop.path));
+        cropPath = null;
+      }
+      if (!mounted || !identical(_camera, camera)) {
+        unawaited(_deleteFile(selectedPhoto));
+        return;
+      }
       setState(() {
-        _photoPath = photo.path;
+        _photoPath = selectedPhoto;
         _printedDateKind = kind;
-        _recognizedPreview = recognized.text
+        _photoScopeMessage = useCrop
+            ? 'تەنها ناو چوارچێوەکە سکان کرا.'
+            : 'لە ناو چوارچێوە بەرواری پشتڕاستکراو نەدۆزرایەوە؛ تەواوی وێنەکە خوێندرایەوە. بەروارەکە لەسەر پاکەتەکە بپشکنە.';
+        _recognizedPreview = recognizedText
             .replaceAll(RegExp(r'\s+'), ' ')
             .trim();
         _candidates = dates.take(4).toList();
@@ -440,7 +485,15 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
             ? 'بەرواری بەسەرچوون لە وێنەکە نەدۆزرایەوە. وێنەی ڕوونتر بگرە.'
             : null;
       });
+      originalPath = null;
+      cropPath = null;
     } catch (_) {
+      if (originalPath != null) {
+        unawaited(_deleteFile(originalPath));
+      }
+      if (cropPath != null) {
+        unawaited(_deleteFile(cropPath));
+      }
       if (mounted) {
         setState(
           () => _error =
@@ -460,6 +513,68 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     }
   }
 
+  Future<File> _cropDatePhoto(String path) async {
+    final codec = await ui.instantiateImageCodec(
+      await File(path).readAsBytes(),
+    );
+    late final ui.FrameInfo frame;
+    try {
+      frame = await codec.getNextFrame();
+    } finally {
+      codec.dispose();
+    }
+    final source = frame.image;
+    try {
+      final wide = source.width > source.height;
+      final bounds = wide
+          ? ui.Rect.fromLTWH(
+              source.width * 0.35,
+              source.height * 0.04,
+              source.width * 0.30,
+              source.height * 0.92,
+            )
+          : ui.Rect.fromLTWH(
+              source.width * 0.04,
+              source.height * 0.35,
+              source.width * 0.92,
+              source.height * 0.30,
+            );
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      canvas.drawImageRect(
+        source,
+        bounds,
+        ui.Rect.fromLTWH(0, 0, bounds.width, bounds.height),
+        ui.Paint(),
+      );
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(
+        bounds.width.round(),
+        bounds.height.round(),
+      );
+      picture.dispose();
+      try {
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (bytes == null) throw StateError('Could not encode date crop');
+        final file = File(
+          '${Directory.systemTemp.path}/zhirox_date_${DateTime.now().microsecondsSinceEpoch}.png',
+        );
+        await file.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
+        return file;
+      } finally {
+        image.dispose();
+      }
+    } finally {
+      source.dispose();
+    }
+  }
+
+  Future<void> _deleteFile(String path) async {
+    try {
+      await File(path).delete();
+    } catch (_) {}
+  }
+
   Future<void> _retry() async {
     _cameraGeneration++;
     final oldPhoto = _photoPath;
@@ -467,15 +582,14 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       _candidates = const [];
       _photoPath = null;
       _printedDateKind = null;
+      _photoScopeMessage = null;
       _dateObservations.clear();
       _framesWithDates = 0;
       _error = null;
       _recognizedPreview = '';
     });
     if (oldPhoto != null) {
-      try {
-        await File(oldPhoto).delete();
-      } catch (_) {}
+      await _deleteFile(oldPhoto);
     }
     final camera = _camera;
     if (camera != null &&
@@ -498,6 +612,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                 '${detected.month.toString().padLeft(2, '0')}/'
                 '${detected.year}',
     );
+    final yearController = TextEditingController();
     String? error;
     try {
       final corrected = await showDialog<DateTime>(
@@ -505,16 +620,32 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
         builder: (dialogContext) => StatefulBuilder(
           builder: (dialogContext, update) => AlertDialog(
             title: const Text('ڕاستکردنەوەی بەروار'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.datetime,
-              textDirection: TextDirection.ltr,
-              decoration: InputDecoration(
-                labelText: 'ڕۆژ/مانگ/ساڵ',
-                hintText: '28/12/2026',
-                errorText: error,
-              ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType: TextInputType.datetime,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: 'ڕۆژ/مانگ/ساڵ',
+                    hintText: '28/12/2026',
+                    errorText: error,
+                  ),
+                ),
+                if (_photoPath != null)
+                  TextField(
+                    controller: yearController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    textDirection: TextDirection.ltr,
+                    decoration: const InputDecoration(
+                      labelText: 'ساڵەکە لەسەر پاکەتەکە دووبارە بنووسە',
+                      hintText: '2026',
+                    ),
+                  ),
+              ],
             ),
             actions: [
               TextButton(
@@ -531,6 +662,17 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                     );
                     return;
                   }
+                  if (_photoPath != null &&
+                      ExpiryDateParser.enteredDate(
+                            '01/01/${yearController.text.trim()}',
+                          )?.year !=
+                          date.year) {
+                    update(
+                      () => error =
+                          'ساڵەکە لەگەڵ بەرواری سەر پاکەتەکە یەکسان بکە.',
+                    );
+                    return;
+                  }
                   Navigator.of(dialogContext).pop(date);
                 },
                 child: const Text('پشتڕاستکردنەوە'),
@@ -542,12 +684,13 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       if (corrected != null && mounted) {
         final oldPhoto = _photoPath;
         if (oldPhoto != null) {
-          unawaited(File(oldPhoto).delete().then((_) {}, onError: (_) {}));
+          unawaited(_deleteFile(oldPhoto));
         }
         Navigator.of(context).pop(corrected);
       }
     } finally {
       controller.dispose();
+      yearController.dispose();
     }
   }
 
@@ -559,7 +702,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     unawaited(_recognizer.close());
     final photo = _photoPath;
     if (photo != null) {
-      unawaited(File(photo).delete().then((_) {}, onError: (_) {}));
+      unawaited(_deleteFile(photo));
     }
     super.dispose();
   }
@@ -625,144 +768,164 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                   ),
           ),
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'بەرواری EXP یان E بخەرە ناو چوارچێوە و وێنەیەکی ڕوون بگرە. لەگەڵ جۆری بەروارەکە و دەقی وێنەکە پێش پاشەکەوتکردن پشتڕاستی بکەرەوە.',
-                  ),
-                  if (_photoPath == null &&
-                      _candidates.isEmpty &&
-                      _backCameras.any(
-                        (lens) => lens.lensType == CameraLensType.ultraWide,
-                      ) &&
-                      _backCameras.any(
-                        (lens) => lens.lensType == CameraLensType.wide,
-                      ))
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        for (final lens in _backCameras.where(
-                          (lens) =>
-                              lens.lensType == CameraLensType.ultraWide ||
-                              lens.lensType == CameraLensType.wide,
-                        ))
-                          ChoiceChip(
-                            label: Text(
-                              lens.lensType == CameraLensType.ultraWide
-                                  ? 'نزیک · ماکرۆ'
-                                  : 'ئاسایی',
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.52,
+              ),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'بەرواری EXP یان E بخەرە ناو چوارچێوە و وێنەیەکی ڕوون بگرە. لەگەڵ جۆری بەروارەکە و دەقی وێنەکە پێش پاشەکەوتکردن پشتڕاستی بکەرەوە.',
+                      ),
+                      if (_photoPath == null &&
+                          _candidates.isEmpty &&
+                          _backCameras.any(
+                            (lens) => lens.lensType == CameraLensType.ultraWide,
+                          ) &&
+                          _backCameras.any(
+                            (lens) => lens.lensType == CameraLensType.wide,
+                          ))
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            for (final lens in _backCameras.where(
+                              (lens) =>
+                                  lens.lensType == CameraLensType.ultraWide ||
+                                  lens.lensType == CameraLensType.wide,
+                            ))
+                              ChoiceChip(
+                                label: Text(
+                                  lens.lensType == CameraLensType.ultraWide
+                                      ? 'نزیک · ماکرۆ'
+                                      : 'ئاسایی',
+                                ),
+                                selected: _description?.name == lens.name,
+                                onSelected: (_) => unawaited(_switchLens(lens)),
+                              ),
+                          ],
+                        ),
+                      if (_photoPath == null && _candidates.isEmpty)
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            ChoiceChip(
+                              label: const Text('١×'),
+                              selected: _zoom < 1.5,
+                              onSelected: (_) => unawaited(_setZoom(1)),
                             ),
-                            selected: _description?.name == lens.name,
-                            onSelected: (_) => unawaited(_switchLens(lens)),
+                            ChoiceChip(
+                              label: const Text('٢× · بۆ دەقی بچووک'),
+                              selected: _zoom >= 1.5,
+                              onSelected: (_) => unawaited(_setZoom(2)),
+                            ),
+                            IconButton(
+                              tooltip: 'دووبارە فوکەس بکە',
+                              onPressed: () => unawaited(_focus(_focusPoint)),
+                              icon: const Icon(Icons.center_focus_strong),
+                            ),
+                            IconButton(
+                              tooltip: _torchOn
+                                  ? 'چرای کامێرا بکوژێنەوە'
+                                  : 'چرای کامێرا هەڵبکە',
+                              onPressed: () => unawaited(_toggleTorch()),
+                              icon: Icon(
+                                _torchOn ? Icons.flash_on : Icons.flash_off,
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (_photoPath == null)
+                        FilledButton.icon(
+                          onPressed: _capturing ? null : _captureDatePhoto,
+                          icon: _capturing
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.camera_alt),
+                          label: Text(
+                            _capturing
+                                ? 'وێنەکە دەخوێندرێتەوە…'
+                                : 'وێنەی بەروار بگرە و سکان بکە',
                           ),
-                      ],
-                    ),
-                  if (_photoPath == null && _candidates.isEmpty)
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('١×'),
-                          selected: _zoom < 1.5,
-                          onSelected: (_) => unawaited(_setZoom(1)),
                         ),
-                        ChoiceChip(
-                          label: const Text('٢× · بۆ دەقی بچووک'),
-                          selected: _zoom >= 1.5,
-                          onSelected: (_) => unawaited(_setZoom(2)),
+                      if (_photoPath != null)
+                        Text(switch (_printedDateKind) {
+                          'expiry' => 'جۆری بەروار: بەسەرچوون (EXP)',
+                          'best_before' =>
+                            'جۆری بەروار: باشترە پێش (Best before)',
+                          'production' => 'جۆری بەروار: بەرهەمهێنان (P/MFG)',
+                          _ =>
+                            'جۆری بەروار: دیار نییە؛ پێش تۆمارکردن لەسەر پاکەتەکە بپشکنە',
+                        }),
+                      if (_photoScopeMessage != null)
+                        Text(
+                          _photoScopeMessage!,
+                          style: const TextStyle(color: Colors.orange),
                         ),
-                        IconButton(
-                          tooltip: 'دووبارە فوکەس بکە',
-                          onPressed: () => unawaited(_focus(_focusPoint)),
-                          icon: const Icon(Icons.center_focus_strong),
+                      if (_recognizedPreview.isNotEmpty)
+                        Text(
+                          'دەقی خوێندراوە: $_recognizedPreview',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        IconButton(
-                          tooltip: _torchOn
-                              ? 'چرای کامێرا بکوژێنەوە'
-                              : 'چرای کامێرا هەڵبکە',
-                          onPressed: () => unawaited(_toggleTorch()),
-                          icon: Icon(
-                            _torchOn ? Icons.flash_on : Icons.flash_off,
+                      if (_candidates.length > 1)
+                        const Text(
+                          'بەروارەکە چەند مانایەکی هەیە؛ ڕۆژ و مانگ و ساڵ لەسەر پاکەتەکە بپشکنە، پاشان پشتڕاستی بکەرەوە.',
+                          style: TextStyle(color: Colors.orange),
+                        ),
+                      if (_candidates.isEmpty && _error != null)
+                        Text(
+                          _error!,
+                          style: const TextStyle(color: Colors.orange),
+                        ),
+                      if (_candidates.isEmpty)
+                        Wrap(
+                          children: [
+                            TextButton.icon(
+                              onPressed: _retry,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('دووبارە هەوڵ بدە'),
+                            ),
+                            TextButton.icon(
+                              onPressed: _printedDateKind == 'production'
+                                  ? null
+                                  : () => unawaited(_correctDate()),
+                              icon: const Icon(Icons.edit_calendar),
+                              label: const Text('بەروار بە دەست بنووسە'),
+                            ),
+                          ],
+                        )
+                      else ...[
+                        for (final date in _candidates.take(4))
+                          ListTile(
+                            leading: const Icon(Icons.event_available),
+                            title: Text(
+                              '${date.year}/${date.month}/${date.day}',
+                            ),
+                            subtitle: const Text(
+                              'ساڵەکە بپشکنە و پشتڕاستی بکەرەوە',
+                            ),
+                            trailing: const Icon(Icons.edit_calendar),
+                            onTap: () => unawaited(_correctDate(date)),
                           ),
-                        ),
-                      ],
-                    ),
-                  if (_photoPath == null)
-                    FilledButton.icon(
-                      onPressed: _capturing ? null : _captureDatePhoto,
-                      icon: _capturing
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.camera_alt),
-                      label: Text(
-                        _capturing
-                            ? 'وێنەکە دەخوێندرێتەوە…'
-                            : 'وێنەی بەروار بگرە و سکان بکە',
-                      ),
-                    ),
-                  if (_photoPath != null)
-                    Text(switch (_printedDateKind) {
-                      'expiry' => 'جۆری بەروار: بەسەرچوون (EXP)',
-                      'best_before' => 'جۆری بەروار: باشترە پێش (Best before)',
-                      'production' => 'جۆری بەروار: بەرهەمهێنان (P/MFG)',
-                      _ =>
-                        'جۆری بەروار: دیار نییە؛ پێش تۆمارکردن لەسەر پاکەتەکە بپشکنە',
-                    }),
-                  if (_recognizedPreview.isNotEmpty)
-                    Text(
-                      'دەقی خوێندراوە: $_recognizedPreview',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  if (_candidates.length > 1)
-                    const Text(
-                      'بەروارەکە چەند مانایەکی هەیە؛ ڕۆژ و مانگ و ساڵ لەسەر پاکەتەکە بپشکنە، پاشان پشتڕاستی بکەرەوە.',
-                      style: TextStyle(color: Colors.orange),
-                    ),
-                  if (_candidates.isEmpty && _error != null)
-                    Text(_error!, style: const TextStyle(color: Colors.orange)),
-                  if (_candidates.isEmpty)
-                    Wrap(
-                      children: [
-                        TextButton.icon(
+                        TextButton(
                           onPressed: _retry,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('دووبارە هەوڵ بدە'),
-                        ),
-                        TextButton.icon(
-                          onPressed: _printedDateKind == 'production'
-                              ? null
-                              : () => unawaited(_correctDate()),
-                          icon: const Icon(Icons.edit_calendar),
-                          label: const Text('بەروار بە دەست بنووسە'),
+                          child: const Text(
+                            'بەروارەکە دروست نییە؛ دووبارە بخوێنەوە',
+                          ),
                         ),
                       ],
-                    )
-                  else ...[
-                    for (final date in _candidates.take(4))
-                      ListTile(
-                        leading: const Icon(Icons.event_available),
-                        title: Text('${date.year}/${date.month}/${date.day}'),
-                        subtitle: const Text(
-                          'ساڵەکە بپشکنە و پشتڕاستی بکەرەوە',
-                        ),
-                        trailing: const Icon(Icons.edit_calendar),
-                        onTap: () => unawaited(_correctDate(date)),
-                      ),
-                    TextButton(
-                      onPressed: _retry,
-                      child: const Text(
-                        'بەروارەکە دروست نییە؛ دووبارە بخوێنەوە',
-                      ),
-                    ),
-                  ],
-                ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
