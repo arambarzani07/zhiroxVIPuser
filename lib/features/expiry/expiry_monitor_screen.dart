@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/features/expiry/expiry_catalog_service.dart';
+import 'package:zhirox/features/expiry/expiry_date_scanner.dart';
+import 'package:zhirox/features/expiry/expiry_reminder_service.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/services/notification_service.dart';
 import 'package:zhirox/utils/helpers.dart';
 
 class ExpiryMonitorScreen extends StatefulWidget {
@@ -21,6 +27,9 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
   bool _loading = true;
   int? _importCompleted;
   int? _importTotal;
+  bool _remindersEnabled = false;
+  bool _remindersBusy = false;
+  int _scheduledDays = 0;
   String? _error;
   String _filter = 'active';
 
@@ -43,7 +52,8 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
   }
 
   Future<void> _load() async {
-    final adminId = context.read<AuthProvider>().adminId;
+    final auth = context.read<AuthProvider>();
+    final adminId = auth.adminId;
     setState(() {
       _loading = true;
       _importCompleted = null;
@@ -63,6 +73,9 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
         }
         _loading = false;
       });
+      if (!kIsWeb) {
+        unawaited(_syncReminders(adminId, auth.userId, arrivals));
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -72,6 +85,66 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
         );
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _syncReminders(
+    String tenant,
+    String user,
+    List<Map<String, dynamic>> arrivals,
+  ) async {
+    if (_remindersBusy) return;
+    setState(() => _remindersBusy = true);
+    try {
+      final enabled = await ExpiryReminderService.enabled(tenant, user);
+      final permitted = await NotificationService.isPermissionGranted();
+      if (!mounted) return;
+      setState(() => _remindersEnabled = enabled && permitted);
+      if (enabled && permitted) {
+        final count = await ExpiryReminderService.refresh(
+          tenant: tenant,
+          user: user,
+          arrivals: arrivals,
+        );
+        if (mounted) setState(() => _scheduledDays = count);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _scheduledDays = 0);
+    } finally {
+      if (mounted) setState(() => _remindersBusy = false);
+    }
+  }
+
+  Future<void> _toggleReminders(bool value) async {
+    final auth = context.read<AuthProvider>();
+    setState(() => _remindersBusy = true);
+    try {
+      final count = await ExpiryReminderService.setEnabled(
+        tenant: auth.adminId,
+        user: auth.userId,
+        value: value,
+        arrivals: _arrivals,
+      );
+      if (mounted) {
+        setState(() {
+          _remindersEnabled = value;
+          _scheduledDays = count;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is FormatException
+                  ? error.message
+                  : 'نەتوانرا ئاگادارکردنەوە چالاک بکرێت.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _remindersBusy = false);
     }
   }
 
@@ -206,6 +279,25 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
                     }
                   },
                 ),
+                if (!kIsWeb)
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.document_scanner_outlined),
+                    label: const Text('خوێندنەوەی بەروار بە کامێرا'),
+                    onPressed: () async {
+                      final scanned = await Navigator.of(context)
+                          .push<DateTime>(
+                            MaterialPageRoute(
+                              builder: (_) => const ExpiryDateScanner(),
+                            ),
+                          );
+                      if (scanned != null && dialogContext.mounted) {
+                        refresh(() {
+                          expiry = scanned;
+                          formError = null;
+                        });
+                      }
+                    },
+                  ),
                 TextField(
                   controller: batch,
                   decoration: const InputDecoration(
@@ -612,6 +704,17 @@ class _ExpiryMonitorScreenState extends State<ExpiryMonitorScreen> {
       const Text(
         'ئەم بەشە تەنها بەروار چاودێری دەکات؛ بڕ و فرۆشتن حساب ناکات.',
       ),
+      if (!kIsWeb)
+        SwitchListTile.adaptive(
+          title: const Text('ئاگادارکردنەوەی بەسەرچوونی کاڵا'),
+          subtitle: Text(
+            _remindersEnabled
+                ? '٣٠، ٧ و ١ ڕۆژ پێش بەسەرچوون · $_scheduledDays بیرخستنەوە دابنراوە'
+                : '٣٠، ٧ و ١ ڕۆژ پێش بەسەرچوون',
+          ),
+          value: _remindersEnabled,
+          onChanged: _remindersBusy ? null : _toggleReminders,
+        ),
       TextField(
         controller: _search,
         decoration: const InputDecoration(

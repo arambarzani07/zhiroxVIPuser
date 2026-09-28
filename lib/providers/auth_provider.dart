@@ -5,6 +5,8 @@ import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/features/customers/customer_directory_snapshot.dart';
+import 'package:zhirox/features/expiry/expiry_reminder_service.dart';
+import 'package:zhirox/features/expiry/expiry_catalog_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   RecordModel? _user;
@@ -49,23 +51,28 @@ class AuthProvider extends ChangeNotifier {
     return parts.join(' ');
   }
 
-  bool get canAddCustomers => userRole == 'admin' ||
+  bool get canAddCustomers =>
+      userRole == 'admin' ||
       (userRole == 'employee' &&
           (_user?.getBoolValue('can_add_customers') ?? false));
 
-  bool get canSetDebtLimit => userRole == 'admin' ||
+  bool get canSetDebtLimit =>
+      userRole == 'admin' ||
       (userRole == 'employee' &&
           (_user?.getBoolValue('can_set_debt_limit') ?? false));
 
-  bool get canSetDueDate => userRole == 'admin' ||
+  bool get canSetDueDate =>
+      userRole == 'admin' ||
       (userRole == 'employee' &&
           (_user?.getBoolValue('can_set_due_date') ?? false));
 
-  bool get canEditDebts => userRole == 'admin' ||
+  bool get canEditDebts =>
+      userRole == 'admin' ||
       (userRole == 'employee' &&
           (_user?.getBoolValue('can_edit_debts') ?? false));
 
-  bool get canSendNotifications => userRole == 'admin' ||
+  bool get canSendNotifications =>
+      userRole == 'admin' ||
       (userRole == 'employee' &&
           (_user?.getBoolValue('can_send_notifications') ?? false));
 
@@ -131,11 +138,31 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _clearLocalUser() async {
+    try {
+      await ExpiryReminderService.clearDeviceSchedules();
+    } catch (_) {}
     _user = null;
   }
 
-  static const String kPlatformDeviceIdKey =
-      'zhirox_platform_admin_device_id';
+  Future<void> _refreshExpiryReminders() async {
+    if (userRole != 'admin' && userRole != 'employee') return;
+    final tenant = adminId;
+    final actor = userId;
+    try {
+      if (!await ExpiryReminderService.enabled(tenant, actor)) return;
+      final arrivals = await ExpiryCatalogService.arrivals(tenant);
+      if (userId != actor || adminId != tenant) return;
+      await ExpiryReminderService.refresh(
+        tenant: tenant,
+        user: actor,
+        arrivals: arrivals,
+      );
+    } catch (_) {
+      // Reminder failures must never block sign-in or other app features.
+    }
+  }
+
+  static const String kPlatformDeviceIdKey = 'zhirox_platform_admin_device_id';
 
   Future<String> _getOrCreatePlatformDeviceId() async {
     final prefs = await SharedPreferences.getInstance();
@@ -179,20 +206,20 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
 
-    _deviceAuthorizationTimer = Timer.periodic(
-      const Duration(minutes: 5),
-      (_) async {
-        try {
-          await _enforceAdminDeviceAuthorization();
-        } catch (error) {
-          final text = error.toString();
-          final blocked = text.contains('چاوەڕێی پەسەندکردنی') ||
-              text.contains('لەلایەن خاوەنی سیستەمەوە ڕاگیراوە');
-          if (!blocked || _disposed) return;
-          await logout();
-        }
-      },
-    );
+    _deviceAuthorizationTimer = Timer.periodic(const Duration(minutes: 5), (
+      _,
+    ) async {
+      try {
+        await _enforceAdminDeviceAuthorization();
+      } catch (error) {
+        final text = error.toString();
+        final blocked =
+            text.contains('چاوەڕێی پەسەندکردنی') ||
+            text.contains('لەلایەن خاوەنی سیستەمەوە ڕاگیراوە');
+        if (!blocked || _disposed) return;
+        await logout();
+      }
+    });
   }
 
   Future<void> _validateSubscription() async {
@@ -259,6 +286,7 @@ class AuthProvider extends ChangeNotifier {
 
       _subscribeToUserChanges();
       _startDeviceAuthorizationHeartbeat();
+      unawaited(_refreshExpiryReminders());
     } finally {
       _isInitializing = false;
       if (!_disposed) notifyListeners();
@@ -346,6 +374,7 @@ class AuthProvider extends ChangeNotifier {
 
       _subscribeToUserChanges();
       _startDeviceAuthorizationHeartbeat();
+      unawaited(_refreshExpiryReminders());
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(kLockoutTimeKey);
@@ -396,10 +425,13 @@ class AuthProvider extends ChangeNotifier {
 
     if (current != null) {
       final tenantId = current.getStringValue('role') == 'admin'
-          ? current.id : current.getStringValue('admin_id');
+          ? current.id
+          : current.getStringValue('admin_id');
       try {
-        await const SecureCustomerDirectorySnapshotStore()
-            .clear(current.id, tenantId);
+        await const SecureCustomerDirectorySnapshotStore().clear(
+          current.id,
+          tenantId,
+        );
       } catch (_) {}
     }
     await PBService.logout();

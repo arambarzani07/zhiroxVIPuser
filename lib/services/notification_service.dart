@@ -1,11 +1,14 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
   static bool _initialized = false;
+  static bool _timezoneReady = false;
 
   /// Initialize the notification plugin (call once in main.dart)
   static Future<void> init() async {
@@ -68,6 +71,43 @@ class NotificationService {
     );
 
     await _plugin.show(id, title, body, details);
+  }
+
+  /// Schedule one generic expiry summary. Keep the IDs in a separate range
+  /// so cancelling them never affects financial reminders.
+  static Future<void> scheduleExpiry({
+    required int id,
+    required DateTime when,
+    required String body,
+  }) async {
+    await init();
+    if (!_timezoneReady) {
+      tzdata.initializeTimeZones();
+      _timezoneReady = true;
+    }
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'zhirox_expiry',
+        'بەرواری کاڵاکان',
+        channelDescription: 'بیرخستنەوەی بەسەرچوونی کاڵا',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+      iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+    );
+    await _plugin.zonedSchedule(
+      id,
+      'ئاگادارکردنەوەی بەرواری کاڵا',
+      body,
+      tz.TZDateTime.from(when.toUtc(), tz.UTC),
+      details,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+    );
+  }
+
+  static Future<void> cancelExpiry(int id) async {
+    await init();
+    await _plugin.cancel(id);
   }
 
   /// Show debt created notification
