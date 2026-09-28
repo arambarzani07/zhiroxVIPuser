@@ -8,16 +8,21 @@ class ExpiryDateParser {
   static final _dayFirst = RegExp(
     r'(?<!\d)(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{2,4})(?!\d)',
   );
+  static final _spacedDayFirst = RegExp(
+    r'(?<!\d)(\d{1,2})\s+(\d{1,2})\s+(\d{2,4})(?!\d)',
+  );
   static final _monthYear = RegExp(
     r'(?<![\d/.-])(\d{1,2})\s*[/.-]\s*(\d{2,4})(?!\d)',
   );
   static final _expiry = RegExp(
     r'\b(exp|expiry|expires|expiration|best\s*before|use\s*by|bb)\b|'
+    r'(?<![a-z])e\s*[:：.]?\s*(?=\d|$)|'
     r'انتهاء|الانتهاء|الصلاحية|بەسەرچوون',
     caseSensitive: false,
   );
   static final _made = RegExp(
     r'\b(mfg|mfd|manufactur\w*|production|prod)\b|'
+    r'(?<![a-z])p\s*[:：.]?\s*(?=\d|$)|'
     r'انتاج|الإنتاج|صنع|بەرهەمهێنان',
     caseSensitive: false,
   );
@@ -50,9 +55,15 @@ class ExpiryDateParser {
     final found = <DateTime, int>{};
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
-      if (_made.hasMatch(line) && !_expiry.hasMatch(line)) continue;
+      final expiryMark = _expiry.allMatches(line).lastOrNull;
+      if (_made.hasMatch(line) && expiryMark == null) continue;
+      // When production and expiry share a line, do not propose the
+      // production date as an expiry candidate.
+      final dateText = expiryMark == null
+          ? line
+          : line.substring(expiryMark.start);
       final preferred =
-          _expiry.hasMatch(line) || (i > 0 && _expiry.hasMatch(lines[i - 1]));
+          expiryMark != null || (i > 0 && _expiry.hasMatch(lines[i - 1]));
       final score = preferred ? 10 : 1;
 
       void add(DateTime? date) {
@@ -60,7 +71,7 @@ class ExpiryDateParser {
       }
 
       final fullDates = <String>{};
-      for (final match in _yearFirst.allMatches(line)) {
+      for (final match in _yearFirst.allMatches(dateText)) {
         fullDates.add(match.group(0)!);
         add(
           _valid(
@@ -70,16 +81,32 @@ class ExpiryDateParser {
           ),
         );
       }
-      for (final match in _dayFirst.allMatches(line)) {
+      for (final match in _dayFirst.allMatches(dateText)) {
         if (fullDates.any((full) => full.contains(match.group(0)!))) continue;
         add(
           _valid(_year(match[3]!), int.parse(match[2]!), int.parse(match[1]!)),
         );
       }
+      // Manufacturers also print "E 28 12 2026" without punctuation.
+      // Bare spaced numbers are parsed only beside an expiry label.
+      if (preferred) {
+        for (final match in _spacedDayFirst.allMatches(dateText)) {
+          add(
+            _valid(
+              _year(match[3]!),
+              int.parse(match[2]!),
+              int.parse(match[1]!),
+            ),
+          );
+        }
+      }
       // A package may print only a month and year. Its expiry is the last
       // calendar day of that month. Require an expiry label to avoid prices.
-      if (preferred && fullDates.isEmpty && !_dayFirst.hasMatch(line)) {
-        for (final match in _monthYear.allMatches(line)) {
+      if (preferred &&
+          fullDates.isEmpty &&
+          !_dayFirst.hasMatch(dateText) &&
+          !_spacedDayFirst.hasMatch(dateText)) {
+        for (final match in _monthYear.allMatches(dateText)) {
           final year = _year(match[2]!);
           final month = int.parse(match[1]!);
           if (year >= 2000 && year <= 2100 && month >= 1 && month <= 12) {

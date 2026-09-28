@@ -21,6 +21,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   final _recognizer = TextRecognizer(script: TextRecognitionScript.latin);
   List<DateTime> _candidates = const [];
   String? _error;
+  String _recognizedPreview = '';
   bool _busy = false;
   bool _starting = false;
   bool _disposed = false;
@@ -72,7 +73,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       );
       final controller = CameraController(
         description,
-        ResolutionPreset.high,
+        ResolutionPreset.veryHigh,
         enableAudio: false,
         imageFormatGroup: Platform.isAndroid
             ? ImageFormatGroup.nv21
@@ -180,7 +181,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
         _candidates.isNotEmpty ||
         (_focusReadyAt != null && now.isBefore(_focusReadyAt!)) ||
         (_lastFrame != null &&
-            now.difference(_lastFrame!).inMilliseconds < 500)) {
+            now.difference(_lastFrame!).inMilliseconds < 900)) {
       return;
     }
     final input = _input(frame);
@@ -193,6 +194,12 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   Future<void> _recognize(InputImage input) async {
     try {
       final text = await _recognizer.processImage(input);
+      if (mounted && !_disposed && text.text.isNotEmpty) {
+        final preview = text.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+        if (preview != _recognizedPreview) {
+          setState(() => _recognizedPreview = preview);
+        }
+      }
       final dates = ExpiryDateParser.candidates(text.text);
       if (dates.isNotEmpty && mounted && !_disposed) {
         final camera = _camera;
@@ -214,6 +221,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     setState(() {
       _candidates = const [];
       _error = null;
+      _recognizedPreview = '';
     });
     final camera = _camera;
     if (camera != null &&
@@ -314,6 +322,12 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                           icon: const Icon(Icons.center_focus_strong),
                         ),
                       ],
+                    ),
+                  if (_candidates.isEmpty && _recognizedPreview.isNotEmpty)
+                    Text(
+                      'دەقی خوێندراو: $_recognizedPreview',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   if (_candidates.isEmpty)
                     TextButton.icon(

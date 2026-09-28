@@ -22,6 +22,17 @@ void main() {
     expect(ExpiryDateParser.candidates('EXP 02/28'), [DateTime(2028, 2, 29)]);
   });
 
+  test('reads spaced E date and ignores spaced P production date', () {
+    expect(ExpiryDateParser.candidates('P 01 07 2026\nE 28 12 2026'), [
+      DateTime(2026, 12, 28),
+    ]);
+    expect(ExpiryDateParser.candidates('P 01 07 2026 E 28 12 2026'), [
+      DateTime(2026, 12, 28),
+    ]);
+    expect(ExpiryDateParser.candidates('P 01 07 2026'), isEmpty);
+    expect(ExpiryDateParser.candidates('28 12 2026'), isEmpty);
+  });
+
   test('rejects invalid calendar dates rather than normalizing them', () {
     expect(ExpiryDateParser.candidates('EXP 31/02/2027'), isEmpty);
     expect(ExpiryDateParser.candidates('MFG 01/01/2026'), isEmpty);
