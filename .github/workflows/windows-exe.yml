@@ -1,0 +1,89 @@
+name: Windows EXE installer
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - ".github/workflows/windows-exe.yml"
+      - "windows/**"
+      - "lib/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-exe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Enable Windows and resolve dependencies
+        shell: pwsh
+        run: |
+          flutter config --enable-windows-desktop
+          flutter create --platforms=windows --project-name zhirox .
+          flutter pub get
+      - name: Build Windows release
+        shell: pwsh
+        run: |
+          flutter build windows --release --dart-define=ZHIROX_APP_EDITION=user --dart-define=ZHIROX_BUILD_NUMBER=${{ github.run_number }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "build/windows/x64/runner/Release/zhirox.exe")) { throw "Windows executable missing" }
+      - name: Bundle Visual C++ runtime
+        shell: pwsh
+        run: |
+          $release = "build/windows/x64/runner/Release"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -property installationPath
+          $crt = Get-ChildItem "$vs/VC/Redist/MSVC" -Recurse -Filter "msvcp140.dll" |
+            Where-Object { $_.FullName -match "x64[\\/]Microsoft.VC.*CRT" } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $crt) { throw "Visual C++ x64 runtime not found" }
+          foreach ($name in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
+            $source = Join-Path $crt.DirectoryName $name
+            if (-not (Test-Path $source)) { throw "Missing runtime: $name" }
+            Copy-Item $source $release
+          }
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Create installer
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) { throw "Inno Setup compiler missing" }
+          & $compiler "windows/installer.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $file = Get-Item "build/installer/ZHIROX-User-Windows-Setup.exe"
+          if ($file.Length -lt 1000000) { throw "Installer unexpectedly small" }
+          Get-FileHash $file.FullName -Algorithm SHA256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZHIROX-User-Windows-EXE
+          path: build/installer/ZHIROX-User-Windows-Setup.exe
+          if-no-files-found: error
+      - name: Publish latest Windows installer
+        if: github.ref == 'refs/heads/user-source'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $file = "build/installer/ZHIROX-User-Windows-Setup.exe"
+          gh release view user-latest 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload user-latest $file --clobber
+          } else {
+            gh release create user-latest $file --title "ZHIROX User - Latest" --notes "Windows installer"
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
