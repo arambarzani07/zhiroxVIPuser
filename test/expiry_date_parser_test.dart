@@ -46,6 +46,35 @@ void main() {
     expect(ExpiryDateParser.isMonthYearOnly('EXP 28/07/2026'), isFalse);
   });
 
+  test(
+    'accepts other labelled month/year layouts without production dates',
+    () {
+      for (final printed in [
+        'EXP07 26',
+        'EXP 07 26',
+        'EX 07 2026',
+        'BEST BEFORE 2026 07',
+        'EXP 2026-07',
+        'بەسەرچوون ٠٧ ٢٠٢٦',
+      ]) {
+        expect(ExpiryDateParser.candidates(printed), [DateTime(2026, 7, 31)]);
+        expect(ExpiryDateParser.isMonthYearOnly(printed), isTrue);
+      }
+      expect(ExpiryDateParser.candidates('M 07 2023'), isEmpty);
+      expect(ExpiryDateParser.candidates('PROD07 2023'), isEmpty);
+      expect(ExpiryDateParser.candidates('LOT 07 26'), isEmpty);
+    },
+  );
+
+  test('compact month/year is not silently mistaken for a full date', () {
+    expect(ExpiryDateParser.candidates('EXP 202607'), [DateTime(2026, 7, 31)]);
+    expect(
+      ExpiryDateParser.candidates('EXP 072026'),
+      containsAll([DateTime(2026, 7, 31), DateTime(2026, 7, 20)]),
+    );
+    expect(ExpiryDateParser.candidates('LOT 072026'), isEmpty);
+  });
+
   test('recognizes type and prioritizes the labelled expiry on packaging', () {
     expect(
       ExpiryDateParser.printedDateKind('MFG 01/07/2026\nEXP 28/12/2026'),

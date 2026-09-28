@@ -608,6 +608,9 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   }
 
   Future<void> _correctDate([DateTime? detected]) async {
+    // OCR can confuse the year even when one candidate appears plausible.
+    // Require an independent reading from the package for every OCR result.
+    final verifyDetectedYear = detected != null;
     final controller = TextEditingController(
       text: detected == null
           ? ''
@@ -637,7 +640,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                     errorText: error,
                   ),
                 ),
-                if (_photoPath != null)
+                if (verifyDetectedYear)
                   TextField(
                     controller: yearController,
                     keyboardType: TextInputType.number,
@@ -665,7 +668,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                     );
                     return;
                   }
-                  if (_photoPath != null &&
+                  if (verifyDetectedYear &&
                       ExpiryDateParser.enteredDate(
                             '01/01/${yearController.text.trim()}',
                           )?.year !=

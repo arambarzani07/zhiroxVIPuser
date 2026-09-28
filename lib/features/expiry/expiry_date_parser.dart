@@ -12,10 +12,13 @@ class ExpiryDateParser {
   );
   // Many packages print "EXP07 2026" without a separator. Only parse the
   // spaced variant when an expiry label is present, to exclude stock codes.
-  static final _spacedMonthYear = RegExp(r'(?<!\d)(\d{1,2})\s+(20\d{2})(?!\d)');
+  static final _spacedMonthYear = RegExp(
+    r'(?<!\d)(\d{1,2})\s+(\d{2}|20\d{2})(?!\d)',
+  );
   static final _yearMonth = RegExp(
     r'(?<!\d)(20\d{2})\s*[/.-]\s*(\d{1,2})(?![/.-]\d|\d)',
   );
+  static final _spacedYearMonth = RegExp(r'(?<!\d)(20\d{2})\s+(\d{1,2})(?!\d)');
   static const _monthNames =
       r'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
       r'jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|'
@@ -37,14 +40,15 @@ class ExpiryDateParser {
     caseSensitive: false,
   );
   static final _expiry = RegExp(
-    r'\b(exp|exd|expiry|expires|expiration|best\s*before|use\s*by|bbe|bbd?|bbs)(?=\b|\d)|'
+    r'\b(exp|exd|ex|expiry|expires|expiration|best\s*before|use\s*by|bbe|bbd?|bbs)(?=\b|\d)|'
     r'(?<![a-z])e\s*[:：.]?\s*(?=\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|$)|'
     r'انتهاء|الانتهاء|الصلاحية|صالح\s*لغاية|بەسەرچوون',
     caseSensitive: false,
   );
   static final _made = RegExp(
-    r'\b(mfg|mfd|manufactur\w*|production|prod|packed\s*on|pkd)\b|'
+    r'\b(mfg|mfd|manufactur\w*|production|prod|packed\s*on|pkd)(?=\b|\d)|'
     r'(?<![a-z])p\s*[:：.]?\s*(?=\d|$)|'
+    r'(?<![a-z])m\s*[:：.]?\s*(?=\d|$)|'
     r'انتاج|الإنتاج|صنع|بەرهەمهێنان',
     caseSensitive: false,
   );
@@ -133,7 +137,10 @@ class ExpiryDateParser {
       final label = _expiry.allMatches(line).lastOrNull;
       if (label == null) continue;
       final after = line.substring(label.end);
-      if ((_monthYear.hasMatch(after) || _spacedMonthYear.hasMatch(after)) &&
+      if ((_monthYear.hasMatch(after) ||
+              _spacedMonthYear.hasMatch(after) ||
+              _yearMonth.hasMatch(after) ||
+              _spacedYearMonth.hasMatch(after)) &&
           !_fullNumeric.hasMatch(after) &&
           !_dayMonthName.hasMatch(after) &&
           !_monthNameDay.hasMatch(after)) {
@@ -260,6 +267,24 @@ class ExpiryDateParser {
       if (preferred) {
         for (final match in _compactNumeric.allMatches(dateText)) {
           final raw = match[1]!;
+          if (raw.length == 6) {
+            // MMYYYY and YYYYMM are also valid readings of six digits.
+            // Show ambiguity instead of guessing a printed day.
+            if (raw.substring(2, 4) == '20') {
+              final month = int.parse(raw.substring(0, 2));
+              final year = int.parse(raw.substring(2));
+              if (month >= 1 && month <= 12) {
+                add(DateTime(year, month + 1, 0));
+              }
+            }
+            if (raw.startsWith('20')) {
+              final year = int.parse(raw.substring(0, 4));
+              final month = int.parse(raw.substring(4));
+              if (month >= 1 && month <= 12) {
+                add(DateTime(year, month + 1, 0));
+              }
+            }
+          }
           if (raw.length == 8 && raw.startsWith('20')) {
             final date = _valid(
               int.parse(raw.substring(0, 4)),
@@ -316,7 +341,10 @@ class ExpiryDateParser {
             add(DateTime(year, month + 1, 0));
           }
         }
-        for (final match in _yearMonth.allMatches(dateText)) {
+        for (final match in [
+          ..._yearMonth.allMatches(dateText),
+          ..._spacedYearMonth.allMatches(dateText),
+        ]) {
           final year = int.parse(match[1]!);
           final month = int.parse(match[2]!);
           if (month >= 1 && month <= 12) add(DateTime(year, month + 1, 0));
