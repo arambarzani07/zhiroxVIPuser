@@ -9,6 +9,34 @@ void main() {
     expect(dates, [DateTime(2027, 9, 27)]);
   });
 
+  test('a photographed production date alone is not an expiry', () {
+    expect(ExpiryDateParser.printedDateKind('P 01 07 2026'), 'production');
+    expect(ExpiryDateParser.candidates('P 01 07 2026'), isEmpty);
+  });
+
+  test('recognizes type and prioritizes the labelled expiry on packaging', () {
+    expect(
+      ExpiryDateParser.printedDateKind('MFG 01/07/2026\nEXP 28/12/2026'),
+      'expiry',
+    );
+    expect(
+      ExpiryDateParser.candidates(
+        'MFG 01/07/2026\nLOT 09/03/2027\nEXP 28/12/2026',
+      ),
+      [DateTime(2026, 12, 28)],
+    );
+    expect(ExpiryDateParser.candidates('EXP 28/12/2026 P 01/07/2026'), [
+      DateTime(2026, 12, 28),
+    ]);
+    expect(
+      ExpiryDateParser.printedDateKind('BEST BEFORE 12/2026'),
+      'best_before',
+    );
+    expect(ExpiryDateParser.candidates('BEST BEFORE 12/2026'), [
+      DateTime(2026, 12, 31),
+    ]);
+  });
+
   test('normalizes Arabic and Persian digits', () {
     expect(ExpiryDateParser.candidates('تاريخ الانتهاء ۲۰۲۷/۰۹/۲۷'), [
       DateTime(2027, 9, 27),
@@ -40,16 +68,8 @@ void main() {
 
   test('keeps ambiguous dates for human verification', () {
     final dates = ExpiryDateParser.candidates('EXP 08/12/2027\n09/12/2027');
-    expect(dates, hasLength(4));
-    expect(
-      dates,
-      containsAll([
-        DateTime(2027, 12, 8),
-        DateTime(2027, 8, 12),
-        DateTime(2027, 12, 9),
-        DateTime(2027, 9, 12),
-      ]),
-    );
+    expect(dates, hasLength(2));
+    expect(dates, containsAll([DateTime(2027, 12, 8), DateTime(2027, 8, 12)]));
   });
 
   test('accepts an explicitly corrected expiry date with a full year', () {

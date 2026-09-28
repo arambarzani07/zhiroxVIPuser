@@ -29,6 +29,10 @@ class ExpiryDateParser {
     '($_monthNames)[\\s./-]+(\\d{2,4})(?!\\d)',
     caseSensitive: false,
   );
+  static final _bestBefore = RegExp(
+    r'\b(best\s*before|bbd?|bbs)\b|يفضل\s*قبل|باشترە\s*پێش',
+    caseSensitive: false,
+  );
   static final _expiry = RegExp(
     r'\b(exp|expiry|expires|expiration|best\s*before|use\s*by|bbd?|bbs)\b|'
     r'(?<![a-z])e\s*[:：.]?\s*(?=\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|$)|'
@@ -41,6 +45,15 @@ class ExpiryDateParser {
     r'انتاج|الإنتاج|صنع|بەرهەمهێنان',
     caseSensitive: false,
   );
+
+  /// A printed production date must never be presented as an expiry date.
+  static String printedDateKind(String text) {
+    final normalized = _digits(text);
+    if (_expiry.hasMatch(normalized) || _gs1Expiry.hasMatch(normalized)) {
+      return _bestBefore.hasMatch(normalized) ? 'best_before' : 'expiry';
+    }
+    return _made.hasMatch(normalized) ? 'production' : 'unlabelled';
+  }
 
   static String _digits(String raw) {
     const local = '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹';
@@ -110,9 +123,20 @@ class ExpiryDateParser {
       }
       // When production and expiry share a line, do not propose the
       // production date as an expiry candidate.
-      final dateText = expiryMark == null
+      final afterMark = expiryMark == null
           ? line
           : line.substring(expiryMark.start);
+      final nextProduction = expiryMark == null
+          ? null
+          : _made.firstMatch(
+              afterMark.substring(expiryMark.end - expiryMark.start),
+            );
+      final dateText = nextProduction == null
+          ? afterMark
+          : afterMark.substring(
+              0,
+              expiryMark!.end - expiryMark.start + nextProduction.start,
+            );
       final preferred =
           expiryMark != null || (i > 0 && _expiry.hasMatch(lines[i - 1]));
       final score = preferred ? 10 : 1;
@@ -264,9 +288,13 @@ class ExpiryDateParser {
         }
       }
     }
-    return found.keys.toList()..sort((a, b) {
-      final ranking = found[b]!.compareTo(found[a]!);
-      return ranking == 0 ? a.compareTo(b) : ranking;
-    });
+    // A labelled expiry on the photo is stronger evidence than any other
+    // printed numbers (batch, price, production or other dates).
+    final labelled = found.values.any((score) => score == 10);
+    return found.keys.where((date) => !labelled || found[date] == 10).toList()
+      ..sort((a, b) {
+        final ranking = found[b]!.compareTo(found[a]!);
+        return ranking == 0 ? a.compareTo(b) : ranking;
+      });
   }
 }

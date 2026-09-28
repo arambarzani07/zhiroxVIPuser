@@ -27,6 +27,9 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   int _framesWithDates = 0;
   String? _error;
   String _recognizedPreview = '';
+  String? _photoPath;
+  String? _printedDateKind;
+  bool _capturing = false;
   bool _busy = false;
   bool _starting = false;
   bool _switching = false;
@@ -54,7 +57,8 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       unawaited(_release());
     } else if (state == AppLifecycleState.resumed &&
         _camera == null &&
-        _candidates.isEmpty) {
+        _candidates.isEmpty &&
+        _photoPath == null) {
       unawaited(_start());
     }
   }
@@ -292,6 +296,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     final now = DateTime.now();
     if (_disposed ||
         _busy ||
+        _capturing ||
         _candidates.isNotEmpty ||
         (_focusReadyAt != null && now.isBefore(_focusReadyAt!)) ||
         (_lastFrame != null &&
@@ -387,14 +392,88 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     }
   }
 
+  Future<void> _captureDatePhoto() async {
+    final camera = _camera;
+    if (_capturing ||
+        camera == null ||
+        !camera.value.isInitialized ||
+        _photoPath != null)
+      return;
+    setState(() {
+      _capturing = true;
+      _error = null;
+    });
+    // Invalidate OCR callbacks from the stream before switching to a JPEG.
+    _cameraGeneration++;
+    try {
+      if (camera.value.isStreamingImages) await camera.stopImageStream();
+      // The same recognizer cannot process a stream frame and a photo at once.
+      while (_busy && mounted && identical(_camera, camera)) {
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+      }
+      if (!mounted || !identical(_camera, camera)) return;
+      final photo = await camera.takePicture();
+      final recognized = await _recognizer.processImage(
+        InputImage.fromFilePath(photo.path),
+      );
+      if (!mounted || !identical(_camera, camera)) {
+        unawaited(File(photo.path).delete().then((_) {}, onError: (_) {}));
+        return;
+      }
+      final kind = ExpiryDateParser.printedDateKind(recognized.text);
+      final dates = kind == 'production'
+          ? <DateTime>[]
+          : ExpiryDateParser.candidates(recognized.text);
+      setState(() {
+        _photoPath = photo.path;
+        _printedDateKind = kind;
+        _recognizedPreview = recognized.text
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+        _candidates = dates.take(4).toList();
+        _error = kind == 'production'
+            ? 'تەنها بەرواری بەرهەمهێنان دۆزرایەوە؛ وێنەی بەرواری EXP بگرە.'
+            : dates.isEmpty
+            ? 'بەرواری بەسەرچوون لە وێنەکە نەدۆزرایەوە. وێنەی ڕوونتر بگرە.'
+            : null;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'گرتن یان خوێندنەوەی وێنە سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
+        );
+      }
+      if (mounted &&
+          identical(_camera, camera) &&
+          !camera.value.isStreamingImages &&
+          _photoPath == null) {
+        try {
+          await camera.startImageStream(_readFrame);
+        } catch (_) {}
+      }
+    } finally {
+      if (mounted) setState(() => _capturing = false);
+    }
+  }
+
   Future<void> _retry() async {
+    _cameraGeneration++;
+    final oldPhoto = _photoPath;
     setState(() {
       _candidates = const [];
+      _photoPath = null;
+      _printedDateKind = null;
       _dateObservations.clear();
       _framesWithDates = 0;
       _error = null;
       _recognizedPreview = '';
     });
+    if (oldPhoto != null) {
+      try {
+        await File(oldPhoto).delete();
+      } catch (_) {}
+    }
     final camera = _camera;
     if (camera != null &&
         camera.value.isInitialized &&
@@ -458,6 +537,10 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
         ),
       );
       if (corrected != null && mounted) {
+        final oldPhoto = _photoPath;
+        if (oldPhoto != null) {
+          unawaited(File(oldPhoto).delete().then((_) {}, onError: (_) {}));
+        }
         Navigator.of(context).pop(corrected);
       }
     } finally {
@@ -471,6 +554,10 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_release());
     unawaited(_recognizer.close());
+    final photo = _photoPath;
+    if (photo != null) {
+      unawaited(File(photo).delete().then((_) {}, onError: (_) {}));
+    }
     super.dispose();
   }
 
@@ -482,7 +569,11 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       body: Column(
         children: [
           Expanded(
-            child: camera != null && camera.value.isInitialized
+            child: _photoPath != null
+                ? Center(
+                    child: Image.file(File(_photoPath!), fit: BoxFit.contain),
+                  )
+                : camera != null && camera.value.isInitialized
                 ? LayoutBuilder(
                     builder: (context, constraints) => GestureDetector(
                       behavior: HitTestBehavior.opaque,
@@ -537,9 +628,10 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'تەنها بەرواری E یان EXP بخەرە ناو چوارچێوە. ئەگەر تارە، کاڵاکە کەمێک دوورتر بگرە و لەسەر بەروارەکە تێپ بکە. پێش پاشەکەوتکردن پشتڕاستی بکەرەوە.',
+                    'بەرواری EXP یان E بخەرە ناو چوارچێوە و وێنەیەکی ڕوون بگرە. لەگەڵ جۆری بەروارەکە و دەقی وێنەکە پێش پاشەکەوتکردن پشتڕاستی بکەرەوە.',
                   ),
-                  if (_candidates.isEmpty &&
+                  if (_photoPath == null &&
+                      _candidates.isEmpty &&
                       _backCameras.any(
                         (lens) => lens.lensType == CameraLensType.ultraWide,
                       ) &&
@@ -565,7 +657,7 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                           ),
                       ],
                     ),
-                  if (_candidates.isEmpty)
+                  if (_photoPath == null && _candidates.isEmpty)
                     Wrap(
                       spacing: 8,
                       children: [
@@ -595,9 +687,33 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                         ),
                       ],
                     ),
+                  if (_photoPath == null)
+                    FilledButton.icon(
+                      onPressed: _capturing ? null : _captureDatePhoto,
+                      icon: _capturing
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.camera_alt),
+                      label: Text(
+                        _capturing
+                            ? 'وێنەکە دەخوێندرێتەوە…'
+                            : 'وێنەی بەروار بگرە و سکان بکە',
+                      ),
+                    ),
+                  if (_photoPath != null)
+                    Text(switch (_printedDateKind) {
+                      'expiry' => 'جۆری بەروار: بەسەرچوون (EXP)',
+                      'best_before' => 'جۆری بەروار: باشترە پێش (Best before)',
+                      'production' => 'جۆری بەروار: بەرهەمهێنان (P/MFG)',
+                      _ =>
+                        'جۆری بەروار: دیار نییە؛ پێش تۆمارکردن لەسەر پاکەتەکە بپشکنە',
+                    }),
                   if (_recognizedPreview.isNotEmpty)
                     Text(
-                      'دەقی ناو چوارچێوە: $_recognizedPreview',
+                      'دەقی خوێندراوە: $_recognizedPreview',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -617,7 +733,9 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                           label: const Text('دووبارە هەوڵ بدە'),
                         ),
                         TextButton.icon(
-                          onPressed: () => unawaited(_correctDate()),
+                          onPressed: _printedDateKind == 'production'
+                              ? null
+                              : () => unawaited(_correctDate()),
                           icon: const Icon(Icons.edit_calendar),
                           label: const Text('بەروار بە دەست بنووسە'),
                         ),
