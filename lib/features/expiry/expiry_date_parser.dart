@@ -137,8 +137,13 @@ class ExpiryDateParser {
               0,
               expiryMark!.end - expiryMark.start + nextProduction.start,
             );
-      final preferred =
-          expiryMark != null || (i > 0 && _expiry.hasMatch(lines[i - 1]));
+      final previousMark = i > 0
+          ? _expiry.allMatches(lines[i - 1]).lastOrNull
+          : null;
+      final previousLabelHasNoDate =
+          previousMark != null &&
+          !RegExp(r'\d').hasMatch(lines[i - 1].substring(previousMark.end));
+      final preferred = expiryMark != null || previousLabelHasNoDate;
       final score = preferred ? 10 : 1;
 
       void add(DateTime? date) {
