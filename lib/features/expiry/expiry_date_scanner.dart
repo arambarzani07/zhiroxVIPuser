@@ -601,15 +601,9 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  if (_candidates.length > 1 &&
-                      _candidates.any(
-                        (date) =>
-                            date.year != _candidates.first.year &&
-                            date.day == _candidates.first.day &&
-                            date.month == _candidates.first.month,
-                      ))
+                  if (_candidates.length > 1)
                     const Text(
-                      'ساڵەکە لە چەند خوێندنەوەدا جیاوازە؛ بەرواری سەر پاکەتەکە بە وردی پشتڕاست بکەرەوە.',
+                      'بەروارەکە چەند مانایەکی هەیە؛ ڕۆژ و مانگ و ساڵ لەسەر پاکەتەکە بپشکنە، پاشان پشتڕاستی بکەرەوە.',
                       style: TextStyle(color: Colors.orange),
                     ),
                   if (_candidates.isEmpty && _error != null)
