@@ -175,8 +175,9 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   }
 
   Future<void> _switchLens(CameraDescription description) async {
-    if (_switching || _starting || _description?.name == description.name)
+    if (_switching || _starting || _description?.name == description.name) {
       return;
+    }
     _switching = true;
     _selectedCamera = description;
     try {
