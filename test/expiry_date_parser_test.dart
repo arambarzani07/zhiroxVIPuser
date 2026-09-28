@@ -44,4 +44,12 @@ void main() {
       DateTime(2027, 12, 9),
     ]);
   });
+
+  test('accepts an explicitly corrected expiry date with a full year', () {
+    expect(ExpiryDateParser.enteredDate('28/12/2026'), DateTime(2026, 12, 28));
+    expect(ExpiryDateParser.enteredDate('٢٨/١٢/٢٠٢٦'), DateTime(2026, 12, 28));
+    expect(ExpiryDateParser.enteredDate('28/12/26'), isNull);
+    expect(ExpiryDateParser.enteredDate('31/02/2026'), isNull);
+    expect(ExpiryDateParser.enteredDate('28/12/2028 extra'), isNull);
+  });
 }

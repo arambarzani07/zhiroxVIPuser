@@ -23,6 +23,8 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   CameraDescription? _selectedCamera;
   final _recognizer = TextRecognizer(script: TextRecognitionScript.latin);
   List<DateTime> _candidates = const [];
+  final Map<DateTime, int> _dateObservations = {};
+  int _framesWithDates = 0;
   String? _error;
   String _recognizedPreview = '';
   bool _busy = false;
@@ -190,6 +192,8 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       if (mounted && !_disposed) {
         setState(() {
           _recognizedPreview = '';
+          _dateObservations.clear();
+          _framesWithDates = 0;
           _error = null;
           _zoom = 1;
           _lastFrame = null;
@@ -337,11 +341,42 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       }
       final dates = ExpiryDateParser.candidates(text.text);
       if (dates.isNotEmpty && mounted && !_disposed) {
+        _framesWithDates++;
+        for (final date in dates.toSet()) {
+          _dateObservations.update(
+            date,
+            (count) => count + 1,
+            ifAbsent: () => 1,
+          );
+        }
+        final ranked = _dateObservations.keys.toList()
+          ..sort((a, b) {
+            final byVotes = _dateObservations[b]!.compareTo(
+              _dateObservations[a]!,
+            );
+            return byVotes == 0 ? a.compareTo(b) : byVotes;
+          });
+        // When OCR alternates between two years for the same day/month,
+        // collect more frames and show both to the user before saving.
+        final conflictingYears = ranked.any(
+          (first) => ranked.any(
+            (second) =>
+                first.year != second.year &&
+                first.month == second.month &&
+                first.day == second.day,
+          ),
+        );
+        final ready =
+            _framesWithDates >= (conflictingYears ? 6 : 3) &&
+            (_dateObservations[ranked.first]! >= 2 || _framesWithDates >= 6);
+        if (!ready) return;
         final camera = _camera;
         if (camera != null && camera.value.isStreamingImages) {
           await camera.stopImageStream();
         }
-        if (mounted) setState(() => _candidates = dates);
+        if (mounted && generation == _cameraGeneration) {
+          setState(() => _candidates = ranked.take(4).toList());
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -355,6 +390,8 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
   Future<void> _retry() async {
     setState(() {
       _candidates = const [];
+      _dateObservations.clear();
+      _framesWithDates = 0;
       _error = null;
       _recognizedPreview = '';
     });
@@ -368,6 +405,63 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
       await _start();
     } else {
       await _focus(_focusPoint);
+    }
+  }
+
+  Future<void> _correctDate([DateTime? detected]) async {
+    final controller = TextEditingController(
+      text: detected == null
+          ? ''
+          : '${detected.day.toString().padLeft(2, '0')}/'
+                '${detected.month.toString().padLeft(2, '0')}/'
+                '${detected.year}',
+    );
+    String? error;
+    try {
+      final corrected = await showDialog<DateTime>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, update) => AlertDialog(
+            title: const Text('ڕاستکردنەوەی بەروار'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.datetime,
+              textDirection: TextDirection.ltr,
+              decoration: InputDecoration(
+                labelText: 'ڕۆژ/مانگ/ساڵ',
+                hintText: '28/12/2026',
+                errorText: error,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('پاشگەزبوونەوە'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final date = ExpiryDateParser.enteredDate(controller.text);
+                  if (date == null) {
+                    update(
+                      () =>
+                          error = 'بەرواری دروست بە ساڵی چوار ژمارەیی بنووسە.',
+                    );
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(date);
+                },
+                child: const Text('پشتڕاستکردنەوە'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (corrected != null && mounted) {
+        Navigator.of(context).pop(corrected);
+      }
+    } finally {
+      controller.dispose();
     }
   }
 
@@ -501,27 +595,50 @@ class _ExpiryDateScannerState extends State<ExpiryDateScanner>
                         ),
                       ],
                     ),
-                  if (_candidates.isEmpty && _recognizedPreview.isNotEmpty)
+                  if (_recognizedPreview.isNotEmpty)
                     Text(
                       'دەقی ناو چوارچێوە: $_recognizedPreview',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                  if (_candidates.length > 1 &&
+                      _candidates.any(
+                        (date) =>
+                            date.year != _candidates.first.year &&
+                            date.day == _candidates.first.day &&
+                            date.month == _candidates.first.month,
+                      ))
+                    const Text(
+                      'ساڵەکە لە چەند خوێندنەوەدا جیاوازە؛ بەرواری سەر پاکەتەکە بە وردی پشتڕاست بکەرەوە.',
+                      style: TextStyle(color: Colors.orange),
+                    ),
                   if (_candidates.isEmpty && _error != null)
                     Text(_error!, style: const TextStyle(color: Colors.orange)),
                   if (_candidates.isEmpty)
-                    TextButton.icon(
-                      onPressed: _retry,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('دووبارە هەوڵ بدە'),
+                    Wrap(
+                      children: [
+                        TextButton.icon(
+                          onPressed: _retry,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('دووبارە هەوڵ بدە'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => unawaited(_correctDate()),
+                          icon: const Icon(Icons.edit_calendar),
+                          label: const Text('بەروار بە دەست بنووسە'),
+                        ),
+                      ],
                     )
                   else ...[
                     for (final date in _candidates.take(4))
                       ListTile(
                         leading: const Icon(Icons.event_available),
                         title: Text('${date.year}/${date.month}/${date.day}'),
-                        subtitle: const Text('بەرواری دۆزراو پشتڕاست بکەرەوە'),
-                        onTap: () => Navigator.of(context).pop(date),
+                        subtitle: const Text(
+                          'ساڵەکە بپشکنە و پشتڕاستی بکەرەوە',
+                        ),
+                        trailing: const Icon(Icons.edit_calendar),
+                        onTap: () => unawaited(_correctDate(date)),
                       ),
                     TextButton(
                       onPressed: _retry,

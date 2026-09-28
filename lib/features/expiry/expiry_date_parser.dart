@@ -50,6 +50,20 @@ class ExpiryDateParser {
     return value < 100 ? 2000 + value : value;
   }
 
+  /// A user-corrected date must have an explicit four-digit year. OCR may
+  /// confuse 6 with 8, so never infer the year from a two-digit entry here.
+  static DateTime? enteredDate(String text) {
+    final match = RegExp(
+      r'^\s*(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{4})\s*$',
+    ).firstMatch(_digits(text));
+    if (match == null) return null;
+    return _valid(
+      int.parse(match[3]!),
+      int.parse(match[2]!),
+      int.parse(match[1]!),
+    );
+  }
+
   static List<DateTime> candidates(String text) {
     final lines = _digits(text).split(RegExp(r'[\r\n]+'));
     final found = <DateTime, int>{};
