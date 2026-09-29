@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/services/pb_service.dart';
 
 class AdvancedCustomerService {
@@ -239,6 +240,15 @@ class AdvancedCustomerService {
       },
     );
     return raw?.toString() ?? '';
+  }
+
+  static Future<bool> consumeCreditApproval(String requestId) async {
+    await PBService.ensureInitialized();
+    final raw = await PBService.client.rpc(
+      'consume_credit_approval',
+      params: {'p_request_id': requestId},
+    );
+    return raw == true;
   }
 
   static Future<List<Map<String, dynamic>>> getApprovalInbox({
