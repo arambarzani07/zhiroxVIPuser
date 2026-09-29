@@ -164,6 +164,21 @@ Deno.serve(async (req) => {
       let canManageBackup = false;
       let canManageDaftarSync = false;
       let canManageSubscription = false;
+      let canViewDashboard = true;
+      let canViewRecentActivity = true;
+      let canViewTransactions = false;
+      let canEditPayments = false;
+      let canDeletePayments = false;
+      let canCreateStatements = false;
+      let canManageCustomerLinks = false;
+      let canPinCustomers = false;
+      let canManageVipCustomers = false;
+      let canMergeCustomerIdentities = false;
+      let canViewMarketRates = true;
+      let canViewIntelligence = false;
+      let canManageCollections = false;
+      let canManageExpiry = false;
+      let canManageSettings = false;
 
       if (role === "admin") {
         if (!requester || !requesterProfile?.is_system_owner || requesterProfile.active !== true) {
@@ -229,6 +244,21 @@ Deno.serve(async (req) => {
           canManageBackup = Boolean(body.can_manage_backup ?? false);
           canManageDaftarSync = Boolean(body.can_manage_daftar_sync ?? false);
           canManageSubscription = Boolean(body.can_manage_subscription ?? false);
+          canViewDashboard = Boolean(body.can_view_dashboard ?? true);
+          canViewRecentActivity = Boolean(body.can_view_recent_activity ?? true);
+          canViewTransactions = Boolean(body.can_view_transactions ?? false);
+          canEditPayments = Boolean(body.can_edit_payments ?? false);
+          canDeletePayments = Boolean(body.can_delete_payments ?? false);
+          canCreateStatements = Boolean(body.can_create_statements ?? false);
+          canManageCustomerLinks = Boolean(body.can_manage_customer_links ?? false);
+          canPinCustomers = Boolean(body.can_pin_customers ?? false);
+          canManageVipCustomers = Boolean(body.can_manage_vip_customers ?? false);
+          canMergeCustomerIdentities = Boolean(body.can_merge_customer_identities ?? false);
+          canViewMarketRates = Boolean(body.can_view_market_rates ?? true);
+          canViewIntelligence = Boolean(body.can_view_intelligence ?? false);
+          canManageCollections = Boolean(body.can_manage_collections ?? false);
+          canManageExpiry = Boolean(body.can_manage_expiry ?? false);
+          canManageSettings = Boolean(body.can_manage_settings ?? false);
         }
       } else {
         if (!adminId) return json({ error: "admin_id_required" }, 400);
@@ -337,6 +367,21 @@ Deno.serve(async (req) => {
         can_manage_backup: canManageBackup,
         can_manage_daftar_sync: canManageDaftarSync,
         can_manage_subscription: canManageSubscription,
+        can_view_dashboard: canViewDashboard,
+        can_view_recent_activity: canViewRecentActivity,
+        can_view_transactions: canViewTransactions,
+        can_edit_payments: canEditPayments,
+        can_delete_payments: canDeletePayments,
+        can_create_statements: canCreateStatements,
+        can_manage_customer_links: canManageCustomerLinks,
+        can_pin_customers: canPinCustomers,
+        can_manage_vip_customers: canManageVipCustomers,
+        can_merge_customer_identities: canMergeCustomerIdentities,
+        can_view_market_rates: canViewMarketRates,
+        can_view_intelligence: canViewIntelligence,
+        can_manage_collections: canManageCollections,
+        can_manage_expiry: canManageExpiry,
+        can_manage_settings: canManageSettings,
         subscription_end: subscriptionEnd,
         is_system_owner: false,
       };
