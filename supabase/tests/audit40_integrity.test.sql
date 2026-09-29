@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(58);
+select plan(60);
 
 select ok(
   to_regprocedure('public.record_payment_service(uuid,uuid,numeric,text,text,uuid)') is not null,
@@ -498,6 +498,40 @@ select ok(
       and p.prosecdef=false
   ),
   'public market directory remains SECURITY INVOKER'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_proc p
+    join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.prosecdef
+      and (
+        has_function_privilege('anon', p.oid, 'EXECUTE')
+        or has_function_privilege('public', p.oid, 'EXECUTE')
+      )
+  ),
+  0::bigint,
+  'no public SECURITY DEFINER function is executable by anon or PUBLIC'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_proc p
+    join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.prosecdef
+      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      and not has_function_privilege('anon', p.oid, 'EXECUTE')
+      and not has_function_privilege('public', p.oid, 'EXECUTE')
+      and p.prosrc !~* 'auth\\.uid\\s*\\('
+      and p.prosrc !~* 'require_system_owner'
+      and p.prosrc !~* 'require_[a-z_]*\\s*\\('
+  ),
+  0::bigint,
+  'authenticated SECURITY DEFINER RPCs keep an explicit identity or authorization guard'
 );
 
 select * from finish();
