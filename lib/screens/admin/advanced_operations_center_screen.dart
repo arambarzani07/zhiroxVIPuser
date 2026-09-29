@@ -127,7 +127,7 @@ class _AdvancedOperationsCenterScreenState
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
-                value: kind,
+                initialValue: kind,
                 decoration: const InputDecoration(labelText: 'جۆری ڕاپۆرت'),
                 items: const [
                   DropdownMenuItem(value: 'daily_summary', child: Text('پوختەی ڕۆژانە')),
@@ -140,7 +140,7 @@ class _AdvancedOperationsCenterScreenState
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                value: cadence,
+                initialValue: cadence,
                 decoration: const InputDecoration(labelText: 'دووبارەبوونەوە'),
                 items: const [
                   DropdownMenuItem(value: 'daily', child: Text('ڕۆژانە')),
