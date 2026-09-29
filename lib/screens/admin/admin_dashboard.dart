@@ -293,7 +293,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return null;
   }
 
-  Widget _buildMarketRateCard(bool isDark) {
+  Widget _buildMarketRateHeaderStrip() {
     final pengi = _marketRateRow('erbil', 'pengi');
     final red = _marketRateRow('erbil', 'red');
     final stale = _marketRateData['stale'] == true;
@@ -301,44 +301,34 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final age = _marketRateAgeLabel();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
         decoration: BoxDecoration(
-          color: isDark ? AppDarkColors.card : Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          color: Colors.white.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE7EAF0),
+            color: Colors.white.withValues(alpha: 0.16),
           ),
-          boxShadow: isDark
-              ? const []
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 34,
+                  height: 34,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
                     Icons.currency_exchange_rounded,
-                    color: AppColors.primary,
-                    size: 22,
+                    color: Colors.white,
+                    size: 19,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 9),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -346,21 +336,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       const Text(
                         'نرخی بازاڕی دۆلار',
                         style: TextStyle(
-                          fontSize: 15,
+                          color: Colors.white,
+                          fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       Text(
                         [
-                          'سەرچاوە: بورصة العراق',
+                          'بورصة العراق',
                           if (age.isNotEmpty) age,
                         ].join(' • '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 11,
-                          color: isDark
-                              ? AppDarkColors.textSecondary
-                              : const Color(0xFF667085),
+                          color: Colors.white.withValues(alpha: 0.68),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -368,60 +360,84 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
                 if (stale)
                   Container(
-                    margin: const EdgeInsetsDirectional.only(end: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    margin: const EdgeInsetsDirectional.only(end: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(9),
+                      color: Colors.amberAccent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Text(
                       'کۆتا نرخ',
                       style: TextStyle(
-                        color: Colors.orange,
-                        fontSize: 10,
+                        color: Colors.amberAccent,
+                        fontSize: 9,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                IconButton(
-                  tooltip: 'نوێکردنەوەی نرخ',
-                  onPressed: _marketRateLoading
-                      ? null
-                      : () => unawaited(_loadMarketRates()),
-                  icon: _marketRateLoading
-                      ? const SizedBox(
-                          width: 19,
-                          height: 19,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh_rounded),
+                SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    tooltip: 'نوێکردنەوەی نرخ',
+                    onPressed: _marketRateLoading
+                        ? null
+                        : () => unawaited(_loadMarketRates()),
+                    icon: _marketRateLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.8,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.refresh_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 9),
             if (_marketRateLoading && !hasData)
               const SizedBox(
-                height: 56,
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                height: 42,
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.8,
+                    color: Colors.white,
+                  ),
+                ),
               )
             else if (!hasData)
               InkWell(
                 onTap: () => unawaited(_loadMarketRates()),
                 borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline_rounded, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _marketRateError ?? 'هێشتا نرخێک بەردەست نییە.',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      const Icon(Icons.refresh_rounded, size: 18),
-                    ],
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _marketRateError ?? 'هێشتا نرخێک بەردەست نییە.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.82),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               )
@@ -429,18 +445,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildMarketRateValue(
+                    child: _buildMarketRateHeaderPill(
                       label: 'هەولێر پێنجی',
                       value: pengi?['rate_iqd_per_100_usd'],
-                      isDark: isDark,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: _buildMarketRateValue(
+                    child: _buildMarketRateHeaderPill(
                       label: 'هەولێر سوور',
                       value: red?['rate_iqd_per_100_usd'],
-                      isDark: isDark,
                     ),
                   ),
                 ],
@@ -451,40 +465,41 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildMarketRateValue({
+  Widget _buildMarketRateHeaderPill({
     required String label,
     required dynamic value,
-    required bool isDark,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
-        color: isDark
-            ? AppDarkColors.cardBorder.withValues(alpha: 0.35)
-            : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.white.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.10),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11,
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: 9.5,
               fontWeight: FontWeight.w600,
-              color: isDark
-                  ? AppDarkColors.textSecondary
-                  : const Color(0xFF667085),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: AlignmentDirectional.centerStart,
             child: Text(
               '100\$ = ${_formatMarketRate(value)} د.ع',
               style: const TextStyle(
-                fontSize: 16,
+                color: Colors.white,
+                fontSize: 14,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -748,7 +763,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
                     // Stats Grid inside header
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: Column(
                         children: [
                           Row(
@@ -792,6 +807,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ],
                       ),
                     ),
+
+                    _buildMarketRateHeaderStrip(),
 
                     // ───── Subscription Warning (inside gradient) ─────
                     if (auth.subscriptionDaysLeft <= 10)
@@ -857,8 +874,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
             ),
-
-        _buildMarketRateCard(isDark),
 
         // ───── Recent Activity Header (fixed) ─────
         Padding(
