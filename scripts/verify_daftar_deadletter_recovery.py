@@ -51,17 +51,20 @@ assert "source_transaction_absent_from_current_full_snapshot" not in edge, (
 # Full reconciliation/cutover/dead-letter recovery now belongs to the durable
 # database runtime-hardening job, not the latency-sensitive sync Edge request.
 required_runtime = (
-    "reconcile_daftar_account_28",
-    "run_daftar_cutover_rehearsal",
-    "resolve_daftar_recovered_dead_letters",
+    "private.reconcile_daftar_source",
+    "private.run_daftar_sync_reconciliation",
+    "public.run_daftar_cutover_rehearsal",
+    "public.resolve_daftar_recovered_dead_letters",
 )
 for marker in required_runtime:
     assert marker in runtime, f"missing runtime hardening contract: {marker}"
 
-reconcile_call = runtime.index("reconcile_daftar_account_28")
-cutover_call = runtime.index("run_daftar_cutover_rehearsal")
-resolve_call = runtime.index("resolve_daftar_recovered_dead_letters")
-assert reconcile_call < cutover_call < resolve_call
+projection_call = runtime.index("private.reconcile_daftar_source")
+integrity_call = runtime.index("private.run_daftar_sync_reconciliation")
+cutover_call = runtime.index("public.run_daftar_cutover_rehearsal")
+resolve_call = runtime.index("public.resolve_daftar_recovered_dead_letters")
+assert projection_call < cutover_call
+assert integrity_call < cutover_call < resolve_call
 
 absent_fn = edge.index("async function resolveAbsentTransactionDeadLetters")
 two_snapshot_note = edge.index(
