@@ -524,7 +524,9 @@ class _CustomerAdvancedCenterScreenState
         type: FileType.audio,
         withData: true,
       );
-      final file = result?.files.firstOrNull;
+      final file = result == null || result.files.isEmpty
+          ? null
+          : result.files.first;
       bytes = file?.bytes;
       fileName = file?.name ?? '';
     } else {
@@ -556,7 +558,9 @@ class _CustomerAdvancedCenterScreenState
 
   Future<void> _uploadDocument() async {
     final result = await FilePicker.platform.pickFiles(withData: true);
-    final file = result?.files.firstOrNull;
+    final file = result == null || result.files.isEmpty
+        ? null
+        : result.files.first;
     if (file?.bytes == null || file == null || !mounted) return;
     final path = await AdvancedCustomerService.uploadVaultBytes(
       customerId: widget.customerId,
@@ -792,7 +796,7 @@ class _CustomerAdvancedCenterScreenState
                 child: Text(title,
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
               ),
-              ?trailing,
+              if (trailing != null) trailing,
             ],
           ),
           const SizedBox(height: 10),
