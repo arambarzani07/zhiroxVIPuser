@@ -146,6 +146,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _canManageBackup = false;
   bool _canManageDaftarSync = false;
   bool _canManageSubscription = false;
+  bool _canViewDashboard = true;
+  bool _canViewRecentActivity = true;
+  bool _canViewTransactions = false;
+  bool _canEditPayments = false;
+  bool _canDeletePayments = false;
+  bool _canCreateStatements = false;
+  bool _canManageCustomerLinks = false;
+  bool _canPinCustomers = false;
+  bool _canManageVipCustomers = false;
+  bool _canMergeCustomerIdentities = false;
+  bool _canViewMarketRates = true;
+  bool _canViewIntelligence = false;
+  bool _canManageCollections = false;
+  bool _canManageExpiry = false;
+  bool _canManageSettings = false;
   StreamSubscription<bool>? _connectivitySub;
   final ScrollController _profileScrollController = ScrollController();
   RealtimeChannel? _financialRealtimeChannel;
@@ -301,6 +316,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           _canManageBackup = user.getBoolValue('can_manage_backup');
           _canManageDaftarSync = user.getBoolValue('can_manage_daftar_sync');
           _canManageSubscription = user.getBoolValue('can_manage_subscription');
+          _canViewDashboard = user.getBoolValue('can_view_dashboard');
+          _canViewRecentActivity = user.getBoolValue('can_view_recent_activity');
+          _canViewTransactions = user.getBoolValue('can_view_transactions');
+          _canEditPayments = user.getBoolValue('can_edit_payments');
+          _canDeletePayments = user.getBoolValue('can_delete_payments');
+          _canCreateStatements = user.getBoolValue('can_create_statements');
+          _canManageCustomerLinks = user.getBoolValue('can_manage_customer_links');
+          _canPinCustomers = user.getBoolValue('can_pin_customers');
+          _canManageVipCustomers = user.getBoolValue('can_manage_vip_customers');
+          _canMergeCustomerIdentities = user.getBoolValue('can_merge_customer_identities');
+          _canViewMarketRates = user.getBoolValue('can_view_market_rates');
+          _canViewIntelligence = user.getBoolValue('can_view_intelligence');
+          _canManageCollections = user.getBoolValue('can_manage_collections');
+          _canManageExpiry = user.getBoolValue('can_manage_expiry');
+          _canManageSettings = user.getBoolValue('can_manage_settings');
         }
 
         _isLoading = false;
