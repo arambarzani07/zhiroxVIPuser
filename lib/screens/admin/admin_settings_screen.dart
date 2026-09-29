@@ -53,13 +53,43 @@ class AdminSettingsScreen extends StatelessWidget {
               ),
             ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
               sliver: SliverList.list(
                 children: [
                   _SettingsGroup(
-                    icon: Icons.space_dashboard_outlined,
-                    title: 'بەڕێوەبردنی کاروبار',
-                    subtitle: 'کارمەند، داواکاری، ڕاپۆرت و بەدواداچوون',
+                    icon: Icons.tune_rounded,
+                    title: 'هەژمار و ڕووکار',
+                    children: [
+                      _SettingsRow(
+                        icon: isDark
+                            ? Icons.light_mode_outlined
+                            : Icons.dark_mode_outlined,
+                        title: isDark ? 'دۆخی ڕووناک' : 'دۆخی تاریک',
+                        subtitle: 'گۆڕینی ڕەنگی ڕووکار',
+                        onTap: () =>
+                            context.read<ThemeProvider>().toggleTheme(),
+                      ),
+                      _SettingsRow(
+                        icon: Icons.phone_android_rounded,
+                        title: 'ژمارەی مۆبایل',
+                        subtitle:
+                            (auth.user?.getStringValue('phone') ?? '').isEmpty
+                            ? 'ژمارە مۆبایلێکی نوێ دابنێ'
+                            : auth.user!.getStringValue('phone'),
+                        onTap: onChangePhone,
+                      ),
+                      _SettingsRow(
+                        icon: Icons.lock_outline_rounded,
+                        title: 'وشەی نهێنی',
+                        subtitle: 'گۆڕینی وشەی نهێنیی هەژمار',
+                        onTap: onChangePassword,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _SettingsGroup(
+                    icon: Icons.store_mall_directory_outlined,
+                    title: 'کاروبار و کڕیار',
                     children: [
                       _SettingsRow(
                         icon: Icons.badge_outlined,
@@ -89,6 +119,20 @@ class AdminSettingsScreen extends StatelessWidget {
                         subtitle: 'ڕاپۆرتی قەرز و پارەدانەوە',
                         onTap: onOpenReports,
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _SettingsGroup(
+                    icon: Icons.insights_outlined,
+                    title: 'قەرز و زیرەکی',
+                    children: [
+                      _SettingsRow(
+                        icon: Icons.event_repeat_rounded,
+                        title: 'بەدواداچوونی قەرز',
+                        subtitle: 'Aging، پێشەنگی کڕیار و پلانی بەدواداچوون',
+                        onTap: () =>
+                            _open(context, const CollectionCenterScreen()),
+                      ),
                       _SettingsRow(
                         icon: Icons.auto_graph_rounded,
                         title: 'ناوەندی زیرەکی',
@@ -100,24 +144,16 @@ class AdminSettingsScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      _SettingsRow(
-                        icon: Icons.event_repeat_rounded,
-                        title: 'بەدواداچوونی قەرز',
-                        subtitle: 'Aging، پێشەنگی کڕیار و پلانی بەدواداچوون',
-                        onTap: () =>
-                            _open(context, const CollectionCenterScreen()),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   _SettingsGroup(
                     icon: Icons.hub_outlined,
                     title: 'پەیوەندی و داتا',
-                    subtitle: 'ئاگادارکردنەوە، Sync و گواستنەوەی داتا',
                     children: [
                       _SettingsRow(
                         icon: Icons.notifications_active_outlined,
-                        title: 'ناوەندی ئاگادارکردنەوەکان',
+                        title: 'ئاگادارکردنەوەکان',
                         subtitle: 'Push، مێژوو و ناردنی گشتی',
                         onTap: () =>
                             _open(context, const AdminNotificationsScreen()),
@@ -138,11 +174,10 @@ class AdminSettingsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   _SettingsGroup(
                     icon: Icons.account_balance_wallet_outlined,
                     title: 'دارایی و بەڵگەنامە',
-                    subtitle: 'بەشداری، پسووڵە و داتای سڕاوە',
                     children: [
                       _SettingsRow(
                         icon: Icons.credit_card_rounded,
@@ -167,11 +202,10 @@ class AdminSettingsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   _SettingsGroup(
                     icon: Icons.verified_user_outlined,
-                    title: 'پاراستن و کۆنترۆڵ',
-                    subtitle: 'دەسەڵات، Audit و Backup',
+                    title: 'پاراستن و Backup',
                     children: [
                       _SettingsRow(
                         icon: Icons.admin_panel_settings_outlined,
@@ -182,39 +216,7 @@ class AdminSettingsScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  _SettingsGroup(
-                    icon: Icons.tune_rounded,
-                    title: 'هەژمار و ڕووکار',
-                    subtitle: 'ڕووکار و زانیارییەکانی هەژمار',
-                    children: [
-                      _SettingsRow(
-                        icon: isDark
-                            ? Icons.light_mode_outlined
-                            : Icons.dark_mode_outlined,
-                        title: isDark ? 'دۆخی ڕووناک' : 'دۆخی تاریک',
-                        subtitle: 'گۆڕینی ڕەنگی ڕووکار',
-                        onTap: () =>
-                            context.read<ThemeProvider>().toggleTheme(),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.phone_android_rounded,
-                        title: 'ژمارەی مۆبایل',
-                        subtitle:
-                            (auth.user?.getStringValue('phone') ?? '').isEmpty
-                            ? 'ژمارە مۆبایلێکی نوێ دابنێ'
-                            : auth.user!.getStringValue('phone'),
-                        onTap: onChangePhone,
-                      ),
-                      _SettingsRow(
-                        icon: Icons.lock_outline_rounded,
-                        title: 'وشەی نهێنی',
-                        subtitle: 'گۆڕینی وشەی نهێنیی هەژمار',
-                        onTap: onChangePassword,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   AppSurface(
                     padding: EdgeInsets.zero,
                     child: _SettingsRow(
@@ -254,7 +256,7 @@ class _SettingsHeaderCard extends StatelessWidget {
         marketName.trim().isEmpty ? 'بەڕێوەبردنی سیستەم' : marketName.trim();
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 15, 16, 15),
+      padding: const EdgeInsets.fromLTRB(15, 12, 15, 12),
       decoration: BoxDecoration(
         color: scheme.primaryContainer.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(20),
@@ -265,16 +267,16 @@ class _SettingsHeaderCard extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 50,
-            height: 50,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: scheme.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
               Icons.storefront_rounded,
               color: scheme.primary,
-              size: 25,
+              size: 22,
             ),
           ),
           const SizedBox(width: 13),
@@ -301,20 +303,6 @@ class _SettingsHeaderCard extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: scheme.surface.withValues(alpha: 0.78),
-              borderRadius: BorderRadius.circular(99),
-            ),
-            child: Text(
-              'بەڕێوەبەر',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: scheme.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-          ),
         ],
       ),
     );
@@ -325,13 +313,11 @@ class _SettingsGroup extends StatelessWidget {
   const _SettingsGroup({
     required this.icon,
     required this.title,
-    required this.subtitle,
     required this.children,
   });
 
   final IconData icon;
   final String title;
-  final String subtitle;
   final List<Widget> children;
 
   @override
@@ -342,32 +328,24 @@ class _SettingsGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsetsDirectional.only(start: 2, bottom: 9),
+          padding: const EdgeInsetsDirectional.only(start: 3, bottom: 8),
           child: Row(
             children: [
-              Icon(icon, size: 18, color: scheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(9),
                 ),
+                child: Icon(icon, size: 16, color: scheme.primary),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
               ),
             ],
           ),
