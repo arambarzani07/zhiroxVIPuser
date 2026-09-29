@@ -369,6 +369,15 @@ class _UserListScreenState extends State<UserListScreen> {
     );
   }
 
+  bool _isEffectiveVip(RecordModel user) {
+    if (!user.getBoolValue('is_vip')) return false;
+    final raw = user.getStringValue('vip_expires_at');
+    if (raw.trim().isEmpty) return true;
+    final expiresAt = DateTime.tryParse(raw);
+    if (expiresAt == null) return true;
+    return expiresAt.toUtc().isAfter(DateTime.now().toUtc());
+  }
+
   String _normalizedCustomerName(String value) =>
       value.trim().toLowerCase().replaceAll(RegExp(r'\\s+'), ' ');
 
@@ -904,7 +913,7 @@ class _UserListScreenState extends State<UserListScreen> {
       isEmployee: _isEmployee,
       approved: user.getBoolValue('approved'),
       isPinned: user.getBoolValue('is_pinned'),
-      isVip: user.getBoolValue('is_vip'),
+      isVip: _isEffectiveVip(user),
       unread: !_isEmployee && inbox?['unread'] == true,
       timeLabel: _inboxTimeLabel(inbox),
       preview: _inboxPreview(inbox),
