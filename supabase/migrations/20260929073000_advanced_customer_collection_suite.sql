@@ -987,25 +987,77 @@ create or replace function public.save_scheduled_report(
 returns uuid
 language plpgsql security invoker set search_path to ''
 as $function$
-declare v_admin uuid:=private.current_admin_id(); v_id uuid:=coalesce(p_id,gen_random_uuid()); v_next timestamptz;
+declare
+  v_admin uuid:=private.current_admin_id();
+  v_id uuid:=coalesce(p_id,gen_random_uuid());
+  v_next timestamptz;
+  v_days integer;
+  v_weekday integer;
+  v_month_day integer;
 begin
-  if v_admin is null or (select private."current_role"())<>'admin' then raise exception 'admin_required' using errcode='42501'; end if;
-  if p_report_kind not in ('daily_summary','collections','cash_flow','employee_performance','data_quality')
-    or p_cadence not in ('daily','weekly','monthly') or p_run_hour not between 0 and 23 then
-    raise exception 'invalid_schedule';
+  if v_admin is null or (select private."current_role"())<>'admin' then
+    raise exception 'admin_required' using errcode='42501';
   end if;
-  v_next:=date_trunc('day',now()) + make_interval(hours=>p_run_hour);
-  if v_next<=now() then v_next:=v_next+interval '1 day'; end if;
+
+  if p_report_kind not in ('daily_summary','collections','cash_flow','employee_performance','data_quality')
+    or p_cadence not in ('daily','weekly','monthly')
+    or p_run_hour not between 0 and 23 then
+    raise exception 'invalid_schedule' using errcode='22023';
+  end if;
+
+  if p_cadence='weekly' then
+    if p_weekday is null or p_weekday not between 1 and 7 then
+      raise exception 'invalid_weekday' using errcode='22023';
+    end if;
+    v_weekday:=p_weekday;
+    v_days:=(v_weekday-extract(isodow from current_date)::integer+7)%7;
+    v_next:=date_trunc('day',now())
+      +make_interval(days=>v_days,hours=>p_run_hour);
+    if v_next<=now() then
+      v_next:=v_next+interval '7 days';
+    end if;
+    v_month_day:=null;
+  elsif p_cadence='monthly' then
+    if p_month_day is null or p_month_day not between 1 and 28 then
+      raise exception 'invalid_month_day' using errcode='22023';
+    end if;
+    v_month_day:=p_month_day;
+    v_next:=date_trunc('month',now())
+      +make_interval(days=>v_month_day-1,hours=>p_run_hour);
+    if v_next<=now() then
+      v_next:=date_trunc('month',now()+interval '1 month')
+        +make_interval(days=>v_month_day-1,hours=>p_run_hour);
+    end if;
+    v_weekday:=null;
+  else
+    v_next:=date_trunc('day',now())+make_interval(hours=>p_run_hour);
+    if v_next<=now() then
+      v_next:=v_next+interval '1 day';
+    end if;
+    v_weekday:=null;
+    v_month_day:=null;
+  end if;
+
   insert into public.scheduled_reports(
     id,admin_id,report_kind,cadence,run_hour,weekday,month_day,recipients,
     enabled,next_run_at,created_by,updated_at
-  ) values(v_id,v_admin,p_report_kind,p_cadence,p_run_hour,p_weekday,p_month_day,
-    coalesce(p_recipients,'[]'::jsonb),coalesce(p_enabled,true),v_next,auth.uid(),now())
-  on conflict(id) do update set report_kind=excluded.report_kind,cadence=excluded.cadence,
-    run_hour=excluded.run_hour,weekday=excluded.weekday,month_day=excluded.month_day,
-    recipients=excluded.recipients,enabled=excluded.enabled,next_run_at=excluded.next_run_at,
+  ) values(
+    v_id,v_admin,p_report_kind,p_cadence,p_run_hour,v_weekday,v_month_day,
+    coalesce(p_recipients,'[]'::jsonb),coalesce(p_enabled,true),
+    v_next,auth.uid(),now()
+  )
+  on conflict(id) do update set
+    report_kind=excluded.report_kind,
+    cadence=excluded.cadence,
+    run_hour=excluded.run_hour,
+    weekday=excluded.weekday,
+    month_day=excluded.month_day,
+    recipients=excluded.recipients,
+    enabled=excluded.enabled,
+    next_run_at=excluded.next_run_at,
     updated_at=now()
   where public.scheduled_reports.admin_id=v_admin;
+
   return v_id;
 end;
 $function$;
