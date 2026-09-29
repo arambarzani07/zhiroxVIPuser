@@ -195,6 +195,35 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
     final auth = context.read<AuthProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final canEdit = auth.userRole == 'admin';
+
+    final permissions = <({IconData icon, String title, bool value, ValueChanged<bool> onChanged})>[
+      (icon: Icons.visibility_outlined, title: 'بینینی کڕیارەکان', value: _user?.getBoolValue('can_view_customers') ?? false, onChanged: (_) {}),
+      (icon: Icons.person_add_alt_1_outlined, title: 'زیادکردنی کڕیار', value: _canAddCustomers, onChanged: (v) => _setProfileState(() => _canAddCustomers = v)),
+      (icon: Icons.edit_outlined, title: 'دەستکاریکردنی کڕیار', value: _user?.getBoolValue('can_edit_customers') ?? false, onChanged: (_) {}),
+      (icon: Icons.delete_outline_rounded, title: 'سڕینەوەی کڕیار', value: _user?.getBoolValue('can_delete_customers') ?? false, onChanged: (_) {}),
+      (icon: Icons.receipt_long_outlined, title: 'بینینی قەرزەکان', value: _user?.getBoolValue('can_view_debts') ?? false, onChanged: (_) {}),
+      (icon: Icons.add_card_outlined, title: 'زیادکردنی قەرز', value: _user?.getBoolValue('can_add_debts') ?? false, onChanged: (_) {}),
+      (icon: Icons.edit_note_outlined, title: 'دەستکاریکردنی قەرز', value: _canEditDebts, onChanged: (v) => _setProfileState(() => _canEditDebts = v)),
+      (icon: Icons.delete_sweep_outlined, title: 'سڕینەوەی قەرز', value: _user?.getBoolValue('can_delete_debts') ?? false, onChanged: (_) {}),
+      (icon: Icons.payments_outlined, title: 'تۆمارکردنی پارەدانەوە', value: _user?.getBoolValue('can_record_payments') ?? false, onChanged: (_) {}),
+      (icon: Icons.account_balance_wallet_outlined, title: 'دانانی سنووری قەرز', value: _canSetDebtLimit, onChanged: (v) => _setProfileState(() => _canSetDebtLimit = v)),
+      (icon: Icons.event_available_outlined, title: 'دانانی بەرواری دانەوە', value: _canSetDueDate, onChanged: (v) => _setProfileState(() => _canSetDueDate = v)),
+      (icon: Icons.analytics_outlined, title: 'بینینی ڕاپۆرتی دارایی', value: _user?.getBoolValue('can_view_financial_reports') ?? false, onChanged: (_) {}),
+      (icon: Icons.file_upload_outlined, title: 'هەناردەکردنی داتا', value: _user?.getBoolValue('can_export_data') ?? false, onChanged: (_) {}),
+      (icon: Icons.file_download_outlined, title: 'هاوردەکردنی داتا', value: _user?.getBoolValue('can_import_data') ?? false, onChanged: (_) {}),
+      (icon: Icons.notifications_active_outlined, title: 'ناردنی ئاگادارکردنەوە', value: _canSendNotifications, onChanged: (v) => _setProfileState(() => _canSendNotifications = v)),
+      (icon: Icons.undo_rounded, title: 'گەڕاندنەوەی پارەدانەوە', value: _canRefundPayments, onChanged: (v) => _setProfileState(() => _canRefundPayments = v)),
+      (icon: Icons.restore_from_trash_outlined, title: 'گەڕاندنەوەی قەرزی سڕاوە', value: _canRestoreDebts, onChanged: (v) => _setProfileState(() => _canRestoreDebts = v)),
+      (icon: Icons.receipt_outlined, title: 'بەڕێوەبردنی پسووڵە', value: _canManageReceipts, onChanged: (v) => _setProfileState(() => _canManageReceipts = v)),
+      (icon: Icons.notifications_outlined, title: 'بەڕێوەبردنی ئاگادارکردنەوە', value: _canManageNotifications, onChanged: (v) => _setProfileState(() => _canManageNotifications = v)),
+      (icon: Icons.how_to_reg_outlined, title: 'پەسەندکردنی کڕیار', value: _canApproveCustomers, onChanged: (v) => _setProfileState(() => _canApproveCustomers = v)),
+      (icon: Icons.badge_outlined, title: 'بەڕێوەبردنی کارمەندان', value: _canManageEmployees, onChanged: (v) => _setProfileState(() => _canManageEmployees = v)),
+      (icon: Icons.fact_check_outlined, title: 'بینینی Audit Log', value: _canViewAuditLog, onChanged: (v) => _setProfileState(() => _canViewAuditLog = v)),
+      (icon: Icons.backup_outlined, title: 'بەڕێوەبردنی Backup', value: _canManageBackup, onChanged: (v) => _setProfileState(() => _canManageBackup = v)),
+      (icon: Icons.sync_rounded, title: 'بەڕێوەبردنی Daftar Sync', value: _canManageDaftarSync, onChanged: (v) => _setProfileState(() => _canManageDaftarSync = v)),
+      (icon: Icons.workspace_premium_outlined, title: 'بەڕێوەبردنی بەشداری', value: _canManageSubscription, onChanged: (v) => _setProfileState(() => _canManageSubscription = v)),
+    ];
+
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -209,42 +238,17 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
           ),
           child: Column(
             children: [
-              _permissionTile(
-                icon: Icons.person_add_alt_1_outlined,
-                title: 'زیادکردنی کڕیار',
-                value: _canAddCustomers,
-                enabled: canEdit,
-                onChanged: (v) => _setProfileState(() => _canAddCustomers = v),
-              ),
-              _permissionTile(
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'دانانی سنووری قەرز',
-                value: _canSetDebtLimit,
-                enabled: canEdit,
-                onChanged: (v) => _setProfileState(() => _canSetDebtLimit = v),
-              ),
-              _permissionTile(
-                icon: Icons.event_available_outlined,
-                title: 'دانانی بەرواری دانەوە',
-                value: _canSetDueDate,
-                enabled: canEdit,
-                onChanged: (v) => _setProfileState(() => _canSetDueDate = v),
-              ),
-              _permissionTile(
-                icon: Icons.edit_note_outlined,
-                title: 'دەستکاریکردنی قەرز',
-                value: _canEditDebts,
-                enabled: canEdit,
-                onChanged: (v) => _setProfileState(() => _canEditDebts = v),
-              ),
-              _permissionTile(
-                icon: Icons.notifications_active_outlined,
-                title: 'ناردنی ئاگادارکردنەوە',
-                value: _canSendNotifications,
-                enabled: canEdit,
-                onChanged: (v) => _setProfileState(() => _canSendNotifications = v),
-                showDivider: false,
-              ),
+              ...List.generate(permissions.length, (index) {
+                final item = permissions[index];
+                return _permissionTile(
+                  icon: item.icon,
+                  title: item.title,
+                  value: item.value,
+                  enabled: canEdit,
+                  onChanged: item.onChanged,
+                  showDivider: index != permissions.length - 1,
+                );
+              }),
               if (canEdit) ...[
                 const SizedBox(height: 12),
                 SizedBox(
@@ -332,6 +336,26 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
         'can_set_due_date': _canSetDueDate,
         'can_edit_debts': _canEditDebts,
         'can_send_notifications': _canSendNotifications,
+        'can_view_customers': _user?.getBoolValue('can_view_customers') ?? false,
+        'can_edit_customers': _user?.getBoolValue('can_edit_customers') ?? false,
+        'can_delete_customers': _user?.getBoolValue('can_delete_customers') ?? false,
+        'can_view_debts': _user?.getBoolValue('can_view_debts') ?? false,
+        'can_add_debts': _user?.getBoolValue('can_add_debts') ?? false,
+        'can_delete_debts': _user?.getBoolValue('can_delete_debts') ?? false,
+        'can_record_payments': _user?.getBoolValue('can_record_payments') ?? false,
+        'can_view_financial_reports': _user?.getBoolValue('can_view_financial_reports') ?? false,
+        'can_export_data': _user?.getBoolValue('can_export_data') ?? false,
+        'can_import_data': _user?.getBoolValue('can_import_data') ?? false,
+        'can_refund_payments': _canRefundPayments,
+        'can_restore_debts': _canRestoreDebts,
+        'can_manage_receipts': _canManageReceipts,
+        'can_manage_notifications': _canManageNotifications,
+        'can_approve_customers': _canApproveCustomers,
+        'can_manage_employees': _canManageEmployees,
+        'can_view_audit_log': _canViewAuditLog,
+        'can_manage_backup': _canManageBackup,
+        'can_manage_daftar_sync': _canManageDaftarSync,
+        'can_manage_subscription': _canManageSubscription,
       });
       if (!mounted) return;
       AppHelpers.showSnackBar(context, 'دەسەڵاتەکان نوێکرانەوە');
