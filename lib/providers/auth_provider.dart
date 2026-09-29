@@ -116,6 +116,7 @@ class AuthProvider extends ChangeNotifier {
   bool get canViewMarketRates => _employeePermission('can_view_market_rates');
   bool get canViewIntelligence => _employeePermission('can_view_intelligence');
   bool get canManageCollections => _employeePermission('can_manage_collections');
+  bool get canViewExpiry => _employeePermission('can_view_expiry');
   bool get canManageExpiry => _employeePermission('can_manage_expiry');
   bool get canManageSettings => _employeePermission('can_manage_settings');
 
