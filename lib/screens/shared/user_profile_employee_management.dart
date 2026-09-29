@@ -222,6 +222,21 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
       (icon: Icons.backup_outlined, title: 'بەڕێوەبردنی Backup', value: _canManageBackup, onChanged: (v) => _setProfileState(() => _canManageBackup = v)),
       (icon: Icons.sync_rounded, title: 'بەڕێوەبردنی Daftar Sync', value: _canManageDaftarSync, onChanged: (v) => _setProfileState(() => _canManageDaftarSync = v)),
       (icon: Icons.workspace_premium_outlined, title: 'بەڕێوەبردنی بەشداری', value: _canManageSubscription, onChanged: (v) => _setProfileState(() => _canManageSubscription = v)),
+      (icon: Icons.dashboard_outlined, title: 'بینینی داشبۆرد', value: _canViewDashboard, onChanged: (v) => _setProfileState(() => _canViewDashboard = v)),
+      (icon: Icons.history_rounded, title: 'بینینی چالاکییە نوێکان', value: _canViewRecentActivity, onChanged: (v) => _setProfileState(() => _canViewRecentActivity = v)),
+      (icon: Icons.swap_horiz_rounded, title: 'بینینی مێژووی مامەڵەکان', value: _canViewTransactions, onChanged: (v) => _setProfileState(() => _canViewTransactions = v)),
+      (icon: Icons.edit_note_rounded, title: 'دەستکاریکردنی پارەدانەوە', value: _canEditPayments, onChanged: (v) => _setProfileState(() => _canEditPayments = v)),
+      (icon: Icons.delete_forever_outlined, title: 'سڕینەوەی پارەدانەوە', value: _canDeletePayments, onChanged: (v) => _setProfileState(() => _canDeletePayments = v)),
+      (icon: Icons.description_outlined, title: 'دروستکردنی کەشف و بەڵگەنامە', value: _canCreateStatements, onChanged: (v) => _setProfileState(() => _canCreateStatements = v)),
+      (icon: Icons.link_rounded, title: 'بەڕێوەبردنی لینکی کڕیار', value: _canManageCustomerLinks, onChanged: (v) => _setProfileState(() => _canManageCustomerLinks = v)),
+      (icon: Icons.push_pin_outlined, title: 'Pin کردنی کڕیار', value: _canPinCustomers, onChanged: (v) => _setProfileState(() => _canPinCustomers = v)),
+      (icon: Icons.workspace_premium_outlined, title: 'بەڕێوەبردنی VIP', value: _canManageVipCustomers, onChanged: (v) => _setProfileState(() => _canManageVipCustomers = v)),
+      (icon: Icons.merge_type_rounded, title: 'یەکخستنی ناسنامەی دووبارە', value: _canMergeCustomerIdentities, onChanged: (v) => _setProfileState(() => _canMergeCustomerIdentities = v)),
+      (icon: Icons.currency_exchange_rounded, title: 'بینینی نرخی بازاڕ', value: _canViewMarketRates, onChanged: (v) => _setProfileState(() => _canViewMarketRates = v)),
+      (icon: Icons.auto_graph_rounded, title: 'بینینی ناوەندی زیرەکی', value: _canViewIntelligence, onChanged: (v) => _setProfileState(() => _canViewIntelligence = v)),
+      (icon: Icons.event_repeat_rounded, title: 'بەڕێوەبردنی بەدواداچوونی قەرز', value: _canManageCollections, onChanged: (v) => _setProfileState(() => _canManageCollections = v)),
+      (icon: Icons.inventory_2_outlined, title: 'بەڕێوەبردنی کاڵای بەسەرچوو', value: _canManageExpiry, onChanged: (v) => _setProfileState(() => _canManageExpiry = v)),
+      (icon: Icons.settings_outlined, title: 'بەڕێوەبردنی ڕێکخستنەکان', value: _canManageSettings, onChanged: (v) => _setProfileState(() => _canManageSettings = v)),
     ];
 
     return SliverToBoxAdapter(
@@ -356,6 +371,21 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
         'can_manage_backup': _canManageBackup,
         'can_manage_daftar_sync': _canManageDaftarSync,
         'can_manage_subscription': _canManageSubscription,
+        'can_view_dashboard': _canViewDashboard,
+        'can_view_recent_activity': _canViewRecentActivity,
+        'can_view_transactions': _canViewTransactions,
+        'can_edit_payments': _canEditPayments,
+        'can_delete_payments': _canDeletePayments,
+        'can_create_statements': _canCreateStatements,
+        'can_manage_customer_links': _canManageCustomerLinks,
+        'can_pin_customers': _canPinCustomers,
+        'can_manage_vip_customers': _canManageVipCustomers,
+        'can_merge_customer_identities': _canMergeCustomerIdentities,
+        'can_view_market_rates': _canViewMarketRates,
+        'can_view_intelligence': _canViewIntelligence,
+        'can_manage_collections': _canManageCollections,
+        'can_manage_expiry': _canManageExpiry,
+        'can_manage_settings': _canManageSettings,
       });
       if (!mounted) return;
       AppHelpers.showSnackBar(context, 'دەسەڵاتەکان نوێکرانەوە');
