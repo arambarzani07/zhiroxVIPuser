@@ -1320,7 +1320,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ),
         ),
-      if (auth.canViewDebts)
+      if (auth.canCreateStatements)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
@@ -1341,7 +1341,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
       if (!totalsComplete) _buildCurrencySummaryWarning(),
       _buildDebtLimitCard(),
-      if (auth.canSendNotifications)
+      if (auth.canManageCustomerLinks)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
@@ -1350,13 +1350,27 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
     ];
 
-    final transactions = <Widget>[
-      _buildCustomerChatTimelineCard(
-        totalDebt: totalDebt,
-        totalRemaining: totalRemaining,
-        totalPaid: totalPaid,
-      ),
-    ];
+    final transactions = auth.canViewTransactions
+        ? <Widget>[
+            _buildCustomerChatTimelineCard(
+              totalDebt: totalDebt,
+              totalRemaining: totalRemaining,
+              totalPaid: totalPaid,
+            ),
+          ]
+        : <Widget>[
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Center(
+                  child: Text(
+                    'دەسەڵاتی بینینی مێژووی مامەڵەکانت نییە.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+          ];
 
     final edit = <Widget>[
       _buildProfileEditor(),
