@@ -30,6 +30,16 @@ class _AddUserDialogState extends State<AddUserDialog> {
   bool _canEditDebts = false;
 
   bool _canSendNotifications = false;
+  bool _canViewCustomers = true;
+  bool _canEditCustomers = false;
+  bool _canDeleteCustomers = false;
+  bool _canViewDebts = true;
+  bool _canAddDebts = false;
+  bool _canDeleteDebts = false;
+  bool _canRecordPayments = false;
+  bool _canViewFinancialReports = false;
+  bool _canExportData = false;
+  bool _canImportData = false;
 
   @override
   void dispose() {
@@ -221,6 +231,16 @@ class _AddUserDialogState extends State<AddUserDialog> {
         canSetDueDate: _canSetDueDate,
         canEditDebts: _canEditDebts,
         canSendNotifications: _canSendNotifications,
+        canViewCustomers: _canViewCustomers,
+        canEditCustomers: _canEditCustomers,
+        canDeleteCustomers: _canDeleteCustomers,
+        canViewDebts: _canViewDebts,
+        canAddDebts: _canAddDebts,
+        canDeleteDebts: _canDeleteDebts,
+        canRecordPayments: _canRecordPayments,
+        canViewFinancialReports: _canViewFinancialReports,
+        canExportData: _canExportData,
+        canImportData: _canImportData,
         debtLimit: debtLimit,
       );
 
@@ -594,9 +614,49 @@ class _AddUserDialogState extends State<AddUserDialog> {
           child: Column(
             children: [
               _buildSwitch(
+                'بینینی کڕیارەکان',
+                _canViewCustomers,
+                (v) => setState(() => _canViewCustomers = v),
+              ),
+              _buildSwitch(
                 'زیادکردنی کڕیار',
                 _canAddCustomers,
                 (v) => setState(() => _canAddCustomers = v),
+              ),
+              _buildSwitch(
+                'دەستکاریکردنی کڕیار',
+                _canEditCustomers,
+                (v) => setState(() => _canEditCustomers = v),
+              ),
+              _buildSwitch(
+                'سڕینەوەی کڕیار',
+                _canDeleteCustomers,
+                (v) => setState(() => _canDeleteCustomers = v),
+              ),
+              _buildSwitch(
+                'بینینی قەرزەکان',
+                _canViewDebts,
+                (v) => setState(() => _canViewDebts = v),
+              ),
+              _buildSwitch(
+                'زیادکردنی قەرز',
+                _canAddDebts,
+                (v) => setState(() => _canAddDebts = v),
+              ),
+              _buildSwitch(
+                'دەستکاریکردنی قەرز',
+                _canEditDebts,
+                (v) => setState(() => _canEditDebts = v),
+              ),
+              _buildSwitch(
+                'سڕینەوەی قەرز',
+                _canDeleteDebts,
+                (v) => setState(() => _canDeleteDebts = v),
+              ),
+              _buildSwitch(
+                'تۆمارکردنی پارەدانەوە',
+                _canRecordPayments,
+                (v) => setState(() => _canRecordPayments = v),
               ),
               _buildSwitch(
                 'دانانی سنووری قەرز',
@@ -609,9 +669,19 @@ class _AddUserDialogState extends State<AddUserDialog> {
                 (v) => setState(() => _canSetDueDate = v),
               ),
               _buildSwitch(
-                'دەستکاریکردنی قەرز',
-                _canEditDebts,
-                (v) => setState(() => _canEditDebts = v),
+                'بینینی ڕاپۆرتی دارایی',
+                _canViewFinancialReports,
+                (v) => setState(() => _canViewFinancialReports = v),
+              ),
+              _buildSwitch(
+                'هەناردەکردنی داتا',
+                _canExportData,
+                (v) => setState(() => _canExportData = v),
+              ),
+              _buildSwitch(
+                'هاوردەکردنی داتا',
+                _canImportData,
+                (v) => setState(() => _canImportData = v),
               ),
               _buildSwitch(
                 'ناردنی ئاگادارکردنەوە',
