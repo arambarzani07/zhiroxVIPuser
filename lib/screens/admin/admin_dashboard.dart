@@ -40,16 +40,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
   bool _dashboardRealtimeRefreshPending = false;
   String _recentActivityFilter = 'debt';
   List<Map<String, dynamic>> _syncAlerts = const [];
+  Map<String, dynamic> _marketRateData = const {};
+  String? _marketRateError;
+  bool _marketRateLoading = false;
+  Future<void>? _marketRateLoad;
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadStats());
+    unawaited(_loadMarketRates());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_subscribeDashboardRealtime());
     });
     _connectivitySub = ConnectivityService.instance.statusStream.listen((online) {
-      if (online && mounted) unawaited(_loadStats());
+      if (online && mounted) {
+        unawaited(_loadStats());
+        unawaited(_loadMarketRates());
+      }
     });
   }
 
@@ -194,6 +202,291 @@ class _AdminDashboardState extends State<AdminDashboard> {
     });
   }
 
+  Future<void> _loadMarketRates() {
+    final activeLoad = _marketRateLoad;
+    if (activeLoad != null) return activeLoad;
+
+    final load = _loadMarketRatesOnce();
+    _marketRateLoad = load;
+    unawaited(
+      load.whenComplete(() {
+        if (identical(_marketRateLoad, load)) _marketRateLoad = null;
+      }),
+    );
+    return load;
+  }
+
+  Future<void> _loadMarketRatesOnce() async {
+    if (!mounted) return;
+    if (_marketRateData.isEmpty) {
+      setState(() => _marketRateLoading = true);
+    }
+
+    try {
+      final data = await PBService.getMarketExchangeRates();
+      if (!mounted) return;
+      setState(() {
+        _marketRateData = data;
+        _marketRateError = null;
+        _marketRateLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _marketRateError = AppHelpers.backendErrorMessage(
+          error,
+          fallback: 'نەتوانرا نرخی بازاڕ نوێ بکرێتەوە.',
+        );
+        _marketRateLoading = false;
+      });
+    }
+  }
+
+  String _formatMarketRate(dynamic value) {
+    final number = value is num
+        ? value.toDouble()
+        : double.tryParse(value?.toString() ?? '');
+    if (number == null || number <= 0) return '—';
+    final text = number.toStringAsFixed(0);
+    return text.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (match) => '${match[1]},',
+    );
+  }
+
+  String _marketRateAgeLabel() {
+    final rates = _marketRateData['rates'];
+    if (rates is! List || rates.isEmpty) return '';
+    DateTime? latest;
+    for (final row in rates) {
+      if (row is! Map) continue;
+      final raw = row['source_published_at'] ?? row['retrieved_at'] ?? row['updated_at'];
+      final parsed = DateTime.tryParse(raw?.toString() ?? '');
+      if (parsed == null) continue;
+      if (latest == null || parsed.isAfter(latest)) latest = parsed;
+    }
+    if (latest == null) return '';
+    final diff = DateTime.now().toUtc().difference(latest.toUtc());
+    if (diff.inMinutes < 1) return 'ئێستا';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} خولەک پێش ئێستا';
+    if (diff.inHours < 24) return '${diff.inHours} کاتژمێر پێش ئێستا';
+    return '${diff.inDays} ڕۆژ پێش ئێستا';
+  }
+
+  Map<String, dynamic>? _marketRateRow(String city, String variant) {
+    final rates = _marketRateData['rates'];
+    if (rates is! List) return null;
+    for (final item in rates) {
+      if (item is! Map) continue;
+      if (item['city']?.toString() == city &&
+          item['variant']?.toString() == variant) {
+        return Map<String, dynamic>.from(item);
+      }
+    }
+    return null;
+  }
+
+  Widget _buildMarketRateCard(bool isDark) {
+    final pengi = _marketRateRow('erbil', 'pengi');
+    final red = _marketRateRow('erbil', 'red');
+    final stale = _marketRateData['stale'] == true;
+    final hasData = pengi != null || red != null;
+    final age = _marketRateAgeLabel();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? AppDarkColors.card : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE7EAF0),
+          ),
+          boxShadow: isDark
+              ? const []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.currency_exchange_rounded,
+                    color: AppColors.primary,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'نرخی بازاڕی دۆلار',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          'سەرچاوە: بورصة العراق',
+                          if (age.isNotEmpty) age,
+                        ].join(' • '),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark
+                              ? AppDarkColors.textSecondary
+                              : const Color(0xFF667085),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (stale)
+                  Container(
+                    margin: const EdgeInsetsDirectional.only(end: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Text(
+                      'کۆتا نرخ',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                IconButton(
+                  tooltip: 'نوێکردنەوەی نرخ',
+                  onPressed: _marketRateLoading
+                      ? null
+                      : () => unawaited(_loadMarketRates()),
+                  icon: _marketRateLoading
+                      ? const SizedBox(
+                          width: 19,
+                          height: 19,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (_marketRateLoading && !hasData)
+              const SizedBox(
+                height: 56,
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            else if (!hasData)
+              InkWell(
+                onTap: () => unawaited(_loadMarketRates()),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _marketRateError ?? 'هێشتا نرخێک بەردەست نییە.',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      const Icon(Icons.refresh_rounded, size: 18),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildMarketRateValue(
+                      label: 'هەولێر پێنجی',
+                      value: pengi?['rate_iqd_per_100_usd'],
+                      isDark: isDark,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildMarketRateValue(
+                      label: 'هەولێر سوور',
+                      value: red?['rate_iqd_per_100_usd'],
+                      isDark: isDark,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMarketRateValue({
+    required String label,
+    required dynamic value,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppDarkColors.cardBorder.withValues(alpha: 0.35)
+            : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : const Color(0xFF667085),
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              '100\$ = ${_formatMarketRate(value)} د.ع',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
@@ -252,14 +545,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ],
       onSelected: (index) {
         if (_currentIndex == index) {
-          if (index == 0) unawaited(_loadStats());
+          if (index == 0) {
+            unawaited(_loadStats());
+            unawaited(_loadMarketRates());
+          }
           return;
         }
         setState(() {
           _visitedTabs.add(index);
           _currentIndex = index;
         });
-        if (index == 0) unawaited(_loadStats());
+        if (index == 0) {
+          unawaited(_loadStats());
+          unawaited(_loadMarketRates());
+        }
       },
     );
   }
@@ -303,7 +602,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final totalPaymentsUsd = (_stats['totalPaymentsUsd'] ?? 0).toDouble();
 
     return RefreshIndicator(
-      onRefresh: _loadStats,
+      onRefresh: () async {
+        await Future.wait<void>([_loadStats(), _loadMarketRates()]);
+      },
       child: CustomScrollView(
         key: const PageStorageKey('admin-dashboard-scroll'),
         physics: const AlwaysScrollableScrollPhysics(),
@@ -550,6 +851,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
 
+        _buildMarketRateCard(isDark),
 
         // ───── Recent Activity Header (fixed) ─────
         Padding(
