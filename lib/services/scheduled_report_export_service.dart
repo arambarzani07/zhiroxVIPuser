@@ -13,9 +13,9 @@ class ScheduledReportExportService {
     return switch (kind) {
       'daily_summary' => 'پوختەی ڕۆژانە',
       'collections' => 'کۆکردنەوەی قەرز',
-      'cash_flow' => 'Cash Flow Forecast',
+      'cash_flow' => 'پێشبینی هاتووچۆی پارە Forecast',
       'employee_performance' => 'کارایی کارمەند',
-      'data_quality' => 'Data Quality',
+      'data_quality' => 'کوالێتی داتا',
       _ => kind,
     };
   }
