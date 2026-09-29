@@ -102,6 +102,22 @@ class AuthProvider extends ChangeNotifier {
   bool get canManageBackup => _employeePermission('can_manage_backup');
   bool get canManageDaftarSync => _employeePermission('can_manage_daftar_sync');
   bool get canManageSubscription => _employeePermission('can_manage_subscription');
+  bool get canViewDashboard => _employeePermission('can_view_dashboard');
+  bool get canViewRecentActivity => _employeePermission('can_view_recent_activity');
+  bool get canViewTransactions => _employeePermission('can_view_transactions');
+  bool get canEditPayments => _employeePermission('can_edit_payments');
+  bool get canDeletePayments => _employeePermission('can_delete_payments');
+  bool get canCreateStatements => _employeePermission('can_create_statements');
+  bool get canManageCustomerLinks => _employeePermission('can_manage_customer_links');
+  bool get canPinCustomers => _employeePermission('can_pin_customers');
+  bool get canManageVipCustomers => _employeePermission('can_manage_vip_customers');
+  bool get canMergeCustomerIdentities =>
+      _employeePermission('can_merge_customer_identities');
+  bool get canViewMarketRates => _employeePermission('can_view_market_rates');
+  bool get canViewIntelligence => _employeePermission('can_view_intelligence');
+  bool get canManageCollections => _employeePermission('can_manage_collections');
+  bool get canManageExpiry => _employeePermission('can_manage_expiry');
+  bool get canManageSettings => _employeePermission('can_manage_settings');
 
   double get debtLimit => _user?.getDoubleValue('debt_limit') ?? 0;
 
