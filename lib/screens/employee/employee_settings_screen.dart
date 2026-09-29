@@ -10,6 +10,8 @@ import 'package:zhirox/screens/admin/receipt_settings_screen.dart';
 import 'package:zhirox/screens/admin/daftar_sync_dashboard_screen.dart';
 import 'package:zhirox/screens/admin/governance_center_screen.dart';
 import 'package:zhirox/screens/admin/subscription_payment_screen.dart';
+import 'package:zhirox/screens/admin/collection_center_screen.dart';
+import 'package:zhirox/screens/admin/intelligence_center_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -41,7 +43,9 @@ class EmployeeSettingsScreen extends StatelessWidget {
                 auth.canManageDaftarSync ||
                 auth.canViewAuditLog ||
                 auth.canManageBackup ||
-                auth.canManageSubscription) ...[
+                auth.canManageSubscription ||
+                auth.canViewIntelligence ||
+                auth.canManageCollections) ...[
               Text(
                 'دەسەڵاتە ڕێگەپێدراوەکان',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -138,6 +142,32 @@ class EmployeeSettingsScreen extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (_) => const GovernanceCenterScreen(),
+                          ),
+                        ),
+                      ),
+                    if (auth.canViewIntelligence)
+                      _PermissionLink(
+                        icon: Icons.auto_graph_rounded,
+                        title: 'ناوەندی زیرەکی',
+                        subtitle: 'هەڵسەنگاندن و ئاگاداریی دارایی',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const Scaffold(
+                              body: SafeArea(child: IntelligenceCenterScreen()),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (auth.canManageCollections)
+                      _PermissionLink(
+                        icon: Icons.event_repeat_rounded,
+                        title: 'بەدواداچوونی قەرز',
+                        subtitle: 'Aging و پلانی بەدواداچوون',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CollectionCenterScreen(),
                           ),
                         ),
                       ),
