@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
+import 'package:zhirox/screens/shared/customer_advanced_center_screen.dart';
 import 'package:zhirox/screens/shared/add_user_screen.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
 import 'package:zhirox/screens/shared/financial_payment_flow.dart';
@@ -867,6 +868,18 @@ class _UserListScreenState extends State<UserListScreen> {
     }
   }
 
+  Future<void> _openAdvancedCustomerCenter(RecordModel user) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CustomerAdvancedCenterScreen(customerId: user.id),
+      ),
+    );
+    if (mounted) {
+      await _loadUsers(search: _searchController.text.trim());
+    }
+  }
+
   Future<void> _showCustomerPrioritySheet(
     RecordModel user,
     AuthProvider auth,
@@ -1159,6 +1172,17 @@ class _UserListScreenState extends State<UserListScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: saving
+                        ? null
+                        : () {
+                            Navigator.pop(sheetContext, false);
+                            unawaited(_openAdvancedCustomerCenter(user));
+                          },
+                    icon: const Icon(Icons.tune_rounded, size: 18),
+                    label: const Text('ناوەندی پێشکەوتوو'),
+                  ),
+                  const SizedBox(height: 8),
                   FilledButton.icon(
                     onPressed: saving
                         ? null
