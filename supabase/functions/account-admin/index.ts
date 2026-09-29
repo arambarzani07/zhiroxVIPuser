@@ -154,6 +154,16 @@ Deno.serve(async (req) => {
       let canViewFinancialReports = false;
       let canExportData = false;
       let canImportData = false;
+      let canRefundPayments = false;
+      let canRestoreDebts = false;
+      let canManageReceipts = false;
+      let canManageNotifications = false;
+      let canApproveCustomers = false;
+      let canManageEmployees = false;
+      let canViewAuditLog = false;
+      let canManageBackup = false;
+      let canManageDaftarSync = false;
+      let canManageSubscription = false;
 
       if (role === "admin") {
         if (!requester || !requesterProfile?.is_system_owner || requesterProfile.active !== true) {
@@ -198,6 +208,16 @@ Deno.serve(async (req) => {
         canViewFinancialReports = Boolean(body.can_view_financial_reports ?? false);
         canExportData = Boolean(body.can_export_data ?? false);
         canImportData = Boolean(body.can_import_data ?? false);
+        canRefundPayments = Boolean(body.can_refund_payments ?? false);
+        canRestoreDebts = Boolean(body.can_restore_debts ?? false);
+        canManageReceipts = Boolean(body.can_manage_receipts ?? false);
+        canManageNotifications = Boolean(body.can_manage_notifications ?? false);
+        canApproveCustomers = Boolean(body.can_approve_customers ?? false);
+        canManageEmployees = Boolean(body.can_manage_employees ?? false);
+        canViewAuditLog = Boolean(body.can_view_audit_log ?? false);
+        canManageBackup = Boolean(body.can_manage_backup ?? false);
+        canManageDaftarSync = Boolean(body.can_manage_daftar_sync ?? false);
+        canManageSubscription = Boolean(body.can_manage_subscription ?? false);
       } else {
         if (!adminId) return json({ error: "admin_id_required" }, 400);
         const { data: targetAdmin, error: targetAdminError } = await admin
@@ -295,6 +315,16 @@ Deno.serve(async (req) => {
         can_view_financial_reports: canViewFinancialReports,
         can_export_data: canExportData,
         can_import_data: canImportData,
+        can_refund_payments: canRefundPayments,
+        can_restore_debts: canRestoreDebts,
+        can_manage_receipts: canManageReceipts,
+        can_manage_notifications: canManageNotifications,
+        can_approve_customers: canApproveCustomers,
+        can_manage_employees: canManageEmployees,
+        can_view_audit_log: canViewAuditLog,
+        can_manage_backup: canManageBackup,
+        can_manage_daftar_sync: canManageDaftarSync,
+        can_manage_subscription: canManageSubscription,
         subscription_end: subscriptionEnd,
         is_system_owner: false,
       };
