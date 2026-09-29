@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cross_file/cross_file.dart';
-import 'package:csv/csv.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -30,7 +29,7 @@ class ScheduledReportExportService {
   }) {
     final out = <String, String>{};
     for (final entry in source.entries) {
-      final key = prefix.isEmpty ? entry.key : prefix + '.' + entry.key;
+      final key = prefix.isEmpty ? entry.key : '$prefix.${entry.key}';
       final value = entry.value;
       if (value is Map) {
         out.addAll(
@@ -48,21 +47,38 @@ class ScheduledReportExportService {
     return out;
   }
 
+  static String _csvCell(dynamic value) {
+    final text = value?.toString() ?? '';
+    final escaped = text.replaceAll('"', '""');
+    if (escaped.contains(',') ||
+        escaped.contains('"') ||
+        escaped.contains('\n') ||
+        escaped.contains('\r')) {
+      return '"$escaped"';
+    }
+    return escaped;
+  }
+
+  static String _rowsToCsv(List<List<dynamic>> rows) {
+    return rows
+        .map((row) => row.map(_csvCell).join(','))
+        .join('\r\n');
+  }
+
   static String _safeStamp(String value) {
     final parsed = DateTime.tryParse(value);
     final date = (parsed ?? DateTime.now()).toLocal();
-    return date.year.toString().padLeft(4, '0') +
-        date.month.toString().padLeft(2, '0') +
-        date.day.toString().padLeft(2, '0') +
-        '_' +
-        date.hour.toString().padLeft(2, '0') +
-        date.minute.toString().padLeft(2, '0');
+    return '${date.year.toString().padLeft(4, '0')}'
+        '${date.month.toString().padLeft(2, '0')}'
+        '${date.day.toString().padLeft(2, '0')}_'
+        '${date.hour.toString().padLeft(2, '0')}'
+        '${date.minute.toString().padLeft(2, '0')}';
   }
 
   static String _fileBase(Map<String, dynamic> run) {
     final kind = run['report_kind']?.toString() ?? 'report';
     final stamp = _safeStamp(run['generated_at']?.toString() ?? '');
-    return 'zhirox_' + kind + '_' + stamp;
+    return 'zhirox_${kind}_$stamp';
   }
 
   static Future<void> shareCsv(Map<String, dynamic> run) async {
@@ -78,9 +94,9 @@ class ScheduledReportExportService {
       <dynamic>['field', 'value'],
       ...flat.entries.map((entry) => <dynamic>[entry.key, entry.value]),
     ];
-    final csv = const ListToCsvConverter().convert(rows);
-    final bytes = Uint8List.fromList(utf8.encode('\uFEFF' + csv));
-    final filename = _fileBase(run) + '.csv';
+    final csv = _rowsToCsv(rows);
+    final bytes = Uint8List.fromList(utf8.encode('\uFEFF$csv'));
+    final filename = '${_fileBase(run)}.csv';
 
     await Share.shareXFiles(
       <XFile>[
@@ -171,7 +187,7 @@ class ScheduledReportExportService {
 
     await Printing.sharePdf(
       bytes: await document.save(),
-      filename: _fileBase(run) + '.pdf',
+      filename: '${_fileBase(run)}.pdf',
     );
   }
 }
