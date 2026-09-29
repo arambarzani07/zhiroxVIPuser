@@ -121,45 +121,73 @@ class _AdvancedOperationsCenterScreenState
   Future<void> _addSchedule() async {
     var kind = 'daily_summary';
     var cadence = 'daily';
+    var weekday = 1;
     final hour = TextEditingController(text: '8');
+    final monthDay = TextEditingController(text: '1');
     final save = await showDialog<bool>(
       context: context,
       builder: (d) => StatefulBuilder(
         builder: (d, update) => AlertDialog(
           title: const Text('ڕاپۆرتی خۆکار'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: kind,
-                decoration: const InputDecoration(labelText: 'جۆری ڕاپۆرت'),
-                items: const [
-                  DropdownMenuItem(value: 'daily_summary', child: Text('پوختەی ڕۆژانە')),
-                  DropdownMenuItem(value: 'collections', child: Text('کۆکردنەوەی قەرز')),
-                  DropdownMenuItem(value: 'cash_flow', child: Text('Cash Flow')),
-                  DropdownMenuItem(value: 'employee_performance', child: Text('کارایی کارمەند')),
-                  DropdownMenuItem(value: 'data_quality', child: Text('کوالێتی داتا')),
-                ],
-                onChanged: (v) => update(() => kind = v ?? kind),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                initialValue: cadence,
-                decoration: const InputDecoration(labelText: 'دووبارەبوونەوە'),
-                items: const [
-                  DropdownMenuItem(value: 'daily', child: Text('ڕۆژانە')),
-                  DropdownMenuItem(value: 'weekly', child: Text('هەفتانە')),
-                  DropdownMenuItem(value: 'monthly', child: Text('مانگانە')),
-                ],
-                onChanged: (v) => update(() => cadence = v ?? cadence),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: hour,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'کاتژمێر 0–23'),
-              ),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: kind,
+                  decoration: const InputDecoration(labelText: 'جۆری ڕاپۆرت'),
+                  items: const [
+                    DropdownMenuItem(value: 'daily_summary', child: Text('پوختەی ڕۆژانە')),
+                    DropdownMenuItem(value: 'collections', child: Text('کۆکردنەوەی قەرز')),
+                    DropdownMenuItem(value: 'cash_flow', child: Text('Cash Flow')),
+                    DropdownMenuItem(value: 'employee_performance', child: Text('کارایی کارمەند')),
+                    DropdownMenuItem(value: 'data_quality', child: Text('کوالێتی داتا')),
+                  ],
+                  onChanged: (v) => update(() => kind = v ?? kind),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: cadence,
+                  decoration: const InputDecoration(labelText: 'دووبارەبوونەوە'),
+                  items: const [
+                    DropdownMenuItem(value: 'daily', child: Text('ڕۆژانە')),
+                    DropdownMenuItem(value: 'weekly', child: Text('هەفتانە')),
+                    DropdownMenuItem(value: 'monthly', child: Text('مانگانە')),
+                  ],
+                  onChanged: (v) => update(() => cadence = v ?? cadence),
+                ),
+                const SizedBox(height: 10),
+                if (cadence == 'weekly')
+                  DropdownButtonFormField<int>(
+                    initialValue: weekday,
+                    decoration: const InputDecoration(labelText: 'ڕۆژی هەفتە'),
+                    items: const [
+                      DropdownMenuItem(value: 1, child: Text('دووشەممە')),
+                      DropdownMenuItem(value: 2, child: Text('سێشەممە')),
+                      DropdownMenuItem(value: 3, child: Text('چوارشەممە')),
+                      DropdownMenuItem(value: 4, child: Text('پێنجشەممە')),
+                      DropdownMenuItem(value: 5, child: Text('هەینی')),
+                      DropdownMenuItem(value: 6, child: Text('شەممە')),
+                      DropdownMenuItem(value: 7, child: Text('یەکشەممە')),
+                    ],
+                    onChanged: (v) => update(() => weekday = v ?? weekday),
+                  ),
+                if (cadence == 'monthly')
+                  TextField(
+                    controller: monthDay,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'ڕۆژی مانگ 1–28',
+                    ),
+                  ),
+                if (cadence != 'daily') const SizedBox(height: 10),
+                TextField(
+                  controller: hour,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'کاتژمێر 0–23'),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -179,12 +207,43 @@ class _AdvancedOperationsCenterScreenState
         reportKind: kind,
         cadence: cadence,
         runHour: (int.tryParse(hour.text) ?? 8).clamp(0, 23).toInt(),
+        weekday: cadence == 'weekly' ? weekday : null,
+        monthDay: cadence == 'monthly'
+            ? (int.tryParse(monthDay.text) ?? 1).clamp(1, 28).toInt()
+            : null,
       );
       if (mounted) await _load();
     }
     hour.dispose();
+    monthDay.dispose();
   }
 
+  String _weekdayLabel(int weekday) {
+    return switch (weekday) {
+      1 => 'دووشەممە',
+      2 => 'سێشەممە',
+      3 => 'چوارشەممە',
+      4 => 'پێنجشەممە',
+      5 => 'هەینی',
+      6 => 'شەممە',
+      7 => 'یەکشەممە',
+      _ => '—',
+    };
+  }
+
+  String _scheduleTimingLabel(Map<String, dynamic> schedule) {
+    final cadence = schedule['cadence']?.toString() ?? 'daily';
+    final hour = _int(schedule['run_hour']);
+    if (cadence == 'weekly') {
+      return 'هەفتانە • ${_weekdayLabel(_int(schedule['weekday']))} • '
+          '${hour.toString().padLeft(2, '0')}:00';
+    }
+    if (cadence == 'monthly') {
+      return 'مانگانە • ڕۆژی ${_int(schedule['month_day'])} • '
+          '${hour.toString().padLeft(2, '0')}:00';
+    }
+    return 'ڕۆژانە • ${hour.toString().padLeft(2, '0')}:00';
+  }
   Future<void> _exportScheduledRun(
     Map<String, dynamic> run, {
     required bool pdf,
@@ -498,7 +557,7 @@ class _AdvancedOperationsCenterScreenState
                 ),
               ),
               subtitle: Text(
-                '${s['cadence']} • ${s['run_hour']}:00 • '
+                '${_scheduleTimingLabel(s)}\n'
                 'next: ${s['next_run_at'] ?? '—'}',
               ),
               trailing: Icon(
