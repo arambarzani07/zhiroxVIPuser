@@ -713,6 +713,7 @@ approved as (
   where q.admin_id=ctx.admin_id and q.customer_id=p_customer_id
     and q.status='approved'
     and abs(q.debt_amount-p_debt_amount)<0.01
+    and abs(q.projected_balance-p_projected_balance)<0.01
     and q.created_at>now()-interval '24 hours'
   order by q.created_at desc limit 1
 )
@@ -1106,6 +1107,7 @@ declare
   v_required integer := 0;
   v_request_id uuid;
   v_base_date date;
+  v_projected_balance numeric := 0;
 begin
   -- Background/service-role imports do not carry an authenticated end-user
   -- identity. Existing trusted sync pipelines keep their current behavior.
@@ -1160,6 +1162,12 @@ begin
   end if;
 
   if v_required > 0 then
+    select coalesce(sum(d.remaining),0)+new.amount
+    into v_projected_balance
+    from public.debts d
+    where d.customer_id=new.customer_id
+      and coalesce(d.is_deleted,false)=false;
+
     select q.id into v_request_id
     from public.credit_approval_requests q
     where q.admin_id=v_admin
@@ -1167,6 +1175,7 @@ begin
       and q.status='approved'
       and q.required_approvals>=v_required
       and abs(q.debt_amount-new.amount)<0.01
+      and abs(q.projected_balance-v_projected_balance)<0.01
       and q.created_at>now()-interval '24 hours'
     order by q.created_at desc,q.id desc
     limit 1
