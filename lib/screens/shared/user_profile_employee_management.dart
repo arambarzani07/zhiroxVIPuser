@@ -235,7 +235,8 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
       (icon: Icons.currency_exchange_rounded, title: 'بینینی نرخی بازاڕ', value: _canViewMarketRates, onChanged: (v) => _setProfileState(() => _canViewMarketRates = v)),
       (icon: Icons.auto_graph_rounded, title: 'بینینی ناوەندی زیرەکی', value: _canViewIntelligence, onChanged: (v) => _setProfileState(() => _canViewIntelligence = v)),
       (icon: Icons.event_repeat_rounded, title: 'بەڕێوەبردنی بەدواداچوونی قەرز', value: _canManageCollections, onChanged: (v) => _setProfileState(() => _canManageCollections = v)),
-      (icon: Icons.inventory_2_outlined, title: 'بەڕێوەبردنی کاڵای بەسەرچوو', value: _canManageExpiry, onChanged: (v) => _setProfileState(() => _canManageExpiry = v)),
+      (icon: Icons.inventory_2_outlined, title: 'بینینی کاڵای بەسەرچوو', value: _canViewExpiry, onChanged: (v) => _setProfileState(() => _canViewExpiry = v)),
+      (icon: Icons.inventory_2_rounded, title: 'بەڕێوەبردنی کاڵای بەسەرچوو', value: _canManageExpiry, onChanged: (v) => _setProfileState(() => _canManageExpiry = v)),
       (icon: Icons.settings_outlined, title: 'بەڕێوەبردنی ڕێکخستنەکان', value: _canManageSettings, onChanged: (v) => _setProfileState(() => _canManageSettings = v)),
     ];
 
@@ -384,6 +385,7 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
         'can_view_market_rates': _canViewMarketRates,
         'can_view_intelligence': _canViewIntelligence,
         'can_manage_collections': _canManageCollections,
+        'can_view_expiry': _canViewExpiry,
         'can_manage_expiry': _canManageExpiry,
         'can_manage_settings': _canManageSettings,
       });
