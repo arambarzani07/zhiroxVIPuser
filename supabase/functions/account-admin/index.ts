@@ -144,6 +144,16 @@ Deno.serve(async (req) => {
       let canSetDueDate = false;
       let canEditDebts = false;
       let canSendNotifications = false;
+      let canViewCustomers = true;
+      let canEditCustomers = false;
+      let canDeleteCustomers = false;
+      let canViewDebts = true;
+      let canAddDebts = false;
+      let canDeleteDebts = false;
+      let canRecordPayments = false;
+      let canViewFinancialReports = false;
+      let canExportData = false;
+      let canImportData = false;
 
       if (role === "admin") {
         if (!requester || !requesterProfile?.is_system_owner || requesterProfile.active !== true) {
@@ -178,6 +188,16 @@ Deno.serve(async (req) => {
         canSetDueDate = Boolean(body.can_set_due_date ?? false);
         canEditDebts = Boolean(body.can_edit_debts ?? false);
         canSendNotifications = Boolean(body.can_send_notifications ?? false);
+        canViewCustomers = Boolean(body.can_view_customers ?? true);
+        canEditCustomers = Boolean(body.can_edit_customers ?? false);
+        canDeleteCustomers = Boolean(body.can_delete_customers ?? false);
+        canViewDebts = Boolean(body.can_view_debts ?? true);
+        canAddDebts = Boolean(body.can_add_debts ?? false);
+        canDeleteDebts = Boolean(body.can_delete_debts ?? false);
+        canRecordPayments = Boolean(body.can_record_payments ?? false);
+        canViewFinancialReports = Boolean(body.can_view_financial_reports ?? false);
+        canExportData = Boolean(body.can_export_data ?? false);
+        canImportData = Boolean(body.can_import_data ?? false);
       } else {
         if (!adminId) return json({ error: "admin_id_required" }, 400);
         const { data: targetAdmin, error: targetAdminError } = await admin
@@ -265,6 +285,16 @@ Deno.serve(async (req) => {
         can_set_due_date: canSetDueDate,
         can_edit_debts: canEditDebts,
         can_send_notifications: canSendNotifications,
+        can_view_customers: canViewCustomers,
+        can_edit_customers: canEditCustomers,
+        can_delete_customers: canDeleteCustomers,
+        can_view_debts: canViewDebts,
+        can_add_debts: canAddDebts,
+        can_delete_debts: canDeleteDebts,
+        can_record_payments: canRecordPayments,
+        can_view_financial_reports: canViewFinancialReports,
+        can_export_data: canExportData,
+        can_import_data: canImportData,
         subscription_end: subscriptionEnd,
         is_system_owner: false,
       };
