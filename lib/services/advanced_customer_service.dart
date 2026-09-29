@@ -372,6 +372,21 @@ class AdvancedCustomerService {
     return raw?.toString() ?? '';
   }
 
+  static Future<List<Map<String, dynamic>>> getScheduledReportRuns({
+    int limit = 50,
+  }) async {
+    await PBService.ensureInitialized();
+    final raw = await PBService.client.rpc(
+      'get_scheduled_report_runs',
+      params: {'p_limit': limit},
+    );
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
+
   static Future<Map<String, dynamic>> refreshAutoVip(
     String customerId,
   ) async {
