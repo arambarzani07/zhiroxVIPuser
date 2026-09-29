@@ -5,12 +5,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 migration = ROOT / "supabase/migrations/20260925071439_daftar_deadletter_auto_recovery.sql"
 sync_edge = ROOT / "supabase/functions/daftar-sync/index.ts"
+runtime_hardening = ROOT / "supabase/migrations/20260929170500_daftar_sync_runtime_hardening.sql"
 
 assert migration.exists(), "Daftar dead-letter auto-recovery migration missing"
 assert sync_edge.exists(), "Daftar sync Edge Function missing"
+assert runtime_hardening.exists(), "Daftar runtime hardening migration missing"
 
 sql = migration.read_text(errors="ignore")
 edge = sync_edge.read_text(errors="ignore")
+runtime = runtime_hardening.read_text(errors="ignore")
 
 required_sql = (
     "public.resolve_daftar_recovered_dead_letters",
@@ -37,7 +40,6 @@ required_edge = (
     "daftar_inbound_missing_candidates",
     "missingCount < 2",
     "source_transaction_absent_from_two_consecutive_full_snapshots",
-    'admin.rpc("resolve_daftar_recovered_dead_letters"',
 )
 for marker in required_edge:
     assert marker in edge, f"missing dead-letter Edge contract: {marker}"
@@ -46,11 +48,20 @@ assert "source_transaction_absent_from_current_full_snapshot" not in edge, (
     "single-snapshot financial dead-letter resolution must stay forbidden"
 )
 
-resolve_call = edge.index('admin.rpc("resolve_daftar_recovered_dead_letters"')
-reconcile_call = edge.index('"reconcile_daftar_account_28"')
-cutover_call = edge.index('"run_daftar_cutover_rehearsal"')
-assert reconcile_call < resolve_call
-assert cutover_call < resolve_call
+# Full reconciliation/cutover/dead-letter recovery now belongs to the durable
+# database runtime-hardening job, not the latency-sensitive sync Edge request.
+required_runtime = (
+    "reconcile_daftar_account_28",
+    "run_daftar_cutover_rehearsal",
+    "resolve_daftar_recovered_dead_letters",
+)
+for marker in required_runtime:
+    assert marker in runtime, f"missing runtime hardening contract: {marker}"
+
+reconcile_call = runtime.index("reconcile_daftar_account_28")
+cutover_call = runtime.index("run_daftar_cutover_rehearsal")
+resolve_call = runtime.index("resolve_daftar_recovered_dead_letters")
+assert reconcile_call < cutover_call < resolve_call
 
 absent_fn = edge.index("async function resolveAbsentTransactionDeadLetters")
 two_snapshot_note = edge.index(
