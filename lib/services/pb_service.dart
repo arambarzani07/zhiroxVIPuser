@@ -408,6 +408,16 @@ class PBService {
     bool canViewFinancialReports = false,
     bool canExportData = false,
     bool canImportData = false,
+    bool canRefundPayments = false,
+    bool canRestoreDebts = false,
+    bool canManageReceipts = false,
+    bool canManageNotifications = false,
+    bool canApproveCustomers = false,
+    bool canManageEmployees = false,
+    bool canViewAuditLog = false,
+    bool canManageBackup = false,
+    bool canManageDaftarSync = false,
+    bool canManageSubscription = false,
     double debtLimit = 0,
   }) {
     return _invokeCreateAccount({
@@ -434,6 +444,16 @@ class PBService {
       'can_view_financial_reports': canViewFinancialReports,
       'can_export_data': canExportData,
       'can_import_data': canImportData,
+      'can_refund_payments': canRefundPayments,
+      'can_restore_debts': canRestoreDebts,
+      'can_manage_receipts': canManageReceipts,
+      'can_manage_notifications': canManageNotifications,
+      'can_approve_customers': canApproveCustomers,
+      'can_manage_employees': canManageEmployees,
+      'can_view_audit_log': canViewAuditLog,
+      'can_manage_backup': canManageBackup,
+      'can_manage_daftar_sync': canManageDaftarSync,
+      'can_manage_subscription': canManageSubscription,
       'debt_limit': debtLimit,
     });
   }
