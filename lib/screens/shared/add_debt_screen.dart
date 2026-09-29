@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 
 import 'package:zhirox/services/pb_service.dart';
+import 'package:zhirox/services/advanced_customer_service.dart';
 import 'package:zhirox/services/notification_service.dart';
 import 'package:zhirox/services/receipt_settings_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -756,8 +757,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
         return;
       }
 
-      // Check Debt Limit. This is fail-closed: if the selected customer or
-      // current server balance cannot be verified, do not create/update a debt.
+      // Credit policy + debt limit. All checks are fail-closed.
       RecordModel? selectedCustomer;
       for (final customer in _customers) {
         if (customer.id == _selectedCustomerId) {
@@ -778,8 +778,8 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
       }
 
       final debtLimit = selectedCustomer.getDoubleValue('debt_limit');
-      if (debtLimit > 0) {
-        double currentBalance;
+      double currentBalance = 0;
+      if (debtLimit > 0 || widget.debt == null) {
         try {
           currentBalance = await PBService.getCustomerBalance(
             _selectedCustomerId!,
@@ -795,70 +795,205 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
           return;
         }
         if (!mounted) return;
+      }
 
-        final oldRemainingForProjection =
-            widget.debt?.getDoubleValue('remaining') ?? 0;
-        final oldAmountForProjection =
-            widget.debt?.getDoubleValue('amount') ?? 0;
-        final alreadyPaidForProjection = widget.debt == null
-            ? 0.0
-            : (oldAmountForProjection - oldRemainingForProjection)
-                .clamp(0.0, double.infinity)
-                .toDouble();
-        final newRemainingForProjection = widget.debt == null
-            ? totalNewDebt
-            : (totalNewDebt - alreadyPaidForProjection)
-                .clamp(0.0, double.infinity)
-                .toDouble();
-        final sameCustomer = widget.debt != null &&
-            widget.debt!.getStringValue('customer') == _selectedCustomerId;
-        final projectedBalance = currentBalance +
-            newRemainingForProjection -
-            (sameCustomer ? oldRemainingForProjection : 0);
+      final oldRemainingForProjection =
+          widget.debt?.getDoubleValue('remaining') ?? 0;
+      final oldAmountForProjection =
+          widget.debt?.getDoubleValue('amount') ?? 0;
+      final alreadyPaidForProjection = widget.debt == null
+          ? 0.0
+          : (oldAmountForProjection - oldRemainingForProjection)
+              .clamp(0.0, double.infinity)
+              .toDouble();
+      final newRemainingForProjection = widget.debt == null
+          ? totalNewDebt
+          : (totalNewDebt - alreadyPaidForProjection)
+              .clamp(0.0, double.infinity)
+              .toDouble();
+      final sameCustomer = widget.debt != null &&
+          widget.debt!.getStringValue('customer') == _selectedCustomerId;
+      final projectedBalance = currentBalance +
+          newRemainingForProjection -
+          (sameCustomer ? oldRemainingForProjection : 0);
 
-        if (projectedBalance > debtLimit) {
-          final canOverride = auth.canSetDebtLimit;
+      String? approvedRequestIdToConsume;
+      if (widget.debt == null) {
+        Map<String, dynamic> policy;
+        try {
+          policy = await AdvancedCustomerService.evaluateCreditPolicy(
+            customerId: _selectedCustomerId!,
+            debtAmount: totalNewDebt,
+            projectedBalance: projectedBalance,
+          );
+        } catch (_) {
+          if (!mounted) return;
+          AppHelpers.showSnackBar(
+            context,
+            'نەتوانرا یاساکانی قەرزی کڕیار پشتڕاست بکرێنەوە.',
+            isError: true,
+          );
+          setState(() => _isLoading = false);
+          return;
+        }
+        if (!mounted) return;
 
-          if (canOverride) {
-            final confirm = await showDialog<bool>(
-              context: context,
-              builder: (dialogContext) => AlertDialog(
-                title: const Text('سنووری قەرز تێپەڕیوە'),
-                content: Text(
-                  'بەکارهێنەر سنووری قەرزی تێپەڕاندووە.\n'
-                  'سنور: ${AppHelpers.formatCurrency(debtLimit)}\n'
-                  'کۆی گشتی: ${AppHelpers.formatCurrency(projectedBalance)}\n\n'
-                  'ئایا دەتەوێت بەردەوام بیت؟',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogContext, false),
-                    child: const Text('نەخێر'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogContext, true),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
-                    child: const Text('بەڵێ، بەردەوام بە'),
-                  ),
-                ],
-              ),
-            );
-            if (!mounted) return;
-            if (confirm != true) {
-              setState(() => _isLoading = false);
-              return;
-            }
-          } else {
+        final maxDebtDays = (policy['max_debt_days'] as num?)?.toInt();
+        if (maxDebtDays != null && maxDebtDays > 0) {
+          if (_dueDate == null) {
             AppHelpers.showSnackBar(
               context,
-              'ناتوانیت ئەم قەرزە زیاد بکەیت! بەکارهێنەر سنووری قەرزی تێپەڕاندووە.\n'
-              'سنور: ${AppHelpers.formatCurrency(debtLimit)}\n'
-              'کۆی گشتی دوای زیادکردن: ${AppHelpers.formatCurrency(projectedBalance)}',
+              'بۆ ئەم کڕیارە بەرواری کۆتایی قەرز پێویستە.',
               isError: true,
             );
             setState(() => _isLoading = false);
             return;
           }
+          final base = (_hasCustomDebtDate && _customDebtDate != null)
+              ? _customDebtDate!
+              : DateTime.now();
+          final days = DateTime(
+            _dueDate!.year,
+            _dueDate!.month,
+            _dueDate!.day,
+          ).difference(DateTime(base.year, base.month, base.day)).inDays;
+          if (days > maxDebtDays) {
+            AppHelpers.showSnackBar(
+              context,
+              'ماوەی ئەم قەرزە نابێت لە $maxDebtDays ڕۆژ زیاتر بێت.',
+              isError: true,
+            );
+            setState(() => _isLoading = false);
+            return;
+          }
+        }
+
+        final decision = policy['decision']?.toString() ?? 'allowed';
+        final reason = policy['reason']?.toString() ?? 'ok';
+        if (decision == 'blocked') {
+          final message = reason == 'blacklist'
+              ? 'ئەم کڕیارە لە Blacklist ـدایە؛ قەرزی نوێ ڕێگەپێنەدراوە.'
+              : 'قەرزی نوێ بۆ ئەم کڕیارە کاتیی قوفڵ کراوە.';
+          AppHelpers.showSnackBar(context, message, isError: true);
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        if (decision == 'approval_required') {
+          final approvals =
+              (policy['required_approvals'] as num?)?.toInt() ?? 1;
+          final send = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('پەسەندکردن پێویستە'),
+              content: Text(
+                approvals > 1
+                    ? 'ئەم قەرزە پێویستی بە پەسەندی دوو کەسی دەسەڵاتدار هەیە. داواکاری بنێردرێت؟'
+                    : 'ئەم قەرزە پێویستی بە پەسەندی بەڕێوەبەر هەیە. داواکاری بنێردرێت؟',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('پاشگەزبوونەوە'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('ناردنی داواکاری'),
+                ),
+              ],
+            ),
+          );
+          if (!mounted) return;
+          if (send == true) {
+            await AdvancedCustomerService.requestCreditApproval(
+              customerId: _selectedCustomerId!,
+              debtAmount: totalNewDebt,
+              projectedBalance: projectedBalance,
+              reason: 'Add Debt',
+            );
+            if (!mounted) return;
+            AppHelpers.showSnackBar(
+              context,
+              'داواکاریی پەسەندکردن نێردرا. دوای پەسەندکردن دووبارە قەرزەکە تۆمار بکە.',
+            );
+          }
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        if (reason == 'watchlist') {
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('کڕیار لە Watchlist ـدایە'),
+              content: const Text(
+                'ئەم کڕیارە لە لیستی چاودێریدایە. دەتەوێت بەردەوام بیت؟',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('نەخێر'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('بەردەوام بە'),
+                ),
+              ],
+            ),
+          );
+          if (!mounted) return;
+          if (proceed != true) {
+            setState(() => _isLoading = false);
+            return;
+          }
+        }
+
+        final approvedId = policy['approved_request_id']?.toString() ?? '';
+        if (approvedId.isNotEmpty) approvedRequestIdToConsume = approvedId;
+      }
+
+      if (debtLimit > 0 && projectedBalance > debtLimit) {
+        final canOverride = auth.canSetDebtLimit;
+
+        if (canOverride) {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('سنووری قەرز تێپەڕیوە'),
+              content: Text(
+                'بەکارهێنەر سنووری قەرزی تێپەڕاندووە.\n'
+                'سنور: ${AppHelpers.formatCurrency(debtLimit)}\n'
+                'کۆی گشتی: ${AppHelpers.formatCurrency(projectedBalance)}\n\n'
+                'ئایا دەتەوێت بەردەوام بیت؟',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('نەخێر'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('بەڵێ، بەردەوام بە'),
+                ),
+              ],
+            ),
+          );
+          if (!mounted) return;
+          if (confirm != true) {
+            setState(() => _isLoading = false);
+            return;
+          }
+        } else {
+          AppHelpers.showSnackBar(
+            context,
+            'ناتوانیت ئەم قەرزە زیاد بکەیت! بەکارهێنەر سنووری قەرزی تێپەڕاندووە.\n'
+            'سنور: ${AppHelpers.formatCurrency(debtLimit)}\n'
+            'کۆی گشتی دوای زیادکردن: ${AppHelpers.formatCurrency(projectedBalance)}',
+            isError: true,
+          );
+          setState(() => _isLoading = false);
+          return;
         }
       }
 
@@ -964,6 +1099,17 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
           referenceKind: widget.referenceKind,
           referenceId: widget.referenceId,
         );
+
+        if (approvedRequestIdToConsume != null) {
+          try {
+            await AdvancedCustomerService.consumeCreditApproval(
+              approvedRequestIdToConsume,
+            );
+          } catch (_) {
+            // The debt is authoritative; a stale approval marker must not
+            // roll back a successfully created financial record.
+          }
+        }
 
         // Local push notification for new debt
         try {
