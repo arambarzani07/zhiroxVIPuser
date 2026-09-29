@@ -121,6 +121,16 @@ Deno.serve(async (req) => {
       "can_view_financial_reports",
       "can_export_data",
       "can_import_data",
+      "can_refund_payments",
+      "can_restore_debts",
+      "can_manage_receipts",
+      "can_manage_notifications",
+      "can_approve_customers",
+      "can_manage_employees",
+      "can_view_audit_log",
+      "can_manage_backup",
+      "can_manage_daftar_sync",
+      "can_manage_subscription",
     ]);
 
     const allowed = isSelf ? selfFields : tenantAdminFields;
