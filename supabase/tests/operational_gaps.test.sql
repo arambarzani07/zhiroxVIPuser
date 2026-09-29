@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(25);
 
 select ok(to_regprocedure('public.get_my_daftar_sync_alerts()') is not null,
   'admin sync alerts endpoint exists');
@@ -177,6 +177,25 @@ select is(
   ),
   1::bigint,
   'advanced debt policy guard exists'
+);
+
+
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.consume_credit_approval(uuid)',
+    'EXECUTE'
+  ),
+  'signed-in users can consume approved credit requests'
+);
+
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.delete_scheduled_report(uuid)',
+    'EXECUTE'
+  ),
+  'signed-in admins can call scheduled report deletion'
 );
 
 select * from finish();
