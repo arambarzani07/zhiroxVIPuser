@@ -347,6 +347,15 @@ class AdvancedCustomerService {
     return raw is Map ? Map<String, dynamic>.from(raw) : const {};
   }
 
+  static Future<bool> deleteScheduledReport(String id) async {
+    await PBService.ensureInitialized();
+    final raw = await PBService.client.rpc(
+      'delete_scheduled_report',
+      params: {'p_id': id},
+    );
+    return raw == true;
+  }
+
   static Future<List<Map<String, dynamic>>> getScheduledReports() async {
     await PBService.ensureInitialized();
     final raw = await PBService.client.rpc('get_scheduled_reports');
