@@ -159,6 +159,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _canViewMarketRates = true;
   bool _canViewIntelligence = false;
   bool _canManageCollections = false;
+  bool _canViewExpiry = false;
   bool _canManageExpiry = false;
   bool _canManageSettings = false;
   StreamSubscription<bool>? _connectivitySub;
@@ -329,6 +330,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           _canViewMarketRates = user.getBoolValue('can_view_market_rates');
           _canViewIntelligence = user.getBoolValue('can_view_intelligence');
           _canManageCollections = user.getBoolValue('can_manage_collections');
+          _canViewExpiry = user.getBoolValue('can_view_expiry');
           _canManageExpiry = user.getBoolValue('can_manage_expiry');
           _canManageSettings = user.getBoolValue('can_manage_settings');
         }
