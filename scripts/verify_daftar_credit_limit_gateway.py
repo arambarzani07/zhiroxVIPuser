@@ -14,18 +14,24 @@ required_fn = [
     "const SOURCE_FINGERPRINT = 'daftar-live-account-28-v1'",
     "credit_limit_exceeded",
     "current_balance_unavailable",
-    "legacy_import_links",
-    "debt_limit",
+    "daftar_native_credit_limits",
+    "daftar_credit_limit_gateway_events",
     "transaction_type",
     "PAYMENT",
     "LOAN",
+    "authorizeLegacyMutation",
+    "authentication_required",
+    "AbortSignal.timeout(10_000)",
 ]
 for marker in required_fn:
     assert marker in fn, marker
 
 assert "if (txType === 'LOAN' || txType === 'DEBT')" in fn
-assert "projectedBalance > debtLimit" in fn
+assert "if (projected > limit)" in fn
 assert "OLD_BASE + path" in fn
+assert "if (['POST','PUT','PATCH','DELETE'].includes(req.method))" in fn
+assert "const authorized = await authorizeLegacyMutation(req)" in fn
+assert "OLD_BASE + '/api/v1/users?user_id=' + LEGACY_USER_ID" in fn
 assert "delete from public.profiles" not in fn.lower()
 assert "delete from public.debts" not in fn.lower()
 assert "delete from public.payments" not in fn.lower()
