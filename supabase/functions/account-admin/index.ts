@@ -177,6 +177,7 @@ Deno.serve(async (req) => {
       let canViewMarketRates = true;
       let canViewIntelligence = false;
       let canManageCollections = false;
+      let canViewExpiry = false;
       let canManageExpiry = false;
       let canManageSettings = false;
 
@@ -257,6 +258,7 @@ Deno.serve(async (req) => {
           canViewMarketRates = Boolean(body.can_view_market_rates ?? true);
           canViewIntelligence = Boolean(body.can_view_intelligence ?? false);
           canManageCollections = Boolean(body.can_manage_collections ?? false);
+          canViewExpiry = Boolean(body.can_view_expiry ?? false);
           canManageExpiry = Boolean(body.can_manage_expiry ?? false);
           canManageSettings = Boolean(body.can_manage_settings ?? false);
         }
@@ -380,6 +382,7 @@ Deno.serve(async (req) => {
         can_view_market_rates: canViewMarketRates,
         can_view_intelligence: canViewIntelligence,
         can_manage_collections: canManageCollections,
+        can_view_expiry: canViewExpiry,
         can_manage_expiry: canManageExpiry,
         can_manage_settings: canManageSettings,
         subscription_end: subscriptionEnd,
