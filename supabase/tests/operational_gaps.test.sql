@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(26);
 
 select ok(to_regprocedure('public.get_my_daftar_sync_alerts()') is not null,
   'admin sync alerts endpoint exists');
@@ -196,6 +196,17 @@ select ok(
     'EXECUTE'
   ),
   'signed-in admins can call scheduled report deletion'
+);
+
+
+select ok(
+  position(
+    'q.projected_balance'
+    in pg_get_functiondef(
+      'public.evaluate_customer_credit_policy(uuid,numeric,numeric)'::regprocedure
+    )
+  ) > 0,
+  'credit approvals are bound to projected balance'
 );
 
 select * from finish();
