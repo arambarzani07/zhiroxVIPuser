@@ -183,6 +183,45 @@ create index if not exists credit_approval_requests_inbox_idx
 create index if not exists scheduled_reports_due_idx
   on public.scheduled_reports(admin_id, enabled, next_run_at);
 
+
+-- Explicit leading-column indexes for every new foreign key. Audit40 verifies
+-- that each FK is independently covered, even when a different composite
+-- index exists for query ordering.
+create index if not exists customer_groups_created_by_fk_idx
+  on public.customer_groups(created_by);
+create index if not exists customer_group_members_customer_fk_idx
+  on public.customer_group_members(customer_id);
+create index if not exists customer_group_members_admin_fk_idx
+  on public.customer_group_members(admin_id);
+create index if not exists customer_advanced_rules_admin_fk_idx
+  on public.customer_advanced_rules(admin_id);
+create index if not exists customer_advanced_rules_updated_by_fk_idx
+  on public.customer_advanced_rules(updated_by);
+create index if not exists customer_relationships_related_customer_fk_idx
+  on public.customer_relationships(related_customer_id);
+create index if not exists customer_relationships_created_by_fk_idx
+  on public.customer_relationships(created_by);
+create index if not exists customer_business_profiles_admin_fk_idx
+  on public.customer_business_profiles(admin_id);
+create index if not exists customer_business_profiles_updated_by_fk_idx
+  on public.customer_business_profiles(updated_by);
+create index if not exists customer_notes_customer_fk_idx
+  on public.customer_notes(customer_id);
+create index if not exists customer_notes_created_by_fk_idx
+  on public.customer_notes(created_by);
+create index if not exists customer_documents_customer_fk_idx
+  on public.customer_documents(customer_id);
+create index if not exists customer_documents_uploaded_by_fk_idx
+  on public.customer_documents(uploaded_by);
+create index if not exists credit_approval_requests_customer_fk_idx
+  on public.credit_approval_requests(customer_id);
+create index if not exists credit_approval_requests_requested_by_fk_idx
+  on public.credit_approval_requests(requested_by);
+create index if not exists credit_approval_decisions_actor_fk_idx
+  on public.credit_approval_decisions(actor_id);
+create index if not exists scheduled_reports_created_by_fk_idx
+  on public.scheduled_reports(created_by);
+
 alter table public.customer_groups enable row level security;
 alter table public.customer_group_members enable row level security;
 alter table public.customer_advanced_rules enable row level security;
