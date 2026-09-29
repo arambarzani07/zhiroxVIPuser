@@ -206,6 +206,18 @@ class AdvancedCustomerService {
     return path;
   }
 
+  static Future<String> createVaultSignedUrl(
+    String storagePath, {
+    int expiresInSeconds = 600,
+  }) async {
+    await PBService.ensureInitialized();
+    final path = storagePath.trim();
+    if (path.isEmpty) throw ArgumentError.value(storagePath, 'storagePath');
+    return PBService.client.storage
+        .from('customer-vault')
+        .createSignedUrl(path, expiresInSeconds);
+  }
+
   static Future<Map<String, dynamic>> evaluateCreditPolicy({
     required String customerId,
     required double debtAmount,
