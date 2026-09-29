@@ -23,6 +23,7 @@ class _CollectionCenterScreenState extends State<CollectionCenterScreen> {
     '31_60': '٣١–٦٠ ڕۆژ',
     '60_plus': '+٦٠ ڕۆژ',
     'followup_due': 'بەدواداچوون',
+    'watchlist': 'Watchlist',
   };
 
   bool _loading = true;
@@ -334,6 +335,11 @@ class _CollectionCenterScreenState extends State<CollectionCenterScreen> {
               value: _int(summary['followups_due']).toString(),
             ),
             _SummaryCard(
+              icon: Icons.visibility_outlined,
+              label: 'Watch / Blacklist',
+              value: _int(summary['watched_customers']).toString(),
+            ),
+            _SummaryCard(
               icon: Icons.account_balance_wallet_outlined,
               label: 'دواکەوتووی IQD',
               value: _money(summary['overdue_iqd'], 'IQD'),
@@ -473,6 +479,21 @@ class _CollectionCenterScreenState extends State<CollectionCenterScreen> {
                                 const _MiniBadge(
                                   icon: Icons.push_pin_outlined,
                                   text: 'Pin',
+                                ),
+                              if (item['credit_frozen'] == true)
+                                const _MiniBadge(
+                                  icon: Icons.lock_outline_rounded,
+                                  text: 'Frozen',
+                                ),
+                              if (item['watch_status'] == 'watchlist')
+                                const _MiniBadge(
+                                  icon: Icons.visibility_outlined,
+                                  text: 'Watch',
+                                ),
+                              if (item['watch_status'] == 'blacklist')
+                                const _MiniBadge(
+                                  icon: Icons.block_rounded,
+                                  text: 'Blacklist',
                                 ),
                             ],
                           ),
