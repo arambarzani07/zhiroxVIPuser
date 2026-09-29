@@ -1020,6 +1020,107 @@ where r.admin_id=(select private.current_admin_id())
   and (select private."current_role"()) in ('admin','employee');
 $function$;
 
+
+
+create or replace function private.enforce_advanced_customer_credit_policy()
+returns trigger
+language plpgsql
+security definer
+set search_path to ''
+as $function$
+declare
+  v_admin uuid;
+  v_rule public.customer_advanced_rules%rowtype;
+  v_required integer := 0;
+  v_request_id uuid;
+  v_base_date date;
+begin
+  -- Background/service-role imports do not carry an authenticated end-user
+  -- identity. Existing trusted sync pipelines keep their current behavior.
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  select p.admin_id into v_admin
+  from public.profiles p
+  where p.id=new.customer_id and p.role='customer';
+
+  if v_admin is null then
+    return new;
+  end if;
+
+  if private.current_admin_id() is distinct from v_admin then
+    raise exception 'cross_tenant_debt_write' using errcode='42501';
+  end if;
+
+  select * into v_rule
+  from public.customer_advanced_rules r
+  where r.customer_id=new.customer_id and r.admin_id=v_admin;
+
+  if not found then
+    return new;
+  end if;
+
+  if v_rule.watch_status='blacklist' then
+    raise exception 'customer_blacklisted' using errcode='42501';
+  end if;
+
+  if v_rule.credit_frozen then
+    raise exception 'customer_credit_frozen' using errcode='42501';
+  end if;
+
+  if v_rule.max_debt_days is not null then
+    if new.due_date is null then
+      raise exception 'debt_due_date_required' using errcode='22023';
+    end if;
+    v_base_date := coalesce(new.custom_date::date,new.created_at::date,current_date);
+    if new.due_date > v_base_date + v_rule.max_debt_days then
+      raise exception 'max_debt_days_exceeded' using errcode='22023';
+    end if;
+  end if;
+
+  if v_rule.two_step_approval_amount is not null
+     and new.amount >= v_rule.two_step_approval_amount then
+    v_required := 2;
+  elsif v_rule.manager_approval_amount is not null
+     and new.amount >= v_rule.manager_approval_amount then
+    v_required := 1;
+  end if;
+
+  if v_required > 0 then
+    select q.id into v_request_id
+    from public.credit_approval_requests q
+    where q.admin_id=v_admin
+      and q.customer_id=new.customer_id
+      and q.status='approved'
+      and q.required_approvals>=v_required
+      and abs(q.debt_amount-new.amount)<0.01
+      and q.created_at>now()-interval '24 hours'
+    order by q.created_at desc,q.id desc
+    limit 1
+    for update;
+
+    if v_request_id is null then
+      raise exception 'credit_approval_required' using errcode='42501';
+    end if;
+
+    update public.credit_approval_requests
+    set status='consumed',consumed_at=now()
+    where id=v_request_id and status='approved';
+  end if;
+
+  return new;
+end;
+$function$;
+
+revoke all on function private.enforce_advanced_customer_credit_policy()
+from public,anon,authenticated;
+
+drop trigger if exists debts_advanced_credit_policy_guard on public.debts;
+create trigger debts_advanced_credit_policy_guard
+before insert on public.debts
+for each row execute function private.enforce_advanced_customer_credit_policy();
+
 create or replace function private.recalculate_customer_auto_vip(p_customer_id uuid)
 returns void
 language plpgsql
