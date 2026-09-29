@@ -151,7 +151,7 @@ class _CustomerAdvancedCenterScreenState
                   onChanged: (v) => update(() => frozen = v),
                 ),
                 DropdownButtonFormField<String>(
-                  value: watch,
+                  initialValue: watch,
                   decoration: const InputDecoration(labelText: 'دۆخی چاودێری'),
                   items: const [
                     DropdownMenuItem(value: 'normal', child: Text('ئاسایی')),
@@ -458,7 +458,7 @@ class _CustomerAdvancedCenterScreenState
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: selectedId,
+                  initialValue: selectedId,
                   isExpanded: true,
                   items: options.map((RecordModel c) => DropdownMenuItem(
                     value: c.id,
@@ -802,7 +802,7 @@ class _CustomerAdvancedCenterScreenState
                 child: Text(title,
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
               ),
-              if (trailing != null) trailing,
+              ?trailing,
             ],
           ),
           const SizedBox(height: 10),
