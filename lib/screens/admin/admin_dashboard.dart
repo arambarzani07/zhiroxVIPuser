@@ -44,12 +44,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String? _marketRateError;
   bool _marketRateLoading = false;
   Future<void>? _marketRateLoad;
+  Timer? _marketRateTimer;
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadStats());
     unawaited(_loadMarketRates());
+    _marketRateTimer = Timer.periodic(const Duration(minutes: 2), (_) {
+      if (mounted && _currentIndex == 0) {
+        unawaited(_loadMarketRates());
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_subscribeDashboardRealtime());
     });
@@ -63,6 +69,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   @override
   void dispose() {
+    _marketRateTimer?.cancel();
     _dashboardRealtimeDebounce?.cancel();
     _dashboardRealtimeRefreshPending = false;
     final channel = _dashboardRealtimeChannel;
@@ -260,7 +267,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     DateTime? latest;
     for (final row in rates) {
       if (row is! Map) continue;
-      final raw = row['source_published_at'] ?? row['retrieved_at'] ?? row['updated_at'];
+      final raw = row['retrieved_at'] ?? row['source_published_at'] ?? row['updated_at'];
       final parsed = DateTime.tryParse(raw?.toString() ?? '');
       if (parsed == null) continue;
       if (latest == null || parsed.isAfter(latest)) latest = parsed;
