@@ -89,7 +89,25 @@ Deno.serve(async (req) => {
       requester.role === "admin" &&
       (target.role === "employee" || target.role === "customer") &&
       target.admin_id === requester.id;
-    if (!isSelf && !sameTenantMember) return json({ error: "forbidden" }, 403);
+    const employeeCustomerMember =
+      requester.role === "employee" &&
+      target.role === "customer" &&
+      Boolean(requester.admin_id) &&
+      target.admin_id === requester.admin_id;
+    const employeeEmployeeMember =
+      requester.role === "employee" &&
+      target.role === "employee" &&
+      Boolean(requester.admin_id) &&
+      target.admin_id === requester.admin_id;
+
+    if (
+      !isSelf &&
+      !sameTenantMember &&
+      !employeeCustomerMember &&
+      !employeeEmployeeMember
+    ) {
+      return json({ error: "forbidden" }, 403);
+    }
 
     const selfFields = new Set(["name", "father_name", "grandfather_name", "phone"]);
     if (requester.role === "admin") selfFields.add("market_name");
@@ -133,7 +151,38 @@ Deno.serve(async (req) => {
       "can_manage_subscription",
     ]);
 
-    const allowed = isSelf ? selfFields : tenantAdminFields;
+    const employeeCustomerFields = new Set<string>();
+    if (employeeCustomerMember) {
+      if (requester.can_edit_customers === true) {
+        employeeCustomerFields.add("name");
+        employeeCustomerFields.add("father_name");
+        employeeCustomerFields.add("grandfather_name");
+        employeeCustomerFields.add("phone");
+      }
+      if (requester.can_approve_customers === true) {
+        employeeCustomerFields.add("approved");
+      }
+      if (requester.can_set_debt_limit === true) {
+        employeeCustomerFields.add("debt_limit");
+      }
+    }
+
+    const employeeEmployeeFields = new Set<string>();
+    if (employeeEmployeeMember && requester.can_manage_employees === true) {
+      employeeEmployeeFields.add("name");
+      employeeEmployeeFields.add("father_name");
+      employeeEmployeeFields.add("grandfather_name");
+      employeeEmployeeFields.add("phone");
+      employeeEmployeeFields.add("active");
+    }
+
+    const allowed = isSelf
+      ? selfFields
+      : sameTenantMember
+        ? tenantAdminFields
+        : employeeCustomerMember
+          ? employeeCustomerFields
+          : employeeEmployeeFields;
     const update: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(incoming)) {
       if (allowed.has(key)) update[key] = value;
@@ -172,7 +221,12 @@ Deno.serve(async (req) => {
       update.phone = phone;
     }
 
-    if (Object.keys(update).length === 0) return json({ user: target });
+    if (Object.keys(update).length === 0) {
+      if (!isSelf && !sameTenantMember) {
+        return json({ error: "missing_permission" }, 403);
+      }
+      return json({ user: target });
+    }
 
     const syncAuthIdentity = Object.hasOwn(update, "phone") || Object.hasOwn(update, "name");
     let previousAuthEmail: string | undefined;
