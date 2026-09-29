@@ -156,8 +156,8 @@ class _CustomerAdvancedCenterScreenState
                   decoration: const InputDecoration(labelText: 'دۆخی چاودێری'),
                   items: const [
                     DropdownMenuItem(value: 'normal', child: Text('ئاسایی')),
-                    DropdownMenuItem(value: 'watchlist', child: Text('Watchlist')),
-                    DropdownMenuItem(value: 'blacklist', child: Text('Blacklist')),
+                    DropdownMenuItem(value: 'watchlist', child: Text('لیستی چاودێری')),
+                    DropdownMenuItem(value: 'blacklist', child: Text('لیستی ڕێگەنەدراو')),
                   ],
                   onChanged: (v) => update(() => watch = v ?? 'normal'),
                 ),
@@ -258,7 +258,7 @@ class _CustomerAdvancedCenterScreenState
     try {
       await AdvancedCustomerService.saveRules(
         customerId: widget.customerId,
-        creditFrozen: frozen,
+        creditقوفڵکراو: frozen,
         watchStatus: watch,
         graceDays: int.tryParse(grace.text) ?? 0,
         maxDebtDays: int.tryParse(maxDays.text),
@@ -394,7 +394,7 @@ class _CustomerAdvancedCenterScreenState
     final save = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Business Customer'),
+        title: const Text('کڕیاری بازرگانی'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -660,7 +660,7 @@ class _CustomerAdvancedCenterScreenState
                         ),
                         children: [
                           _line('Credit Freeze', rules['credit_frozen'] == true ? 'چالاک' : 'ناچالاک'),
-                          _line('Watch Status', rules['watch_status']?.toString() ?? 'normal'),
+                          _line('چاودێری Status', rules['watch_status']?.toString() ?? 'normal'),
                           _line('Grace Period', '${_int(rules['grace_days'])} ڕۆژ'),
                           _line('Automatic VIP', rules['auto_vip_enabled'] == true ? 'چالاک' : 'ناچالاک'),
                         ],
@@ -698,7 +698,7 @@ class _CustomerAdvancedCenterScreenState
                       ),
                       const SizedBox(height: 12),
                       _section(
-                        title: 'Business Customer',
+                        title: 'کڕیاری بازرگانی',
                         icon: Icons.business_outlined,
                         trailing: IconButton(onPressed: _editBusiness, icon: const Icon(Icons.edit_outlined)),
                         children: [
@@ -709,7 +709,7 @@ class _CustomerAdvancedCenterScreenState
                       ),
                       const SizedBox(height: 12),
                       _section(
-                        title: 'Notes & Document Vault',
+                        title: 'تێبینی و خەزنەی بەڵگەنامە',
                         icon: Icons.folder_copy_outlined,
                         children: [
                           Wrap(
@@ -774,7 +774,7 @@ class _CustomerAdvancedCenterScreenState
                       if (mergeHistory.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         _section(
-                          title: 'Merge History',
+                          title: 'مێژووی یەکخستن',
                           icon: Icons.merge_type_rounded,
                           children: mergeHistory.map((m) => ListTile(
                             dense: true,
@@ -800,7 +800,7 @@ class _CustomerAdvancedCenterScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Smart Customer Summary',
+          const Text('پوختەی زیرەکی کڕیار',
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
           const SizedBox(height: 8),
           Text(summary, style: const TextStyle(height: 1.55)),
@@ -809,16 +809,16 @@ class _CustomerAdvancedCenterScreenState
             spacing: 8,
             runSpacing: 8,
             children: [
-              _metric('Trust', trust, Icons.verified_user_outlined),
-              _metric('Risk', risk, Icons.warning_amber_rounded),
-              _metric('Priority', priority, Icons.priority_high_rounded),
+              _metric('متمانە', trust, Icons.verified_user_outlined),
+              _metric('مەترسی', risk, Icons.warning_amber_rounded),
+              _metric('پێشینە', priority, Icons.priority_high_rounded),
             ],
           ),
           const SizedBox(height: 10),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.auto_awesome_rounded),
-            title: const Text('Next Best Action'),
+            title: const Text('باشترین هەنگاوی داهاتوو'),
             subtitle: Text(action),
           ),
         ],
