@@ -124,23 +124,36 @@ type ParsedRate = {
   updated_at: string;
 };
 
-function latestPublishedAt(html: string): string | null {
-  const values = [...html.matchAll(/datetime="([^"]+)"/g)]
-    .map((m) => Date.parse(m[1]))
-    .filter((v) => Number.isFinite(v));
-  if (!values.length) return null;
-  return new Date(Math.max(...values)).toISOString();
+function sourcePublishedAtNear(text: string, offset: number): string | null {
+  const tail = text.slice(offset, offset + 1200);
+  const match = tail.match(
+    /(\d{2})\/(\d{2})\/(\d{4})\s*\((\d{1,2}):(\d{2})\s*(AM|PM)\)/i,
+  );
+  if (!match) return null;
+
+  const day = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const year = Number.parseInt(match[3], 10);
+  let hour = Number.parseInt(match[4], 10);
+  const minute = Number.parseInt(match[5], 10);
+  const meridiem = match[6].toUpperCase();
+
+  if (hour === 12) hour = 0;
+  if (meridiem === "PM") hour += 12;
+
+  // Iraq market posts use local Iraq time (UTC+03:00).
+  return new Date(Date.UTC(year, month - 1, day, hour - 3, minute)).toISOString();
 }
 
 function parseRates(html: string): ParsedRate[] {
   const text = htmlToText(html);
   const now = new Date().toISOString();
-  const publishedAt = latestPublishedAt(html);
   const byKey = new Map<string, ParsedRate>();
 
   const normalizedText = latinDigits(text);
+  // Borsa Iraq uses both "100$=..." and "100=..." in live posts.
   const pattern =
-    /100\s*\$\s*=\s*([0-9]{2,3}(?:[\s,،٬.]?[0-9]{3})?)\s*([^\n]*?)(?=100\s*\$|\n|$)/gu;
+    /100\s*\$?\s*=\s*([0-9]{2,3}(?:[\s,،٬.]?[0-9]{3})?)\s*([^\n]*?)(?=100\s*\$?\s*=|\n|$)/gu;
 
   for (const match of normalizedText.matchAll(pattern)) {
     const rate = normalizeRate(match[1]);
@@ -150,7 +163,11 @@ function parseRates(html: string): ParsedRate[] {
 
     const variant = detectVariant(context);
     const key = `${city}:${variant}`;
-    byKey.set(key, {
+    const publishedAt = sourcePublishedAtNear(
+      normalizedText,
+      (match.index ?? 0) + match[0].length,
+    );
+    const candidate: ParsedRate = {
       source: SOURCE_KEY,
       city,
       variant,
@@ -159,7 +176,23 @@ function parseRates(html: string): ParsedRate[] {
       source_published_at: publishedAt,
       retrieved_at: now,
       updated_at: now,
-    });
+    };
+
+    const existing = byKey.get(key);
+    if (existing == null) {
+      byKey.set(key, candidate);
+      continue;
+    }
+
+    const existingTime = Date.parse(existing.source_published_at ?? "");
+    const candidateTime = Date.parse(candidate.source_published_at ?? "");
+    if (
+      !Number.isFinite(existingTime) ||
+      !Number.isFinite(candidateTime) ||
+      candidateTime >= existingTime
+    ) {
+      byKey.set(key, candidate);
+    }
   }
 
   return [...byKey.values()];
