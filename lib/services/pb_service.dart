@@ -398,6 +398,16 @@ class PBService {
     bool canSetDueDate = false,
     bool canEditDebts = false,
     bool canSendNotifications = false,
+    bool canViewCustomers = true,
+    bool canEditCustomers = false,
+    bool canDeleteCustomers = false,
+    bool canViewDebts = true,
+    bool canAddDebts = false,
+    bool canDeleteDebts = false,
+    bool canRecordPayments = false,
+    bool canViewFinancialReports = false,
+    bool canExportData = false,
+    bool canImportData = false,
     double debtLimit = 0,
   }) {
     return _invokeCreateAccount({
@@ -414,6 +424,16 @@ class PBService {
       'can_set_due_date': canSetDueDate,
       'can_edit_debts': canEditDebts,
       'can_send_notifications': canSendNotifications,
+      'can_view_customers': canViewCustomers,
+      'can_edit_customers': canEditCustomers,
+      'can_delete_customers': canDeleteCustomers,
+      'can_view_debts': canViewDebts,
+      'can_add_debts': canAddDebts,
+      'can_delete_debts': canDeleteDebts,
+      'can_record_payments': canRecordPayments,
+      'can_view_financial_reports': canViewFinancialReports,
+      'can_export_data': canExportData,
+      'can_import_data': canImportData,
       'debt_limit': debtLimit,
     });
   }
