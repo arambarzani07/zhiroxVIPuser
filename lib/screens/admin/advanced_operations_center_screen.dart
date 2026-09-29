@@ -32,7 +32,7 @@ class _AdvancedOperationsCenterScreenState
   String _money(dynamic value, {bool usd = false}) {
     final n = _double(value);
     final formatted = NumberFormat('#,##0.##', 'en_US').format(n);
-    return usd ? '$$formatted' : '$formatted د.ع';
+    return usd ? '\\$formatted' : '$formatted د.ع';
   }
 
   @override
