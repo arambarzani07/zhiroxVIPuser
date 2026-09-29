@@ -27,6 +27,21 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function secureSecretEqual(left: string, right: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [leftHash, rightHash] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(left)),
+    crypto.subtle.digest("SHA-256", encoder.encode(right)),
+  ]);
+  const a = new Uint8Array(leftHash);
+  const b = new Uint8Array(rightHash);
+  let difference = 0;
+  for (let i = 0; i < a.length; i++) {
+    difference |= a[i] ^ b[i];
+  }
+  return difference === 0;
+}
+
 export type WorkerEvent = {
   id: string;
   market_id: string;
@@ -565,7 +580,12 @@ async function serve(req: Request): Promise<Response> {
     return json({ error: "server_not_configured" }, 500);
   }
 
-  if ((req.headers.get("x-zhirox-push-worker") ?? "") !== runtime.workerSecret) {
+  const providedWorkerSecret = req.headers.get("x-zhirox-push-worker") ?? "";
+  if (
+    !providedWorkerSecret ||
+    !runtime.workerSecret ||
+    !(await secureSecretEqual(providedWorkerSecret, runtime.workerSecret))
+  ) {
     return json({ error: "unauthorized" }, 401);
   }
 
