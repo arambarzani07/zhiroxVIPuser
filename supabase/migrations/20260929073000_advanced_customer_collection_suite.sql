@@ -197,6 +197,8 @@ create index if not exists customer_advanced_rules_admin_fk_idx
   on public.customer_advanced_rules(admin_id);
 create index if not exists customer_advanced_rules_updated_by_fk_idx
   on public.customer_advanced_rules(updated_by);
+create index if not exists customer_relationships_customer_fk_idx
+  on public.customer_relationships(customer_id);
 create index if not exists customer_relationships_related_customer_fk_idx
   on public.customer_relationships(related_customer_id);
 create index if not exists customer_relationships_created_by_fk_idx
