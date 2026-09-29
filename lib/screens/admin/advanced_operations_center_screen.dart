@@ -258,13 +258,13 @@ class _AdvancedOperationsCenterScreenState
         id: id,
         reportKind: schedule['report_kind']?.toString() ?? 'daily_summary',
         cadence: schedule['cadence']?.toString() ?? 'daily',
-        runHour: _int(schedule['run_hour']).clamp(0, 23),
+        runHour: _int(schedule['run_hour']).clamp(0, 23).toInt(),
         weekday: schedule['weekday'] == null
             ? null
-            : _int(schedule['weekday']).clamp(1, 7),
+            : _int(schedule['weekday']).clamp(1, 7).toInt(),
         monthDay: schedule['month_day'] == null
             ? null
-            : _int(schedule['month_day']).clamp(1, 28),
+            : _int(schedule['month_day']).clamp(1, 28).toInt(),
         recipients: _scheduleRecipients(schedule),
         enabled: schedule['enabled'] != true,
       );
