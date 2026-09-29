@@ -91,6 +91,7 @@ class AuthProvider extends ChangeNotifier {
   bool get canViewFinancialReports =>
       _employeePermission('can_view_financial_reports');
   bool get canExportData => _employeePermission('can_export_data');
+  bool get canImportData => _employeePermission('can_import_data');
 
   double get debtLimit => _user?.getDoubleValue('debt_limit') ?? 0;
 
