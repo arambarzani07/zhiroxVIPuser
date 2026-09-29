@@ -11,6 +11,7 @@ import 'package:zhirox/services/daftar_live_read_service.dart';
 import 'package:zhirox/services/debt_push_enqueue.dart';
 import 'package:zhirox/services/supabase_compat.dart';
 import 'package:zhirox/utils/constants.dart';
+import 'package:zhirox/utils/helpers.dart';
 
 class PBService {
   static bool _initialized = false;
@@ -1834,7 +1835,7 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
 
     throw Exception(
       AppHelpers.backendErrorMessage(
-        liveError ?? 'market_rate_unavailable',
+        liveError,
         fallback: 'نەتوانرا نرخی بازاڕ وەربگیرێت.',
       ),
     );
