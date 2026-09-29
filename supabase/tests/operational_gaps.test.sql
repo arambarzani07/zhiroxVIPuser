@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(22);
 
 select ok(to_regprocedure('public.get_my_daftar_sync_alerts()') is not null,
   'admin sync alerts endpoint exists');
@@ -65,6 +65,106 @@ begin
 end;
 $test$;
 select ok(true, 'merge/unmerge keeps identity and blocks cross-tenant requests');
+
+
+select ok(
+  to_regprocedure('public.get_customer_advanced_center(uuid)') is not null,
+  'advanced customer center endpoint exists'
+);
+
+select ok(
+  to_regprocedure('public.evaluate_customer_credit_policy(uuid,numeric,numeric)') is not null,
+  'customer credit policy evaluator exists'
+);
+
+select ok(
+  to_regprocedure('public.request_credit_approval(uuid,numeric,numeric,text)') is not null,
+  'credit approval request endpoint exists'
+);
+
+select ok(
+  to_regprocedure('public.decide_credit_approval(uuid,text,text)') is not null,
+  'credit approval decision endpoint exists'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.get_customer_advanced_center(uuid)',
+    'EXECUTE'
+  ),
+  'anonymous users cannot read advanced customer state'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from storage.buckets
+    where id='customer-vault' and public=false
+  ),
+  1::bigint,
+  'customer document vault is private'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from cron.job
+    where jobname='zhirox-scheduled-report-runner'
+      and active=true
+  ),
+  1::bigint,
+  'scheduled report runner is active exactly once'
+);
+
+select ok(
+  (
+    select c.relrowsecurity
+    from pg_class c
+    join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='public'
+      and c.relname='scheduled_report_runs'
+  ),
+  'scheduled report history has RLS enabled'
+);
+
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'public.scheduled_report_runs',
+    'INSERT'
+  ),
+  'clients cannot forge scheduled report history'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_trigger
+    where tgrelid='public.debts'::regclass
+      and not tgisinternal
+      and tgname='debts_auto_vip_refresh'
+  ),
+  1::bigint,
+  'debt changes refresh automatic VIP state'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_trigger
+    where tgrelid='public.payments'::regclass
+      and not tgisinternal
+      and tgname='payments_auto_vip_refresh'
+  ),
+  1::bigint,
+  'payment changes refresh automatic VIP state'
+);
+
+select ok(
+  to_regprocedure('public.get_scheduled_report_runs(integer)') is not null,
+  'scheduled report history endpoint exists'
+);
 
 select * from finish();
 rollback;
