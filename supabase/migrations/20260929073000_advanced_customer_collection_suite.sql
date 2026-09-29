@@ -1333,11 +1333,11 @@ grant execute on function public.get_customer_advanced_center(uuid),
  public.add_customer_document(uuid,text,text,text,text,bigint,text),
  public.get_customer_assets(uuid), public.evaluate_customer_credit_policy(uuid,numeric,numeric),
  public.request_credit_approval(uuid,numeric,numeric,text),
- public.decide_credit_approval(uuid,text,text), public.get_credit_approval_inbox(integer),
+ public.decide_credit_approval(uuid,text,text), public.consume_credit_approval(uuid), public.get_credit_approval_inbox(integer),
  public.get_cash_flow_forecast(integer), public.get_employee_performance(integer),
  public.get_customer_anomalies(integer), public.get_data_quality_center(integer),
  public.save_scheduled_report(uuid,text,text,integer,integer,integer,jsonb,boolean),
- public.get_scheduled_reports(), public.refresh_auto_vip(uuid)
+ public.get_scheduled_reports(), public.delete_scheduled_report(uuid), public.refresh_auto_vip(uuid)
  to authenticated;
 
 
