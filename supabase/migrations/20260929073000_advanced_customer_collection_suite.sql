@@ -777,6 +777,20 @@ begin
 end;
 $function$;
 
+create or replace function public.consume_credit_approval(p_request_id uuid)
+returns boolean
+language plpgsql security invoker set search_path to ''
+as $function$
+declare v_admin uuid:=private.current_admin_id(); v_count int;
+begin
+  update public.credit_approval_requests
+  set status='consumed',consumed_at=now()
+  where id=p_request_id and admin_id=v_admin and status='approved';
+  get diagnostics v_count=row_count;
+  return v_count>0;
+end;
+$function$;
+
 create or replace function public.get_credit_approval_inbox(p_limit int default 100)
 returns jsonb
 language sql stable security invoker set search_path to ''
@@ -1005,7 +1019,7 @@ revoke all on function public.get_customer_advanced_center(uuid),
  public.add_customer_document(uuid,text,text,text,text,bigint,text),
  public.get_customer_assets(uuid), public.evaluate_customer_credit_policy(uuid,numeric,numeric),
  public.request_credit_approval(uuid,numeric,numeric,text),
- public.decide_credit_approval(uuid,text,text), public.get_credit_approval_inbox(integer),
+ public.decide_credit_approval(uuid,text,text), public.consume_credit_approval(uuid), public.get_credit_approval_inbox(integer),
  public.get_cash_flow_forecast(integer), public.get_employee_performance(integer),
  public.get_customer_anomalies(integer), public.get_data_quality_center(integer),
  public.save_scheduled_report(uuid,text,text,integer,integer,integer,jsonb,boolean),
