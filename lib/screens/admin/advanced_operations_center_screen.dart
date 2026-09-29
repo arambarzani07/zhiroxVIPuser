@@ -139,7 +139,7 @@ class _AdvancedOperationsCenterScreenState
                   items: const [
                     DropdownMenuItem(value: 'daily_summary', child: Text('پوختەی ڕۆژانە')),
                     DropdownMenuItem(value: 'collections', child: Text('کۆکردنەوەی قەرز')),
-                    DropdownMenuItem(value: 'cash_flow', child: Text('Cash Flow')),
+                    DropdownMenuItem(value: 'cash_flow', child: Text('پێشبینی هاتووچۆی پارە')),
                     DropdownMenuItem(value: 'employee_performance', child: Text('کارایی کارمەند')),
                     DropdownMenuItem(value: 'data_quality', child: Text('کوالێتی داتا')),
                   ],
@@ -401,7 +401,7 @@ class _AdvancedOperationsCenterScreenState
       length: 6,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Operations Intelligence'),
+          title: const Text('ناوەندی زانیاریی ئۆپەراسیۆن'),
           actions: [
             IconButton(
               tooltip: 'نوێکردنەوە',
@@ -413,11 +413,11 @@ class _AdvancedOperationsCenterScreenState
             isScrollable: true,
             tabs: [
               Tab(text: 'پەسەند'),
-              Tab(text: 'Cash Flow'),
-              Tab(text: 'Anomaly'),
+              Tab(text: 'پێشبینی هاتووچۆی پارە'),
+              Tab(text: 'مامەڵەی نائاسایی'),
               Tab(text: 'کارمەند'),
               Tab(text: 'ڕاپۆرت'),
-              Tab(text: 'Data Quality'),
+              Tab(text: 'کوالێتی داتا'),
             ],
           ),
         ),
@@ -602,7 +602,7 @@ class _AdvancedOperationsCenterScreenState
           ),
           const SizedBox(height: 16),
           const AppSectionHeader(
-            title: 'Schedule ـەکان',
+            title: 'خشتەی ڕاپۆرتە خۆکارەکان',
             subtitle: 'ڕاپۆرتە خۆکارە چالاک و کاتی run ـی داهاتوو',
           ),
           const SizedBox(height: 8),
@@ -643,7 +643,7 @@ class _AdvancedOperationsCenterScreenState
                               : Icons.play_circle_outline,
                         ),
                         const SizedBox(width: 8),
-                        Text(s['enabled'] == true ? 'Pause' : 'Resume'),
+                        Text(s['enabled'] == true ? 'وەستاندن' : 'بەردەوامکردنەوە'),
                       ],
                     ),
                   ),
@@ -670,7 +670,7 @@ class _AdvancedOperationsCenterScreenState
           const SizedBox(height: 18),
           const AppSectionHeader(
             title: 'مێژووی ڕاپۆرتە خۆکارەکان',
-            subtitle: 'snapshot ـە درووستکراوەکان؛ PDF یان CSV بکە',
+            subtitle: 'وێنەی داتای ئەو کاتە ـە درووستکراوەکان؛ PDF یان CSV بکە',
           ),
           const SizedBox(height: 10),
           if (_reportRuns.isEmpty)
@@ -678,7 +678,7 @@ class _AdvancedOperationsCenterScreenState
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
                 child: Text(
-                  'هێشتا هیچ scheduled report ـێک run نەبووە',
+                  'هێشتا هیچ ڕاپۆرتی خۆکار ـێک run نەبووە',
                   textAlign: TextAlign.center,
                 ),
               ),
