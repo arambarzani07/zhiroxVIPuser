@@ -1355,7 +1355,7 @@ using (
   admin_id=(select private.current_admin_id())
   and (select private."current_role"()) in ('admin','employee')
 );
-revoke all on public.scheduled_report_runs from public,anon;
+revoke all on public.scheduled_report_runs from public,anon,authenticated;
 grant select on public.scheduled_report_runs to authenticated;
 
 create or replace function private.build_scheduled_report_payload(
