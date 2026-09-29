@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 const SOURCE_URL = "https://t.me/s/iraqborsa";
 const SOURCE_KEY = "iraqborsa_public_mirror";
 const SOURCE_LABEL = "بورصة العراق";
-const CACHE_MS = 2 * 60 * 1000;
+const CACHE_MS = 60 * 1000;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
