@@ -526,9 +526,9 @@ select is(
       and has_function_privilege('authenticated', p.oid, 'EXECUTE')
       and not has_function_privilege('anon', p.oid, 'EXECUTE')
       and not has_function_privilege('public', p.oid, 'EXECUTE')
-      and p.prosrc !~* 'auth[.]uid[[:space:]]*[(]'
-      and p.prosrc !~* 'require_system_owner'
-      and p.prosrc !~* 'require_[a-z_]*[[:space:]]*[(]'
+      and position('auth.uid' in lower(p.prosrc)) = 0
+      and position('require_system_owner' in lower(p.prosrc)) = 0
+      and position('require_' in lower(p.prosrc)) = 0
   ),
   0::bigint,
   'authenticated SECURITY DEFINER RPCs keep an explicit identity or authorization guard'
