@@ -1062,6 +1062,26 @@ begin
 end;
 $function$;
 
+create or replace function public.delete_scheduled_report(p_id uuid)
+returns boolean
+language plpgsql
+security invoker
+set search_path to ''
+as $function$
+declare v_deleted integer;
+begin
+  if private.current_admin_id() is null
+     or (select private."current_role"())<>'admin' then
+    raise exception 'admin_required' using errcode='42501';
+  end if;
+
+  delete from public.scheduled_reports
+  where id=p_id and admin_id=(select private.current_admin_id());
+  get diagnostics v_deleted=row_count;
+  return v_deleted>0;
+end;
+$function$;
+
 create or replace function public.get_scheduled_reports()
 returns jsonb
 language sql stable security invoker set search_path to ''
@@ -1301,7 +1321,7 @@ revoke all on function public.get_customer_advanced_center(uuid),
  public.get_cash_flow_forecast(integer), public.get_employee_performance(integer),
  public.get_customer_anomalies(integer), public.get_data_quality_center(integer),
  public.save_scheduled_report(uuid,text,text,integer,integer,integer,jsonb,boolean),
- public.get_scheduled_reports(), public.refresh_auto_vip(uuid)
+ public.get_scheduled_reports(), public.delete_scheduled_report(uuid), public.refresh_auto_vip(uuid)
  from public, anon;
 
 grant execute on function public.get_customer_advanced_center(uuid),
