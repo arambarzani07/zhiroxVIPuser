@@ -1250,17 +1250,23 @@ Deno.serve(async (req) => {
     const transactionCandidateIds = [
       ...new Set(transactionMirrorCandidates.map((row) => String(row.id))),
     ];
+    // Keep the indexed composite lookup in smaller batches and retry transient
+    // Postgres statement-timeout / gateway failures. A failed reconciliation
+    // read must not turn a healthy incremental sync into a 500 response.
     for (
       let offset = 0;
       offset < transactionCandidateIds.length;
-      offset += 200
+      offset += 100
     ) {
-      const { data, error } = await admin
-        .from("daftar_sync_seen")
-        .select("entity_kind, source_id, payload_hash")
-        .eq("sync_source_id", source.id)
-        .in("entity_kind", ["debt", "payment"])
-        .in("source_id", transactionCandidateIds.slice(offset, offset + 200));
+      const sourceIds = transactionCandidateIds.slice(offset, offset + 100);
+      const { data, error } = await retryTransientSupabase(() =>
+        admin
+          .from("daftar_sync_seen")
+          .select("entity_kind, source_id, payload_hash")
+          .eq("sync_source_id", source.id)
+          .in("entity_kind", ["debt", "payment"])
+          .in("source_id", sourceIds)
+      );
       if (error) throw error;
       seenTransactionRows.push(...(data ?? []));
     }
