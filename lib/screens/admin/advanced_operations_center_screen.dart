@@ -174,7 +174,7 @@ class _AdvancedOperationsCenterScreenState
       await AdvancedCustomerService.saveScheduledReport(
         reportKind: kind,
         cadence: cadence,
-        runHour: (int.tryParse(hour.text) ?? 8).clamp(0, 23),
+        runHour: (int.tryParse(hour.text) ?? 8).clamp(0, 23).toInt(),
       );
       if (mounted) await _load();
     }
