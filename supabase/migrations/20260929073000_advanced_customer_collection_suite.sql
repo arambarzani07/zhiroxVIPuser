@@ -137,6 +137,39 @@ create table if not exists public.scheduled_reports (
   updated_at timestamptz not null default now()
 );
 
+insert into storage.buckets(id,name,public,file_size_limit)
+values ('customer-vault','customer-vault',false,52428800)
+on conflict(id) do update set
+  public=false,
+  file_size_limit=excluded.file_size_limit;
+
+drop policy if exists customer_vault_tenant_select on storage.objects;
+create policy customer_vault_tenant_select
+on storage.objects for select to authenticated
+using (
+  bucket_id='customer-vault'
+  and name like ((select private.current_admin_id())::text || '/%')
+  and (select private."current_role"()) in ('admin','employee')
+);
+
+drop policy if exists customer_vault_tenant_insert on storage.objects;
+create policy customer_vault_tenant_insert
+on storage.objects for insert to authenticated
+with check (
+  bucket_id='customer-vault'
+  and name like ((select private.current_admin_id())::text || '/%')
+  and (select private."current_role"()) in ('admin','employee')
+);
+
+drop policy if exists customer_vault_admin_delete on storage.objects;
+create policy customer_vault_admin_delete
+on storage.objects for delete to authenticated
+using (
+  bucket_id='customer-vault'
+  and name like ((select private.current_admin_id())::text || '/%')
+  and (select private."current_role"())='admin'
+);
+
 create index if not exists customer_group_members_customer_idx
   on public.customer_group_members(admin_id, customer_id);
 create index if not exists customer_relationships_customer_idx
