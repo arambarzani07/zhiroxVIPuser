@@ -92,6 +92,16 @@ class AuthProvider extends ChangeNotifier {
       _employeePermission('can_view_financial_reports');
   bool get canExportData => _employeePermission('can_export_data');
   bool get canImportData => _employeePermission('can_import_data');
+  bool get canRefundPayments => _employeePermission('can_refund_payments');
+  bool get canRestoreDebts => _employeePermission('can_restore_debts');
+  bool get canManageReceipts => _employeePermission('can_manage_receipts');
+  bool get canManageNotifications => _employeePermission('can_manage_notifications');
+  bool get canApproveCustomers => _employeePermission('can_approve_customers');
+  bool get canManageEmployees => _employeePermission('can_manage_employees');
+  bool get canViewAuditLog => _employeePermission('can_view_audit_log');
+  bool get canManageBackup => _employeePermission('can_manage_backup');
+  bool get canManageDaftarSync => _employeePermission('can_manage_daftar_sync');
+  bool get canManageSubscription => _employeePermission('can_manage_subscription');
 
   double get debtLimit => _user?.getDoubleValue('debt_limit') ?? 0;
 
