@@ -728,6 +728,15 @@ class _UserListScreenState extends State<UserListScreen> {
     );
   }
 
+  bool _isEffectiveVip(RecordModel user) {
+    if (!user.getBoolValue('is_vip')) return false;
+    final raw = user.getStringValue('vip_expires_at');
+    if (raw.trim().isEmpty) return true;
+    final expiresAt = DateTime.tryParse(raw);
+    if (expiresAt == null) return true;
+    return expiresAt.toUtc().isAfter(DateTime.now().toUtc());
+  }
+
   String _normalizedCustomerName(String value) =>
       value.trim().toLowerCase().replaceAll(RegExp(r'\\s+'), ' ');
 
@@ -1267,7 +1276,7 @@ class _UserListScreenState extends State<UserListScreen> {
         _hasSameNamePeer(user) && phoneTail.isNotEmpty ? '$name · $phoneTail' : name;
     final approved = user.getBoolValue('approved');
     final isPinnedCustomer = user.getBoolValue('is_pinned');
-    final isVipCustomer = user.getBoolValue('is_vip');
+    final isVipCustomer = _isEffectiveVip(user);
     final accentColor = AppColors.primary;
     final balance = _balances[user.id] ?? 0;
     final balanceUnavailable = _balanceErrors.contains(user.id);
