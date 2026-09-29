@@ -670,25 +670,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 bottom: false,
                 child: Column(
                   children: [
-                    // Compact top bar: secondary actions live in Settings.
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                      child: Row(
-                        children: [
-                          Text(
-                            AppStrings.appName,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.72),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const Spacer(),
-                        ],
-                      ),
-                    ),
-
-                    // Welcome - Tappable for profile menu
                     GestureDetector(
                       onTap: () {
                         setState(() {
@@ -697,66 +678,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         });
                       },
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                        child: Row(
-                          children: [
-                            // Avatar
-                            Container(
-                              width: 52,
-                              height: 52,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.3),
-                                  width: 2,
-                                ),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  (auth.user?.getStringValue('market_name') ??
-                                              '')
-                                          .isNotEmpty
-                                      ? (auth.user?.getStringValue(
-                                                  'market_name',
-                                                ) ??
-                                                '')[0]
-                                            .toUpperCase()
-                                      : '?',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                        child: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Text(
+                            auth.user?.getStringValue('market_name') ??
+                                'ناوی مارکێت نەدراوە',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
                             ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'بەخێربێیتەوە 👋',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.7),
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    auth.user?.getStringValue('market_name') ??
-                                        'ناوی مارکێت نەدراوە',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
