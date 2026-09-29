@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(29);
 
 select ok(to_regprocedure('public.get_my_daftar_sync_alerts()') is not null,
   'admin sync alerts endpoint exists');
@@ -207,6 +207,34 @@ select ok(
     )
   ) > 0,
   'credit approvals are bound to projected balance'
+);
+
+
+select ok(
+  to_regprocedure(
+    'public.review_customer_anomaly(uuid,text,text,text,text)'
+  ) is not null,
+  'anomaly review endpoint exists'
+);
+
+select ok(
+  (
+    select c.relrowsecurity
+    from pg_class c
+    join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='public'
+      and c.relname='customer_anomaly_reviews'
+  ),
+  'anomaly reviews have RLS enabled'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.review_customer_anomaly(uuid,text,text,text,text)',
+    'EXECUTE'
+  ),
+  'anonymous users cannot review anomalies'
 );
 
 select * from finish();
