@@ -149,6 +149,21 @@ Deno.serve(async (req) => {
       "can_manage_backup",
       "can_manage_daftar_sync",
       "can_manage_subscription",
+      "can_view_dashboard",
+      "can_view_recent_activity",
+      "can_view_transactions",
+      "can_edit_payments",
+      "can_delete_payments",
+      "can_create_statements",
+      "can_manage_customer_links",
+      "can_pin_customers",
+      "can_manage_vip_customers",
+      "can_merge_customer_identities",
+      "can_view_market_rates",
+      "can_view_intelligence",
+      "can_manage_collections",
+      "can_manage_expiry",
+      "can_manage_settings",
     ]);
 
     const employeeCustomerFields = new Set<string>();
