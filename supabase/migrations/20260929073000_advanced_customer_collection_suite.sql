@@ -979,6 +979,90 @@ where r.admin_id=(select private.current_admin_id())
   and (select private."current_role"()) in ('admin','employee');
 $function$;
 
+create or replace function private.recalculate_customer_auto_vip(p_customer_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path to ''
+as $function$
+declare
+  v_enabled boolean;
+  v_months integer;
+  v_grace integer;
+  v_total numeric;
+  v_paid numeric;
+  v_settled integer;
+  v_overdue integer;
+  v_ratio numeric;
+  v_should boolean;
+begin
+  select r.auto_vip_enabled,r.auto_vip_months,r.grace_days
+  into v_enabled,v_months,v_grace
+  from public.customer_advanced_rules r
+  where r.customer_id=p_customer_id;
+
+  if coalesce(v_enabled,false)=false then
+    return;
+  end if;
+
+  select
+    coalesce(sum(d.amount),0),
+    coalesce(sum(greatest(d.amount-d.remaining,0)),0),
+    count(*) filter(where d.remaining<=0),
+    count(*) filter(
+      where d.remaining>0 and d.due_date is not null
+        and d.due_date+coalesce(v_grace,0)<current_date
+    )
+  into v_total,v_paid,v_settled,v_overdue
+  from public.debts d
+  where d.customer_id=p_customer_id and coalesce(d.is_deleted,false)=false;
+
+  v_ratio:=case when v_total>0 then v_paid/v_total else 0 end;
+  v_should:=v_settled>=5 and v_ratio>=0.90 and v_overdue=0;
+
+  update public.profiles
+  set is_vip=v_should,
+      vip_expires_at=case
+        when v_should then now()+make_interval(months=>coalesce(v_months,6))
+        else null
+      end,
+      updated_at=now()
+  where id=p_customer_id and role='customer';
+end;
+$function$;
+
+create or replace function private.customer_auto_vip_refresh_trigger()
+returns trigger
+language plpgsql
+security definer
+set search_path to ''
+as $function$
+declare v_customer_id uuid;
+begin
+  if tg_table_name='payments' then
+    select d.customer_id into v_customer_id
+    from public.debts d
+    where d.id=coalesce(new.debt_id,old.debt_id);
+  else
+    v_customer_id:=coalesce(new.customer_id,old.customer_id);
+  end if;
+  if v_customer_id is not null then
+    perform private.recalculate_customer_auto_vip(v_customer_id);
+  end if;
+  return null;
+end;
+$function$;
+
+drop trigger if exists debts_auto_vip_refresh on public.debts;
+create trigger debts_auto_vip_refresh
+after insert or update or delete on public.debts
+for each row execute function private.customer_auto_vip_refresh_trigger();
+
+drop trigger if exists payments_auto_vip_refresh on public.payments;
+create trigger payments_auto_vip_refresh
+after insert or update or delete on public.payments
+for each row execute function private.customer_auto_vip_refresh_trigger();
+
 create or replace function public.refresh_auto_vip(p_customer_id uuid)
 returns jsonb
 language plpgsql security invoker set search_path to ''
