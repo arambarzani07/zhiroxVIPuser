@@ -258,7 +258,7 @@ class _CustomerAdvancedCenterScreenState
     try {
       await AdvancedCustomerService.saveRules(
         customerId: widget.customerId,
-        creditقوفڵکراو: frozen,
+        creditFrozen: frozen,
         watchStatus: watch,
         graceDays: int.tryParse(grace.text) ?? 0,
         maxDebtDays: int.tryParse(maxDays.text),
