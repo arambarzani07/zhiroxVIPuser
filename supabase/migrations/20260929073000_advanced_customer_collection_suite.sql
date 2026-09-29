@@ -1328,3 +1328,213 @@ $function$;
 
 revoke all on function public.get_collection_center(text,integer) from public,anon;
 grant execute on function public.get_collection_center(text,integer) to authenticated;
+
+
+create table if not exists public.scheduled_report_runs (
+  id uuid primary key default gen_random_uuid(),
+  schedule_id uuid not null references public.scheduled_reports(id) on delete cascade,
+  admin_id uuid not null references public.profiles(id) on delete cascade,
+  report_kind text not null,
+  payload jsonb not null default '{}'::jsonb,
+  generated_at timestamptz not null default now()
+);
+create index if not exists scheduled_report_runs_schedule_fk_idx
+  on public.scheduled_report_runs(schedule_id);
+create index if not exists scheduled_report_runs_admin_fk_idx
+  on public.scheduled_report_runs(admin_id);
+create index if not exists scheduled_report_runs_admin_generated_idx
+  on public.scheduled_report_runs(admin_id,generated_at desc);
+
+alter table public.scheduled_report_runs enable row level security;
+drop policy if exists scheduled_report_runs_tenant_select on public.scheduled_report_runs;
+create policy scheduled_report_runs_tenant_select
+on public.scheduled_report_runs for select to authenticated
+using (
+  admin_id=(select private.current_admin_id())
+  and (select private."current_role"()) in ('admin','employee')
+);
+revoke all on public.scheduled_report_runs from public,anon;
+grant select on public.scheduled_report_runs to authenticated;
+
+create or replace function private.build_scheduled_report_payload(
+  p_admin_id uuid,p_report_kind text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to ''
+as $function$
+declare v_payload jsonb;
+begin
+  if p_report_kind='cash_flow' then
+    select jsonb_build_object(
+      'period_days',30,
+      'total_iqd',coalesce(sum(case when upper(coalesce(d.currency,'IQD'))<>'USD' then d.remaining else 0 end),0),
+      'total_usd',coalesce(sum(case when upper(coalesce(d.currency,'IQD'))='USD' then d.remaining else 0 end),0),
+      'items',count(*)
+    ) into v_payload
+    from public.debts d join public.profiles p on p.id=d.customer_id
+    left join public.customer_advanced_rules r on r.customer_id=p.id and r.admin_id=p_admin_id
+    where p.admin_id=p_admin_id and p.role='customer'
+      and coalesce(d.is_deleted,false)=false and d.remaining>0
+      and d.due_date is not null
+      and d.due_date+coalesce(r.grace_days,0)
+        between current_date and current_date+30;
+  elsif p_report_kind='employee_performance' then
+    select jsonb_build_object(
+      'period_days',30,
+      'employees',coalesce(jsonb_agg(jsonb_build_object(
+        'id',e.id,'name',e.name,
+        'customers_added',(select count(*) from public.profiles c
+          where c.created_by=e.id and c.role='customer' and c.created_at>=now()-interval '30 days'),
+        'debts_added',(select count(*) from public.debts d
+          where d.created_by=e.id and d.created_at>=now()-interval '30 days'
+            and coalesce(d.is_deleted,false)=false),
+        'payments_recorded',(select count(*) from public.payments pay
+          where pay.created_by=e.id and pay.created_at>=now()-interval '30 days')
+      ) order by e.name),'[]'::jsonb)
+    ) into v_payload
+    from public.profiles e
+    where e.admin_id=p_admin_id and e.role='employee' and e.active;
+  elsif p_report_kind='data_quality' then
+    select jsonb_build_object(
+      'invalid_phone',count(*) filter(
+        where length(regexp_replace(coalesce(p.phone,''),'[^0-9]','','g'))<10
+      ),
+      'duplicate_names',count(*) filter(where exists(
+        select 1 from public.profiles x
+        where x.admin_id=p_admin_id and x.role='customer' and x.id<>p.id
+          and lower(trim(x.name))=lower(trim(p.name)) and trim(p.name)<>''
+      )),
+      'open_debt_without_due_date',(select count(*)
+        from public.debts d join public.profiles c on c.id=d.customer_id
+        where c.admin_id=p_admin_id and c.role='customer'
+          and coalesce(d.is_deleted,false)=false and d.remaining>0 and d.due_date is null)
+    ) into v_payload
+    from public.profiles p
+    where p.admin_id=p_admin_id and p.role='customer';
+  elsif p_report_kind='collections' then
+    select jsonb_build_object(
+      'overdue_customers',count(distinct p.id) filter(
+        where d.remaining>0 and d.due_date is not null
+          and d.due_date+coalesce(r.grace_days,0)<current_date
+      ),
+      'overdue_iqd',coalesce(sum(case
+        when d.remaining>0 and d.due_date is not null
+          and d.due_date+coalesce(r.grace_days,0)<current_date
+          and upper(coalesce(d.currency,'IQD'))<>'USD'
+          then d.remaining else 0 end),0),
+      'overdue_usd',coalesce(sum(case
+        when d.remaining>0 and d.due_date is not null
+          and d.due_date+coalesce(r.grace_days,0)<current_date
+          and upper(coalesce(d.currency,'IQD'))='USD'
+          then d.remaining else 0 end),0)
+    ) into v_payload
+    from public.profiles p
+    left join public.customer_advanced_rules r on r.customer_id=p.id and r.admin_id=p_admin_id
+    left join public.debts d on d.customer_id=p.id and coalesce(d.is_deleted,false)=false
+    where p.admin_id=p_admin_id and p.role='customer';
+  else
+    select jsonb_build_object(
+      'customers',count(distinct p.id),
+      'open_debt_iqd',coalesce(sum(case
+        when d.remaining>0 and upper(coalesce(d.currency,'IQD'))<>'USD'
+          then d.remaining else 0 end),0),
+      'open_debt_usd',coalesce(sum(case
+        when d.remaining>0 and upper(coalesce(d.currency,'IQD'))='USD'
+          then d.remaining else 0 end),0),
+      'generated_for',current_date
+    ) into v_payload
+    from public.profiles p
+    left join public.debts d on d.customer_id=p.id and coalesce(d.is_deleted,false)=false
+    where p.admin_id=p_admin_id and p.role='customer';
+  end if;
+  return coalesce(v_payload,'{}'::jsonb);
+end;
+$function$;
+
+create or replace function private.run_due_scheduled_reports()
+returns jsonb
+language plpgsql
+security definer
+set search_path to ''
+as $function$
+declare r public.scheduled_reports%rowtype;
+v_payload jsonb; v_ok int:=0; v_errors int:=0;
+begin
+  for r in
+    select * from public.scheduled_reports
+    where enabled=true and next_run_at is not null and next_run_at<=now()
+    order by next_run_at,id
+    for update skip locked
+  loop
+    begin
+      v_payload:=private.build_scheduled_report_payload(r.admin_id,r.report_kind);
+      insert into public.scheduled_report_runs(schedule_id,admin_id,report_kind,payload)
+      values(r.id,r.admin_id,r.report_kind,v_payload);
+      update public.scheduled_reports
+      set last_run_at=now(),
+          next_run_at=case r.cadence
+            when 'weekly' then greatest(coalesce(r.next_run_at,now()),now())+interval '7 days'
+            when 'monthly' then greatest(coalesce(r.next_run_at,now()),now())+interval '1 month'
+            else greatest(coalesce(r.next_run_at,now()),now())+interval '1 day'
+          end,
+          updated_at=now()
+      where id=r.id;
+      v_ok:=v_ok+1;
+    exception when others then
+      v_errors:=v_errors+1;
+    end;
+  end loop;
+  delete from public.scheduled_report_runs
+  where generated_at<now()-interval '365 days';
+  return jsonb_build_object('generated',v_ok,'errors',v_errors);
+end;
+$function$;
+
+revoke all on function private.build_scheduled_report_payload(uuid,text),
+ private.run_due_scheduled_reports()
+ from public,anon,authenticated;
+
+do $scheduled_reports_cron$
+declare v_job_id bigint;
+begin
+  select jobid into v_job_id from cron.job
+  where jobname='zhirox-scheduled-report-runner' limit 1;
+  if v_job_id is null then
+    perform cron.schedule(
+      'zhirox-scheduled-report-runner',
+      '*/15 * * * *',
+      'select private.run_due_scheduled_reports();'
+    );
+  else
+    perform cron.alter_job(
+      job_id=>v_job_id,
+      schedule=>'*/15 * * * *',
+      command=>'select private.run_due_scheduled_reports();',
+      active=>true
+    );
+  end if;
+end
+$scheduled_reports_cron$;
+
+create or replace function public.get_scheduled_report_runs(p_limit int default 50)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to ''
+as $function$
+select coalesce(jsonb_agg(to_jsonb(x) order by x.generated_at desc),'[]'::jsonb)
+from (
+  select r.* from public.scheduled_report_runs r
+  where r.admin_id=(select private.current_admin_id())
+    and (select private."current_role"()) in ('admin','employee')
+  order by r.generated_at desc
+  limit greatest(1,least(coalesce(p_limit,50),200))
+) x;
+$function$;
+
+revoke all on function public.get_scheduled_report_runs(integer) from public,anon;
+grant execute on function public.get_scheduled_report_runs(integer) to authenticated;
