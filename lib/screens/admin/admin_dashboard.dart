@@ -301,7 +301,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final age = _marketRateAgeLabel();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
         decoration: BoxDecoration(
@@ -678,7 +678,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         });
                       },
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
                         child: Align(
                           alignment: AlignmentDirectional.centerStart,
                           child: Text(
@@ -688,7 +688,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 24,
+                              fontSize: 22,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -698,7 +698,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
                     // Stats Grid inside header
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: Column(
                         children: [
                           Row(
@@ -719,7 +719,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           Row(
                             children: [
                               _buildHeaderStat(
