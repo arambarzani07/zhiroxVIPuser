@@ -83,7 +83,8 @@ assert 'const reappearedTransactions: LegacyTransaction[] = []' in inbound
 assert '.in("payload_hash", ["__deleted__", "__credit_limit_rejected__"])' in inbound
 assert 'const transactionMirrorCandidates = (mirrorBootstrap' in inbound
 assert 'changedAt >= lastSuccessMs - 120_000' in inbound
-assert 'transactionCandidateIds.slice(offset, offset + 200)' in inbound
+assert 'transactionCandidateIds.slice(offset, offset + 100)' in inbound
+assert 'retryTransientSupabase(() =>' in inbound
 assert 'const deletedTransactionIds = [...deletedMarkerIds]' in inbound
 assert 'reconcileAmbiguousTransactionDelete' in outbound
 assert 'fetchRemoteTransactionsLive' in outbound
