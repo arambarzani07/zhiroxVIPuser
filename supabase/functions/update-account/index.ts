@@ -162,6 +162,7 @@ Deno.serve(async (req) => {
       "can_view_market_rates",
       "can_view_intelligence",
       "can_manage_collections",
+      "can_view_expiry",
       "can_manage_expiry",
       "can_manage_settings",
     ]);
