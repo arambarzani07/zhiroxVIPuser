@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
 import 'package:zhirox/services/advanced_customer_service.dart';
+import 'package:zhirox/services/scheduled_report_export_service.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
 
@@ -23,6 +24,7 @@ class _AdvancedOperationsCenterScreenState
   List<Map<String, dynamic>> _employees = const [];
   Map<String, dynamic> _quality = const {};
   List<Map<String, dynamic>> _schedules = const [];
+  List<Map<String, dynamic>> _reportRuns = const [];
 
   int _int(dynamic value) =>
       (value as num?)?.toInt() ?? int.tryParse('${value ?? 0}') ?? 0;
@@ -55,6 +57,7 @@ class _AdvancedOperationsCenterScreenState
         AdvancedCustomerService.getEmployeePerformance(days: 30),
         AdvancedCustomerService.getDataQuality(limit: 300),
         AdvancedCustomerService.getScheduledReports(),
+        AdvancedCustomerService.getScheduledReportRuns(limit: 50),
       ]);
       if (!mounted) return;
       setState(() {
@@ -64,6 +67,7 @@ class _AdvancedOperationsCenterScreenState
         _employees = List<Map<String, dynamic>>.from(values[3] as List);
         _quality = Map<String, dynamic>.from(values[4] as Map);
         _schedules = List<Map<String, dynamic>>.from(values[5] as List);
+        _reportRuns = List<Map<String, dynamic>>.from(values[6] as List);
         _loading = false;
       });
     } catch (e) {
@@ -179,6 +183,80 @@ class _AdvancedOperationsCenterScreenState
       if (mounted) await _load();
     }
     hour.dispose();
+  }
+
+  Future<void> _exportScheduledRun(
+    Map<String, dynamic> run, {
+    required bool pdf,
+  }) async {
+    try {
+      if (pdf) {
+        await ScheduledReportExportService.sharePdf(run);
+      } else {
+        await ScheduledReportExportService.shareCsv(run);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا فایلەکە دروست بکرێت.',
+        ),
+        isError: true,
+      );
+    }
+  }
+
+  Widget _scheduledRunCard(Map<String, dynamic> run) {
+    final kind = run['report_kind']?.toString() ?? 'report';
+    final generated = DateTime.tryParse(
+      run['generated_at']?.toString() ?? '',
+    );
+    final generatedLabel = generated == null
+        ? (run['generated_at']?.toString() ?? '')
+        : DateFormat('yyyy/MM/dd HH:mm').format(generated.toLocal());
+    final payload = run['payload'];
+    final fieldCount = payload is Map ? payload.length : 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppSurface(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.history_rounded),
+              title: Text(
+                ScheduledReportExportService.reportKindLabel(kind),
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text('$generatedLabel • $fieldCount خانە'),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _exportScheduledRun(run, pdf: false),
+                    icon: const Icon(Icons.table_view_outlined, size: 18),
+                    label: const Text('CSV'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _exportScheduledRun(run, pdf: true),
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                    label: const Text('PDF'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _openCustomer(String? id) async {
@@ -400,23 +478,53 @@ class _AdvancedOperationsCenterScreenState
             icon: const Icon(Icons.add_alarm_rounded),
             label: const Text('ڕاپۆرتی خۆکار زیاد بکە'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          const AppSectionHeader(
+            title: 'Schedule ـەکان',
+            subtitle: 'ڕاپۆرتە خۆکارە چالاک و کاتی run ـی داهاتوو',
+          ),
+          const SizedBox(height: 8),
           if (_schedules.isEmpty)
             const Padding(
-              padding: EdgeInsets.all(24),
+              padding: EdgeInsets.symmetric(vertical: 18),
               child: Center(child: Text('هێشتا schedule نییە')),
             ),
-          ..._schedules.map((s) => ListTile(
-            leading: const Icon(Icons.schedule_send_outlined),
-            title: Text(s['report_kind']?.toString() ?? ''),
-            subtitle: Text(
-              '${s['cadence']} • ${s['run_hour']}:00 • '
-              'next: ${s['next_run_at'] ?? '—'}',
+          ..._schedules.map(
+            (s) => ListTile(
+              leading: const Icon(Icons.schedule_send_outlined),
+              title: Text(
+                ScheduledReportExportService.reportKindLabel(
+                  s['report_kind']?.toString() ?? '',
+                ),
+              ),
+              subtitle: Text(
+                '${s['cadence']} • ${s['run_hour']}:00 • '
+                'next: ${s['next_run_at'] ?? '—'}',
+              ),
+              trailing: Icon(
+                s['enabled'] == true
+                    ? Icons.check_circle_rounded
+                    : Icons.pause_circle_outline,
+              ),
             ),
-            trailing: Icon(
-              s['enabled'] == true ? Icons.check_circle_rounded : Icons.pause_circle_outline,
+          ),
+          const SizedBox(height: 18),
+          const AppSectionHeader(
+            title: 'مێژووی ڕاپۆرتە خۆکارەکان',
+            subtitle: 'snapshot ـە درووستکراوەکان؛ PDF یان CSV بکە',
+          ),
+          const SizedBox(height: 10),
+          if (_reportRuns.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'هێشتا هیچ scheduled report ـێک run نەبووە',
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ),
-          )),
+          ..._reportRuns.map(_scheduledRunCard),
         ],
       ),
     );
