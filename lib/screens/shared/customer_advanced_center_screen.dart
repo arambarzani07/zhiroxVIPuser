@@ -52,10 +52,6 @@ class _CustomerAdvancedCenterScreenState
       int.tryParse('${value ?? 0}') ??
       0;
 
-  double _double(dynamic value) => (value as num?)?.toDouble() ??
-      double.tryParse('${value ?? 0}') ??
-      0;
-
   Future<void> _load() async {
     if (!mounted) return;
     setState(() {
@@ -435,7 +431,17 @@ class _CustomerAdvancedCenterScreenState
   }
 
   Future<void> _addRelationship() async {
-    final customers = await PBService.getAllApprovedCustomers();
+    final actorId = PBService.client.auth.currentUser?.id ?? '';
+    if (actorId.isEmpty) return;
+    final actor = await PBService.getUser(actorId);
+    final actorRole = actor.getStringValue('role');
+    final adminId =
+        actorRole == 'admin' ? actor.id : actor.getStringValue('admin_id');
+    final customers = await PBService.getUsers(
+      role: 'customer',
+      approved: true,
+      adminId: adminId.isEmpty ? null : adminId,
+    );
     if (!mounted) return;
     final options = customers.where((c) => c.id != widget.customerId).toList();
     if (options.isEmpty) return;
