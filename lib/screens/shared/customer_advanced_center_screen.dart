@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketbase/pocketbase.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:zhirox/services/advanced_customer_service.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -491,6 +492,29 @@ class _CustomerAdvancedCenterScreenState
     note.dispose();
   }
 
+  Future<void> _openVaultAsset(String storagePath) async {
+    final path = storagePath.trim();
+    if (path.isEmpty) return;
+    try {
+      final signed = await AdvancedCustomerService.createVaultSignedUrl(path);
+      final uri = Uri.tryParse(signed);
+      if (uri == null ||
+          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw const FormatException('invalid customer vault url');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا فایلەکە بکرێتەوە.',
+        ),
+        isError: true,
+      );
+    }
+  }
+
   Future<void> _addInternalNote() async {
     final controller = TextEditingController();
     final save = await showDialog<bool>(
@@ -700,26 +724,51 @@ class _CustomerAdvancedCenterScreenState
                           ),
                           const SizedBox(height: 10),
                           Text('${notes.length} تێبینی/میدیا • ${docs.length} بەڵگەنامە'),
-                          ...notes.take(5).map((n) => ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(switch (n['note_type']) {
-                              'photo' => Icons.photo_outlined,
-                              'voice' => Icons.mic_none_rounded,
-                              _ => Icons.lock_outline_rounded,
-                            }),
-                            title: Text(n['body']?.toString().trim().isNotEmpty == true
-                                ? n['body'].toString()
-                                : n['note_type']?.toString() ?? 'note'),
-                            subtitle: Text(n['created_at']?.toString() ?? ''),
-                          )),
-                          ...docs.take(5).map((d) => ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.description_outlined),
-                            title: Text(d['file_name']?.toString() ?? 'فایل'),
-                            subtitle: Text(d['kind']?.toString() ?? ''),
-                          )),
+                          ...notes.take(5).map((n) {
+                            final mediaPath =
+                                n['media_path']?.toString() ?? '';
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              onTap: mediaPath.isEmpty
+                                  ? null
+                                  : () => _openVaultAsset(mediaPath),
+                              leading: Icon(switch (n['note_type']) {
+                                'photo' => Icons.photo_outlined,
+                                'voice' => Icons.mic_none_rounded,
+                                _ => Icons.lock_outline_rounded,
+                              }),
+                              title: Text(
+                                n['body']?.toString().trim().isNotEmpty == true
+                                    ? n['body'].toString()
+                                    : n['note_type']?.toString() ?? 'note',
+                              ),
+                              subtitle:
+                                  Text(n['created_at']?.toString() ?? ''),
+                              trailing: mediaPath.isEmpty
+                                  ? null
+                                  : const Icon(Icons.open_in_new_rounded),
+                            );
+                          }),
+                          ...docs.take(5).map((d) {
+                            final storagePath =
+                                d['storage_path']?.toString() ?? '';
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              onTap: storagePath.isEmpty
+                                  ? null
+                                  : () => _openVaultAsset(storagePath),
+                              leading:
+                                  const Icon(Icons.description_outlined),
+                              title:
+                                  Text(d['file_name']?.toString() ?? 'فایل'),
+                              subtitle: Text(d['kind']?.toString() ?? ''),
+                              trailing: storagePath.isEmpty
+                                  ? null
+                                  : const Icon(Icons.open_in_new_rounded),
+                            );
+                          }),
                         ],
                       ),
                       if (mergeHistory.isNotEmpty) ...[
