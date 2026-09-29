@@ -197,10 +197,10 @@ class _UserListScreenState extends State<UserListScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final canAdd =
-        (auth.userRole == 'admin') ||
+        auth.userRole == 'admin' ||
         (auth.userRole == 'employee' &&
-            auth.canAddCustomers &&
-            widget.role == 'customer');
+            ((widget.role == 'customer' && auth.canAddCustomers) ||
+                (widget.role == 'employee' && auth.canManageEmployees)));
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final pinHeader = shouldPinUserListHeader(widget.role);
     final header = _buildDirectoryHeader(canAdd: canAdd);
@@ -899,9 +899,19 @@ class _UserListScreenState extends State<UserListScreen> {
     final displayName =
         _hasSameNamePeer(user) && phoneTail.isNotEmpty ? '$name · $phoneTail' : name;
     final inbox = _customerInbox[user.id];
-    final canManageCustomer = widget.role == 'customer' &&
-        !_directory.isLoading && !_directory.showingSnapshot &&
-        (auth.userRole == 'admin' || auth.userRole == 'employee');
+    final canViewCustomer = widget.role == 'customer' &&
+        !_directory.isLoading &&
+        !_directory.showingSnapshot &&
+        (auth.userRole == 'admin' ||
+            (auth.userRole == 'employee' && auth.canViewCustomers));
+    final canManageCustomer = canViewCustomer &&
+        (auth.userRole == 'admin' ||
+            (auth.userRole == 'employee' &&
+                (auth.canAddDebts ||
+                    auth.canRecordPayments ||
+                    auth.canViewDebts ||
+                    auth.canViewFinancialReports ||
+                    auth.canExportData)));
     final balance = _balances[user.id] ?? 0;
 
     return CustomerDirectoryCard(
@@ -922,37 +932,46 @@ class _UserListScreenState extends State<UserListScreen> {
       balanceUnavailable: _balanceErrors.contains(user.id),
       openDebtCount: (inbox?['open_debt_count'] as num?)?.toInt() ?? 0,
       canManage: canManageCustomer,
-      onTap: _directory.isLoading || _directory.showingSnapshot
-          ? null : () => _openUserProfile(user),
+      onTap: !canViewCustomer && widget.role == 'customer'
+          ? null
+          : (_directory.isLoading || _directory.showingSnapshot
+              ? null
+              : () => _openUserProfile(user)),
       onLongPress: canManageCustomer && auth.userRole == 'admin'
           ? () => _showCustomerPrioritySheet(user, auth)
           : null,
       actions: canManageCustomer
           ? [
-              CustomerCardAction(
-                icon: Icons.add_card_rounded,
-                label: 'قەرز',
-                color: Colors.orange,
-                onTap: () => _quickCustomerDebt(user),
-              ),
-              CustomerCardAction(
-                icon: Icons.payments_outlined,
-                label: 'پارە',
-                color: Colors.green,
-                onTap: () => _quickCustomerPayment(user, auth),
-              ),
-              CustomerCardAction(
-                icon: Icons.chat_bubble_outline_rounded,
-                label: 'چات',
-                color: AppColors.primary,
-                onTap: () => _quickCustomerChat(user),
-              ),
-              CustomerCardAction(
-                icon: Icons.picture_as_pdf_outlined,
-                label: 'کەشف',
-                color: Colors.deepPurple,
-                onTap: () => _quickCustomerStatement(user, auth),
-              ),
+              if (auth.userRole == 'admin' || auth.canAddDebts)
+                CustomerCardAction(
+                  icon: Icons.add_card_rounded,
+                  label: 'قەرز',
+                  color: Colors.orange,
+                  onTap: () => _quickCustomerDebt(user),
+                ),
+              if (auth.userRole == 'admin' || auth.canRecordPayments)
+                CustomerCardAction(
+                  icon: Icons.payments_outlined,
+                  label: 'پارە',
+                  color: Colors.green,
+                  onTap: () => _quickCustomerPayment(user, auth),
+                ),
+              if (auth.userRole == 'admin' || auth.canViewDebts)
+                CustomerCardAction(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: 'چات',
+                  color: AppColors.primary,
+                  onTap: () => _quickCustomerChat(user),
+                ),
+              if (auth.userRole == 'admin' ||
+                  auth.canViewFinancialReports ||
+                  auth.canExportData)
+                CustomerCardAction(
+                  icon: Icons.picture_as_pdf_outlined,
+                  label: 'کەشف',
+                  color: Colors.deepPurple,
+                  onTap: () => _quickCustomerStatement(user, auth),
+                ),
             ]
           : const [],
     );
