@@ -40,6 +40,16 @@ class _AddUserDialogState extends State<AddUserDialog> {
   bool _canViewFinancialReports = false;
   bool _canExportData = false;
   bool _canImportData = false;
+  bool _canRefundPayments = false;
+  bool _canRestoreDebts = false;
+  bool _canManageReceipts = false;
+  bool _canManageNotifications = false;
+  bool _canApproveCustomers = false;
+  bool _canManageEmployees = false;
+  bool _canViewAuditLog = false;
+  bool _canManageBackup = false;
+  bool _canManageDaftarSync = false;
+  bool _canManageSubscription = false;
 
   @override
   void dispose() {
@@ -241,6 +251,16 @@ class _AddUserDialogState extends State<AddUserDialog> {
         canViewFinancialReports: _canViewFinancialReports,
         canExportData: _canExportData,
         canImportData: _canImportData,
+        canRefundPayments: _canRefundPayments,
+        canRestoreDebts: _canRestoreDebts,
+        canManageReceipts: _canManageReceipts,
+        canManageNotifications: _canManageNotifications,
+        canApproveCustomers: _canApproveCustomers,
+        canManageEmployees: _canManageEmployees,
+        canViewAuditLog: _canViewAuditLog,
+        canManageBackup: _canManageBackup,
+        canManageDaftarSync: _canManageDaftarSync,
+        canManageSubscription: _canManageSubscription,
         debtLimit: debtLimit,
       );
 
@@ -687,6 +707,56 @@ class _AddUserDialogState extends State<AddUserDialog> {
                 'ناردنی ئاگادارکردنەوە',
                 _canSendNotifications,
                 (v) => setState(() => _canSendNotifications = v),
+              ),
+              _buildSwitch(
+                'گەڕاندنەوەی پارەدانەوە',
+                _canRefundPayments,
+                (v) => setState(() => _canRefundPayments = v),
+              ),
+              _buildSwitch(
+                'گەڕاندنەوەی قەرزی سڕاوە',
+                _canRestoreDebts,
+                (v) => setState(() => _canRestoreDebts = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی پسووڵە',
+                _canManageReceipts,
+                (v) => setState(() => _canManageReceipts = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی ئاگادارکردنەوە',
+                _canManageNotifications,
+                (v) => setState(() => _canManageNotifications = v),
+              ),
+              _buildSwitch(
+                'پەسەندکردنی کڕیار',
+                _canApproveCustomers,
+                (v) => setState(() => _canApproveCustomers = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی کارمەندان',
+                _canManageEmployees,
+                (v) => setState(() => _canManageEmployees = v),
+              ),
+              _buildSwitch(
+                'بینینی Audit Log',
+                _canViewAuditLog,
+                (v) => setState(() => _canViewAuditLog = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی Backup',
+                _canManageBackup,
+                (v) => setState(() => _canManageBackup = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی Daftar Sync',
+                _canManageDaftarSync,
+                (v) => setState(() => _canManageDaftarSync = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی بەشداری',
+                _canManageSubscription,
+                (v) => setState(() => _canManageSubscription = v),
                 isLast: true,
               ),
             ],
