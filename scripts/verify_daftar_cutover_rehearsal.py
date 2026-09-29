@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 migration = (ROOT / 'supabase/migrations/20260920003000_daftar_cutover_rehearsal.sql').read_text(errors='ignore')
 worker = (ROOT / 'supabase/functions/daftar-sync/index.ts').read_text(errors='ignore')
+runtime = (ROOT / 'supabase/migrations/20260929170500_daftar_sync_runtime_hardening.sql').read_text(errors='ignore')
 workflow = (ROOT / '.github/workflows/ios-unsigned-ipa.yml').read_text(errors='ignore')
 
 assert 'legacy_import_links_admin_kind_source_idx' in migration
@@ -21,8 +22,11 @@ assert "case when v_total_mismatches = 0 then 'pass' else 'fail' end" in migrati
 assert "s.cutover_rehearsal_status = 'pass'" in migration
 assert "s.cutover_rehearsal_mismatches = 0" in migration
 
-assert 'run_daftar_cutover_rehearsal' in worker
-assert 'cutover_rehearsal_failed' in worker
+# Full cutover rehearsal runs in the durable database reconciliation job,
+# outside the latency-sensitive Edge sync request.
+assert 'public.run_daftar_cutover_rehearsal' in runtime
+assert 'private.run_daftar_sync_reconciliation' in runtime
+assert runtime.index('private.run_daftar_sync_reconciliation') < runtime.index('public.run_daftar_cutover_rehearsal')
 assert 'Verify Daftar cutover rehearsal' in workflow
 
 print('Daftar cutover rehearsal verified')
