@@ -1125,3 +1125,167 @@ grant execute on function public.get_customer_advanced_center(uuid),
  public.save_scheduled_report(uuid,text,text,integer,integer,integer,jsonb,boolean),
  public.get_scheduled_reports(), public.refresh_auto_vip(uuid)
  to authenticated;
+
+
+-- Keep the existing Collection Center API, but apply per-customer grace
+-- periods and watch/freeze rules to aging and priority.
+create or replace function public.get_collection_center(
+  p_filter text default 'all',
+  p_limit integer default 100
+)
+returns jsonb
+language sql
+stable
+security invoker
+set search_path to ''
+as $function$
+with ctx as (
+  select
+    (select private.current_admin_id()) as admin_id,
+    (select private."current_role"()) as role_name,
+    greatest(1, least(coalesce(p_limit,100),200)) as row_limit,
+    case
+      when p_filter in ('all','overdue','1_7','8_30','31_60','60_plus','followup_due','watchlist')
+        then p_filter else 'all'
+    end as selected_filter
+),
+rollup as (
+  select
+    p.id customer_id,p.name,p.father_name,p.grandfather_name,p.phone,
+    p.is_vip,p.is_pinned,
+    coalesce(r.credit_frozen,false) credit_frozen,
+    coalesce(r.watch_status,'normal') watch_status,
+    coalesce(r.grace_days,0) grace_days,
+    count(d.id) filter(where d.remaining>0)::int open_debt_count,
+    count(d.id) filter(
+      where d.remaining>0 and d.due_date is not null
+        and d.due_date+coalesce(r.grace_days,0)<current_date
+    )::int overdue_debt_count,
+    coalesce(sum(case when d.remaining>0 and upper(coalesce(d.currency,'IQD'))='USD'
+      then d.remaining else 0 end),0)::numeric balance_usd,
+    coalesce(sum(case when d.remaining>0 and upper(coalesce(d.currency,'IQD'))<>'USD'
+      then d.remaining else 0 end),0)::numeric balance_iqd,
+    coalesce(sum(case when d.remaining>0 and d.due_date is not null
+      and d.due_date+coalesce(r.grace_days,0)<current_date
+      and upper(coalesce(d.currency,'IQD'))='USD' then d.remaining else 0 end),0)::numeric overdue_usd,
+    coalesce(sum(case when d.remaining>0 and d.due_date is not null
+      and d.due_date+coalesce(r.grace_days,0)<current_date
+      and upper(coalesce(d.currency,'IQD'))<>'USD' then d.remaining else 0 end),0)::numeric overdue_iqd,
+    min(d.due_date+coalesce(r.grace_days,0)) filter(
+      where d.remaining>0 and d.due_date is not null
+        and d.due_date+coalesce(r.grace_days,0)<current_date
+    ) effective_oldest_due_date,
+    count(d.id) filter(
+      where d.remaining>0 and d.due_date is not null
+        and d.due_date+coalesce(r.grace_days,0)=current_date
+    )::int due_today_count
+  from public.profiles p
+  cross join ctx
+  left join public.customer_advanced_rules r
+    on r.customer_id=p.id and r.admin_id=ctx.admin_id
+  left join public.debts d
+    on d.customer_id=p.id and coalesce(d.is_deleted,false)=false
+  where ctx.admin_id is not null
+    and ctx.role_name in ('admin','employee')
+    and p.admin_id=ctx.admin_id and p.role='customer' and p.active is true
+  group by p.id,p.name,p.father_name,p.grandfather_name,p.phone,p.is_vip,p.is_pinned,
+    r.credit_frozen,r.watch_status,r.grace_days
+),
+with_followup as (
+  select r.*,
+    f.id followup_id,f.next_followup_date,f.note followup_note,
+    case when r.effective_oldest_due_date is null then 0
+      else greatest(current_date-r.effective_oldest_due_date,0) end::int overdue_days
+  from rollup r
+  left join lateral (
+    select cf.id,cf.next_followup_date,cf.note
+    from public.customer_followups cf
+    cross join ctx
+    where cf.admin_id=ctx.admin_id and cf.customer_id=r.customer_id
+      and cf.status='pending'
+    order by cf.updated_at desc,cf.id desc limit 1
+  ) f on true
+  where r.open_debt_count>0
+),
+scored as (
+  select w.*,
+    case
+      when w.overdue_days=0 then 'current'
+      when w.overdue_days<=7 then '1_7'
+      when w.overdue_days<=30 then '8_30'
+      when w.overdue_days<=60 then '31_60'
+      else '60_plus'
+    end aging_bucket,
+    least(100,
+      (case when w.watch_status='blacklist' then 35 when w.watch_status='watchlist' then 20 else 0 end)
+      +(case when w.credit_frozen then 15 else 0 end)
+      +(case when w.is_vip then 5 else 0 end)
+      +(case when w.is_pinned then 5 else 0 end)
+      +least(w.overdue_days,35)
+      +least(w.overdue_debt_count*5,20)
+      +(case when w.next_followup_date is not null and w.next_followup_date<=current_date then 10 else 0 end)
+    )::int priority_score
+  from with_followup w
+),
+filtered as (
+  select s.* from scored s cross join ctx
+  where ctx.selected_filter='all'
+    or (ctx.selected_filter='overdue' and s.overdue_days>0)
+    or (ctx.selected_filter='1_7' and s.aging_bucket='1_7')
+    or (ctx.selected_filter='8_30' and s.aging_bucket='8_30')
+    or (ctx.selected_filter='31_60' and s.aging_bucket='31_60')
+    or (ctx.selected_filter='60_plus' and s.aging_bucket='60_plus')
+    or (ctx.selected_filter='followup_due' and s.next_followup_date is not null and s.next_followup_date<=current_date)
+    or (ctx.selected_filter='watchlist' and s.watch_status in ('watchlist','blacklist'))
+),
+limited as (
+  select f.* from filtered f cross join ctx
+  order by
+    (f.watch_status='blacklist') desc,
+    (f.next_followup_date is not null and f.next_followup_date<=current_date) desc,
+    f.priority_score desc,f.overdue_days desc,f.is_pinned desc,f.name
+  limit (select row_limit from ctx)
+),
+summary as (
+  select
+    count(*) filter(where overdue_days>0)::int overdue_customers,
+    count(*) filter(where due_today_count>0)::int due_today_customers,
+    count(*) filter(where next_followup_date is not null and next_followup_date<=current_date)::int followups_due,
+    count(*) filter(where watch_status in ('watchlist','blacklist'))::int watched_customers,
+    coalesce(sum(overdue_iqd),0)::numeric overdue_iqd,
+    coalesce(sum(overdue_usd),0)::numeric overdue_usd
+  from scored
+)
+select jsonb_build_object(
+  'summary',jsonb_build_object(
+    'overdue_customers',summary.overdue_customers,
+    'due_today_customers',summary.due_today_customers,
+    'followups_due',summary.followups_due,
+    'watched_customers',summary.watched_customers,
+    'overdue_iqd',summary.overdue_iqd,
+    'overdue_usd',summary.overdue_usd
+  ),
+  'items',coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'customer_id',l.customer_id,'name',l.name,'father_name',l.father_name,
+      'grandfather_name',l.grandfather_name,'phone',l.phone,
+      'is_vip',l.is_vip,'is_pinned',l.is_pinned,
+      'credit_frozen',l.credit_frozen,'watch_status',l.watch_status,'grace_days',l.grace_days,
+      'open_debt_count',l.open_debt_count,'overdue_debt_count',l.overdue_debt_count,
+      'balance_iqd',l.balance_iqd,'balance_usd',l.balance_usd,
+      'overdue_iqd',l.overdue_iqd,'overdue_usd',l.overdue_usd,
+      'oldest_due_date',l.effective_oldest_due_date,'overdue_days',l.overdue_days,
+      'due_today_count',l.due_today_count,'aging_bucket',l.aging_bucket,
+      'priority_score',l.priority_score,'followup_id',l.followup_id,
+      'next_followup_date',l.next_followup_date,'followup_note',l.followup_note
+    ) order by (l.watch_status='blacklist') desc,
+      (l.next_followup_date is not null and l.next_followup_date<=current_date) desc,
+      l.priority_score desc,l.overdue_days desc,l.name)
+    from limited l
+  ),'[]'::jsonb)
+)
+from summary;
+$function$;
+
+revoke all on function public.get_collection_center(text,integer) from public,anon;
+grant execute on function public.get_collection_center(text,integer) to authenticated;
