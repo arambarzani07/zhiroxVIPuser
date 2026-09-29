@@ -267,17 +267,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
     DateTime? latest;
     for (final row in rates) {
       if (row is! Map) continue;
-      final raw = row['retrieved_at'] ?? row['source_published_at'] ?? row['updated_at'];
+      final raw =
+          row['retrieved_at'] ?? row['updated_at'] ?? row['source_published_at'];
       final parsed = DateTime.tryParse(raw?.toString() ?? '');
       if (parsed == null) continue;
       if (latest == null || parsed.isAfter(latest)) latest = parsed;
     }
     if (latest == null) return '';
-    final diff = DateTime.now().toUtc().difference(latest.toUtc());
-    if (diff.inMinutes < 1) return 'ئێستا';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} خولەک پێش ئێستا';
-    if (diff.inHours < 24) return '${diff.inHours} کاتژمێر پێش ئێستا';
-    return '${diff.inDays} ڕۆژ پێش ئێستا';
+
+    final local = latest.toLocal();
+    final hour12 = local.hour == 0
+        ? 12
+        : local.hour > 12
+        ? local.hour - 12
+        : local.hour;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final period = local.hour >= 12 ? 'PM' : 'AM';
+    return '$hour12:$minute $period';
   }
 
   Map<String, dynamic>? _marketRateRow(String city, String variant) {
