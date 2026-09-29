@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
+import 'package:zhirox/screens/admin/advanced_operations_center_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -254,6 +255,16 @@ class _CollectionCenterScreenState extends State<CollectionCenterScreen> {
       appBar: AppBar(
         title: const Text('ناوەندی بەدواداچوونی قەرز'),
         actions: [
+          IconButton(
+            tooltip: 'Operations Intelligence',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const AdvancedOperationsCenterScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.insights_outlined),
+          ),
           IconButton(
             tooltip: 'نوێکردنەوە',
             onPressed: _loading ? null : _load,
