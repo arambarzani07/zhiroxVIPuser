@@ -850,6 +850,62 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     return storagePath;
   }
 
+  static Future<String?> _verifyCustomerCreditPolicyForDebt({
+    required String customerId,
+    required double amount,
+    required String dueDate,
+    String? customCreatedDate,
+  }) async {
+    await ensureInitialized();
+    final balance = await getCustomerBalance(customerId);
+    final raw = await client.rpc(
+      'evaluate_customer_credit_policy',
+      params: {
+        'p_customer_id': customerId,
+        'p_debt_amount': amount,
+        'p_projected_balance': balance + amount,
+      },
+    );
+    if (raw is! Map) {
+      throw const FormatException('invalid customer credit policy');
+    }
+    final policy = Map<String, dynamic>.from(raw);
+    final decision = policy['decision']?.toString() ?? 'blocked';
+    final reason = policy['reason']?.toString() ?? 'policy_unavailable';
+
+    if (decision == 'blocked') {
+      if (reason == 'blacklist') {
+        throw Exception('ئەم کڕیارە لە Blacklist ـدایە؛ قەرزی نوێ ڕێگەپێنەدراوە.');
+      }
+      throw Exception('قەرزی نوێ بۆ ئەم کڕیارە کاتیی قوفڵ کراوە.');
+    }
+    if (decision == 'approval_required') {
+      throw Exception('ئەم قەرزە پێویستی بە پەسەندکردن هەیە.');
+    }
+
+    final maxDebtDays = (policy['max_debt_days'] as num?)?.toInt();
+    if (maxDebtDays != null && maxDebtDays > 0) {
+      final due = DateTime.tryParse(dueDate.trim());
+      if (due == null) {
+        throw Exception('بۆ ئەم کڕیارە بەرواری کۆتایی قەرز پێویستە.');
+      }
+      final custom = customCreatedDate == null
+          ? null
+          : DateTime.tryParse(customCreatedDate);
+      final base = (custom ?? DateTime.now()).toLocal();
+      final localDue = due.toLocal();
+      final days = DateTime(localDue.year, localDue.month, localDue.day)
+          .difference(DateTime(base.year, base.month, base.day))
+          .inDays;
+      if (days > maxDebtDays) {
+        throw Exception('ماوەی ئەم قەرزە نابێت لە $maxDebtDays ڕۆژ زیاتر بێت.');
+      }
+    }
+
+    final approvalId = policy['approved_request_id']?.toString() ?? '';
+    return approvalId.isEmpty ? null : approvalId;
+  }
+
   static Future<RecordModel> createDebt({
     required String customerId,
     required String description,
@@ -869,6 +925,13 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     String? referenceKind,
     String? referenceId,
   }) async {
+    final approvedRequestId = await _verifyCustomerCreditPolicyForDebt(
+      customerId: customerId,
+      amount: amount,
+      dueDate: dueDate,
+      customCreatedDate: customCreatedDate,
+    );
+
     String receiptPath = '';
     if (receiptImagePath != null && receiptImagePath.isNotEmpty) {
       receiptPath = await _uploadReceipt(
@@ -917,6 +980,18 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
         } catch (_) {}
       }
       rethrow;
+    }
+
+    if (approvedRequestId != null) {
+      try {
+        await client.rpc(
+          'consume_credit_approval',
+          params: {'p_request_id': approvedRequestId},
+        );
+      } catch (_) {
+        // The debt write is authoritative. A stale approval marker should not
+        // roll back a successful financial record.
+      }
     }
 
     await enqueueDebtPushBestEffort(
