@@ -514,7 +514,13 @@ class _UserListScreenState extends State<UserListScreen> {
     RecordModel user,
     AuthProvider auth,
   ) async {
-    if (widget.role != 'customer' || auth.userRole != 'admin') return;
+    final canPin =
+        auth.userRole == 'admin' || auth.canPinCustomers;
+    final canVip =
+        auth.userRole == 'admin' || auth.canManageVipCustomers;
+    final canLimit =
+        auth.userRole == 'admin' || auth.canSetDebtLimit;
+    if (widget.role != 'customer' || !(canPin || canVip || canLimit)) return;
 
     Map<String, dynamic>? recommendation;
     try {
@@ -643,7 +649,7 @@ class _UserListScreenState extends State<UserListScreen> {
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     value: isPinned,
-                    onChanged: saving
+                    onChanged: saving || !canPin
                         ? null
                         : (value) =>
                             setSheetState(() => isPinned = value),
@@ -669,7 +675,7 @@ class _UserListScreenState extends State<UserListScreen> {
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     value: isVip,
-                    onChanged: saving
+                    onChanged: saving || !canVip
                         ? null
                         : (value) => setSheetState(() => isVip = value),
                     secondary: Icon(
@@ -787,7 +793,7 @@ class _UserListScreenState extends State<UserListScreen> {
                   ],
                   TextField(
                     controller: limitController,
-                    enabled: !saving,
+                    enabled: !saving && canLimit,
                     keyboardType: TextInputType.number,
                     textDirection: TextDirection.ltr,
                     decoration: InputDecoration(
@@ -802,28 +808,32 @@ class _UserListScreenState extends State<UserListScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: saving
-                        ? null
-                        : () {
-                            Navigator.pop(sheetContext, false);
-                            unawaited(_openAdvancedCustomerCenter(user));
-                          },
-                    icon: const Icon(Icons.tune_rounded, size: 18),
-                    label: const Text('ناوەندی پێشکەوتوو'),
-                  ),
-                  const SizedBox(height: 8),
+                  if (auth.userRole == 'admin') ...[
+                    OutlinedButton.icon(
+                      onPressed: saving
+                          ? null
+                          : () {
+                              Navigator.pop(sheetContext, false);
+                              unawaited(_openAdvancedCustomerCenter(user));
+                            },
+                      icon: const Icon(Icons.tune_rounded, size: 18),
+                      label: const Text('ناوەندی پێشکەوتوو'),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   FilledButton.icon(
                     onPressed: saving
                         ? null
                         : () async {
-                            final limit = double.tryParse(
-                                  limitController.text
-                                      .replaceAll(',', '')
-                                      .trim(),
-                                ) ??
-                                -1;
-                            if (limit < 0) {
+                            final limit = canLimit
+                                ? (double.tryParse(
+                                          limitController.text
+                                              .replaceAll(',', '')
+                                              .trim(),
+                                        ) ??
+                                    -1)
+                                : currentLimit;
+                            if (canLimit && limit < 0) {
                               AppHelpers.showSnackBar(
                                 context,
                                 'سنووری قەرز دروست نییە',
@@ -835,10 +845,10 @@ class _UserListScreenState extends State<UserListScreen> {
                             try {
                               await PBService.updateUser(
                                 user.id,
-                                {
-                                  'is_pinned': isPinned,
-                                  'is_vip': isVip,
-                                  'debt_limit': limit,
+                                <String, dynamic>{
+                                  if (canPin) 'is_pinned': isPinned,
+                                  if (canVip) 'is_vip': isVip,
+                                  if (canLimit) 'debt_limit': limit,
                                 },
                               );
                               if (sheetContext.mounted) {
@@ -911,7 +921,10 @@ class _UserListScreenState extends State<UserListScreen> {
                     auth.canRecordPayments ||
                     auth.canViewDebts ||
                     auth.canViewFinancialReports ||
-                    auth.canExportData)));
+                    auth.canExportData ||
+                    auth.canPinCustomers ||
+                    auth.canManageVipCustomers ||
+                    auth.canSetDebtLimit)));
     final balance = _balances[user.id] ?? 0;
 
     return CustomerDirectoryCard(
@@ -937,7 +950,11 @@ class _UserListScreenState extends State<UserListScreen> {
           : (_directory.isLoading || _directory.showingSnapshot
               ? null
               : () => _openUserProfile(user)),
-      onLongPress: canManageCustomer && auth.userRole == 'admin'
+      onLongPress: canManageCustomer &&
+              (auth.userRole == 'admin' ||
+                  auth.canPinCustomers ||
+                  auth.canManageVipCustomers ||
+                  auth.canSetDebtLimit)
           ? () => _showCustomerPrioritySheet(user, auth)
           : null,
       actions: canManageCustomer
