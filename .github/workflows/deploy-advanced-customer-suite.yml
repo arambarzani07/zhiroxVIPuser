@@ -1,0 +1,235 @@
+name: Deploy Advanced Customer Suite
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - .github/workflows/deploy-advanced-customer-suite.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-advanced-customer-suite-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      MIGRATION_FILE: supabase/migrations/20260929073000_advanced_customer_collection_suite.sql
+    steps:
+      - name: Checkout User source
+        uses: actions/checkout@v4
+        with:
+          ref: user-source
+
+      - name: Validate production credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "SUPABASE_ACCESS_TOKEN is missing" >&2; exit 1; }
+          test -n "$SUPABASE_PROJECT_REF" || { echo "SUPABASE_PROJECT_REF is missing" >&2; exit 1; }
+          test -s "$MIGRATION_FILE" || { echo "Migration file is missing" >&2; exit 1; }
+
+      - name: Apply advanced customer suite migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+          import urllib.error
+          import urllib.request
+
+          token = os.environ["SUPABASE_ACCESS_TOKEN"]
+          project = os.environ["SUPABASE_PROJECT_REF"]
+          migration = pathlib.Path(os.environ["MIGRATION_FILE"]).read_text(encoding="utf-8")
+          payload = json.dumps({
+              "query": "begin;\n" + migration + "\ncommit;",
+              "read_only": False,
+          }).encode()
+
+          request = urllib.request.Request(
+              f"https://api.supabase.com/v1/projects/{project}/database/query",
+              data=payload,
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=180) as response:
+                  body = response.read().decode("utf-8", errors="replace")
+                  if response.status < 200 or response.status >= 300:
+                      raise RuntimeError(f"Unexpected status {response.status}: {body}")
+                  print("Advanced Customer Suite migration applied.")
+          except urllib.error.HTTPError as exc:
+              body = exc.read().decode("utf-8", errors="replace")
+              print(f"Supabase Management API HTTP {exc.code}: {body}", file=sys.stderr)
+              raise
+          PY
+
+      - name: Verify production schema and security
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          token = os.environ["SUPABASE_ACCESS_TOKEN"]
+          project = os.environ["SUPABASE_PROJECT_REF"]
+          verify_sql = r"""
+          do $verify$
+          begin
+            if to_regprocedure('public.get_customer_advanced_center(uuid)') is null then
+              raise exception 'missing get_customer_advanced_center';
+            end if;
+            if to_regprocedure('public.evaluate_customer_credit_policy(uuid,numeric,numeric)') is null then
+              raise exception 'missing evaluate_customer_credit_policy';
+            end if;
+            if to_regprocedure('public.consume_credit_approval(uuid)') is null then
+              raise exception 'missing consume_credit_approval';
+            end if;
+            if to_regprocedure('public.delete_scheduled_report(uuid)') is null then
+              raise exception 'missing delete_scheduled_report';
+            end if;
+            if to_regprocedure('public.get_scheduled_report_runs(integer)') is null then
+              raise exception 'missing get_scheduled_report_runs';
+            end if;
+
+            if (select count(*) from pg_trigger
+                where tgrelid='public.debts'::regclass
+                  and not tgisinternal
+                  and tgname='debts_advanced_credit_policy_guard') <> 1 then
+              raise exception 'advanced debt policy guard missing';
+            end if;
+            if (select count(*) from pg_trigger
+                where tgrelid='public.debts'::regclass
+                  and not tgisinternal
+                  and tgname='debts_auto_vip_refresh') <> 1 then
+              raise exception 'debt auto vip trigger missing';
+            end if;
+            if (select count(*) from pg_trigger
+                where tgrelid='public.payments'::regclass
+                  and not tgisinternal
+                  and tgname='payments_auto_vip_refresh') <> 1 then
+              raise exception 'payment auto vip trigger missing';
+            end if;
+
+            if (select count(*) from cron.job
+                where jobname='zhirox-scheduled-report-runner'
+                  and active=true) <> 1 then
+              raise exception 'scheduled report cron missing or duplicated';
+            end if;
+
+            if (select count(*) from storage.buckets
+                where id='customer-vault' and public=false) <> 1 then
+              raise exception 'private customer-vault bucket missing';
+            end if;
+
+            if not exists (
+              select 1
+              from pg_class c
+              join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public'
+                and c.relname='scheduled_report_runs'
+                and c.relrowsecurity
+            ) then
+              raise exception 'scheduled_report_runs RLS missing';
+            end if;
+
+            if has_table_privilege(
+              'authenticated',
+              'public.scheduled_report_runs',
+              'INSERT'
+            ) then
+              raise exception 'authenticated can forge scheduled report runs';
+            end if;
+
+            if not has_function_privilege(
+              'authenticated',
+              'public.consume_credit_approval(uuid)',
+              'EXECUTE'
+            ) then
+              raise exception 'consume_credit_approval grant missing';
+            end if;
+
+            if not has_function_privilege(
+              'authenticated',
+              'public.delete_scheduled_report(uuid)',
+              'EXECUTE'
+            ) then
+              raise exception 'delete_scheduled_report grant missing';
+            end if;
+
+            if not exists (
+              select 1 from information_schema.columns
+              where table_schema='public'
+                and table_name='profiles'
+                and column_name='vip_expires_at'
+            ) then
+              raise exception 'profiles.vip_expires_at missing';
+            end if;
+          end
+          $verify$;
+
+          select jsonb_build_object(
+            'advanced_customer_center', to_regprocedure('public.get_customer_advanced_center(uuid)') is not null,
+            'credit_policy_guard', (select count(*)=1 from pg_trigger
+              where tgrelid='public.debts'::regclass and not tgisinternal
+                and tgname='debts_advanced_credit_policy_guard'),
+            'scheduled_report_runner', (select count(*)=1 from cron.job
+              where jobname='zhirox-scheduled-report-runner' and active=true),
+            'customer_vault_private', (select count(*)=1 from storage.buckets
+              where id='customer-vault' and public=false)
+          ) as verification;
+          """
+
+          payload = json.dumps({
+              "query": verify_sql,
+              "read_only": False,
+          }).encode()
+          request = urllib.request.Request(
+              f"https://api.supabase.com/v1/projects/{project}/database/query",
+              data=payload,
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=90) as response:
+                  body = response.read().decode("utf-8", errors="replace")
+                  if response.status < 200 or response.status >= 300:
+                      raise RuntimeError(f"Unexpected status {response.status}: {body}")
+                  print("Production verification passed.")
+                  print(body)
+          except urllib.error.HTTPError as exc:
+              body = exc.read().decode("utf-8", errors="replace")
+              print(f"Supabase verification HTTP {exc.code}: {body}", file=sys.stderr)
+              raise
+          PY
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          {
+            echo "## Advanced Customer Suite"
+            echo "- Migration: 20260929073000_advanced_customer_collection_suite.sql"
+            echo "- Production SQL: applied"
+            echo "- RPC / trigger / cron / RLS / grants: verified"
+          } >> "$GITHUB_STEP_SUMMARY"
