@@ -25,6 +25,13 @@ type SyncSource = {
   last_success_at?: string | null;
   sync_mode: "mirror" | "zhirox_primary";
   inbound_sync_enabled?: boolean | null;
+  reconciliation_status?: string | null;
+  reconciliation_missing_contacts?: number | null;
+  reconciliation_missing_transactions?: number | null;
+  cutover_rehearsal_status?: string | null;
+  cutover_rehearsal_mismatches?: number | null;
+  last_reconciled_at?: string | null;
+  last_cutover_rehearsal_at?: string | null;
 };
 
 type LegacyContact = {
@@ -2162,35 +2169,28 @@ Deno.serve(async (req) => {
         ...delta.map((row) => Number(row.id)),
       )
       : Number(source.last_transaction_id);
-    const { data: reconciliation, error: reconciliationError } = await admin
-      .rpc(
-        "reconcile_daftar_account_28",
-        { p_source_id: source.id },
-      );
-    if (reconciliationError) {
-      throw new Error(`reconciliation_failed:${reconciliationError.message}`);
-    }
-
-    const { data: cutoverRehearsal, error: cutoverRehearsalError } = await admin
-      .rpc(
-        "run_daftar_cutover_rehearsal",
-        { p_source_id: source.id },
-      );
-    if (cutoverRehearsalError) {
-      throw new Error(
-        `cutover_rehearsal_failed:${cutoverRehearsalError.message}`,
-      );
-    }
-
-    const { data: deadLetterRecovery, error: deadLetterRecoveryError } =
-      await admin.rpc("resolve_daftar_recovered_dead_letters", {
-        p_source_id: source.id,
-      });
-    if (deadLetterRecoveryError) {
-      throw new Error(
-        `dead_letter_recovery_failed:${deadLetterRecoveryError.message}`,
-      );
-    }
+    // Full-table reconciliation and cutover rehearsal are intentionally not
+    // part of the 30-second delta-sync path. They scan the complete mirror and
+    // can exceed the request statement timeout as the ledger grows. The
+    // dedicated hourly database reconciliation job owns those checks.
+    const reconciliation = {
+      status: source.reconciliation_status ?? "pending",
+      missing_contacts: Number(source.reconciliation_missing_contacts ?? 0),
+      missing_transactions: Number(
+        source.reconciliation_missing_transactions ?? 0,
+      ),
+      last_reconciled_at: source.last_reconciled_at ?? null,
+      deferred_to_hourly_audit: true,
+    };
+    const cutoverRehearsal = {
+      status: source.cutover_rehearsal_status ?? "pending",
+      total_mismatches: Number(source.cutover_rehearsal_mismatches ?? 0),
+      last_cutover_rehearsal_at: source.last_cutover_rehearsal_at ?? null,
+      deferred_to_hourly_audit: true,
+    };
+    const deadLetterRecovery = {
+      deferred_to_hourly_audit: true,
+    };
 
     const allowInboundSync = source.sync_mode === "zhirox_primary" &&
       source.inbound_sync_enabled === true;
