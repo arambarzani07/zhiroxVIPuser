@@ -533,8 +533,92 @@ class _AdvancedOperationsCenterScreenState
     );
   }
 
+  Future<void> _reviewAnomaly(
+    Map<String, dynamic> anomaly, {
+    required String resolution,
+  }) async {
+    final customerId = anomaly['customer_id']?.toString() ?? '';
+    final recordId = anomaly['record_id']?.toString() ?? '';
+    final anomalyType = anomaly['anomaly']?.toString() ?? '';
+    if (customerId.isEmpty || recordId.isEmpty || anomalyType.isEmpty) return;
+
+    final noteController = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          resolution == 'false_positive'
+              ? 'هەڵەی سیستەم بوو'
+              : 'پشکنرا',
+        ),
+        content: TextField(
+          controller: noteController,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'تێبینی (ئارەزوومەندانە)',
+            alignLabelWithHint: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('پاشگەزبوونەوە'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('پاشەکەوت'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) {
+      noteController.dispose();
+      return;
+    }
+
+    try {
+      await AdvancedCustomerService.reviewAnomaly(
+        customerId: customerId,
+        recordId: recordId,
+        anomaly: anomalyType,
+        resolution: resolution,
+        note: noteController.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        _anomalies = _anomalies
+            .where(
+              (row) =>
+                  row['record_id']?.toString() != recordId ||
+                  row['anomaly']?.toString() != anomalyType,
+            )
+            .toList(growable: false);
+      });
+      AppHelpers.showSnackBar(
+        context,
+        resolution == 'false_positive'
+            ? 'مامەڵەکە وەک هەڵەی سیستەم نیشان کرا.'
+            : 'مامەڵەکە وەک پشکنراو نیشان کرا.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا دۆخی anomaly ـەکە بگۆڕدرێت.',
+        ),
+        isError: true,
+      );
+    } finally {
+      noteController.dispose();
+    }
+  }
+
   Widget _anomalyTab() {
-    if (_anomalies.isEmpty) return _empty('هیچ مامەڵەی نائاسایی نەدۆزرایەوە');
+    if (_anomalies.isEmpty) {
+      return _empty('هیچ مامەڵەی نائاسایی نەدۆزرایەوە');
+    }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
@@ -543,16 +627,57 @@ class _AdvancedOperationsCenterScreenState
         itemBuilder: (context, i) {
           final a = _anomalies[i];
           final duplicate = a['anomaly'] == 'possible_duplicate';
-          return ListTile(
-            onTap: () => _openCustomer(a['customer_id']?.toString()),
-            leading: Icon(
-              duplicate ? Icons.copy_all_outlined : Icons.warning_amber_rounded,
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: AppSurface(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                onTap: () => _openCustomer(a['customer_id']?.toString()),
+                leading: Icon(
+                  duplicate
+                      ? Icons.copy_all_outlined
+                      : Icons.warning_amber_rounded,
+                ),
+                title: Text(a['customer_name']?.toString() ?? 'کڕیار'),
+                subtitle: Text(
+                  duplicate
+                      ? 'گومان لە مامەڵەی دووبارە'
+                      : 'بڕی زۆر نائاسایی • ${_money(a['amount'])}',
+                ),
+                trailing: PopupMenuButton<String>(
+                  tooltip: 'پشکنینی مامەڵە',
+                  onSelected: (value) {
+                    if (value == 'reviewed') {
+                      _reviewAnomaly(a, resolution: 'reviewed');
+                    } else if (value == 'false_positive') {
+                      _reviewAnomaly(a, resolution: 'false_positive');
+                    }
+                  },
+                  itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'reviewed',
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle_outline_rounded),
+                          SizedBox(width: 8),
+                          Text('پشکنرا'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'false_positive',
+                      child: Row(
+                        children: [
+                          Icon(Icons.remove_circle_outline_rounded),
+                          SizedBox(width: 8),
+                          Text('هەڵەی سیستەم بوو'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            title: Text(a['customer_name']?.toString() ?? 'کڕیار'),
-            subtitle: Text(
-              duplicate ? 'گومان لە مامەڵەی دووبارە' : 'بڕی زۆر نائاسایی',
-            ),
-            trailing: Text(_money(a['amount'])),
           );
         },
       ),
