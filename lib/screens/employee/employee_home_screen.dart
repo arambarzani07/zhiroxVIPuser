@@ -11,6 +11,22 @@ class EmployeeHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    if (!auth.canViewDashboard) {
+      return const Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'دەسەڵاتی بینینی داشبۆردت نییە.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final permissions = <String>[
       if (auth.canAddCustomers) 'زیادکردنی کڕیار',
       if (auth.canAddDebts) 'زیادکردنی قەرز',
@@ -50,19 +66,33 @@ class EmployeeHomeScreen extends StatelessWidget {
               subtitle: 'لە یەک شوێنەوە دەست بە کار بکە',
             ),
             const SizedBox(height: 10),
-            AppSurface(child: Column(children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const CircleAvatar(
-                  backgroundColor: AppColors.primarySoft,
-                  child: Icon(Icons.people_rounded, color: AppColors.primary),
-                ),
-                title: const Text('کڕیارەکان', style: TextStyle(fontWeight: FontWeight.w800)),
-                subtitle: const Text('گەڕان، بینین و تۆمارکردنی مامەڵە'),
-                trailing: const Icon(Icons.chevron_left_rounded),
-                onTap: onOpenCustomers,
-              ),
-            ])),
+            AppSurface(
+              child: auth.canViewCustomers
+                  ? Column(
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const CircleAvatar(
+                            backgroundColor: AppColors.primarySoft,
+                            child: Icon(
+                              Icons.people_rounded,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          title: const Text(
+                            'کڕیارەکان',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          subtitle: const Text(
+                            'گەڕان، بینین و تۆمارکردنی مامەڵە',
+                          ),
+                          trailing: const Icon(Icons.chevron_left_rounded),
+                          onTap: onOpenCustomers,
+                        ),
+                      ],
+                    )
+                  : const Text('دەسەڵاتی بینینی کڕیارەکانت نییە.'),
+            ),
             const SizedBox(height: 22),
             const AppSectionHeader(
               title: 'دەسەڵاتە چالاکەکان',
