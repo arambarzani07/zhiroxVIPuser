@@ -244,6 +244,69 @@ class _AdvancedOperationsCenterScreenState
     }
     return 'ڕۆژانە • ${hour.toString().padLeft(2, '0')}:00';
   }
+  List<String> _scheduleRecipients(Map<String, dynamic> schedule) {
+    final raw = schedule['recipients'];
+    if (raw is! List) return const <String>[];
+    return raw.map((value) => value.toString()).toList(growable: false);
+  }
+
+  Future<void> _toggleSchedule(Map<String, dynamic> schedule) async {
+    try {
+      final id = schedule['id']?.toString() ?? '';
+      if (id.isEmpty) return;
+      await AdvancedCustomerService.saveScheduledReport(
+        id: id,
+        reportKind: schedule['report_kind']?.toString() ?? 'daily_summary',
+        cadence: schedule['cadence']?.toString() ?? 'daily',
+        runHour: _int(schedule['run_hour']).clamp(0, 23),
+        weekday: schedule['weekday'] == null
+            ? null
+            : _int(schedule['weekday']).clamp(1, 7),
+        monthDay: schedule['month_day'] == null
+            ? null
+            : _int(schedule['month_day']).clamp(1, 28),
+        recipients: _scheduleRecipients(schedule),
+        enabled: schedule['enabled'] != true,
+      );
+      if (mounted) await _load();
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا دۆخی ڕاپۆرتەکە بگۆڕدرێت.',
+        ),
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _deleteSchedule(Map<String, dynamic> schedule) async {
+    final id = schedule['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+    final ok = await AppHelpers.showConfirmDialog(
+      context,
+      title: 'سڕینەوەی Scheduled Report',
+      message: 'دڵنیایت دەتەوێت ئەم schedule ـە بسڕیتەوە؟',
+    );
+    if (!ok || !mounted) return;
+    try {
+      await AdvancedCustomerService.deleteScheduledReport(id);
+      if (mounted) await _load();
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا schedule ـەکە بسڕدرێتەوە.',
+        ),
+        isError: true,
+      );
+    }
+  }
+
   Future<void> _exportScheduledRun(
     Map<String, dynamic> run, {
     required bool pdf,
@@ -560,11 +623,48 @@ class _AdvancedOperationsCenterScreenState
                 '${_scheduleTimingLabel(s)}\n'
                 'next: ${s['next_run_at'] ?? '—'}',
               ),
-              trailing: Icon(
-                s['enabled'] == true
-                    ? Icons.check_circle_rounded
-                    : Icons.pause_circle_outline,
+              trailing: PopupMenuButton<String>(
+                tooltip: 'بەڕێوەبردنی schedule',
+                onSelected: (value) {
+                  if (value == 'toggle') {
+                    _toggleSchedule(s);
+                  } else if (value == 'delete') {
+                    _deleteSchedule(s);
+                  }
+                },
+                itemBuilder: (context) => <PopupMenuEntry<String>>[
+                  PopupMenuItem<String>(
+                    value: 'toggle',
+                    child: Row(
+                      children: [
+                        Icon(
+                          s['enabled'] == true
+                              ? Icons.pause_circle_outline
+                              : Icons.play_circle_outline,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(s['enabled'] == true ? 'Pause' : 'Resume'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline_rounded),
+                        SizedBox(width: 8),
+                        Text('سڕینەوە'),
+                      ],
+                    ),
+                  ),
+                ],
+                child: Icon(
+                  s['enabled'] == true
+                      ? Icons.check_circle_rounded
+                      : Icons.pause_circle_outline,
+                ),
               ),
+
             ),
           ),
           const SizedBox(height: 18),
