@@ -1,10 +1,6 @@
 name: Deploy Advanced Customer Suite
 
 on:
-  push:
-    branches: [user-source]
-    paths:
-      - .github/workflows/deploy-advanced-customer-suite.yml
   workflow_dispatch:
 
 permissions:
@@ -21,7 +17,7 @@ jobs:
     environment: production
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_PROJECT_REF: hsoyfbtpvwfmjokudznx
       MIGRATION_FILE: supabase/migrations/20260929073000_advanced_customer_collection_suite.sql
     steps:
       - name: Checkout User source
