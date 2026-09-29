@@ -187,8 +187,20 @@ begin
   if p_resolution not in ('reviewed','false_positive') then
     raise exception 'invalid_resolution' using errcode='22023';
   end if;
-  if trim(coalesce(p_record_id,''))='' or trim(coalesce(p_anomaly,''))='' then
+  if p_anomaly not in ('possible_duplicate','large_amount') then
     raise exception 'invalid_anomaly' using errcode='22023';
+  end if;
+  if trim(coalesce(p_record_id,''))='' then
+    raise exception 'invalid_record' using errcode='22023';
+  end if;
+  if not exists (
+    select 1
+    from public.debts d
+    where d.id::text=trim(p_record_id)
+      and d.customer_id=p_customer_id
+      and coalesce(d.is_deleted,false)=false
+  ) then
+    raise exception 'anomaly_record_not_found' using errcode='P0002';
   end if;
 
   insert into public.customer_anomaly_reviews(
