@@ -1790,6 +1790,56 @@ static Future<List<RecordModel>> getAllApprovedCustomers() async {
     };
   }
 
+  static Future<Map<String, dynamic>> getMarketExchangeRates() async {
+    await ensureInitialized();
+
+    Object? liveError;
+    try {
+      final response = await client.functions.invoke(
+        'market-exchange-rate',
+        body: const <String, dynamic>{},
+      );
+      final data = response.data;
+      if (data is Map && data['rates'] is List) {
+        return Map<String, dynamic>.from(data);
+      }
+      liveError = _functionError(data);
+    } catch (error) {
+      liveError = error;
+    }
+
+    try {
+      final rows = await client
+          .from('market_exchange_rates')
+          .select(
+            'source,city,variant,rate_iqd_per_100_usd,source_url,source_published_at,retrieved_at,updated_at',
+          )
+          .eq('source', 'iraqborsa_public_mirror')
+          .order('city')
+          .order('variant');
+
+      if (rows.isNotEmpty) {
+        return <String, dynamic>{
+          'source': 'بورصة العراق',
+          'source_transport': 'telegram_public_mirror',
+          'source_url': 'https://t.me/s/iraqborsa',
+          'stale': true,
+          'cached': true,
+          'rates': rows,
+        };
+      }
+    } catch (_) {
+      // Preserve the live function failure below when both paths fail.
+    }
+
+    throw Exception(
+      AppHelpers.backendErrorMessage(
+        liveError ?? 'market_rate_unavailable',
+        fallback: 'نەتوانرا نرخی بازاڕ وەربگیرێت.',
+      ),
+    );
+  }
+
   // ==================== Notifications ====================
 
   static Future<void> createNotification({
