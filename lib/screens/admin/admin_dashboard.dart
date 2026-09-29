@@ -51,7 +51,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     super.initState();
     unawaited(_loadStats());
     unawaited(_loadMarketRates());
-    _marketRateTimer = Timer.periodic(const Duration(minutes: 2), (_) {
+    _marketRateTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted && _currentIndex == 0) {
         unawaited(_loadMarketRates());
       }
