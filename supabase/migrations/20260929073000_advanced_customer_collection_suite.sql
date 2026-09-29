@@ -118,6 +118,100 @@ create table if not exists public.credit_approval_decisions (
   primary key (request_id, actor_id)
 );
 
+
+create table if not exists public.customer_anomaly_reviews (
+  id uuid primary key default gen_random_uuid(),
+  admin_id uuid not null references public.profiles(id) on delete cascade,
+  customer_id uuid not null references public.profiles(id) on delete cascade,
+  record_id text not null,
+  anomaly text not null,
+  resolution text not null default 'reviewed'
+    check (resolution in ('reviewed','false_positive')),
+  note text not null default '',
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  reviewed_at timestamptz not null default now(),
+  unique(admin_id,record_id,anomaly)
+);
+create index if not exists customer_anomaly_reviews_customer_fk_idx
+  on public.customer_anomaly_reviews(customer_id);
+create index if not exists customer_anomaly_reviews_reviewed_by_fk_idx
+  on public.customer_anomaly_reviews(reviewed_by);
+create index if not exists customer_anomaly_reviews_admin_reviewed_idx
+  on public.customer_anomaly_reviews(admin_id,reviewed_at desc);
+
+alter table public.customer_anomaly_reviews enable row level security;
+drop policy if exists customer_anomaly_reviews_tenant_select
+  on public.customer_anomaly_reviews;
+create policy customer_anomaly_reviews_tenant_select
+on public.customer_anomaly_reviews for select to authenticated
+using (
+  admin_id=(select private.current_admin_id())
+  and (select private."current_role"()) in ('admin','employee')
+);
+drop policy if exists customer_anomaly_reviews_admin_write
+  on public.customer_anomaly_reviews;
+create policy customer_anomaly_reviews_admin_write
+on public.customer_anomaly_reviews for all to authenticated
+using (
+  admin_id=(select private.current_admin_id())
+  and (select private."current_role"())='admin'
+)
+with check (
+  admin_id=(select private.current_admin_id())
+  and (select private."current_role"())='admin'
+);
+
+revoke all on public.customer_anomaly_reviews from public,anon;
+grant select,insert,update,delete on public.customer_anomaly_reviews
+  to authenticated;
+
+create or replace function public.review_customer_anomaly(
+  p_customer_id uuid,
+  p_record_id text,
+  p_anomaly text,
+  p_resolution text default 'reviewed',
+  p_note text default ''
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path to ''
+as $function$
+declare
+  v_admin uuid:=private.require_tenant_customer(p_customer_id);
+  v_id uuid;
+begin
+  if (select private."current_role"())<>'admin' then
+    raise exception 'admin_required' using errcode='42501';
+  end if;
+  if p_resolution not in ('reviewed','false_positive') then
+    raise exception 'invalid_resolution' using errcode='22023';
+  end if;
+  if trim(coalesce(p_record_id,''))='' or trim(coalesce(p_anomaly,''))='' then
+    raise exception 'invalid_anomaly' using errcode='22023';
+  end if;
+
+  insert into public.customer_anomaly_reviews(
+    admin_id,customer_id,record_id,anomaly,resolution,note,reviewed_by,reviewed_at
+  ) values(
+    v_admin,p_customer_id,trim(p_record_id),trim(p_anomaly),
+    p_resolution,left(coalesce(p_note,''),1000),auth.uid(),now()
+  )
+  on conflict(admin_id,record_id,anomaly) do update set
+    resolution=excluded.resolution,
+    note=excluded.note,
+    reviewed_by=excluded.reviewed_by,
+    reviewed_at=now()
+  returning id into v_id;
+  return v_id;
+end;
+$function$;
+
+revoke all on function public.review_customer_anomaly(uuid,text,text,text,text)
+  from public,anon;
+grant execute on function public.review_customer_anomaly(uuid,text,text,text,text)
+  to authenticated;
+
 create table if not exists public.scheduled_reports (
   id uuid primary key default gen_random_uuid(),
   admin_id uuid not null references public.profiles(id) on delete cascade,
@@ -938,8 +1032,19 @@ select coalesce(jsonb_agg(jsonb_build_object(
   'kind',f.kind,'amount',f.amount,'at',f.at,'anomaly',f.anomaly
 ) order by f.at desc),'[]'::jsonb)
 from (
-  select * from flagged where anomaly is not null
-  order by at desc limit greatest(1,least(coalesce(p_limit,100),300))
+  select x.*
+  from flagged x
+  where x.anomaly is not null
+    and not exists (
+      select 1
+      from public.customer_anomaly_reviews ar
+      where ar.admin_id=(select admin_id from cfg)
+        and ar.customer_id=x.customer_id
+        and ar.record_id=x.record_id
+        and ar.anomaly=x.anomaly
+    )
+  order by x.at desc
+  limit greatest(1,least(coalesce(p_limit,100),300))
 ) f join public.profiles p on p.id=f.customer_id;
 $function$;
 
