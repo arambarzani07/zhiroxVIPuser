@@ -126,6 +126,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _canSetDueDate = false;
   bool _canEditDebts = false;
   bool _canSendNotifications = false;
+  bool _canRefundPayments = false;
+  bool _canRestoreDebts = false;
+  bool _canManageReceipts = false;
+  bool _canManageNotifications = false;
+  bool _canApproveCustomers = false;
+  bool _canManageEmployees = false;
+  bool _canViewAuditLog = false;
+  bool _canManageBackup = false;
+  bool _canManageDaftarSync = false;
+  bool _canManageSubscription = false;
   StreamSubscription<bool>? _connectivitySub;
   final ScrollController _profileScrollController = ScrollController();
   RealtimeChannel? _financialRealtimeChannel;
@@ -261,6 +271,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           _canSetDueDate = user.getBoolValue('can_set_due_date');
           _canEditDebts = user.getBoolValue('can_edit_debts');
           _canSendNotifications = user.getBoolValue('can_send_notifications');
+          _canRefundPayments = user.getBoolValue('can_refund_payments');
+          _canRestoreDebts = user.getBoolValue('can_restore_debts');
+          _canManageReceipts = user.getBoolValue('can_manage_receipts');
+          _canManageNotifications = user.getBoolValue('can_manage_notifications');
+          _canApproveCustomers = user.getBoolValue('can_approve_customers');
+          _canManageEmployees = user.getBoolValue('can_manage_employees');
+          _canViewAuditLog = user.getBoolValue('can_view_audit_log');
+          _canManageBackup = user.getBoolValue('can_manage_backup');
+          _canManageDaftarSync = user.getBoolValue('can_manage_daftar_sync');
+          _canManageSubscription = user.getBoolValue('can_manage_subscription');
         }
 
         _isLoading = false;
