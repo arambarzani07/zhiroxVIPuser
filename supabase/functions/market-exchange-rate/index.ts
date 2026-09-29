@@ -138,14 +138,11 @@ function parseRates(html: string): ParsedRate[] {
   const publishedAt = latestPublishedAt(html);
   const byKey = new Map<string, ParsedRate>();
 
-  for (const line of text.split("\n")) {
-    if (!/100\s*\$/.test(latinDigits(line))) continue;
-    const normalized = latinDigits(line);
-    const match = normalized.match(
-      /100\s*\$\s*=\s*([0-9٠-٩۰-۹]{2,3}(?:[\s,،٬.]?[0-9٠-٩۰-۹]{3})?)\s*(.*)$/u,
-    );
-    if (!match) continue;
+  const normalizedText = latinDigits(text);
+  const pattern =
+    /100\s*\$\s*=\s*([0-9]{2,3}(?:[\s,،٬.]?[0-9]{3})?)\s*([^\n]*?)(?=100\s*\$|\n|$)/gu;
 
+  for (const match of normalizedText.matchAll(pattern)) {
     const rate = normalizeRate(match[1]);
     const context = match[2] ?? "";
     const city = detectCity(context);
