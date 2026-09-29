@@ -180,6 +180,13 @@ Deno.serve(async (req) => {
       if (requester.can_set_debt_limit === true) {
         employeeCustomerFields.add("debt_limit");
       }
+      if (requester.can_pin_customers === true) {
+        employeeCustomerFields.add("is_pinned");
+        employeeCustomerFields.add("pinned_at");
+      }
+      if (requester.can_manage_vip_customers === true) {
+        employeeCustomerFields.add("is_vip");
+      }
     }
 
     const employeeEmployeeFields = new Set<string>();
