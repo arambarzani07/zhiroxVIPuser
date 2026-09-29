@@ -185,39 +185,51 @@ Deno.serve(async (req) => {
           return json({ error: "market_exists" }, 409);
         }
       } else if (role === "employee") {
-        if (
-          !requesterProfile ||
-          requesterProfile.role !== "admin" ||
-          !(await isOperational(admin, requesterProfile))
-        ) {
+        if (!requesterProfile || !(await isOperational(admin, requesterProfile))) {
           return json({ error: "employee_creation_requires_admin" }, 403);
         }
-        adminId = requester.id;
-        canAddCustomers = Boolean(body.can_add_customers ?? false);
-        canSetDebtLimit = Boolean(body.can_set_debt_limit ?? false);
-        canSetDueDate = Boolean(body.can_set_due_date ?? false);
-        canEditDebts = Boolean(body.can_edit_debts ?? false);
-        canSendNotifications = Boolean(body.can_send_notifications ?? false);
-        canViewCustomers = Boolean(body.can_view_customers ?? true);
-        canEditCustomers = Boolean(body.can_edit_customers ?? false);
-        canDeleteCustomers = Boolean(body.can_delete_customers ?? false);
-        canViewDebts = Boolean(body.can_view_debts ?? true);
-        canAddDebts = Boolean(body.can_add_debts ?? false);
-        canDeleteDebts = Boolean(body.can_delete_debts ?? false);
-        canRecordPayments = Boolean(body.can_record_payments ?? false);
-        canViewFinancialReports = Boolean(body.can_view_financial_reports ?? false);
-        canExportData = Boolean(body.can_export_data ?? false);
-        canImportData = Boolean(body.can_import_data ?? false);
-        canRefundPayments = Boolean(body.can_refund_payments ?? false);
-        canRestoreDebts = Boolean(body.can_restore_debts ?? false);
-        canManageReceipts = Boolean(body.can_manage_receipts ?? false);
-        canManageNotifications = Boolean(body.can_manage_notifications ?? false);
-        canApproveCustomers = Boolean(body.can_approve_customers ?? false);
-        canManageEmployees = Boolean(body.can_manage_employees ?? false);
-        canViewAuditLog = Boolean(body.can_view_audit_log ?? false);
-        canManageBackup = Boolean(body.can_manage_backup ?? false);
-        canManageDaftarSync = Boolean(body.can_manage_daftar_sync ?? false);
-        canManageSubscription = Boolean(body.can_manage_subscription ?? false);
+
+        const requesterIsAdmin = requesterProfile.role === "admin";
+        const requesterIsEmployeeManager =
+          requesterProfile.role === "employee" &&
+          requesterProfile.can_manage_employees === true &&
+          Boolean(requesterProfile.admin_id);
+
+        if (!requesterIsAdmin && !requesterIsEmployeeManager) {
+          return json({ error: "employee_creation_requires_admin" }, 403);
+        }
+
+        adminId = requesterIsAdmin ? requester.id : requesterProfile.admin_id;
+
+        // Only tenant admins can assign granular permissions. Delegated employee
+        // managers may create a basic employee, but cannot grant privileges.
+        if (requesterIsAdmin) {
+          canAddCustomers = Boolean(body.can_add_customers ?? false);
+          canSetDebtLimit = Boolean(body.can_set_debt_limit ?? false);
+          canSetDueDate = Boolean(body.can_set_due_date ?? false);
+          canEditDebts = Boolean(body.can_edit_debts ?? false);
+          canSendNotifications = Boolean(body.can_send_notifications ?? false);
+          canViewCustomers = Boolean(body.can_view_customers ?? true);
+          canEditCustomers = Boolean(body.can_edit_customers ?? false);
+          canDeleteCustomers = Boolean(body.can_delete_customers ?? false);
+          canViewDebts = Boolean(body.can_view_debts ?? true);
+          canAddDebts = Boolean(body.can_add_debts ?? false);
+          canDeleteDebts = Boolean(body.can_delete_debts ?? false);
+          canRecordPayments = Boolean(body.can_record_payments ?? false);
+          canViewFinancialReports = Boolean(body.can_view_financial_reports ?? false);
+          canExportData = Boolean(body.can_export_data ?? false);
+          canImportData = Boolean(body.can_import_data ?? false);
+          canRefundPayments = Boolean(body.can_refund_payments ?? false);
+          canRestoreDebts = Boolean(body.can_restore_debts ?? false);
+          canManageReceipts = Boolean(body.can_manage_receipts ?? false);
+          canManageNotifications = Boolean(body.can_manage_notifications ?? false);
+          canApproveCustomers = Boolean(body.can_approve_customers ?? false);
+          canManageEmployees = Boolean(body.can_manage_employees ?? false);
+          canViewAuditLog = Boolean(body.can_view_audit_log ?? false);
+          canManageBackup = Boolean(body.can_manage_backup ?? false);
+          canManageDaftarSync = Boolean(body.can_manage_daftar_sync ?? false);
+          canManageSubscription = Boolean(body.can_manage_subscription ?? false);
+        }
       } else {
         if (!adminId) return json({ error: "admin_id_required" }, 400);
         const { data: targetAdmin, error: targetAdminError } = await admin
@@ -451,7 +463,7 @@ Deno.serve(async (req) => {
 
       const { data: target, error: targetError } = await admin
         .from("profiles")
-        .select("id, role, admin_id, is_system_owner")
+        .select("id, role, admin_id, is_system_owner, approved")
         .eq("id", targetId)
         .maybeSingle();
       if (targetError) return json({ error: targetError.message }, 400);
@@ -466,7 +478,15 @@ Deno.serve(async (req) => {
         requesterProfile.role === "admin" &&
         (target.role === "employee" || target.role === "customer") &&
         target.admin_id === requester.id;
-      if (!isOwner && !isTenantAdmin) return json({ error: "forbidden" }, 403);
+      const isEmployeeManager =
+        requesterProfile.role === "employee" &&
+        requesterProfile.can_manage_employees === true &&
+        target.role === "employee" &&
+        Boolean(requesterProfile.admin_id) &&
+        target.admin_id === requesterProfile.admin_id;
+      if (!isOwner && !isTenantAdmin && !isEmployeeManager) {
+        return json({ error: "forbidden" }, 403);
+      }
 
       const { error } = await admin.auth.admin.updateUserById(targetId, {
         password: newPassword,
@@ -489,7 +509,7 @@ Deno.serve(async (req) => {
 
       const { data: target, error: targetError } = await admin
         .from("profiles")
-        .select("id, role, admin_id, is_system_owner")
+        .select("id, role, admin_id, is_system_owner, approved")
         .eq("id", targetId)
         .maybeSingle();
       if (targetError) return json({ error: targetError.message }, 400);
@@ -504,7 +524,22 @@ Deno.serve(async (req) => {
         requesterProfile.role === "admin" &&
         (target.role === "employee" || target.role === "customer") &&
         target.admin_id === requester.id;
-      if (!isOwner && !isTenantAdmin) return json({ error: "forbidden" }, 403);
+      const isEmployeeManager =
+        requesterProfile.role === "employee" &&
+        requesterProfile.can_manage_employees === true &&
+        target.role === "employee" &&
+        Boolean(requesterProfile.admin_id) &&
+        target.admin_id === requesterProfile.admin_id;
+      const isPendingCustomerApprover =
+        requesterProfile.role === "employee" &&
+        requesterProfile.can_approve_customers === true &&
+        target.role === "customer" &&
+        target.approved !== true &&
+        Boolean(requesterProfile.admin_id) &&
+        target.admin_id === requesterProfile.admin_id;
+      if (!isOwner && !isTenantAdmin && !isEmployeeManager && !isPendingCustomerApprover) {
+        return json({ error: "forbidden" }, 403);
+      }
 
       // Public relational data is intentionally FK-driven: profile deletion
       // cascades customer debt/payment/read state and SET NULLs creator fields.
