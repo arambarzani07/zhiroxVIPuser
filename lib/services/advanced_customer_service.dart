@@ -336,6 +336,27 @@ class AdvancedCustomerService {
         .toList(growable: false);
   }
 
+  static Future<String> reviewAnomaly({
+    required String customerId,
+    required String recordId,
+    required String anomaly,
+    required String resolution,
+    String note = '',
+  }) async {
+    await PBService.ensureInitialized();
+    final raw = await PBService.client.rpc(
+      'review_customer_anomaly',
+      params: {
+        'p_customer_id': customerId,
+        'p_record_id': recordId,
+        'p_anomaly': anomaly,
+        'p_resolution': resolution,
+        'p_note': note.trim(),
+      },
+    );
+    return raw?.toString() ?? '';
+  }
+
   static Future<Map<String, dynamic>> getDataQuality({
     int limit = 200,
   }) async {
