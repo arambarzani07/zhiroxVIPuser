@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(23);
 
 select ok(to_regprocedure('public.get_my_daftar_sync_alerts()') is not null,
   'admin sync alerts endpoint exists');
@@ -164,6 +164,19 @@ select is(
 select ok(
   to_regprocedure('public.get_scheduled_report_runs(integer)') is not null,
   'scheduled report history endpoint exists'
+);
+
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_trigger
+    where tgrelid='public.debts'::regclass
+      and not tgisinternal
+      and tgname='debts_advanced_credit_policy_guard'
+  ),
+  1::bigint,
+  'advanced debt policy guard exists'
 );
 
 select * from finish();
