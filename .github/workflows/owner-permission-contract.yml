@@ -6,11 +6,16 @@ on:
       - owner-source
     paths:
       - 'lib/security/owner_permission_registry.dart'
+      - 'lib/services/owner_permission_service.dart'
+      - 'lib/screens/auth/owner_permission_center_screen.dart'
+      - 'lib/screens/auth/owner_market_permission_matrix_screen.dart'
       - 'scripts/verify_owner_permission_registry.py'
       - 'scripts/verify_owner_permission_enforcement.py'
       - 'scripts/verify_owner_account_admin_governance.py'
       - 'scripts/verify_owner_permission_catalog_chain.py'
+      - 'scripts/verify_owner_market_permission_matrix.py'
       - 'supabase/migrations/**owner_permission**.sql'
+      - 'supabase/migrations/**owner_market_permission**.sql'
       - 'supabase/migrations/**owner_account_admin**.sql'
       - 'supabase/functions/owner-account-recovery/index.ts'
       - 'supabase/functions/account-admin/index.ts'
@@ -18,11 +23,16 @@ on:
   pull_request:
     paths:
       - 'lib/security/owner_permission_registry.dart'
+      - 'lib/services/owner_permission_service.dart'
+      - 'lib/screens/auth/owner_permission_center_screen.dart'
+      - 'lib/screens/auth/owner_market_permission_matrix_screen.dart'
       - 'scripts/verify_owner_permission_registry.py'
       - 'scripts/verify_owner_permission_enforcement.py'
       - 'scripts/verify_owner_account_admin_governance.py'
       - 'scripts/verify_owner_permission_catalog_chain.py'
+      - 'scripts/verify_owner_market_permission_matrix.py'
       - 'supabase/migrations/**owner_permission**.sql'
+      - 'supabase/migrations/**owner_market_permission**.sql'
       - 'supabase/migrations/**owner_account_admin**.sql'
       - 'supabase/functions/owner-account-recovery/index.ts'
       - 'supabase/functions/account-admin/index.ts'
@@ -44,3 +54,5 @@ jobs:
         run: python3 scripts/verify_owner_account_admin_governance.py
       - name: Verify Owner permission catalog invoker chain
         run: python3 scripts/verify_owner_permission_catalog_chain.py
+      - name: Verify Owner market permission matrix
+        run: python3 scripts/verify_owner_market_permission_matrix.py
