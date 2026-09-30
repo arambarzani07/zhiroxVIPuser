@@ -275,7 +275,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
       }
       final debtLimit = double.tryParse(_debtLimitController.text.trim()) ?? 0;
 
-      final createdUser = await PBService.createUser(
+      await PBService.createUser(
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
         password: _passwordController.text,
