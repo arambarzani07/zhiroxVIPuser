@@ -1,0 +1,30 @@
+name: Employee permissions contract
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - 'lib/screens/shared/user_profile_employee_management.dart'
+      - 'supabase/migrations/**employee_permissions*.sql'
+      - 'scripts/verify_employee_permissions_contract.py'
+      - '.github/workflows/employee-permissions-contract.yml'
+  pull_request:
+    branches: [user-source]
+    paths:
+      - 'lib/screens/shared/user_profile_employee_management.dart'
+      - 'supabase/migrations/**employee_permissions*.sql'
+      - 'scripts/verify_employee_permissions_contract.py'
+      - '.github/workflows/employee-permissions-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify 60 employee permissions stay synchronized
+        run: python3 scripts/verify_employee_permissions_contract.py
