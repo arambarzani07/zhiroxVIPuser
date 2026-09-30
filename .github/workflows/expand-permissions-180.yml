@@ -1,11 +1,9 @@
-name: Expand employee permissions to 180
+name: Finalize employee permissions 180
 
 on:
   push:
     branches: [user-source]
     paths:
-      - 'scripts/expand_permissions_to_180.py'
-      - 'scripts/fix_expand_180_contract.py'
       - '.github/workflows/expand-permissions-180.yml'
   workflow_dispatch:
 
@@ -13,19 +11,13 @@ permissions:
   contents: write
 
 jobs:
-  expand:
+  finalize:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: user-source
-
-      - name: Apply 180-permission patch
-        run: python3 scripts/expand_permissions_to_180.py
-
-      - name: Repair generated contract parser
-        run: python3 scripts/fix_expand_180_contract.py
 
       - name: Remove stale AuthProvider import
         shell: bash
@@ -37,7 +29,7 @@ jobs:
       - name: Verify clean patch formatting
         run: git diff --check
 
-      - name: Commit expansion
+      - name: Commit cleanup
         shell: bash
         run: |
           set -euo pipefail
@@ -47,6 +39,6 @@ jobs:
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib supabase scripts
-          git commit -m 'Finalize 180 employee permissions integration'
+          git add lib/providers/auth_provider.dart
+          git commit -m 'Remove stale customer snapshot import'
           git push origin HEAD:user-source
