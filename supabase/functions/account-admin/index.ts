@@ -92,6 +92,23 @@ async function isOperational(admin: any, profile: any): Promise<boolean> {
     (Number.isFinite(subscriptionEnd) && subscriptionEnd >= Date.now());
 }
 
+async function authorizeOwnerAction(
+  admin: any,
+  actorId: string,
+  permissionKey: string,
+  targetAdminId: string | null = null,
+): Promise<boolean> {
+  const { data, error } = await admin.rpc(
+    "authorize_system_owner_account_admin_service",
+    {
+      p_actor_id: actorId,
+      p_permission_key: permissionKey,
+      p_target_admin_id: targetAdminId,
+    },
+  );
+  return !error && data?.authorized === true;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -145,6 +162,9 @@ Deno.serve(async (req) => {
       }
       if (!["admin", "employee", "customer"].includes(role)) {
         return json({ error: "invalid_role" }, 400);
+      }
+      if (requesterProfile?.is_system_owner === true && role !== "admin") {
+        return json({ error: "owner_tenant_member_management_forbidden" }, 403);
       }
 
       const { data: existing, error: existingError } = await admin
@@ -206,6 +226,15 @@ Deno.serve(async (req) => {
       if (role === "admin") {
         if (!requester || !requesterProfile?.is_system_owner || requesterProfile.active !== true) {
           return json({ error: "system_owner_required" }, 403);
+        }
+        for (const permissionKey of [
+          "owner_create_admin",
+          "owner_create_market",
+          "owner_create_subscription",
+        ]) {
+          if (!(await authorizeOwnerAction(admin, requester.id, permissionKey))) {
+            return json({ error: "owner_permission_denied", permission_key: permissionKey }, 403);
+          }
         }
 
         adminId = null;
@@ -429,6 +458,29 @@ Deno.serve(async (req) => {
         }
         return json({ error: profileError.message }, 400);
       }
+      if (role === "admin" && requester) {
+        const { error: auditError } = await admin
+          .from("owner_platform_audit")
+          .insert({
+            actor_id: requester.id,
+            target_admin_id: inserted.id,
+            action: "admin_account_created",
+            metadata: {
+              permission_keys: [
+                "owner_create_admin",
+                "owner_create_market",
+                "owner_create_subscription",
+              ],
+              market_name: marketName,
+              subscription_plan: resolvedSubscription?.plan ?? null,
+              subscription_days: resolvedSubscription?.days ?? null,
+            },
+          });
+        if (auditError) {
+          await admin.auth.admin.deleteUser(authData.user.id);
+          return json({ error: "owner_audit_failed" }, 500);
+        }
+      }
       return json({ user: inserted }, 201);
     }
 
@@ -442,6 +494,9 @@ Deno.serve(async (req) => {
     if (action === "list_admins") {
       if (requesterProfile.is_system_owner !== true) {
         return json({ error: "system_owner_required" }, 403);
+      }
+      if (!(await authorizeOwnerAction(admin, requester.id, "owner_view_all_admins"))) {
+        return json({ error: "owner_permission_denied", permission_key: "owner_view_all_admins" }, 403);
       }
       const page = Math.max(1, Math.round(Number(body.page ?? 1)) || 1);
       const perPage = Math.min(100, Math.max(1, Math.round(Number(body.per_page ?? 15)) || 15));
@@ -484,13 +539,26 @@ Deno.serve(async (req) => {
       }
       const { data: target, error: targetError } = await admin
         .from("profiles")
-        .select("id,subscription_end")
+        .select("id,subscription_plan,subscription_end")
         .eq("id", adminId)
         .eq("role", "admin")
         .eq("is_system_owner", false)
         .maybeSingle();
       if (targetError) return json({ error: targetError.message }, 400);
       if (!target) return json({ error: "admin_not_found" }, 404);
+
+      const renewalPermissions = [
+        "owner_renew_subscription",
+        "owner_extend_subscription_days",
+      ];
+      if (String(target.subscription_plan ?? "") !== resolvedSubscription.plan) {
+        renewalPermissions.push("owner_change_subscription_plan");
+      }
+      for (const permissionKey of renewalPermissions) {
+        if (!(await authorizeOwnerAction(admin, requester.id, permissionKey, adminId))) {
+          return json({ error: "owner_permission_denied", permission_key: permissionKey }, 403);
+        }
+      }
 
       const parsedEnd = target.subscription_end
         ? Date.parse(String(target.subscription_end))
@@ -501,6 +569,8 @@ Deno.serve(async (req) => {
       const subscriptionEnd = new Date(
         base + resolvedSubscription.days * 86400000,
       ).toISOString();
+      const previousPlan = target.subscription_plan ?? null;
+      const previousEnd = target.subscription_end ?? null;
       const { error: updateError } = await admin
         .from("profiles")
         .update({
@@ -509,6 +579,29 @@ Deno.serve(async (req) => {
         })
         .eq("id", adminId);
       if (updateError) return json({ error: updateError.message }, 400);
+
+      const { error: auditError } = await admin
+        .from("owner_platform_audit")
+        .insert({
+          actor_id: requester.id,
+          target_admin_id: adminId,
+          action: "subscription_renewed_via_account_admin",
+          metadata: {
+            permission_keys: renewalPermissions,
+            previous_subscription_plan: previousPlan,
+            subscription_plan: resolvedSubscription.plan,
+            previous_subscription_end: previousEnd,
+            subscription_end: subscriptionEnd,
+            extend_days: resolvedSubscription.days,
+          },
+        });
+      if (auditError) {
+        await admin
+          .from("profiles")
+          .update({ subscription_plan: previousPlan, subscription_end: previousEnd })
+          .eq("id", adminId);
+        return json({ error: "owner_audit_failed" }, 500);
+      }
       return json({ subscription_end: subscriptionEnd });
     }
 
@@ -536,6 +629,12 @@ Deno.serve(async (req) => {
       }
 
       const isOwner = requesterProfile.is_system_owner === true;
+      if (isOwner) {
+        if (target.role === "admin") {
+          return json({ error: "admin_recovery_requires_dedicated_endpoint" }, 409);
+        }
+        return json({ error: "owner_tenant_member_management_forbidden" }, 403);
+      }
       const isTenantAdmin =
         requesterProfile.role === "admin" &&
         (target.role === "employee" || target.role === "customer") &&
@@ -546,7 +645,7 @@ Deno.serve(async (req) => {
         target.role === "employee" &&
         Boolean(requesterProfile.admin_id) &&
         target.admin_id === requesterProfile.admin_id;
-      if (!isOwner && !isTenantAdmin && !isEmployeeManager) {
+      if (!isTenantAdmin && !isEmployeeManager) {
         return json({ error: "forbidden" }, 403);
       }
 
@@ -582,6 +681,9 @@ Deno.serve(async (req) => {
       }
 
       const isOwner = requesterProfile.is_system_owner === true;
+      if (isOwner) {
+        return json({ error: "owner_tenant_member_management_forbidden" }, 403);
+      }
       const isTenantAdmin =
         requesterProfile.role === "admin" &&
         (target.role === "employee" || target.role === "customer") &&
@@ -599,7 +701,7 @@ Deno.serve(async (req) => {
         target.approved !== true &&
         Boolean(requesterProfile.admin_id) &&
         target.admin_id === requesterProfile.admin_id;
-      if (!isOwner && !isTenantAdmin && !isEmployeeManager && !isPendingCustomerApprover) {
+      if (!isTenantAdmin && !isEmployeeManager && !isPendingCustomerApprover) {
         return json({ error: "forbidden" }, 403);
       }
 
