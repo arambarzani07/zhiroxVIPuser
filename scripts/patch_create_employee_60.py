@@ -1,0 +1,185 @@
+from pathlib import Path
+
+path = Path('lib/screens/shared/add_user_screen.dart')
+text = path.read_text()
+
+all_specs = [
+    ('can_view_customers', '_canViewCustomers', 'بینینی کڕیارەکان', True),
+    ('can_add_customers', '_canAddCustomers', 'زیادکردنی کڕیار', False),
+    ('can_edit_customers', '_canEditCustomers', 'دەستکاریکردنی کڕیار', False),
+    ('can_delete_customers', '_canDeleteCustomers', 'سڕینەوەی کڕیار', False),
+    ('can_view_debts', '_canViewDebts', 'بینینی قەرزەکان', True),
+    ('can_add_debts', '_canAddDebts', 'زیادکردنی قەرز', False),
+    ('can_edit_debts', '_canEditDebts', 'دەستکاریکردنی قەرز', False),
+    ('can_delete_debts', '_canDeleteDebts', 'سڕینەوەی قەرز', False),
+    ('can_record_payments', '_canRecordPayments', 'تۆمارکردنی پارەدانەوە', False),
+    ('can_view_financial_reports', '_canViewFinancialReports', 'بینینی ڕاپۆرتی دارایی', False),
+    ('can_export_data', '_canExportData', 'هەناردەکردنی داتا', False),
+    ('can_send_notifications', '_canSendNotifications', 'ناردنی ئاگادارکردنەوە', False),
+    ('can_set_debt_limit', '_canSetDebtLimit', 'دانانی سنووری قەرز', False),
+    ('can_set_due_date', '_canSetDueDate', 'دانانی بەرواری دانەوە', False),
+    ('can_import_data', '_canImportData', 'هاوردەکردنی داتا', False),
+    ('can_refund_payments', '_canRefundPayments', 'گەڕاندنەوەی پارەدانەوە', False),
+    ('can_restore_debts', '_canRestoreDebts', 'گەڕاندنەوەی قەرزی سڕاوە', False),
+    ('can_manage_receipts', '_canManageReceipts', 'بەڕێوەبردنی پسووڵە', False),
+    ('can_manage_notifications', '_canManageNotifications', 'بەڕێوەبردنی ئاگادارکردنەوە', False),
+    ('can_approve_customers', '_canApproveCustomers', 'پەسەندکردنی کڕیار', False),
+    ('can_manage_employees', '_canManageEmployees', 'بەڕێوەبردنی کارمەندان', False),
+    ('can_view_audit_log', '_canViewAuditLog', 'بینینی Audit Log', False),
+    ('can_manage_backup', '_canManageBackup', 'بەڕێوەبردنی Backup', False),
+    ('can_manage_daftar_sync', '_canManageDaftarSync', 'بەڕێوەبردنی Daftar Sync', False),
+    ('can_manage_subscription', '_canManageSubscription', 'بەڕێوەبردنی بەشداری', False),
+    ('can_view_dashboard', '_canViewDashboard', 'بینینی داشبۆرد', True),
+    ('can_view_recent_activity', '_canViewRecentActivity', 'بینینی چالاکییە نوێکان', True),
+    ('can_view_transactions', '_canViewTransactions', 'بینینی مێژووی مامەڵەکان', False),
+    ('can_edit_payments', '_canEditPayments', 'دەستکاریکردنی پارەدانەوە', False),
+    ('can_delete_payments', '_canDeletePayments', 'سڕینەوەی پارەدانەوە', False),
+    ('can_create_statements', '_canCreateStatements', 'دروستکردنی کەشف و بەڵگەنامە', False),
+    ('can_manage_customer_links', '_canManageCustomerLinks', 'بەڕێوەبردنی لینکی کڕیار', False),
+    ('can_pin_customers', '_canPinCustomers', 'Pin کردنی کڕیار', False),
+    ('can_manage_vip_customers', '_canManageVipCustomers', 'بەڕێوەبردنی VIP', False),
+    ('can_merge_customer_identities', '_canMergeCustomerIdentities', 'یەکخستنی ناسنامەی دووبارە', False),
+    ('can_view_market_rates', '_canViewMarketRates', 'بینینی نرخی بازاڕ', True),
+    ('can_view_intelligence', '_canViewIntelligence', 'بینینی ناوەندی زیرەکی', False),
+    ('can_manage_collections', '_canManageCollections', 'بەڕێوەبردنی بەدواداچوونی قەرز', False),
+    ('can_view_expiry', '_canViewExpiry', 'بینینی کاڵای بەسەرچوو', False),
+    ('can_manage_expiry', '_canManageExpiry', 'بەڕێوەبردنی کاڵای بەسەرچوو', False),
+    ('can_manage_settings', '_canManageSettings', 'بەڕێوەبردنی ڕێکخستنەکان', False),
+    ('can_view_customer_phone', '_canViewCustomerPhone', 'بینینی ژمارەی مۆبایلی کڕیار', False),
+    ('can_view_customer_notes', '_canViewCustomerNotes', 'بینینی تێبینییەکانی کڕیار', False),
+    ('can_edit_customer_notes', '_canEditCustomerNotes', 'دەستکاریکردنی تێبینییەکانی کڕیار', False),
+    ('can_view_customer_balances', '_canViewCustomerBalances', 'بینینی باڵانسی کڕیار', False),
+    ('can_view_payment_history', '_canViewPaymentHistory', 'بینینی مێژووی پارەدانەوە', False),
+    ('can_create_receipts', '_canCreateReceipts', 'دروستکردنی پسووڵە', False),
+    ('can_edit_receipts', '_canEditReceipts', 'دەستکاریکردنی پسووڵە', False),
+    ('can_delete_receipts', '_canDeleteReceipts', 'سڕینەوەی پسووڵە', False),
+    ('can_export_receipts', '_canExportReceipts', 'هەناردەکردنی پسووڵە', False),
+    ('can_view_report_summary', '_canViewReportSummary', 'بینینی پوختەی ڕاپۆرت', False),
+    ('can_export_reports', '_canExportReports', 'هەناردەکردنی ڕاپۆرت', False),
+    ('can_view_sync_logs', '_canViewSyncLogs', 'بینینی Sync Logs', False),
+    ('can_retry_failed_sync', '_canRetryFailedSync', 'دووبارە هەوڵدانی Sync شکستخواردوو', False),
+    ('can_run_manual_backup', '_canRunManualBackup', 'Backup ـی دەستی', False),
+    ('can_restore_backup', '_canRestoreBackup', 'گەڕاندنەوەی Backup', False),
+    ('can_manage_notification_templates', '_canManageNotificationTemplates', 'بەڕێوەبردنی قاڵبی ئاگادارکردنەوە', False),
+    ('can_send_bulk_notifications', '_canSendBulkNotifications', 'ناردنی ئاگادارکردنەوەی بەکۆمەڵ', False),
+    ('can_manage_market_rate_refresh', '_canManageMarketRateRefresh', 'نوێکردنەوەی نرخی بازاڕ', False),
+    ('can_manage_security_settings', '_canManageSecuritySettings', 'بەڕێوەبردنی ڕێکخستنەکانی ئاسایش', False),
+]
+
+existing_vars = {
+    '_canAddCustomers', '_canSetDebtLimit', '_canSetDueDate', '_canEditDebts',
+    '_canSendNotifications', '_canViewCustomers', '_canEditCustomers', '_canDeleteCustomers',
+    '_canViewDebts', '_canAddDebts', '_canDeleteDebts', '_canRecordPayments',
+    '_canViewFinancialReports', '_canExportData', '_canImportData', '_canRefundPayments',
+    '_canRestoreDebts', '_canManageReceipts', '_canManageNotifications', '_canApproveCustomers',
+    '_canManageEmployees', '_canViewAuditLog', '_canManageBackup', '_canManageDaftarSync',
+    '_canManageSubscription',
+}
+
+if '_canManageSecuritySettings' not in text:
+    marker = '  bool _canManageSubscription = false;\n'
+    assert marker in text, 'permission declaration marker missing'
+    additions = ''.join(
+        f"  bool {var} = {'true' if default else 'false'};\n"
+        for _, var, _, default in all_specs if var not in existing_vars
+    )
+    text = text.replace(marker, marker + additions, 1)
+
+if 'final createdUser = await PBService.createUser(' not in text:
+    marker = '      await PBService.createUser(\n'
+    assert marker in text, 'createUser call marker missing'
+    text = text.replace(marker, '      final createdUser = await PBService.createUser(\n', 1)
+
+if 'PBService.updateUser(\n            createdUser.id' not in text:
+    marker = '        debtLimit: debtLimit,\n      );\n\n      if (mounted) {'
+    assert marker in text, 'createUser tail marker missing'
+    mapping = '\n'.join(f"              '{key}': {var}," for key, var, _, _ in all_specs)
+    replacement = f"""        debtLimit: debtLimit,
+      );
+
+      if (widget.role == 'employee') {{
+        try {{
+          await PBService.updateUser(
+            createdUser.id,
+            <String, dynamic>{{
+{mapping}
+            }},
+          );
+        }} catch (_) {{
+          try {{
+            await PBService.deleteUser(createdUser.id);
+          }} catch (_) {{}}
+          rethrow;
+        }}
+      }}
+
+      if (mounted) {{"""
+    text = text.replace(marker, replacement, 1)
+
+text = text.replace(
+    "'تەنها ئەو کارانە چالاک بکە کە پێویستی پێیان هەیە.'",
+    "'60 دەسەڵات بەردەستن؛ تەنها ئەوانە چالاک بکە کە پێویستی پێیان هەیە.'",
+    1,
+)
+
+permission_section = text.split('Widget _buildPermissionSection', 1)[1]
+if '_canManageSecuritySettings,' not in permission_section:
+    marker = """              _buildSwitch(
+                'بەڕێوەبردنی بەشداری',
+                _canManageSubscription,
+                (v) => setState(() => _canManageSubscription = v),
+                isLast: true,
+              ),
+"""
+    assert marker in text, 'last permission switch marker missing'
+    base = """              _buildSwitch(
+                'بەڕێوەبردنی بەشداری',
+                _canManageSubscription,
+                (v) => setState(() => _canManageSubscription = v),
+              ),
+"""
+    missing_specs = [(k, v, l, d) for k, v, l, d in all_specs if v not in existing_vars]
+    extra = []
+    for index, (_, var, label, _) in enumerate(missing_specs):
+        extra.extend([
+            '              _buildSwitch(\n',
+            f"                '{label}',\n",
+            f'                {var},\n',
+            f'                (v) => setState(() => {var} = v),\n',
+        ])
+        if index == len(missing_specs) - 1:
+            extra.append('                isLast: true,\n')
+        extra.append('              ),\n')
+    text = text.replace(marker, base + ''.join(extra), 1)
+
+path.write_text(text)
+
+test_path = Path('test/add_employee_permissions_60_test.dart')
+keys = [key for key, _, _, _ in all_specs]
+dart_keys = ',\n'.join(f"    '{key}'" for key in keys)
+test_path.write_text(f"""import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {{
+  test('new employee dialog exposes and persists all 60 permissions', () {{
+    final source = File('lib/screens/shared/add_user_screen.dart').readAsStringSync();
+    const permissionKeys = <String>[
+{dart_keys},
+    ];
+
+    expect(permissionKeys.toSet().length, 60);
+    for (final key in permissionKeys) {{
+      expect(source, contains("'$key'"), reason: 'missing $key');
+    }}
+    expect(source, contains('60 دەسەڵات بەردەستن'));
+    expect(source, contains('final createdUser = await PBService.createUser('));
+    expect(source, contains('PBService.updateUser(\\n            createdUser.id'));
+    expect(source, contains('PBService.deleteUser(createdUser.id)'));
+  }});
+}}
+""")
+
+assert len(all_specs) == 60
+assert text.count('PBService.updateUser(\n            createdUser.id') == 1
+print('Patched create employee flow for 60 permissions.')
