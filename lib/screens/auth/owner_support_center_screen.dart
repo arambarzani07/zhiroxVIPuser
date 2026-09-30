@@ -252,28 +252,14 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
       body: _loading
           ? const OwnerStatePanel.loading()
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.cloud_off_rounded, size: 44),
-                        const SizedBox(height: 12),
-                        Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: _load,
-                          child: const Text('دووبارە هەوڵ بدە'),
-                        ),
-                      ],
-                    ),
-                  ),
+              ? OwnerStatePanel.error(
+                  message: _error!,
+                  onAction: _load,
                 )
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                     children: [
                       AppSurface(
                         child: Row(

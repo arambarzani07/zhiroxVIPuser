@@ -407,11 +407,14 @@ class _OwnerPlanMarketControlScreenState
       body: _loading
           ? const OwnerStatePanel.loading()
           : planLimits == null
-              ? Center(child: Text(_error?.toString() ?? 'زانیاری بەردەست نییە'))
+              ? OwnerStatePanel.error(
+                  message: _error?.toString() ?? 'زانیاری بەردەست نییە',
+                  onAction: _load,
+                )
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                     children: [
                       const AppSurface(
                         child: Text(

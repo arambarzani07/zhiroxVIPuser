@@ -246,7 +246,10 @@ class _OwnerMarketPermissionMatrixScreenState
       body: _loadingMarkets
           ? const OwnerStatePanel.loading()
           : _markets.isEmpty
-              ? const Center(child: Text('هیچ مارکێتێک بەردەست نییە'))
+              ? const OwnerStatePanel.empty(
+                  title: 'هیچ مارکێتێک بەردەست نییە',
+                  message: 'سەرەتا مارکێتێک دروست بکە، پاشان دەسەڵات و پلانەکەی ڕێکبخە.',
+                )
               : Column(
                   children: [
                     Padding(

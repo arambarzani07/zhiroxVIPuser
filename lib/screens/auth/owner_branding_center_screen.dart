@@ -243,7 +243,7 @@ class _OwnerBrandingCenterScreenState extends State<OwnerBrandingCenterScreen> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                     children: [
                       Text(
                         'ناسنامەی تایبەتی مارکێتەکان',
