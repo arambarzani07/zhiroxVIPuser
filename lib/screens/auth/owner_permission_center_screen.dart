@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/screens/auth/owner_market_permission_matrix_screen.dart';
 import 'package:zhirox/services/owner_permission_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/widgets/app_design.dart';
@@ -41,6 +42,16 @@ class _OwnerPermissionCenterScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('ناوەندی دەسەڵاتەکانی Owner'),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const OwnerMarketPermissionMatrixScreen(),
+          ),
+        ),
+        icon: const Icon(Icons.storefront_rounded),
+        label: const Text('دەسەڵاتی مارکێتەکان'),
       ),
       body: FutureBuilder<OwnerPermissionCatalog>(
         future: _future,
@@ -90,7 +101,7 @@ class _OwnerPermissionCenterScreenState
             onRefresh: _refresh,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               children: [
                 AppSurface(
                   child: Column(
@@ -139,6 +150,18 @@ class _OwnerPermissionCenterScreenState
                         'ئەم دەسەڵاتانە تایبەتن بە کۆنترۆڵی پلاتفۆرم، مارکێت و هەژماری بەڕێوەبەر؛ '
                         'دەستگەیشتنی ڕاستەوخۆ بە قەرز، پارەدانەوە، پسوولە و تێبینی تایبەتی کڕیار لێرە نییە.',
                         style: TextStyle(height: 1.55),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const OwnerMarketPermissionMatrixScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.rule_folder_rounded),
+                        label: const Text('جێبەجێکردنی دەسەڵات بەسەر مارکێتەکان'),
                       ),
                     ],
                   ),
