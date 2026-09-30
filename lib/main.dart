@@ -19,6 +19,7 @@ import 'package:zhirox/widgets/app_design.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/auto_update_gate.dart';
 import 'package:zhirox/widgets/platform_operations_gate.dart';
+import 'package:zhirox/widgets/remote_notification_gate.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -140,7 +141,7 @@ class ZhiroxApp extends StatelessWidget {
               ),
             );
           },
-          home: const AuthWrapper(),
+          home: const RemoteNotificationGate(child: AuthWrapper()),
         ),
       ),
     );
