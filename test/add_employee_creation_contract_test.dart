@@ -1,12 +1,18 @@
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('employee creation is strong-password and 60-permission complete', () {
+  test('employee creation is strong-password and 180-permission complete', () {
     final ui = File('lib/screens/shared/add_user_screen.dart').readAsStringSync();
     final service = File('lib/services/pb_service.dart').readAsStringSync();
-    final edge = File('supabase/functions/account-admin/index.ts').readAsStringSync();
-    const keys = <String>[
+    final registry = File(
+      'lib/permissions/additional_employee_permissions.dart',
+    ).readAsStringSync();
+    final edge =
+        File('supabase/functions/employee-create/index.ts').readAsStringSync();
+
+    const legacyKeys = <String>[
       'can_view_customers',
       'can_add_customers',
       'can_edit_customers',
@@ -68,13 +74,33 @@ void main() {
       'can_manage_market_rate_refresh',
       'can_manage_security_settings',
     ];
-    expect(keys.toSet().length, 60);
-    for (final key in keys) {
-      expect(service, contains("'$key'"), reason: 'service missing $key');
-      expect(edge, contains(key), reason: 'edge function missing $key');
+
+    final additionalKeys = RegExp(
+      r"AdditionalEmployeePermissionSpec\(key: '([^']+)'",
+    ).allMatches(registry).map((match) => match.group(1)!).toSet();
+
+    expect(legacyKeys.toSet().length, 60);
+    expect(additionalKeys.length, 120);
+    expect(legacyKeys.toSet().intersection(additionalKeys), isEmpty);
+    expect({...legacyKeys, ...additionalKeys}.length, 180);
+
+    for (final key in legacyKeys) {
+      expect(service, contains("'$key'"), reason: 'service missing legacy $key');
+      expect(edge, contains(key), reason: 'employee-create missing legacy $key');
     }
+    for (final key in additionalKeys) {
+      expect(edge, contains(key), reason: 'employee-create missing additional $key');
+    }
+
     expect(ui, contains('لانیکەم ١٢ پیت + Aa1!'));
     expect(ui, contains("RegExp(r'[A-Z]')"));
-    expect(ui, isNot(contains("PBService.updateUser(\n            createdUser.id")));
+    expect(ui, contains('180 دەسەڵات بەردەستن'));
+    expect(ui, contains('extraPermissions: widget.role == \'employee\''));
+    expect(service, contains('Map<String, bool> extraPermissions'));
+    expect(service, contains('...extraPermissions,'));
+    expect(
+      ui,
+      isNot(contains('PBService.updateUser(\n            createdUser.id')),
+    );
   });
 }
