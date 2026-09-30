@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zhirox/services/pb_service.dart';
-import 'package:zhirox/features/customers/customer_directory_snapshot.dart';
 import 'package:zhirox/features/expiry/expiry_reminder_service.dart';
 import 'package:zhirox/features/expiry/expiry_catalog_service.dart';
 
