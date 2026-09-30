@@ -24,6 +24,8 @@ checks = {
         "OneSignal.Notifications.requestPermission",
         "addClickListener",
         "ONESIGNAL_APP_ID",
+        "onesignal-config",
+        "_resolveOneSignalAppId",
     ],
     "lib/services/onesignal_push_service.dart": [
         "onesignal-send",
@@ -31,6 +33,11 @@ checks = {
         "debtCreated",
         "debtLimitWarning",
         "syncError",
+    ],
+    "supabase/functions/onesignal-config/index.ts": [
+        "ONESIGNAL_APP_ID",
+        "configured",
+        "app_id",
     ],
     "supabase/functions/onesignal-send/index.ts": [
         "ONESIGNAL_APP_ID",
