@@ -3,6 +3,50 @@
 import 'package:flutter/material.dart';
 import 'package:zhirox/utils/constants.dart';
 
+@immutable
+class OwnerVisualExtension extends ThemeExtension<OwnerVisualExtension> {
+  const OwnerVisualExtension({
+    required this.enabled,
+    required this.heroStart,
+    required this.heroEnd,
+    required this.softAccent,
+  });
+
+  final bool enabled;
+  final Color heroStart;
+  final Color heroEnd;
+  final Color softAccent;
+
+  @override
+  OwnerVisualExtension copyWith({
+    bool? enabled,
+    Color? heroStart,
+    Color? heroEnd,
+    Color? softAccent,
+  }) {
+    return OwnerVisualExtension(
+      enabled: enabled ?? this.enabled,
+      heroStart: heroStart ?? this.heroStart,
+      heroEnd: heroEnd ?? this.heroEnd,
+      softAccent: softAccent ?? this.softAccent,
+    );
+  }
+
+  @override
+  OwnerVisualExtension lerp(
+    covariant ThemeExtension<OwnerVisualExtension>? other,
+    double t,
+  ) {
+    if (other is! OwnerVisualExtension) return this;
+    return OwnerVisualExtension(
+      enabled: t < 0.5 ? enabled : other.enabled,
+      heroStart: Color.lerp(heroStart, other.heroStart, t) ?? heroStart,
+      heroEnd: Color.lerp(heroEnd, other.heroEnd, t) ?? heroEnd,
+      softAccent: Color.lerp(softAccent, other.softAccent, t) ?? softAccent,
+    );
+  }
+}
+
 abstract final class AppDesign {
   static const double radiusSmall = 12;
   static const double radiusMedium = 18;
@@ -137,6 +181,318 @@ abstract final class AppDesign {
     );
   }
 
+  static ThemeData get ownerLightTheme {
+    const primary = Color(0xFF294CC8);
+    const background = Color(0xFFF4F6FB);
+    const soft = Color(0xFFE8EDFF);
+    const outline = Color(0xFFDCE2EF);
+    final scheme = ColorScheme.fromSeed(
+      seedColor: primary,
+      brightness: Brightness.light,
+      surface: Colors.white,
+    ).copyWith(
+      primary: primary,
+      secondary: const Color(0xFF0F8F83),
+      tertiary: const Color(0xFF6D4ED8),
+      error: AppColors.danger,
+      outline: outline,
+      outlineVariant: const Color(0xFFE9EDF5),
+      surface: Colors.white,
+      surfaceContainerLowest: Colors.white,
+      surfaceContainerLow: const Color(0xFFF7F8FC),
+      surfaceContainer: const Color(0xFFF0F3FA),
+      primaryContainer: soft,
+      onPrimaryContainer: const Color(0xFF17358E),
+    );
+
+    return _ownerBase(scheme).copyWith(
+      scaffoldBackgroundColor: background,
+      extensions: const <ThemeExtension<dynamic>>[
+        OwnerVisualExtension(
+          enabled: true,
+          heroStart: Color(0xFF1F3FAF),
+          heroEnd: Color(0xFF4164E6),
+          softAccent: soft,
+        ),
+      ],
+      appBarTheme: const AppBarTheme(
+        centerTitle: false,
+        backgroundColor: background,
+        foregroundColor: Color(0xFF151A2C),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 18,
+        toolbarHeight: 68,
+        titleTextStyle: TextStyle(
+          fontFamily: 'NotoKufiArabic',
+          fontSize: 19,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF151A2C),
+          letterSpacing: -0.2,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        elevation: 0,
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: outline),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 76,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        indicatorColor: soft,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+          size: 24,
+          color: states.contains(WidgetState.selected)
+              ? primary
+              : const Color(0xFF737C92),
+        )),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+          fontFamily: 'NotoKufiArabic',
+          fontSize: 11,
+          fontWeight: states.contains(WidgetState.selected)
+              ? FontWeight.w900
+              : FontWeight.w600,
+          color: states.contains(WidgetState.selected)
+              ? primary
+              : const Color(0xFF737C92),
+        )),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        dragHandleColor: Color(0xFFCBD2E1),
+      ),
+    );
+  }
+
+  static ThemeData get ownerDarkTheme {
+    const primary = Color(0xFF9AAEFF);
+    const background = Color(0xFF09101F);
+    const surface = Color(0xFF111A2D);
+    const card = Color(0xFF151F35);
+    const outline = Color(0xFF293651);
+    const soft = Color(0xFF24396F);
+    final scheme = ColorScheme.fromSeed(
+      seedColor: primary,
+      brightness: Brightness.dark,
+      surface: surface,
+    ).copyWith(
+      primary: primary,
+      secondary: const Color(0xFF58C7B9),
+      tertiary: const Color(0xFFC2A8FF),
+      error: const Color(0xFFFF7A88),
+      outline: outline,
+      outlineVariant: const Color(0xFF202C44),
+      surface: surface,
+      surfaceContainerLowest: card,
+      surfaceContainerLow: const Color(0xFF10192B),
+      surfaceContainer: const Color(0xFF18243B),
+      primaryContainer: soft,
+      onPrimaryContainer: const Color(0xFFDDE4FF),
+    );
+
+    return _ownerBase(scheme).copyWith(
+      scaffoldBackgroundColor: background,
+      extensions: const <ThemeExtension<dynamic>>[
+        OwnerVisualExtension(
+          enabled: true,
+          heroStart: Color(0xFF182A68),
+          heroEnd: Color(0xFF304B9C),
+          softAccent: soft,
+        ),
+      ],
+      appBarTheme: const AppBarTheme(
+        centerTitle: false,
+        backgroundColor: background,
+        foregroundColor: Color(0xFFF5F7FC),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 18,
+        toolbarHeight: 68,
+        titleTextStyle: TextStyle(
+          fontFamily: 'NotoKufiArabic',
+          fontSize: 19,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFFF5F7FC),
+          letterSpacing: -0.2,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        elevation: 0,
+        color: card,
+        surfaceTintColor: Colors.transparent,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: outline),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 76,
+        elevation: 0,
+        backgroundColor: card,
+        indicatorColor: soft,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+          size: 24,
+          color: states.contains(WidgetState.selected)
+              ? primary
+              : const Color(0xFFA7B0C3),
+        )),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+          fontFamily: 'NotoKufiArabic',
+          fontSize: 11,
+          fontWeight: states.contains(WidgetState.selected)
+              ? FontWeight.w900
+              : FontWeight.w600,
+          color: states.contains(WidgetState.selected)
+              ? primary
+              : const Color(0xFFA7B0C3),
+        )),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: card,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        dragHandleColor: Color(0xFF3B4965),
+      ),
+    );
+  }
+
+  static ThemeData _ownerBase(ColorScheme scheme) {
+    final base = _base(scheme);
+    return base.copyWith(
+      dividerTheme: DividerThemeData(
+        color: scheme.outlineVariant,
+        thickness: 1,
+        space: 1,
+      ),
+      listTileTheme: ListTileThemeData(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+        minVerticalPadding: 10,
+        iconColor: scheme.primary,
+        textColor: scheme.onSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: scheme.surfaceContainerLow,
+        selectedColor: scheme.primaryContainer,
+        disabledColor: scheme.surfaceContainer,
+        side: BorderSide(color: scheme.outlineVariant),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        labelStyle: TextStyle(
+          fontFamily: 'NotoKufiArabic',
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: scheme.onSurface,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        elevation: 4,
+        color: scheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return scheme.primary;
+          return scheme.onSurfaceVariant;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return scheme.primary.withValues(alpha: 0.24);
+          }
+          return scheme.surfaceContainer;
+        }),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: scheme.primary,
+        linearTrackColor: scheme.surfaceContainer,
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        elevation: 2,
+        foregroundColor: scheme.onPrimary,
+        backgroundColor: scheme.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size.square(44),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(48, 52),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          textStyle: const TextStyle(
+            fontFamily: 'NotoKufiArabic',
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(48, 50),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          side: BorderSide(color: scheme.outline),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          textStyle: const TextStyle(
+            fontFamily: 'NotoKufiArabic',
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: scheme.surfaceContainerLow,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 17, vertical: 16),
+        hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+        labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: BorderSide(color: scheme.primary, width: 1.8),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        elevation: 0,
+        backgroundColor: scheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+
   static ThemeData _base(ColorScheme scheme) => ThemeData(
     colorScheme: scheme,
     fontFamily: 'NotoKufiArabic',
@@ -223,35 +579,92 @@ class AppSectionHeader extends StatelessWidget {
   final Widget? trailing;
 
   @override
-  Widget build(BuildContext context) => Row(children: [
-    Expanded(child: Column(
+  Widget build(BuildContext context) {
+    final owner = Theme.of(context).extension<OwnerVisualExtension>()?.enabled == true;
+    final scheme = Theme.of(context).colorScheme;
+    final text = Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  fontSize: owner ? 17 : null,
+                ),
+          ),
+          if (subtitle != null) ...[
+            SizedBox(height: owner ? 4 : 0),
+            Text(
+              subtitle!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.55,
+                  ),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w800,
-        )),
-        if (subtitle != null)
-          Text(subtitle!, style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          )),
+        if (owner) ...[
+          Container(
+            width: 4,
+            height: subtitle == null ? 24 : 42,
+            decoration: BoxDecoration(
+              color: scheme.primary,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
+        text,
+        if (trailing != null) ...[
+          const SizedBox(width: 10),
+          trailing!,
+        ],
       ],
-    )),
-    if (trailing != null) trailing!,
-  ]);
+    );
+  }
 }
 
 class AppSurface extends StatelessWidget {
-  const AppSurface({super.key, required this.child, this.padding = const EdgeInsets.all(16)});
+  const AppSurface({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+  });
   final Widget child;
   final EdgeInsetsGeometry padding;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLowest,
-      borderRadius: BorderRadius.circular(AppDesign.radiusMedium),
-      border: Border.all(color: Theme.of(context).colorScheme.outline),
-    ),
-    child: Padding(padding: padding, child: child),
-  );
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final owner = theme.extension<OwnerVisualExtension>()?.enabled == true;
+    final isDark = theme.brightness == Brightness.dark;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(owner ? 22 : AppDesign.radiusMedium),
+        border: Border.all(
+          color: owner
+              ? theme.colorScheme.outlineVariant
+              : theme.colorScheme.outline,
+        ),
+        boxShadow: owner && !isDark
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF1C2B5A).withValues(alpha: 0.055),
+                  blurRadius: 18,
+                  offset: const Offset(0, 7),
+                ),
+              ]
+            : null,
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+  }
 }
