@@ -13,7 +13,7 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  static const String _oneSignalAppId = String.fromEnvironment(
+  static const String _buildOneSignalAppId = String.fromEnvironment(
     'ONESIGNAL_APP_ID',
   );
 
@@ -23,12 +23,19 @@ class NotificationService {
 
   static StreamSubscription<AuthState>? _authSubscription;
   static String? _oneSignalExternalId;
+  static String? _runtimeOneSignalAppId;
   static bool _initialized = false;
   static bool _timezoneReady = false;
   static bool _oneSignalReady = false;
 
+  static String get _effectiveOneSignalAppId {
+    final buildValue = _buildOneSignalAppId.trim();
+    if (buildValue.isNotEmpty) return buildValue;
+    return _runtimeOneSignalAppId?.trim() ?? '';
+  }
+
   static bool get isOneSignalConfigured =>
-      !kIsWeb && _oneSignalAppId.trim().isNotEmpty;
+      !kIsWeb && _effectiveOneSignalAppId.isNotEmpty;
 
   static bool get isOneSignalReady => _oneSignalReady;
 
@@ -40,10 +47,41 @@ class NotificationService {
     return OneSignal.User.pushSubscription.id;
   }
 
+  static Future<String> _resolveOneSignalAppId() async {
+    final buildValue = _buildOneSignalAppId.trim();
+    if (buildValue.isNotEmpty) return buildValue;
+    if (kIsWeb) return '';
+
+    final cached = _runtimeOneSignalAppId?.trim() ?? '';
+    if (cached.isNotEmpty) return cached;
+
+    try {
+      await PBService.ensureInitialized();
+      final response = await PBService.client.functions.invoke(
+        'onesignal-config',
+        body: const <String, dynamic>{},
+      );
+      final data = response.data;
+      if (data is Map) {
+        final appId = data['app_id']?.toString().trim() ?? '';
+        if (appId.isNotEmpty) {
+          _runtimeOneSignalAppId = appId;
+          return appId;
+        }
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('OneSignal runtime configuration failed: $error');
+      }
+    }
+    return '';
+  }
+
   /// Initialize local notifications and OneSignal push notifications.
   ///
-  /// OneSignal is enabled only when the release/build provides:
-  /// `--dart-define=ONESIGNAL_APP_ID=<app-id>`
+  /// OneSignal first uses the optional build value
+  /// `--dart-define=ONESIGNAL_APP_ID=your-app-id`. If that value is absent,
+  /// the public App ID is loaded from the `onesignal-config` backend function.
   static Future<void> init() async {
     if (_initialized) return;
 
@@ -64,10 +102,13 @@ class NotificationService {
     await _plugin.initialize(settings);
     _initialized = true;
 
-    if (!isOneSignalConfigured) return;
+    if (kIsWeb) return;
+
+    final appId = await _resolveOneSignalAppId();
+    if (appId.isEmpty) return;
 
     try {
-      await OneSignal.initialize(_oneSignalAppId.trim());
+      await OneSignal.initialize(appId);
       _oneSignalReady = true;
 
       OneSignal.Notifications.addClickListener((event) {
