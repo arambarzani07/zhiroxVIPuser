@@ -1,0 +1,33 @@
+name: Fix Unused Created User
+
+on:
+  push:
+    branches:
+      - user-source
+    paths:
+      - scripts/fix_unused_created_user.py
+      - .github/workflows/fix-unused-created-user.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: user-source
+      - name: Apply analyzer hotfix
+        run: |
+          python3 scripts/fix_unused_created_user.py
+          git diff --check
+          ! grep -q "final createdUser = await PBService.createUser" lib/screens/shared/add_user_screen.dart
+      - name: Commit hotfix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/shared/add_user_screen.dart
+          git commit -m "Remove unused employee creation result"
+          git push origin HEAD:user-source
