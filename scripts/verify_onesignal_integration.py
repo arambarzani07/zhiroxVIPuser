@@ -6,6 +6,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 checks = {
     "pubspec.yaml": ["onesignal_flutter:"],
+    "lib/main.dart": [
+        "RemoteNotificationGate",
+        "remote_notification_gate.dart",
+    ],
+    "lib/widgets/remote_notification_gate.dart": [
+        "remoteNotificationClicks",
+        "UserProfileScreen",
+        "openFinancialChat",
+        "canViewCustomers",
+    ],
     "lib/services/notification_service.dart": [
         "package:onesignal_flutter/onesignal_flutter.dart",
         "OneSignal.initialize",
@@ -30,6 +40,24 @@ checks = {
         "can_send_push_notifications",
         "cross_tenant_forbidden",
         'https://api.onesignal.com/notifications',
+    ],
+    "supabase/functions/_shared/onesignal.ts": [
+        "sendOneSignalFinancialEventBestEffort",
+        "idempotency_key",
+        "include_aliases",
+        "external_id",
+        "new_debt",
+        "payment_received",
+    ],
+    "supabase/functions/customer-push-events/index.ts": [
+        "sendOneSignalFinancialEventBestEffort",
+        "sendMobilePush",
+        'eventType: "debt_created"',
+    ],
+    "supabase/functions/record-payment/index.ts": [
+        "sendOneSignalFinancialEventBestEffort",
+        "sendMobilePush",
+        'eventType: "payment_created"',
     ],
     "android/app/src/main/AndroidManifest.xml": [
         "android.permission.POST_NOTIFICATIONS",
