@@ -13,6 +13,7 @@ on:
       - 'supabase/functions/onesignal-send/**'
       - 'supabase/functions/customer-push-events/**'
       - 'supabase/functions/record-payment/**'
+      - 'supabase/functions/customer-push-worker/**'
       - 'android/app/src/main/AndroidManifest.xml'
       - 'ios/Runner/Info.plist'
       - 'ios/Runner/Runner.entitlements'
@@ -43,3 +44,5 @@ jobs:
         run: deno check supabase/functions/customer-push-events/index.ts
       - name: Type-check payment push pipeline
         run: deno check supabase/functions/record-payment/index.ts
+      - name: Type-check notification outbox worker
+        run: deno check supabase/functions/customer-push-worker/index.ts
