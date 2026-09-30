@@ -1,0 +1,37 @@
+name: Patch account-admin Owner governance
+
+on:
+  push:
+    branches:
+      - owner-source
+    paths:
+      - 'scripts/patch_account_admin_owner_governance.py'
+      - '.github/workflows/patch-account-admin-owner-governance.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch account-admin
+        run: python3 scripts/patch_account_admin_owner_governance.py
+      - name: Verify Owner governance markers
+        run: |
+          grep -q 'authorize_system_owner_account_admin_service' supabase/functions/account-admin/index.ts
+          grep -q 'owner_tenant_member_management_forbidden' supabase/functions/account-admin/index.ts
+          grep -q 'admin_recovery_requires_dedicated_endpoint' supabase/functions/account-admin/index.ts
+          grep -q 'subscription_renewed_via_account_admin' supabase/functions/account-admin/index.ts
+      - name: Commit patch
+        run: |
+          if git diff --quiet -- supabase/functions/account-admin/index.ts; then
+            echo 'No patch changes to commit'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add supabase/functions/account-admin/index.ts
+          git commit -m 'Enforce Owner governance in account-admin'
+          git push
