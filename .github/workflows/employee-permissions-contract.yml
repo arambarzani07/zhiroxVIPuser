@@ -6,6 +6,7 @@ on:
     paths:
       - 'lib/screens/shared/user_profile_employee_management.dart'
       - 'supabase/migrations/**employee_permissions*.sql'
+      - 'supabase/functions/update-account/index.ts'
       - 'scripts/verify_employee_permissions_contract.py'
       - '.github/workflows/employee-permissions-contract.yml'
   pull_request:
@@ -13,6 +14,7 @@ on:
     paths:
       - 'lib/screens/shared/user_profile_employee_management.dart'
       - 'supabase/migrations/**employee_permissions*.sql'
+      - 'supabase/functions/update-account/index.ts'
       - 'scripts/verify_employee_permissions_contract.py'
       - '.github/workflows/employee-permissions-contract.yml'
 
