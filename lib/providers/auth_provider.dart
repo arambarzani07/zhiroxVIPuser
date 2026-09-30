@@ -81,6 +81,14 @@ class AuthProvider extends ChangeNotifier {
       userRole == 'admin' ||
       (userRole == 'employee' && (_user?.getBoolValue(field) ?? false));
 
+  /// Runtime authorization entrypoint for the complete employee permission
+  /// registry. Admins keep full tenant authority, employees are granted only
+  /// explicit `can_*` flags, and all other roles/invalid keys are denied.
+  bool hasEmployeePermission(String field) {
+    if (!RegExp(r'^can_[a-z0-9_]+$').hasMatch(field)) return false;
+    return _employeePermission(field);
+  }
+
   bool get canViewCustomers => _employeePermission('can_view_customers');
   bool get canEditCustomers => _employeePermission('can_edit_customers');
   bool get canDeleteCustomers => _employeePermission('can_delete_customers');
@@ -372,68 +380,37 @@ class AuthProvider extends ChangeNotifier {
         text.contains('failed host lookup') ||
         text.contains('connection refused') ||
         text.contains('connection reset') ||
-        text.contains('network is unreachable') ||
+        text.contains('connection closed') ||
         text.contains('timed out') ||
-        text.contains('timeoutexception');
+        text.contains('timeout') ||
+        text.contains('network') ||
+        text.contains('offline') ||
+        text.contains('no route to host');
   }
 
-  Future<bool> login(String phone, String password) async {
+  Future<void> login(String phone, String password) async {
+    if (_isLoading) return;
     _isLoading = true;
-    if (!_disposed) notifyListeners();
+    notifyListeners();
 
     try {
       await _checkLockout();
-      try {
-        _user = await PBService.login(phone, password);
-        await _validateSubscription();
-        await _enforceAdminDeviceAuthorization();
-      } catch (e) {
-        if (PBService.isServiceRestrictionError(e)) {
-          throw 'خزمەتگوزاری سێرڤەر کاتێک سنووردار کراوە. هەژمارەکەت نەسڕاوەتەوە؛ تکایە دواتر دووبارە هەوڵ بدە.';
-        }
-
-        await PBService.logout();
-        await _clearLocalUser();
-
-        if (e is String) rethrow;
-        if (_isConnectivityError(e)) {
-          throw 'پەیوەندی بە سێرڤەر نەکرا. تکایە ئینتەرنێت بپشکنە و دووبارە هەوڵ بدە.';
-        }
-
-        await _handleLoginFailure();
-        throw 'وشەی نهێنی یان ژمارە مۆبایل هەڵەیە';
-      }
-
+      final user = await PBService.login(phone, password);
+      _user = user;
+      await _validateSubscription();
+      await _enforceAdminDeviceAuthorization();
       _subscribeToUserChanges();
       _startDeviceAuthorizationHeartbeat();
       unawaited(_refreshExpiryReminders());
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(kLockoutTimeKey);
       await prefs.remove(kFailedAttemptsKey);
-
-      return true;
-    } finally {
-      _isLoading = false;
-      if (!_disposed) notifyListeners();
-    }
-  }
-
-  Future<void> registerCustomer({
-    required String name,
-    required String phone,
-    required String password,
-    required String adminId,
-  }) async {
-    _isLoading = true;
-    if (!_disposed) notifyListeners();
-    try {
-      await PBService.registerCustomer(
-        name: name,
-        phone: phone,
-        password: password,
-        adminId: adminId,
-      );
+      await prefs.remove(kLockoutTimeKey);
+    } catch (error) {
+      if (!_isConnectivityError(error) && !PBService.isServiceRestrictionError(error)) {
+        await _handleLoginFailure();
+      }
+      rethrow;
     } finally {
       _isLoading = false;
       if (!_disposed) notifyListeners();
@@ -443,31 +420,11 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     _deviceAuthorizationTimer?.cancel();
     _deviceAuthorizationTimer = null;
-    final current = _user;
-    if (current != null) {
-      try {
-        await PBService.pb.collection('users').unsubscribe(current.id);
-      } catch (_) {}
-    }
     try {
-      await PBService.pb.collection('debts').unsubscribe();
-      await PBService.pb.collection('payments').unsubscribe();
-      await PBService.pb.collection('notifications').unsubscribe();
-    } catch (_) {}
-
-    if (current != null) {
-      final tenantId = current.getStringValue('role') == 'admin'
-          ? current.id
-          : current.getStringValue('admin_id');
-      try {
-        await const SecureCustomerDirectorySnapshotStore().clear(
-          current.id,
-          tenantId,
-        );
-      } catch (_) {}
+      await PBService.logout();
+    } finally {
+      await _clearLocalUser();
+      if (!_disposed) notifyListeners();
     }
-    await PBService.logout();
-    await _clearLocalUser();
-    if (!_disposed) notifyListeners();
   }
 }
