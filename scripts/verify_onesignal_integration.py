@@ -43,11 +43,17 @@ checks = {
     ],
     "supabase/functions/_shared/onesignal.ts": [
         "sendOneSignalFinancialEventBestEffort",
+        "sendOneSignalOutboxEventBestEffort",
         "idempotency_key",
         "include_aliases",
         "external_id",
         "new_debt",
         "payment_received",
+        "due_reminder",
+        "installment_reminder",
+        "debt_limit_changed",
+        "monthly_statement",
+        "manual",
     ],
     "supabase/functions/customer-push-events/index.ts": [
         "sendOneSignalFinancialEventBestEffort",
@@ -58,6 +64,15 @@ checks = {
         "sendOneSignalFinancialEventBestEffort",
         "sendMobilePush",
         'eventType: "payment_created"',
+    ],
+    "supabase/functions/customer-push-worker/index.ts": [
+        "sendOneSignalOutboxEventBestEffort",
+        "sendMobilePush",
+        "eventPreferenceAllows",
+        "due_reminders",
+        "installment_reminders",
+        "monthly_statements",
+        "manual_messages",
     ],
     "android/app/src/main/AndroidManifest.xml": [
         "android.permission.POST_NOTIFICATIONS",
