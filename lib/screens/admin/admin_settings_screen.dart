@@ -153,7 +153,7 @@ class AdminSettingsScreen extends StatelessWidget {
                     children: [
                       _SettingsRow(
                         icon: Icons.notifications_active_outlined,
-                        title: 'ئاگادارکردنەوەکان',
+                        title: 'ناوەندی ئاگادارکردنەوەکان',
                         subtitle: 'Push، مێژوو و ناردنی گشتی',
                         onTap: () =>
                             _open(context, const AdminNotificationsScreen()),
