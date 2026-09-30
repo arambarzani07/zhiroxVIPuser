@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/widgets/app_design.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:intl/intl.dart' hide TextDirection;
@@ -184,17 +185,16 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? AppDarkColors.card : Colors.white;
-    final border = isDark ? AppDarkColors.cardBorder : const Color(0xFFEAECF0);
-    final textPrimary =
-        isDark ? AppDarkColors.textPrimary : const Color(0xFF1D2939);
-    final textSecondary =
-        isDark ? AppDarkColors.textSecondary : const Color(0xFF667085);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final surface = scheme.surfaceContainerLowest;
+    final border = scheme.outlineVariant;
+    final textPrimary = scheme.onSurface;
+    final textSecondary = scheme.onSurfaceVariant;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? AppDarkColors.background : const Color(0xFFF7F8FA),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         titleSpacing: 0,
         title: Column(
@@ -219,7 +219,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
               ),
           ],
         ),
-        backgroundColor: isDark ? AppDarkColors.surface : Colors.white,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         foregroundColor: textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,

@@ -359,7 +359,7 @@ class _OwnerPolicyComplianceCenterScreenState
         label: const Text('سیاسەتی نوێ'),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const OwnerStatePanel.loading()
           : _error != null
               ? Center(
                   child: Padding(

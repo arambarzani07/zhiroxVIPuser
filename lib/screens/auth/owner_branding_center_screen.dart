@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/widgets/app_design.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/helpers.dart';
 
@@ -220,7 +221,7 @@ class _OwnerBrandingCenterScreenState extends State<OwnerBrandingCenterScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const OwnerStatePanel.loading()
           : _error != null
               ? Center(
                   child: Padding(

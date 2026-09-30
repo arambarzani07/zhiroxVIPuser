@@ -316,7 +316,7 @@ class _OwnerIncidentCenterScreenState extends State<OwnerIncidentCenterScreen> {
         label: const Text('ڕووداوی نوێ'),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const OwnerStatePanel.loading()
           : _error != null
               ? Center(
                   child: Padding(

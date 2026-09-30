@@ -58,7 +58,7 @@ class _OwnerPermissionCenterScreenState
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const OwnerStatePanel.loading();
           }
 
           if (snapshot.hasError) {

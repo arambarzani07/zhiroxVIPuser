@@ -176,7 +176,7 @@ class _OwnerDomainCenterScreenState extends State<OwnerDomainCenterScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const OwnerStatePanel.loading()
           : _error != null
               ? Center(
                   child: Padding(

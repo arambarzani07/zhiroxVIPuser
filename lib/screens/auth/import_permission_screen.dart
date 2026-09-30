@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/widgets/app_design.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 
@@ -90,7 +91,7 @@ class _ImportPermissionScreenState extends State<ImportPermissionScreen> {
       body: RefreshIndicator(
         onRefresh: _load,
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const OwnerStatePanel.loading()
             : _error != null
                 ? ListView(
                     padding: const EdgeInsets.all(24),

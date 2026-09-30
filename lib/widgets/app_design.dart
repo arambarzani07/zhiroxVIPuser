@@ -425,6 +425,54 @@ abstract final class AppDesign {
         color: scheme.primary,
         linearTrackColor: scheme.surfaceContainer,
       ),
+      checkboxTheme: CheckboxThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        side: BorderSide(color: scheme.outline),
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return scheme.primary;
+          return Colors.transparent;
+        }),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return scheme.primary;
+          return scheme.onSurfaceVariant;
+        }),
+      ),
+      expansionTileTheme: ExpansionTileThemeData(
+        iconColor: scheme.primary,
+        collapsedIconColor: scheme.onSurfaceVariant,
+        textColor: scheme.onSurface,
+        collapsedTextColor: scheme.onSurface,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        collapsedShape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: scheme.primary,
+          minimumSize: const Size(44, 44),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(
+            fontFamily: 'NotoKufiArabic',
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          minimumSize: const Size(48, 52),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          textStyle: const TextStyle(
+            fontFamily: 'NotoKufiArabic',
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         elevation: 2,
         foregroundColor: scheme.onPrimary,
@@ -665,6 +713,118 @@ class AppSurface extends StatelessWidget {
             : null,
       ),
       child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+
+class OwnerStatePanel extends StatelessWidget {
+  const OwnerStatePanel({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.message,
+    this.actionLabel,
+    this.onAction,
+    this.busy = false,
+  });
+
+  const OwnerStatePanel.loading({super.key})
+      : icon = Icons.hourglass_top_rounded,
+        title = 'چاوەڕوان بە…',
+        message = 'زانیارییەکان لە سێرڤەرەوە نوێ دەکرێنەوە.',
+        actionLabel = null,
+        onAction = null,
+        busy = true;
+
+  const OwnerStatePanel.empty({
+    super.key,
+    this.title = 'هیچ زانیارییەک نییە',
+    this.message,
+    this.actionLabel,
+    this.onAction,
+  })  : icon = Icons.inbox_outlined,
+        busy = false;
+
+  const OwnerStatePanel.error({
+    super.key,
+    this.title = 'زانیارییەکان نەهاتن',
+    this.message,
+    this.actionLabel = 'دووبارە هەوڵ بدە',
+    this.onAction,
+  })  : icon = Icons.cloud_off_rounded,
+        busy = false;
+
+  final IconData icon;
+  final String title;
+  final String? message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: AppSurface(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(17),
+                  ),
+                  child: busy
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            color: scheme.primary,
+                          ),
+                        )
+                      : Icon(icon, color: scheme.primary, size: 27),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                if (message != null && message!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    message!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          height: 1.6,
+                        ),
+                  ),
+                ],
+                if (onAction != null && actionLabel != null) ...[
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: onAction,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: Text(actionLabel!),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

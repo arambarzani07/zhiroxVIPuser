@@ -405,7 +405,7 @@ class _OwnerPlanMarketControlScreenState
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const OwnerStatePanel.loading()
           : planLimits == null
               ? Center(child: Text(_error?.toString() ?? 'زانیاری بەردەست نییە'))
               : RefreshIndicator(

@@ -289,7 +289,7 @@ class _OwnerPlatformCenterScreenState
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const OwnerStatePanel.loading()
           : _error != null
               ? Center(
                   child: Padding(

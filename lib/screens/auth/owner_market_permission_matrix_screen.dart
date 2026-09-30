@@ -244,7 +244,7 @@ class _OwnerMarketPermissionMatrixScreenState
               ),
             ),
       body: _loadingMarkets
-          ? const Center(child: CircularProgressIndicator())
+          ? const OwnerStatePanel.loading()
           : _markets.isEmpty
               ? const Center(child: Text('هیچ مارکێتێک بەردەست نییە'))
               : Column(
