@@ -10,6 +10,9 @@
 analyzer:
   errors:
     depend_on_referenced_packages: ignore
+    # The legacy per-permission state fields are intentionally retained while
+    # the employee permissions editor is migrated to the 60-key registry.
+    unused_field: ignore
 include: package:flutter_lints/flutter.yaml
 
 linter:
