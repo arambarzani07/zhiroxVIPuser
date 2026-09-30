@@ -28,9 +28,6 @@ EXPECTED_GROUPS = {
     "audit",
 }
 
-# System Owner is a platform operator. Direct market-business content must stay
-# outside the normal Owner permission registry. Any future emergency support
-# access must use a separate, time-bound break-glass flow.
 FORBIDDEN_DIRECT_CONTENT_TOKENS = {
     "customer_debt",
     "customer_payment",
@@ -55,6 +52,13 @@ ENTRY_RE = re.compile(
     r"<OwnerPermissionScope>\{(?P<scopes>[^}]*)\}"
     r"(?P<flags>[^)]*)\),"
 )
+SQL_ENTRY_RE = re.compile(
+    r"\('(?P<key>owner_[a-z0-9_]+)',\s*'(?P<label>[^']+)',\s*"
+    r"'(?P<group>[a-z0-9_]+)',\s*'(?P<group_label>[^']+)',\s*"
+    r"(?P<risk>[1-4]),\s*ARRAY\[(?P<scopes>[^]]+)\]::text\[\],\s*"
+    r"(?P<reason>true|false),\s*(?P<reauth>true|false),\s*"
+    r"(?P<typed>true|false),\s*(?P<two_person>true|false),\s*true\)"
+)
 
 
 def fail(message: str) -> None:
@@ -62,39 +66,85 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
-def verify_migration(registry_keys: set[str]) -> None:
+def _dart_scopes(raw: str) -> tuple[str, ...]:
+    return tuple(
+        scope
+        for scope in ("platform", "market", "admin")
+        if f"OwnerPermissionScope.{scope}" in raw
+    )
+
+
+def _sql_scopes(raw: str) -> tuple[str, ...]:
+    return tuple(re.findall(r"'([^']+)'", raw))
+
+
+def verify_migration(dart_entries: list[re.Match[str]]) -> None:
     if not MIGRATION.exists():
         fail(f"missing migration: {MIGRATION.relative_to(ROOT)}")
 
     sql = MIGRATION.read_text(encoding="utf-8")
-    start = sql.find("insert into private.owner_permission_catalog")
-    end = sql.find("on conflict (permission_key)", start)
-    if start < 0 or end < 0:
-        fail("migration is missing the Owner permission catalog seed")
+    sql_entries = list(SQL_ENTRY_RE.finditer(sql))
+    if len(sql_entries) != EXPECTED_COUNT:
+        fail(f"expected {EXPECTED_COUNT} SQL entries, found {len(sql_entries)}")
 
-    seed = sql[start:end]
-    migration_keys = set(re.findall(r"\('(?P<key>owner_[a-z0-9_]+)'\s*,", seed))
-    if migration_keys != registry_keys:
+    dart_by_key = {m.group("key"): m for m in dart_entries}
+    sql_by_key = {m.group("key"): m for m in sql_entries}
+    if set(dart_by_key) != set(sql_by_key):
         fail(
             "registry/migration key drift: "
-            f"missing_in_sql={sorted(registry_keys - migration_keys)} "
-            f"extra_in_sql={sorted(migration_keys - registry_keys)}"
+            f"missing_in_sql={sorted(set(dart_by_key) - set(sql_by_key))} "
+            f"extra_in_sql={sorted(set(sql_by_key) - set(dart_by_key))}"
         )
 
+    for key, m in dart_by_key.items():
+        s = sql_by_key[key]
+        flags = m.group("flags")
+        dart_shape = (
+            m.group("label"),
+            m.group("group"),
+            m.group("group_label"),
+            int(m.group("risk")),
+            _dart_scopes(m.group("scopes")),
+            (
+                "requiresReason: true" in flags,
+                "requiresReauth: true" in flags,
+                "requiresTypedConfirmation: true" in flags,
+                "requiresTwoPersonApproval: true" in flags,
+            ),
+        )
+        sql_shape = (
+            s.group("label"),
+            s.group("group"),
+            s.group("group_label"),
+            int(s.group("risk")),
+            _sql_scopes(s.group("scopes")),
+            (
+                s.group("reason") == "true",
+                s.group("reauth") == "true",
+                s.group("typed") == "true",
+                s.group("two_person") == "true",
+            ),
+        )
+        if dart_shape != sql_shape:
+            fail(f"Dart/SQL metadata drift for {key}: {dart_shape!r} != {sql_shape!r}")
+
     required_security_fragments = (
+        "create schema if not exists private;",
         "create table if not exists private.owner_permission_catalog",
         "create table if not exists private.owner_permission_principals",
         "create table if not exists private.owner_permission_grants",
         "create table if not exists private.owner_permission_audit",
-        "enable row level security",
-        "revoke all on table private.owner_permission_catalog from public, anon, authenticated",
-        "revoke all on table private.owner_permission_grants from public, anon, authenticated",
+        "alter table private.owner_permission_catalog enable row level security;",
+        "alter table private.owner_permission_principals enable row level security;",
+        "alter table private.owner_permission_grants enable row level security;",
+        "alter table private.owner_permission_audit enable row level security;",
+        "revoke all on table private.owner_permission_catalog from public, anon, authenticated;",
+        "revoke all on table private.owner_permission_grants from public, anon, authenticated;",
         "create or replace function private.system_owner_has_permission",
         "create or replace function private.assert_system_owner_permission",
-        "security definer",
-        "set search_path = ''",
         "create or replace function public.get_system_owner_permission_catalog",
         "security invoker",
+        "set search_path = ''",
     )
     for fragment in required_security_fragments:
         if fragment not in sql:
@@ -118,7 +168,10 @@ def main() -> None:
 
     groups = {m.group("group") for m in entries}
     if groups != EXPECTED_GROUPS:
-        fail(f"group mismatch: missing={sorted(EXPECTED_GROUPS - groups)} extra={sorted(groups - EXPECTED_GROUPS)}")
+        fail(
+            f"group mismatch: missing={sorted(EXPECTED_GROUPS - groups)} "
+            f"extra={sorted(groups - EXPECTED_GROUPS)}"
+        )
 
     for m in entries:
         key = m.group("key")
@@ -126,14 +179,7 @@ def main() -> None:
         scopes = m.group("scopes")
         flags = m.group("flags")
 
-        if not any(
-            scope in scopes
-            for scope in (
-                "OwnerPermissionScope.platform",
-                "OwnerPermissionScope.market",
-                "OwnerPermissionScope.admin",
-            )
-        ):
+        if not _dart_scopes(scopes):
             fail(f"{key} has no scope")
 
         if risk >= 3:
@@ -151,14 +197,14 @@ def main() -> None:
         if any(token in key for token in FORBIDDEN_DIRECT_CONTENT_TOKENS):
             fail(f"{key} violates the Owner/market-content privacy boundary")
 
-    verify_migration(set(keys))
+    verify_migration(entries)
 
     risk_counts = Counter(int(m.group("risk")) for m in entries)
     group_counts = Counter(m.group("group") for m in entries)
     print(
         "OWNER_PERMISSION_CONTRACT_OK "
         f"count={len(entries)} groups={len(group_counts)} "
-        f"risk={dict(sorted(risk_counts.items()))} migration=matched"
+        f"risk={dict(sorted(risk_counts.items()))} dart_sql=matched"
     )
     for group in sorted(group_counts):
         print(f"  {group}: {group_counts[group]}")
