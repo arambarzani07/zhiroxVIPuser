@@ -34,10 +34,10 @@ class OwnerVisualExtension extends ThemeExtension<OwnerVisualExtension> {
 
   @override
   OwnerVisualExtension lerp(
-    covariant ThemeExtension<OwnerVisualExtension>? other,
+    covariant OwnerVisualExtension? other,
     double t,
   ) {
-    if (other is! OwnerVisualExtension) return this;
+    if (other == null) return this;
     return OwnerVisualExtension(
       enabled: t < 0.5 ? enabled : other.enabled,
       heroStart: Color.lerp(heroStart, other.heroStart, t) ?? heroStart,
