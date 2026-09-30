@@ -91,6 +91,19 @@ Deno.serve(async (req) => {
     if (targetError) return json({ error: targetError.message }, 400);
     if (!target) return json({ error: "admin_not_found" }, 404);
 
+    // Permission preflight MUST happen before changing the Auth password.
+    // The finalizer repeats the same checks to reduce authorization races.
+    const { data: authorization, error: authorizationError } = await admin.rpc(
+      "authorize_system_owner_admin_recovery_service",
+      {
+        p_actor_id: requester.id,
+        p_admin_id: adminId,
+      },
+    );
+    if (authorizationError || authorization?.authorized !== true) {
+      return json({ error: "owner_permission_denied" }, 403);
+    }
+
     const { error: passwordError } = await admin.auth.admin.updateUserById(
       adminId,
       { password: newPassword },
