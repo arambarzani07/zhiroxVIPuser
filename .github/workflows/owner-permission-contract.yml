@@ -7,13 +7,16 @@ on:
     paths:
       - 'lib/security/owner_permission_registry.dart'
       - 'scripts/verify_owner_permission_registry.py'
+      - 'scripts/verify_owner_permission_enforcement.py'
       - 'supabase/migrations/**owner_permission**.sql'
       - '.github/workflows/owner-permission-contract.yml'
   pull_request:
     paths:
       - 'lib/security/owner_permission_registry.dart'
       - 'scripts/verify_owner_permission_registry.py'
+      - 'scripts/verify_owner_permission_enforcement.py'
       - 'supabase/migrations/**owner_permission**.sql'
+      - '.github/workflows/owner-permission-contract.yml'
 
 permissions:
   contents: read
@@ -25,3 +28,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify 200-action Owner permission registry
         run: python3 scripts/verify_owner_permission_registry.py
+      - name: Verify Owner permission enforcement batches
+        run: python3 scripts/verify_owner_permission_enforcement.py
