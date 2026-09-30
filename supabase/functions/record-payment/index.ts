@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
+import { sendOneSignalFinancialEventBestEffort } from "../_shared/onesignal.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,6 +59,7 @@ export type PaymentPushDeps = {
   now: () => Date;
   loadContext: (request: PaymentPushRequest) => Promise<PaymentPushContext>;
   enqueuePush: (args: PaymentPushEnqueue) => Promise<void>;
+  sendMobilePush?: (args: PaymentPushEnqueue) => Promise<void>;
   reportError: (message: string) => void;
 };
 
@@ -118,7 +120,7 @@ export async function finalizePaymentPush(
       ? Math.round((storedAmount / context.dollarRate) * 100) / 100
       : storedAmount;
 
-    await deps.enqueuePush({
+    const event: PaymentPushEnqueue = {
       marketId: context.marketId,
       customerId: context.customerId,
       eventType: "payment_created",
@@ -132,7 +134,19 @@ export async function finalizePaymentPush(
         occurred_at: deps.now().toISOString(),
         payment_scope: isCustomerWide ? "general" : "debt",
       },
-    });
+    };
+
+    await deps.enqueuePush(event);
+
+    if (deps.sendMobilePush) {
+      try {
+        await deps.sendMobilePush(event);
+      } catch (error) {
+        deps.reportError(
+          `payment mobile push deferred: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     deps.reportError(`payment push enqueue deferred: ${message}`);
@@ -270,6 +284,14 @@ async function handle(req: Request): Promise<Response> {
       now: () => new Date(),
       loadContext: (request) => loadPaymentPushContext(admin, request),
       enqueuePush: (args) => enqueuePaymentPush(admin, args),
+      sendMobilePush: async (args) => {
+        await sendOneSignalFinancialEventBestEffort({
+          customerId: args.customerId,
+          eventType: args.eventType,
+          eventRecordId: args.eventRecordId,
+          payload: args.payload,
+        });
+      },
       reportError: (message) => console.warn(message),
     };
 
