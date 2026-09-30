@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/screens/auth/owner_market_permission_matrix_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -608,7 +609,21 @@ class _OwnerEntitlementsCenterScreenState
             child: OutlinedButton.icon(
               onPressed: () => _editTenant(item),
               icon: const Icon(Icons.tune_rounded, size: 18),
-              label: const Text('ڕێکخستنی دەسەڵاتی تایبەتمەندی'),
+              label: const Text('ڕێکخستنی ٧ تایبەتمەندی'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const OwnerMarketPermissionMatrixScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.admin_panel_settings_rounded, size: 18),
+              label: const Text('٢٠٠ دەسەڵاتی Owner بەپێی مارکێت'),
             ),
           ),
         ],
