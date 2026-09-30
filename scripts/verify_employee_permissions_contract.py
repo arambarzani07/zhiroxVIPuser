@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 UI = ROOT / "lib/screens/shared/user_profile_employee_management.dart"
 EXPAND = ROOT / "supabase/migrations/20260930072700_expand_employee_permissions_to_60.sql"
 SYNC = ROOT / "supabase/migrations/20260930075000_sync_all_60_employee_permissions.sql"
+FIX_PREFIX = ROOT / "supabase/migrations/20260930102700_fix_employee_permissions_prefix_detection.sql"
 UPDATE_ACCOUNT = ROOT / "supabase/functions/update-account/index.ts"
 
 EXPECTED = {
@@ -52,6 +53,7 @@ if len(EXPECTED) != 60:
 ui_text = UI.read_text(encoding="utf-8")
 expand_text = EXPAND.read_text(encoding="utf-8")
 sync_text = SYNC.read_text(encoding="utf-8")
+fix_prefix_text = FIX_PREFIX.read_text(encoding="utf-8")
 update_account_text = UPDATE_ACCOUNT.read_text(encoding="utf-8")
 
 ui_keys = re.findall(r"_EmployeePermissionSpec\(key:\s*'([^']+)'", ui_text)
@@ -89,6 +91,11 @@ if not edge_match:
 edge_keys = set(re.findall(r'"(can_[a-z0-9_]+)"', edge_match.group(1)))
 compare("update-account tenant admin allow-list", edge_keys)
 
+if "left(permission_name, 4) = 'can_'" not in fix_prefix_text:
+    fail("employee_has_permission prefix detection must use literal can_ prefix matching")
+if re.search(r"\blike\b.*\bescape\b", fix_prefix_text, re.I | re.S):
+    fail("employee_has_permission prefix detection must not use SQL ESCAPE parsing")
+
 for key in EXPECTED:
     profile_marker = f"add column if not exists {key} boolean"
     if profile_marker not in expand_text:
@@ -107,5 +114,5 @@ for key in EXPECTED:
 
 print(
     "employee-permissions-contract: OK "
-    "(60/60 UI, RPC allow-list, update-account allow-list, and sync trigger keys match)"
+    "(60/60 UI, RPC allow-list, update-account allow-list, sync trigger keys, and permission helper prefix parsing match)"
 )
