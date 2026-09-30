@@ -48,6 +48,27 @@ function chunks<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+const subscriptionPlanDays: Record<string, number> = {
+  monthly: 30,
+  quarterly: 90,
+  semiannual: 180,
+  annual: 365,
+};
+
+function resolveSubscriptionPlan(
+  rawPlan: unknown,
+  rawCustomDays: unknown,
+): { plan: string; days: number } | null {
+  const plan = String(rawPlan ?? '').trim().toLowerCase();
+  const fixedDays = subscriptionPlanDays[plan];
+  if (fixedDays) return { plan, days: fixedDays };
+  if (plan !== 'custom') return null;
+
+  const days = Math.round(Number(rawCustomDays));
+  if (!Number.isFinite(days) || days < 1 || days > 3650) return null;
+  return { plan: 'custom', days };
+}
+
 async function isOperational(admin: any, profile: any): Promise<boolean> {
   if (!profile || profile.active !== true || profile.approved !== true) return false;
   if (profile.is_system_owner === true) return true;
@@ -180,6 +201,7 @@ Deno.serve(async (req) => {
       let canViewExpiry = false;
       let canManageExpiry = false;
       let canManageSettings = false;
+      let resolvedSubscription: { plan: string; days: number } | null = null;
 
       if (role === "admin") {
         if (!requester || !requesterProfile?.is_system_owner || requesterProfile.active !== true) {
@@ -188,7 +210,13 @@ Deno.serve(async (req) => {
 
         adminId = null;
         marketName = String(body.market_name ?? "").trim();
-        if (marketName.length < 2) return json({ error: "invalid_input" }, 400);
+        resolvedSubscription = resolveSubscriptionPlan(
+          body.subscription_plan,
+          body.subscription_days,
+        );
+        if (marketName.length < 2 || !resolvedSubscription) {
+          return json({ error: "invalid_input" }, 400);
+        }
 
         const { data: existingMarket, error: marketLookupError } = await admin
           .from("profiles")
@@ -322,12 +350,8 @@ Deno.serve(async (req) => {
         return json({ error: authError?.message ?? "auth_create_failed" }, 400);
       }
 
-      const requestedDays = Math.round(Number(body.subscription_days ?? 30));
-      const subscriptionDays = role === "admin"
-        ? Math.min(3650, Math.max(1, requestedDays || 30))
-        : 0;
-      const subscriptionEnd = role === "admin"
-        ? new Date(Date.now() + subscriptionDays * 86400000).toISOString()
+      const subscriptionEnd = role === "admin" && resolvedSubscription
+        ? new Date(Date.now() + resolvedSubscription.days * 86400000).toISOString()
         : null;
 
       const profile = {
@@ -385,6 +409,7 @@ Deno.serve(async (req) => {
         can_view_expiry: canViewExpiry,
         can_manage_expiry: canManageExpiry,
         can_manage_settings: canManageSettings,
+        subscription_plan: resolvedSubscription?.plan ?? null,
         subscription_end: subscriptionEnd,
         is_system_owner: false,
       };
@@ -450,8 +475,11 @@ Deno.serve(async (req) => {
         return json({ error: "system_owner_required" }, 403);
       }
       const adminId = String(body.admin_id ?? "").trim();
-      const days = Math.round(Number(body.days));
-      if (!adminId || !Number.isFinite(days) || days < 1 || days > 3650) {
+      const resolvedSubscription = resolveSubscriptionPlan(
+        body.subscription_plan,
+        body.days,
+      );
+      if (!adminId || !resolvedSubscription) {
         return json({ error: "invalid_input" }, 400);
       }
       const { data: target, error: targetError } = await admin
@@ -470,10 +498,15 @@ Deno.serve(async (req) => {
       const base = Number.isFinite(parsedEnd) && parsedEnd > Date.now()
         ? parsedEnd
         : Date.now();
-      const subscriptionEnd = new Date(base + days * 86400000).toISOString();
+      const subscriptionEnd = new Date(
+        base + resolvedSubscription.days * 86400000,
+      ).toISOString();
       const { error: updateError } = await admin
         .from("profiles")
-        .update({ subscription_end: subscriptionEnd })
+        .update({
+          subscription_plan: resolvedSubscription.plan,
+          subscription_end: subscriptionEnd,
+        })
         .eq("id", adminId);
       if (updateError) return json({ error: updateError.message }, 400);
       return json({ subscription_end: subscriptionEnd });
