@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
+import { sendOneSignalFinancialEventBestEffort } from "../_shared/onesignal.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,6 +60,7 @@ export type DebtPushDeps = {
   loadDebt: (debtId: string) => Promise<DebtPushContext | null>;
   actorCanAccess: (actorId: string, marketId: string) => Promise<boolean>;
   enqueuePush: (args: DebtPushEnqueue) => Promise<void>;
+  sendMobilePush?: (args: DebtPushEnqueue) => Promise<void>;
 };
 
 export function isLiveDebtEligible(input: {
@@ -112,7 +114,7 @@ export async function handleDebtPushAction(
       : Math.round((debt.amount / debt.dollarRate) * 100) / 100)
     : debt.amount;
 
-  await deps.enqueuePush({
+  const event: DebtPushEnqueue = {
     marketId: debt.marketId,
     customerId: debt.customerId,
     eventType: "debt_created",
@@ -125,7 +127,21 @@ export async function handleDebtPushAction(
       market_name: debt.marketName,
       occurred_at: debt.occurredAt,
     },
-  });
+  };
+
+  await deps.enqueuePush(event);
+
+  if (deps.sendMobilePush) {
+    try {
+      await deps.sendMobilePush(event);
+    } catch (error) {
+      console.warn(
+        "debt mobile push deferred",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
   return { enqueued: true };
 }
 
@@ -281,6 +297,14 @@ async function serve(req: Request): Promise<Response> {
       loadDebt: (debtId) => loadDebtContext(admin, debtId),
       actorCanAccess: (actorId, marketId) => actorCanAccessMarket(admin, actorId, marketId),
       enqueuePush: (args) => enqueueDebtPush(admin, args),
+      sendMobilePush: async (args) => {
+        await sendOneSignalFinancialEventBestEffort({
+          customerId: args.customerId,
+          eventType: args.eventType,
+          eventRecordId: args.eventRecordId,
+          payload: args.payload,
+        });
+      },
     });
     return json(result);
   } catch (error) {
