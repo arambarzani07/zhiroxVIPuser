@@ -180,6 +180,25 @@ Deno.serve(async (req) => {
       let canViewExpiry = false;
       let canManageExpiry = false;
       let canManageSettings = false;
+      let canViewCustomerPhone = false;
+      let canViewCustomerNotes = false;
+      let canEditCustomerNotes = false;
+      let canViewCustomerBalances = false;
+      let canViewPaymentHistory = false;
+      let canCreateReceipts = false;
+      let canEditReceipts = false;
+      let canDeleteReceipts = false;
+      let canExportReceipts = false;
+      let canViewReportSummary = false;
+      let canExportReports = false;
+      let canViewSyncLogs = false;
+      let canRetryFailedSync = false;
+      let canRunManualBackup = false;
+      let canRestoreBackup = false;
+      let canManageNotificationTemplates = false;
+      let canSendBulkNotifications = false;
+      let canManageMarketRateRefresh = false;
+      let canManageSecuritySettings = false;
 
       if (role === "admin") {
         if (!requester || !requesterProfile?.is_system_owner || requesterProfile.active !== true) {
@@ -261,6 +280,25 @@ Deno.serve(async (req) => {
           canViewExpiry = Boolean(body.can_view_expiry ?? false);
           canManageExpiry = Boolean(body.can_manage_expiry ?? false);
           canManageSettings = Boolean(body.can_manage_settings ?? false);
+          canViewCustomerPhone = Boolean(body.can_view_customer_phone ?? false);
+          canViewCustomerNotes = Boolean(body.can_view_customer_notes ?? false);
+          canEditCustomerNotes = Boolean(body.can_edit_customer_notes ?? false);
+          canViewCustomerBalances = Boolean(body.can_view_customer_balances ?? false);
+          canViewPaymentHistory = Boolean(body.can_view_payment_history ?? false);
+          canCreateReceipts = Boolean(body.can_create_receipts ?? false);
+          canEditReceipts = Boolean(body.can_edit_receipts ?? false);
+          canDeleteReceipts = Boolean(body.can_delete_receipts ?? false);
+          canExportReceipts = Boolean(body.can_export_receipts ?? false);
+          canViewReportSummary = Boolean(body.can_view_report_summary ?? false);
+          canExportReports = Boolean(body.can_export_reports ?? false);
+          canViewSyncLogs = Boolean(body.can_view_sync_logs ?? false);
+          canRetryFailedSync = Boolean(body.can_retry_failed_sync ?? false);
+          canRunManualBackup = Boolean(body.can_run_manual_backup ?? false);
+          canRestoreBackup = Boolean(body.can_restore_backup ?? false);
+          canManageNotificationTemplates = Boolean(body.can_manage_notification_templates ?? false);
+          canSendBulkNotifications = Boolean(body.can_send_bulk_notifications ?? false);
+          canManageMarketRateRefresh = Boolean(body.can_manage_market_rate_refresh ?? false);
+          canManageSecuritySettings = Boolean(body.can_manage_security_settings ?? false);
         }
       } else {
         if (!adminId) return json({ error: "admin_id_required" }, 400);
@@ -385,6 +423,25 @@ Deno.serve(async (req) => {
         can_view_expiry: canViewExpiry,
         can_manage_expiry: canManageExpiry,
         can_manage_settings: canManageSettings,
+        can_view_customer_phone: canViewCustomerPhone,
+        can_view_customer_notes: canViewCustomerNotes,
+        can_edit_customer_notes: canEditCustomerNotes,
+        can_view_customer_balances: canViewCustomerBalances,
+        can_view_payment_history: canViewPaymentHistory,
+        can_create_receipts: canCreateReceipts,
+        can_edit_receipts: canEditReceipts,
+        can_delete_receipts: canDeleteReceipts,
+        can_export_receipts: canExportReceipts,
+        can_view_report_summary: canViewReportSummary,
+        can_export_reports: canExportReports,
+        can_view_sync_logs: canViewSyncLogs,
+        can_retry_failed_sync: canRetryFailedSync,
+        can_run_manual_backup: canRunManualBackup,
+        can_restore_backup: canRestoreBackup,
+        can_manage_notification_templates: canManageNotificationTemplates,
+        can_send_bulk_notifications: canSendBulkNotifications,
+        can_manage_market_rate_refresh: canManageMarketRateRefresh,
+        can_manage_security_settings: canManageSecuritySettings,
         subscription_end: subscriptionEnd,
         is_system_owner: false,
       };

@@ -182,6 +182,16 @@ class AppHelpers {
   }) {
     final text = error.toString().toLowerCase();
 
+    if (text.contains('weak_password') || text.contains('وشەی نهێنی لانیکەم ١٢')) {
+      return 'وشەی نهێنی دەبێت لانیکەم ١٢ پیت بێت و پیتی گەورە/بچووک، ژمارە و هێمای تایبەت تێدابێت.';
+    }
+    if (text.contains('phone_exists') || text.contains('ژمارەیە پێشتر تۆمارکراوە')) {
+      return 'ئەم ژمارەی مۆبایلە پێشتر تۆمارکراوە.';
+    }
+    if (text.contains('employee_creation_requires_admin') || text.contains('تەنها بەڕێوەبەر دەتوانێت کارمەند')) {
+      return 'تەنها بەڕێوەبەر دەتوانێت کارمەند دروست بکات.';
+    }
+
     if (text.contains('socket') ||
         text.contains('network') ||
         text.contains('connection') ||

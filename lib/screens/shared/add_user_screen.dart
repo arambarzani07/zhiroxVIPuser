@@ -86,6 +86,18 @@ class _AddUserDialogState extends State<AddUserDialog> {
   bool _canManageMarketRateRefresh = false;
   bool _canManageSecuritySettings = false;
 
+  String? _employeePasswordError(String value) {
+    if (value.isEmpty) return 'تکایە وشەی نهێنی بنووسە';
+    if (value.length < 12) return 'وشەی نهێنی دەبێت لانیکەم ١٢ پیت بێت';
+    if (!RegExp(r'[a-z]').hasMatch(value) ||
+        !RegExp(r'[A-Z]').hasMatch(value) ||
+        !RegExp(r'[0-9]').hasMatch(value) ||
+        !RegExp(r'[^A-Za-z0-9]').hasMatch(value)) {
+      return 'وشەی نهێنی دەبێت پیتی گەورە و بچووک، ژمارە و هێمای تایبەت تێدابێت';
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -228,16 +240,15 @@ class _AddUserDialogState extends State<AddUserDialog> {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
     final password = _passwordController.text;
-    if (name.isEmpty || phone.isEmpty || password.length < 8) {
+    final passwordError = _employeePasswordError(password);
+    if (name.isEmpty || phone.isEmpty || passwordError != null) {
       if (widget.role == 'employee' && _employeeSection != 0 && mounted) {
         setState(() => _employeeSection = 0);
       }
       if (mounted) {
         AppHelpers.showSnackBar(
           context,
-          password.isNotEmpty && password.length < 8
-              ? 'وشەی نهێنی نابێت لە ٨ پیت کەمتر بێت'
-              : 'تکایە زانیاری بنەڕەتی تەواو بکە',
+          passwordError ?? 'تکایە زانیاری بنەڕەتی تەواو بکە',
           isError: true,
         );
       }
@@ -296,83 +307,27 @@ class _AddUserDialogState extends State<AddUserDialog> {
         canManageBackup: _canManageBackup,
         canManageDaftarSync: _canManageDaftarSync,
         canManageSubscription: _canManageSubscription,
+        canViewCustomerPhone: _canViewCustomerPhone,
+        canViewCustomerNotes: _canViewCustomerNotes,
+        canEditCustomerNotes: _canEditCustomerNotes,
+        canViewCustomerBalances: _canViewCustomerBalances,
+        canViewPaymentHistory: _canViewPaymentHistory,
+        canCreateReceipts: _canCreateReceipts,
+        canEditReceipts: _canEditReceipts,
+        canDeleteReceipts: _canDeleteReceipts,
+        canExportReceipts: _canExportReceipts,
+        canViewReportSummary: _canViewReportSummary,
+        canExportReports: _canExportReports,
+        canViewSyncLogs: _canViewSyncLogs,
+        canRetryFailedSync: _canRetryFailedSync,
+        canRunManualBackup: _canRunManualBackup,
+        canRestoreBackup: _canRestoreBackup,
+        canManageNotificationTemplates: _canManageNotificationTemplates,
+        canSendBulkNotifications: _canSendBulkNotifications,
+        canManageMarketRateRefresh: _canManageMarketRateRefresh,
+        canManageSecuritySettings: _canManageSecuritySettings,
         debtLimit: debtLimit,
       );
-
-      if (widget.role == 'employee') {
-        try {
-          await PBService.updateUser(
-            createdUser.id,
-            <String, dynamic>{
-              'can_view_customers': _canViewCustomers,
-              'can_add_customers': _canAddCustomers,
-              'can_edit_customers': _canEditCustomers,
-              'can_delete_customers': _canDeleteCustomers,
-              'can_view_debts': _canViewDebts,
-              'can_add_debts': _canAddDebts,
-              'can_edit_debts': _canEditDebts,
-              'can_delete_debts': _canDeleteDebts,
-              'can_record_payments': _canRecordPayments,
-              'can_view_financial_reports': _canViewFinancialReports,
-              'can_export_data': _canExportData,
-              'can_send_notifications': _canSendNotifications,
-              'can_set_debt_limit': _canSetDebtLimit,
-              'can_set_due_date': _canSetDueDate,
-              'can_import_data': _canImportData,
-              'can_refund_payments': _canRefundPayments,
-              'can_restore_debts': _canRestoreDebts,
-              'can_manage_receipts': _canManageReceipts,
-              'can_manage_notifications': _canManageNotifications,
-              'can_approve_customers': _canApproveCustomers,
-              'can_manage_employees': _canManageEmployees,
-              'can_view_audit_log': _canViewAuditLog,
-              'can_manage_backup': _canManageBackup,
-              'can_manage_daftar_sync': _canManageDaftarSync,
-              'can_manage_subscription': _canManageSubscription,
-              'can_view_dashboard': _canViewDashboard,
-              'can_view_recent_activity': _canViewRecentActivity,
-              'can_view_transactions': _canViewTransactions,
-              'can_edit_payments': _canEditPayments,
-              'can_delete_payments': _canDeletePayments,
-              'can_create_statements': _canCreateStatements,
-              'can_manage_customer_links': _canManageCustomerLinks,
-              'can_pin_customers': _canPinCustomers,
-              'can_manage_vip_customers': _canManageVipCustomers,
-              'can_merge_customer_identities': _canMergeCustomerIdentities,
-              'can_view_market_rates': _canViewMarketRates,
-              'can_view_intelligence': _canViewIntelligence,
-              'can_manage_collections': _canManageCollections,
-              'can_view_expiry': _canViewExpiry,
-              'can_manage_expiry': _canManageExpiry,
-              'can_manage_settings': _canManageSettings,
-              'can_view_customer_phone': _canViewCustomerPhone,
-              'can_view_customer_notes': _canViewCustomerNotes,
-              'can_edit_customer_notes': _canEditCustomerNotes,
-              'can_view_customer_balances': _canViewCustomerBalances,
-              'can_view_payment_history': _canViewPaymentHistory,
-              'can_create_receipts': _canCreateReceipts,
-              'can_edit_receipts': _canEditReceipts,
-              'can_delete_receipts': _canDeleteReceipts,
-              'can_export_receipts': _canExportReceipts,
-              'can_view_report_summary': _canViewReportSummary,
-              'can_export_reports': _canExportReports,
-              'can_view_sync_logs': _canViewSyncLogs,
-              'can_retry_failed_sync': _canRetryFailedSync,
-              'can_run_manual_backup': _canRunManualBackup,
-              'can_restore_backup': _canRestoreBackup,
-              'can_manage_notification_templates': _canManageNotificationTemplates,
-              'can_send_bulk_notifications': _canSendBulkNotifications,
-              'can_manage_market_rate_refresh': _canManageMarketRateRefresh,
-              'can_manage_security_settings': _canManageSecuritySettings,
-            },
-          );
-        } catch (_) {
-          try {
-            await PBService.deleteUser(createdUser.id);
-          } catch (_) {}
-          rethrow;
-        }
-      }
 
       if (mounted) {
         AppHelpers.showSnackBar(context, 'بە سەرکەوتوویی زیادکرا');
@@ -678,16 +633,10 @@ class _AddUserDialogState extends State<AddUserDialog> {
         _buildTextField(
           controller: _passwordController,
           label: AppStrings.password,
-          hint: 'لانیکەم ٨ پیت',
+          hint: 'لانیکەم ١٢ پیت + Aa1!',
           icon: Icons.lock_outline,
           isObscure: true,
-          validator: (v) {
-            if (v == null || v.isEmpty) {
-              return 'تکایە وشەی نهێنی بنووسە';
-            }
-            if (v.length < 8) return 'نابێت لە ٨ پیت کەمتر بێت';
-            return null;
-          },
+          validator: (v) => _employeePasswordError(v ?? ''),
         ),
         if (!isEmployee &&
             (auth.userRole == 'admin' || auth.canSetDebtLimit)) ...[
