@@ -70,7 +70,7 @@ compare("set_employee_permissions_v2", allowed_keys)
 
 sync_keys = set(
     re.findall(
-        r"^\s*(can_[a-z0-9_]+)\s*=\s*new\.\1\s*,?\s*$",
+        r"^\s*(?:set\s+)?(can_[a-z0-9_]+)\s*=\s*new\.\1\s*,?\s*$",
         sync_text,
         re.M,
     )
