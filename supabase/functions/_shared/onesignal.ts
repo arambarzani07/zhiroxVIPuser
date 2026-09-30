@@ -123,12 +123,13 @@ export async function sendOneSignalFinancialEventBestEffort(
     }
 
     const messageId = typeof result.id === "string" ? result.id : "";
-    return {
-      attempted: true,
-      delivered: messageId.length > 0,
-      if: undefined,
-      ...(messageId ? { messageId } : { reason: "no_active_subscription" }),
-    } as OneSignalSendResult;
+    return messageId
+      ? { attempted: true, delivered: true, messageId }
+      : {
+          attempted: true,
+          delivered: false,
+          reason: "no_active_subscription",
+        };
   } catch (error) {
     console.warn(
       "OneSignal financial push deferred",
