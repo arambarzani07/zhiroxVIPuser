@@ -11,6 +11,14 @@ export type OneSignalFinancialEvent = {
   payload: PushPayload;
 };
 
+export type OneSignalOutboxEvent = {
+  outboxId: string;
+  customerId: string;
+  eventType: PushEventType;
+  eventRecordId?: string | null;
+  payload: PushPayload;
+};
+
 export type OneSignalSendResult = {
   attempted: boolean;
   delivered: boolean;
@@ -27,38 +35,78 @@ function isUuid(value: string): boolean {
     .test(value);
 }
 
-function appPayload(event: OneSignalFinancialEvent): Record<string, unknown> {
-  if (event.eventType === "debt_created") {
-    return {
-      type: "new_debt",
-      customer_id: event.customerId,
-      debt_id: event.eventRecordId,
-      open_financial_chat: true,
-    };
-  }
-
-  return {
-    type: "payment_received",
-    customer_id: event.customerId,
-    payment_id: event.eventRecordId,
-    open_financial_chat: true,
+function appPayload(input: {
+  customerId: string;
+  eventType: PushEventType;
+  eventRecordId?: string | null;
+  payload: PushPayload;
+}): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    customer_id: input.customerId,
   };
+  const recordId = String(input.eventRecordId ?? "").trim();
+
+  switch (input.eventType) {
+    case "debt_created":
+      return {
+        ...base,
+        type: "new_debt",
+        if_debt_id: undefined,
+        ...(recordId ? { debt_id: recordId } : {}),
+        open_financial_chat: true,
+      };
+    case "payment_created":
+      return {
+        ...base,
+        type: "payment_received",
+        ...(recordId ? { payment_id: recordId } : {}),
+        open_financial_chat: true,
+      };
+    case "due_reminder":
+      return {
+        ...base,
+        type: "due_reminder",
+        ...(input.payload.debt_id ? { debt_id: input.payload.debt_id } : {}),
+        open_financial_chat: true,
+      };
+    case "installment_reminder":
+      return {
+        ...base,
+        type: "installment_reminder",
+        ...(input.payload.debt_id ? { debt_id: input.payload.debt_id } : {}),
+        ...(input.payload.installment_no != null
+          ? { installment_no: input.payload.installment_no }
+          : {}),
+        open_financial_chat: true,
+      };
+    case "debt_limit_changed":
+      return {
+        ...base,
+        type: "debt_limit_changed",
+        open_financial_chat: true,
+      };
+    case "monthly_statement":
+      return {
+        ...base,
+        type: "monthly_statement",
+        ...(input.payload.period ? { period: input.payload.period } : {}),
+      };
+    case "manual":
+      return {
+        ...base,
+        type: "manual",
+      };
+  }
 }
 
-/**
- * Send a mobile push for an already-persisted financial event.
- *
- * This is intentionally best-effort: missing OneSignal secrets or provider
- * outages must never roll back a debt/payment write. The financial record and
- * notification_outbox remain authoritative.
- *
- * eventRecordId is used as OneSignal's idempotency key. Debt/payment record IDs
- * are UUIDs, so safe retries return the original OneSignal result instead of
- * delivering the same mobile notification twice.
- */
-export async function sendOneSignalFinancialEventBestEffort(
-  event: OneSignalFinancialEvent,
-): Promise<OneSignalSendResult> {
+async function sendOneSignal(params: {
+  customerId: string;
+  eventType: PushEventType;
+  eventRecordId?: string | null;
+  payload: PushPayload;
+  idempotencyKey: string;
+  logContext: string;
+}): Promise<OneSignalSendResult> {
   const appId = env("ONESIGNAL_APP_ID");
   const apiKey = env("ONESIGNAL_REST_API_KEY");
   if (!appId || !apiKey) {
@@ -69,9 +117,9 @@ export async function sendOneSignalFinancialEventBestEffort(
     };
   }
 
-  const customerId = event.customerId.trim();
-  const recordId = event.eventRecordId.trim();
-  if (!customerId || !isUuid(recordId)) {
+  const customerId = params.customerId.trim();
+  const idempotencyKey = params.idempotencyKey.trim();
+  if (!customerId || !isUuid(idempotencyKey)) {
     return {
       attempted: false,
       delivered: false,
@@ -79,10 +127,7 @@ export async function sendOneSignalFinancialEventBestEffort(
     };
   }
 
-  const message = formatPushBody(
-    event.eventType as PushEventType,
-    event.payload,
-  );
+  const message = formatPushBody(params.eventType, params.payload);
 
   try {
     const response = await fetch("https://api.onesignal.com/notifications", {
@@ -97,8 +142,13 @@ export async function sendOneSignalFinancialEventBestEffort(
         include_aliases: { external_id: [customerId] },
         headings: { en: message.title },
         contents: { en: message.body },
-        data: appPayload(event),
-        idempotency_key: recordId,
+        data: appPayload({
+          customerId,
+          eventType: params.eventType,
+          eventRecordId: params.eventRecordId,
+          payload: params.payload,
+        }),
+        idempotency_key: idempotencyKey,
       }),
     });
 
@@ -111,7 +161,7 @@ export async function sendOneSignalFinancialEventBestEffort(
 
     if (!response.ok) {
       console.warn(
-        "OneSignal financial push failed",
+        `${params.logContext} failed`,
         response.status,
         JSON.stringify(result),
       );
@@ -132,7 +182,7 @@ export async function sendOneSignalFinancialEventBestEffort(
         };
   } catch (error) {
     console.warn(
-      "OneSignal financial push deferred",
+      `${params.logContext} deferred`,
       error instanceof Error ? error.message : String(error),
     );
     return {
@@ -141,4 +191,47 @@ export async function sendOneSignalFinancialEventBestEffort(
       reason: "transport_error",
     };
   }
+}
+
+/**
+ * Best-effort delivery for debt/payment writes. The financial record remains
+ * authoritative and a push-provider outage must never roll it back.
+ */
+export function sendOneSignalFinancialEventBestEffort(
+  event: OneSignalFinancialEvent,
+): Promise<OneSignalSendResult> {
+  return sendOneSignal({
+    customerId: event.customerId,
+    eventType: event.eventType,
+    eventRecordId: event.eventRecordId,
+    payload: event.payload,
+    idempotencyKey: event.eventRecordId,
+    logContext: "OneSignal financial push",
+  });
+}
+
+/**
+ * Best-effort delivery for the existing notification outbox. Debt/payment are
+ * intentionally skipped here because they are already sent immediately by the
+ * transaction Edge Functions with their record ID as the idempotency key.
+ */
+export function sendOneSignalOutboxEventBestEffort(
+  event: OneSignalOutboxEvent,
+): Promise<OneSignalSendResult> {
+  if (event.eventType === "debt_created" || event.eventType === "payment_created") {
+    return Promise.resolve({
+      attempted: false,
+      delivered: false,
+      reason: "financial_event_sent_at_write_time",
+    });
+  }
+
+  return sendOneSignal({
+    customerId: event.customerId,
+    eventType: event.eventType,
+    eventRecordId: event.eventRecordId,
+    payload: event.payload,
+    idempotencyKey: event.outboxId,
+    logContext: `OneSignal outbox ${event.eventType}`,
+  });
 }
