@@ -410,7 +410,7 @@ class _SettingsRow extends StatelessWidget {
       title: Text(
         title,
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w750,
+              fontWeight: FontWeight.w700,
               color: destructive ? AppColors.danger : null,
             ),
       ),
