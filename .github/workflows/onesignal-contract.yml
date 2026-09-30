@@ -5,9 +5,14 @@ on:
     branches: [user-source]
     paths:
       - 'pubspec.yaml'
+      - 'lib/main.dart'
+      - 'lib/widgets/remote_notification_gate.dart'
       - 'lib/services/notification_service.dart'
       - 'lib/services/onesignal_push_service.dart'
+      - 'supabase/functions/_shared/onesignal.ts'
       - 'supabase/functions/onesignal-send/**'
+      - 'supabase/functions/customer-push-events/**'
+      - 'supabase/functions/record-payment/**'
       - 'android/app/src/main/AndroidManifest.xml'
       - 'ios/Runner/Info.plist'
       - 'ios/Runner/Runner.entitlements'
@@ -32,5 +37,9 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Type-check OneSignal Edge Function
+      - name: Type-check OneSignal sender
         run: deno check supabase/functions/onesignal-send/index.ts
+      - name: Type-check debt push pipeline
+        run: deno check supabase/functions/customer-push-events/index.ts
+      - name: Type-check payment push pipeline
+        run: deno check supabase/functions/record-payment/index.ts
