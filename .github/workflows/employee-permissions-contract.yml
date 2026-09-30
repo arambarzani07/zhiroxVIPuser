@@ -4,16 +4,24 @@ on:
   push:
     branches: [user-source]
     paths:
+      - 'lib/permissions/additional_employee_permissions.dart'
       - 'lib/screens/shared/user_profile_employee_management.dart'
+      - 'lib/screens/shared/add_user_screen.dart'
+      - 'lib/services/pb_service.dart'
       - 'supabase/migrations/**employee_permissions*.sql'
+      - 'supabase/functions/employee-create/index.ts'
       - 'supabase/functions/update-account/index.ts'
       - 'scripts/verify_employee_permissions_contract.py'
       - '.github/workflows/employee-permissions-contract.yml'
   pull_request:
     branches: [user-source]
     paths:
+      - 'lib/permissions/additional_employee_permissions.dart'
       - 'lib/screens/shared/user_profile_employee_management.dart'
+      - 'lib/screens/shared/add_user_screen.dart'
+      - 'lib/services/pb_service.dart'
       - 'supabase/migrations/**employee_permissions*.sql'
+      - 'supabase/functions/employee-create/index.ts'
       - 'supabase/functions/update-account/index.ts'
       - 'scripts/verify_employee_permissions_contract.py'
       - '.github/workflows/employee-permissions-contract.yml'
@@ -28,5 +36,5 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Verify 60 employee permissions stay synchronized
+      - name: Verify 180 employee permissions stay synchronized
         run: python3 scripts/verify_employee_permissions_contract.py
