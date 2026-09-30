@@ -194,15 +194,14 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
     );
     if (value == null) return;
     try {
-      final uid = PBService.client.auth.currentUser!.id;
-      await PBService.client.from('employee_permissions').upsert({
-        'employee_id': employee['id'],
-        'admin_id': uid,
-        ...value,
-        'updated_by': uid,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
-      toast('دەسەڵاتەکان پاشەکەوت کران');
+      await PBService.client.rpc(
+        'set_employee_permissions_v2',
+        params: {
+          'p_employee_id': employee['id'],
+          'p_permissions': value,
+        },
+      );
+      toast('هەموو دەسەڵاتەکان پاشەکەوت کران');
       await load();
     } catch (e) {
       toast(AppHelpers.backendErrorMessage(
@@ -349,11 +348,13 @@ class _GovernanceCenterScreenState extends State<GovernanceCenterScreen>
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
         final employee = employees[i];
-        final enabled = permissionOf(employee).values.where((v) => v == true).length;
+        final enabled = PermissionDialog.permissionKeys
+            .where((key) => permissionOf(employee)[key] == true)
+            .length;
         return Card(child: ListTile(
           leading: const CircleAvatar(child: Icon(Icons.badge_outlined)),
           title: Text((employee['name'] ?? 'کارمەند').toString()),
-          subtitle: Text((employee['phone'] ?? '').toString() + ' • ' + enabled.toString() + ' مۆڵەت'),
+          subtitle: Text((employee['phone'] ?? '').toString() + ' • ' + enabled.toString() + '/60 دەسەڵات'),
           trailing: const Icon(Icons.tune_rounded),
           onTap: () => editPermissions(employee),
         ));
@@ -477,52 +478,229 @@ class PermissionDialog extends StatefulWidget {
   const PermissionDialog({super.key, required this.employeeName, required this.initial});
   final String employeeName;
   final Map<String, dynamic> initial;
+
+  static const groups = <_PermissionGroup>[
+    _PermissionGroup('کڕیار', Icons.people_outline_rounded, {
+      'can_view_customers': 'بینینی کڕیارەکان',
+      'can_add_customers': 'زیادکردنی کڕیار',
+      'can_edit_customers': 'دەستکاریکردنی کڕیار',
+      'can_delete_customers': 'سڕینەوەی کڕیار',
+      'can_approve_customers': 'پەسەندکردنی کڕیار',
+      'can_manage_customer_links': 'بەڕێوەبردنی لینکی کڕیار',
+      'can_pin_customers': 'Pin کردنی کڕیار',
+      'can_manage_vip_customers': 'بەڕێوەبردنی کڕیاری VIP',
+      'can_merge_customer_identities': 'یەکخستنی ناسنامەی کڕیار',
+      'can_view_customer_phone': 'بینینی ژمارەی مۆبایلی کڕیار',
+      'can_view_customer_notes': 'بینینی تێبینی کڕیار',
+      'can_edit_customer_notes': 'دەستکاریکردنی تێبینی کڕیار',
+      'can_view_customer_balances': 'بینینی باڵانسی کڕیار',
+    }),
+    _PermissionGroup('قەرز و پارەدانەوە', Icons.account_balance_wallet_outlined, {
+      'can_view_debts': 'بینینی قەرزەکان',
+      'can_add_debts': 'زیادکردنی قەرز',
+      'can_edit_debts': 'دەستکاریکردنی قەرز',
+      'can_delete_debts': 'سڕینەوەی قەرز',
+      'can_set_debt_limit': 'دانانی سنووری قەرز',
+      'can_set_due_date': 'دانانی بەرواری دانەوە',
+      'can_restore_debts': 'گەڕاندنەوەی قەرزی سڕاوە',
+      'can_record_payments': 'تۆمارکردنی پارەدانەوە',
+      'can_view_payment_history': 'بینینی مێژووی پارەدانەوە',
+      'can_edit_payments': 'دەستکاریکردنی پارەدانەوە',
+      'can_delete_payments': 'سڕینەوەی پارەدانەوە',
+      'can_refund_payments': 'گەڕاندنەوەی پارەدانەوە',
+      'can_manage_collections': 'بەڕێوەبردنی بەدواداچوونی قەرز',
+    }),
+    _PermissionGroup('پسووڵە و ڕاپۆرت', Icons.receipt_long_outlined, {
+      'can_manage_receipts': 'بەڕێوەبردنی پسووڵە',
+      'can_create_receipts': 'دروستکردنی پسووڵە',
+      'can_edit_receipts': 'دەستکاریکردنی پسووڵە',
+      'can_delete_receipts': 'سڕینەوەی پسووڵە',
+      'can_export_receipts': 'هەناردەکردنی پسووڵە',
+      'can_create_statements': 'دروستکردنی کەشفی حیساب',
+      'can_view_financial_reports': 'بینینی ڕاپۆرتی دارایی',
+      'can_view_report_summary': 'بینینی پوختەی ڕاپۆرت',
+      'can_export_reports': 'هەناردەکردنی ڕاپۆرت',
+      'can_export_data': 'هەناردەکردنی داتا',
+      'can_import_data': 'هاوردەکردنی داتا',
+    }),
+    _PermissionGroup('داشبۆرد و زیرەکی', Icons.dashboard_outlined, {
+      'can_view_dashboard': 'بینینی داشبۆرد',
+      'can_view_recent_activity': 'بینینی چالاکییە نوێکان',
+      'can_view_transactions': 'بینینی هەموو مامەڵەکان',
+      'can_view_market_rates': 'بینینی نرخی بازاڕ',
+      'can_manage_market_rate_refresh': 'نوێکردنەوەی نرخی بازاڕ',
+      'can_view_intelligence': 'بینینی ناوەندی زیرەکی',
+      'can_view_expiry': 'بینینی چاودێری بەرواری کاڵا',
+      'can_manage_expiry': 'بەڕێوەبردنی کاڵای بەسەرچوو',
+    }),
+    _PermissionGroup('ئاگادارکردنەوە و Sync', Icons.sync_outlined, {
+      'can_send_notifications': 'ناردنی ئاگادارکردنەوە',
+      'can_manage_notifications': 'بەڕێوەبردنی ئاگادارکردنەوە',
+      'can_manage_notification_templates': 'بەڕێوەبردنی قالبی ئاگادارکردنەوە',
+      'can_send_bulk_notifications': 'ناردنی ئاگادارکردنەوەی کۆمەڵەیی',
+      'can_manage_daftar_sync': 'بەڕێوەبردنی Daftar Sync',
+      'can_view_sync_logs': 'بینینی لۆگی Sync',
+      'can_retry_failed_sync': 'دووبارەکردنەوەی Sync ـی شکستخواردوو',
+    }),
+    _PermissionGroup('بەڕێوەبردن و پاراستن', Icons.security_outlined, {
+      'can_manage_employees': 'بەڕێوەبردنی کارمەندان',
+      'can_view_audit_log': 'بینینی Audit Log',
+      'can_manage_backup': 'بەڕێوەبردنی Backup',
+      'can_run_manual_backup': 'دروستکردنی Backup ـی دەستی',
+      'can_restore_backup': 'گەڕاندنەوە لە Backup',
+      'can_manage_subscription': 'بەڕێوەبردنی بەشداری',
+      'can_manage_settings': 'بەڕێوەبردنی ڕێکخستنەکان',
+      'can_manage_security_settings': 'ڕێکخستنی پاراستن و ئاسایش',
+    }),
+  ];
+
+  static const permissionKeys = <String>[
+    'can_view_customers', 'can_add_customers', 'can_edit_customers',
+    'can_delete_customers', 'can_approve_customers', 'can_manage_customer_links',
+    'can_pin_customers', 'can_manage_vip_customers', 'can_merge_customer_identities',
+    'can_view_customer_phone', 'can_view_customer_notes', 'can_edit_customer_notes',
+    'can_view_customer_balances', 'can_view_debts', 'can_add_debts',
+    'can_edit_debts', 'can_delete_debts', 'can_set_debt_limit', 'can_set_due_date',
+    'can_restore_debts', 'can_record_payments', 'can_view_payment_history',
+    'can_edit_payments', 'can_delete_payments', 'can_refund_payments',
+    'can_manage_collections', 'can_manage_receipts', 'can_create_receipts',
+    'can_edit_receipts', 'can_delete_receipts', 'can_export_receipts',
+    'can_create_statements', 'can_view_financial_reports', 'can_view_report_summary',
+    'can_export_reports', 'can_export_data', 'can_import_data', 'can_view_dashboard',
+    'can_view_recent_activity', 'can_view_transactions', 'can_view_market_rates',
+    'can_manage_market_rate_refresh', 'can_view_intelligence', 'can_view_expiry',
+    'can_manage_expiry', 'can_send_notifications', 'can_manage_notifications',
+    'can_manage_notification_templates', 'can_send_bulk_notifications',
+    'can_manage_daftar_sync', 'can_view_sync_logs', 'can_retry_failed_sync',
+    'can_manage_employees', 'can_view_audit_log', 'can_manage_backup',
+    'can_run_manual_backup', 'can_restore_backup', 'can_manage_subscription',
+    'can_manage_settings', 'can_manage_security_settings',
+  ];
+
   @override
   State<PermissionDialog> createState() => _PermissionDialogState();
 }
 
+class _PermissionGroup {
+  const _PermissionGroup(this.title, this.icon, this.permissions);
+  final String title;
+  final IconData icon;
+  final Map<String, String> permissions;
+}
+
 class _PermissionDialogState extends State<PermissionDialog> {
-  static const labels = <String, String>{
-    'can_view_customers': 'بینینی کڕیار',
-    'can_add_customers': 'زیادکردنی کڕیار',
-    'can_edit_customers': 'دەستکاری کڕیار',
-    'can_delete_customers': 'سڕینەوەی کڕیار',
-    'can_view_debts': 'بینینی قەرز',
-    'can_add_debts': 'زیادکردنی قەرز',
-    'can_edit_debts': 'دەستکاری قەرز',
-    'can_delete_debts': 'سڕینەوەی قەرز',
-    'can_record_payments': 'تۆمارکردنی پارەدان',
-    'can_view_financial_reports': 'بینینی ڕاپۆرتی دارایی',
-    'can_export_data': 'Exportکردنی داتا',
-    'can_send_notifications': 'ناردنی ئاگادارکردنەوە',
-    'can_view_expiry': 'بینینی چاودێری بەرواری کاڵا',
-    'can_manage_expiry': 'هاوردەکردن و تۆمارکردنی بەرواری کاڵا',
-  };
   late final Map<String, bool> values;
 
   @override
   void initState() {
     super.initState();
-    values = {for (final key in labels.keys) key: widget.initial[key] == true};
+    values = {
+      for (final key in PermissionDialog.permissionKeys)
+        key: widget.initial[key] == true,
+    };
+  }
+
+  int get enabledCount => values.values.where((value) => value).length;
+
+  void setAll(bool enabled) {
+    setState(() {
+      for (final key in values.keys) {
+        values[key] = enabled;
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text('دەسەڵاتی ' + widget.employeeName),
+    titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+    contentPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+    title: Row(
+      children: [
+        const Icon(Icons.admin_panel_settings_outlined),
+        const SizedBox(width: 8),
+        Expanded(child: Text('دەسەڵاتی ' + widget.employeeName)),
+        Text(
+          '$enabledCount/60',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+      ],
+    ),
     content: SizedBox(
       width: double.maxFinite,
       child: ListView(
         shrinkWrap: true,
-        children: labels.entries.map((entry) => SwitchListTile(
-          value: values[entry.key]!,
-          title: Text(entry.value),
-          onChanged: (value) => setState(() => values[entry.key] = value),
-        )).toList(),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => setAll(true),
+                    icon: const Icon(Icons.done_all_rounded, size: 18),
+                    label: const Text('هەمووی چالاک بکە'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => setAll(false),
+                    icon: const Icon(Icons.block_outlined, size: 18),
+                    label: const Text('هەمووی داخە'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (final group in PermissionDialog.groups) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
+              child: Row(
+                children: [
+                  Icon(group.icon, size: 18),
+                  const SizedBox(width: 7),
+                  Text(
+                    group.title,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+            ),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (var index = 0;
+                      index < group.permissions.length;
+                      index++) ...[
+                    SwitchListTile(
+                      dense: true,
+                      value: values[group.permissions.keys.elementAt(index)] ?? false,
+                      title: Text(group.permissions.values.elementAt(index)),
+                      onChanged: (value) => setState(
+                        () => values[group.permissions.keys.elementAt(index)] = value,
+                      ),
+                    ),
+                    if (index < group.permissions.length - 1)
+                      const Divider(height: 1),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     ),
     actions: [
-      TextButton(onPressed: () => Navigator.pop(context), child: const Text('پاشگەزبوونەوە')),
-      FilledButton(onPressed: () => Navigator.pop(context, values), child: const Text('پاشەکەوت')),
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('پاشگەزبوونەوە'),
+      ),
+      FilledButton.icon(
+        onPressed: () => Navigator.pop(context, values),
+        icon: const Icon(Icons.save_outlined),
+        label: const Text('پاشەکەوت'),
+      ),
     ],
   );
 }
