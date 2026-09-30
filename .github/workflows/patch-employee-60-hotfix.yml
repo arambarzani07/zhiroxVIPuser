@@ -19,48 +19,15 @@ jobs:
           ref: user-source
           fetch-depth: 0
       - name: Submit all 60 permissions from employee dialog
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('lib/screens/shared/add_user_screen.dart')
-          source = path.read_text()
-          old = """        canManageSubscription: _canManageSubscription,
-        canViewCustomerPhone: _canViewCustomerPhone,"""
-          new = """        canManageSubscription: _canManageSubscription,
-        canViewDashboard: _canViewDashboard,
-        canViewRecentActivity: _canViewRecentActivity,
-        canViewTransactions: _canViewTransactions,
-        canEditPayments: _canEditPayments,
-        canDeletePayments: _canDeletePayments,
-        canCreateStatements: _canCreateStatements,
-        canManageCustomerLinks: _canManageCustomerLinks,
-        canPinCustomers: _canPinCustomers,
-        canManageVipCustomers: _canManageVipCustomers,
-        canMergeCustomerIdentities: _canMergeCustomerIdentities,
-        canViewMarketRates: _canViewMarketRates,
-        canViewIntelligence: _canViewIntelligence,
-        canManageCollections: _canManageCollections,
-        canViewExpiry: _canViewExpiry,
-        canManageExpiry: _canManageExpiry,
-        canManageSettings: _canManageSettings,
-        canViewCustomerPhone: _canViewCustomerPhone,"""
-          if old not in source:
-              if 'canViewDashboard: _canViewDashboard,' in source:
-                  print('Patch already applied')
-                  raise SystemExit(0)
-              raise SystemExit('Expected createUser permission insertion point not found')
-          path.write_text(source.replace(old, new, 1))
-          PY
+        run: python3 scripts/patch_employee_60_submission.py
       - name: Commit hotfix
-        shell: bash
         run: |
           if git diff --quiet; then
-            echo 'No changes needed'
+            echo "No changes needed"
             exit 0
           fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib/screens/shared/add_user_screen.dart
-          git commit -m 'Submit all 60 employee permissions during creation'
+          git commit -m "Submit all 60 employee permissions during creation"
           git push origin HEAD:user-source
