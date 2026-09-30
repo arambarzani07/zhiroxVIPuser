@@ -25,7 +25,7 @@ jobs:
           grep -q "owner_permission_grants" supabase/migrations/20260930130637_owner_permission_governance_v1.sql
       - name: Commit migration
         run: |
-          if git diff --quiet -- supabase/migrations/20260930130637_owner_permission_governance_v1.sql; then
+          if [ -z "$(git status --porcelain -- supabase/migrations/20260930130637_owner_permission_governance_v1.sql)" ]; then
             echo "Migration already materialized"
             exit 0
           fi
