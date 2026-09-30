@@ -8,6 +8,7 @@ import {
   type PushPayload,
 } from "../_shared/customer_push/payload.ts";
 import { loadOrInitializePushRuntime } from "../_shared/customer_push/runtime.ts";
+import { sendOneSignalOutboxEventBestEffort } from "../_shared/onesignal.ts";
 
 function envJsonKey(name: string): string | null {
   const raw = Deno.env.get(name);
@@ -81,6 +82,7 @@ export type WorkerDeps = {
     subscription: WorkerSubscription,
     message: { title: string; body: string; url: string },
   ) => Promise<void>;
+  sendMobilePush?: (event: WorkerEvent) => Promise<void>;
   updateDelivery: (deliveryId: string, patch: Record<string, unknown>) => Promise<void>;
   updateSubscription: (subscriptionId: string, patch: Record<string, unknown>) => Promise<void>;
   countPendingDeliveries: (outboxId: string) => Promise<number>;
@@ -137,6 +139,32 @@ function statusCode(error: unknown): number {
 function errorText(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
   return text.slice(0, 500);
+}
+
+function preferenceFieldForEvent(eventType: PushEventType): string | null {
+  return eventType === "due_reminder"
+    ? "due_reminders"
+    : eventType === "installment_reminder"
+    ? "installment_reminders"
+    : eventType === "monthly_statement"
+    ? "monthly_statements"
+    : eventType === "manual"
+    ? "manual_messages"
+    : null;
+}
+
+async function eventPreferenceAllows(admin: any, event: WorkerEvent): Promise<boolean> {
+  const preferenceField = preferenceFieldForEvent(event.event_type);
+  if (!preferenceField) return true;
+
+  const { data: preference, error } = await admin
+    .from("customer_notification_preferences")
+    .select(preferenceField)
+    .eq("market_id", event.market_id)
+    .eq("customer_id", event.customer_id)
+    .maybeSingle();
+  if (error) throw error;
+  return preference?.[preferenceField] !== false;
 }
 
 function portalUrlForEvent(event: WorkerEvent): string {
@@ -220,6 +248,18 @@ export async function processOutboxEvent(
 ): Promise<void> {
   const now = deps.now();
   const nowIso = now.toISOString();
+
+  if (deps.sendMobilePush) {
+    try {
+      await deps.sendMobilePush(event);
+    } catch (error) {
+      console.warn(
+        "OneSignal outbox delivery deferred",
+        event.event_type,
+        errorText(error),
+      );
+    }
+  }
 
   if (!event.fanout_at) {
     const subscriptions = await deps.listActiveSubscriptions(event);
@@ -327,27 +367,7 @@ function repositoryDeps(admin: any): WorkerDeps {
   return {
     now: () => new Date(),
     listActiveSubscriptions: async (event) => {
-      const preferenceField =
-        event.event_type === "due_reminder"
-          ? "due_reminders"
-          : event.event_type === "installment_reminder"
-          ? "installment_reminders"
-          : event.event_type === "monthly_statement"
-          ? "monthly_statements"
-          : event.event_type === "manual"
-          ? "manual_messages"
-          : null;
-
-      if (preferenceField) {
-        const { data: preference, error: preferenceError } = await admin
-          .from("customer_notification_preferences")
-          .select(preferenceField)
-          .eq("market_id", event.market_id)
-          .eq("customer_id", event.customer_id)
-          .maybeSingle();
-        if (preferenceError) throw preferenceError;
-        if (preference?.[preferenceField] === false) return [];
-      }
+      if (!(await eventPreferenceAllows(admin, event))) return [];
 
       const { data, error } = await admin.from("customer_push_subscriptions")
         .select("id,endpoint,p256dh,auth,active")
@@ -398,6 +418,16 @@ function repositoryDeps(admin: any): WorkerDeps {
         },
         JSON.stringify(message),
       );
+    },
+    sendMobilePush: async (event) => {
+      if (!(await eventPreferenceAllows(admin, event))) return;
+      await sendOneSignalOutboxEventBestEffort({
+        outboxId: event.id,
+        customerId: event.customer_id,
+        eventType: event.event_type,
+        eventRecordId: event.event_record_id,
+        payload: event.payload,
+      });
     },
     updateDelivery: async (deliveryId, patch) => {
       const { error } = await admin.from("notification_deliveries")
