@@ -6,11 +6,14 @@ void main() {
   test('employee creation is strong-password and 180-permission complete', () {
     final ui = File('lib/screens/shared/add_user_screen.dart').readAsStringSync();
     final service = File('lib/services/pb_service.dart').readAsStringSync();
-    final registry = File(
+    final additionalRegistry = File(
       'lib/permissions/additional_employee_permissions.dart',
     ).readAsStringSync();
     final edge =
         File('supabase/functions/employee-create/index.ts').readAsStringSync();
+    final edgeRegistry = File(
+      'supabase/functions/_shared/employee-permission-keys.ts',
+    ).readAsStringSync();
 
     const legacyKeys = <String>[
       'can_view_customers',
@@ -77,20 +80,34 @@ void main() {
 
     final additionalKeys = RegExp(
       r"AdditionalEmployeePermissionSpec\(key: '([^']+)'",
-    ).allMatches(registry).map((match) => match.group(1)!).toSet();
+    ).allMatches(additionalRegistry).map((match) => match.group(1)!).toSet();
 
     expect(legacyKeys.toSet().length, 60);
     expect(additionalKeys.length, 120);
     expect(legacyKeys.toSet().intersection(additionalKeys), isEmpty);
-    expect({...legacyKeys, ...additionalKeys}.length, 180);
+
+    final allKeys = <String>{...legacyKeys, ...additionalKeys};
+    expect(allKeys.length, 180);
 
     for (final key in legacyKeys) {
       expect(service, contains("'$key'"), reason: 'service missing legacy $key');
-      expect(edge, contains(key), reason: 'employee-create missing legacy $key');
     }
-    for (final key in additionalKeys) {
-      expect(edge, contains(key), reason: 'employee-create missing additional $key');
+    for (final key in allKeys) {
+      expect(
+        edgeRegistry,
+        contains('"$key"'),
+        reason: 'shared Edge registry missing $key',
+      );
     }
+
+    expect(
+      edge,
+      contains('from "../_shared/employee-permission-keys.ts"'),
+    );
+    expect(edge, contains('EMPLOYEE_PERMISSION_KEYS'));
+    expect(edge, contains('DEFAULT_TRUE_EMPLOYEE_PERMISSIONS'));
+    expect(edge, contains('for (const key of EMPLOYEE_PERMISSION_KEYS)'));
+    expect(edge, contains('...permissions,'));
 
     expect(ui, contains('لانیکەم ١٢ پیت + Aa1!'));
     expect(ui, contains("RegExp(r'[A-Z]')"));
