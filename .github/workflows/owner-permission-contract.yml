@@ -8,16 +8,22 @@ on:
       - 'lib/security/owner_permission_registry.dart'
       - 'scripts/verify_owner_permission_registry.py'
       - 'scripts/verify_owner_permission_enforcement.py'
+      - 'scripts/verify_owner_account_admin_governance.py'
       - 'supabase/migrations/**owner_permission**.sql'
+      - 'supabase/migrations/**owner_account_admin**.sql'
       - 'supabase/functions/owner-account-recovery/index.ts'
+      - 'supabase/functions/account-admin/index.ts'
       - '.github/workflows/owner-permission-contract.yml'
   pull_request:
     paths:
       - 'lib/security/owner_permission_registry.dart'
       - 'scripts/verify_owner_permission_registry.py'
       - 'scripts/verify_owner_permission_enforcement.py'
+      - 'scripts/verify_owner_account_admin_governance.py'
       - 'supabase/migrations/**owner_permission**.sql'
+      - 'supabase/migrations/**owner_account_admin**.sql'
       - 'supabase/functions/owner-account-recovery/index.ts'
+      - 'supabase/functions/account-admin/index.ts'
       - '.github/workflows/owner-permission-contract.yml'
 
 permissions:
@@ -32,3 +38,5 @@ jobs:
         run: python3 scripts/verify_owner_permission_registry.py
       - name: Verify Owner permission enforcement batches
         run: python3 scripts/verify_owner_permission_enforcement.py
+      - name: Verify account-admin Owner governance
+        run: python3 scripts/verify_owner_account_admin_governance.py
