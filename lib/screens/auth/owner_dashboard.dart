@@ -16,6 +16,7 @@ import 'package:zhirox/screens/auth/owner_security_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_support_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_operations_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_entitlements_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_permission_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_recovery_device_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_backup_resilience_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_readiness_center_screen.dart';
@@ -366,6 +367,28 @@ class _OwnerHome extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const OwnerEntitlementsCenterScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 72,
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.deepPurple.withValues(alpha: 0.10),
+                      child: const Icon(
+                        Icons.admin_panel_settings_rounded,
+                        color: Colors.deepPurple,
+                      ),
+                    ),
+                    title: const Text('ناوەندی دەسەڵاتەکانی Owner'),
+                    subtitle: const Text(
+                      '٢٠٠ دەسەڵات، Risk، Scope و پالیسی پاراستن لە catalog ـی live',
+                    ),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerPermissionCenterScreen(),
                       ),
                     ),
                   ),
