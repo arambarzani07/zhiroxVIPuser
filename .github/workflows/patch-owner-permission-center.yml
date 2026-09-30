@@ -1,0 +1,36 @@
+name: Patch Owner permission center
+
+on:
+  push:
+    branches:
+      - owner-source
+    paths:
+      - 'scripts/patch_owner_permission_center.py'
+      - '.github/workflows/patch-owner-permission-center.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Owner dashboard
+        run: python3 scripts/patch_owner_permission_center.py
+      - name: Verify wiring
+        run: |
+          grep -q "owner_permission_center_screen.dart" lib/screens/auth/owner_dashboard.dart
+          grep -q "OwnerPermissionCenterScreen" lib/screens/auth/owner_dashboard.dart
+          grep -q "٢٠٠ دەسەڵات" lib/screens/auth/owner_dashboard.dart
+      - name: Commit dashboard wiring
+        run: |
+          if [ -z "$(git status --porcelain -- lib/screens/auth/owner_dashboard.dart)" ]; then
+            echo "Owner permission center already wired"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/auth/owner_dashboard.dart
+          git commit -m "Expose Owner permission center in dashboard"
+          git push
