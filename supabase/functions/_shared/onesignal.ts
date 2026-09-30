@@ -51,7 +51,6 @@ function appPayload(input: {
       return {
         ...base,
         type: "new_debt",
-        if_debt_id: undefined,
         ...(recordId ? { debt_id: recordId } : {}),
         open_financial_chat: true,
       };
