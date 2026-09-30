@@ -50,6 +50,41 @@ class _AddUserDialogState extends State<AddUserDialog> {
   bool _canManageBackup = false;
   bool _canManageDaftarSync = false;
   bool _canManageSubscription = false;
+  bool _canViewDashboard = true;
+  bool _canViewRecentActivity = true;
+  bool _canViewTransactions = false;
+  bool _canEditPayments = false;
+  bool _canDeletePayments = false;
+  bool _canCreateStatements = false;
+  bool _canManageCustomerLinks = false;
+  bool _canPinCustomers = false;
+  bool _canManageVipCustomers = false;
+  bool _canMergeCustomerIdentities = false;
+  bool _canViewMarketRates = true;
+  bool _canViewIntelligence = false;
+  bool _canManageCollections = false;
+  bool _canViewExpiry = false;
+  bool _canManageExpiry = false;
+  bool _canManageSettings = false;
+  bool _canViewCustomerPhone = false;
+  bool _canViewCustomerNotes = false;
+  bool _canEditCustomerNotes = false;
+  bool _canViewCustomerBalances = false;
+  bool _canViewPaymentHistory = false;
+  bool _canCreateReceipts = false;
+  bool _canEditReceipts = false;
+  bool _canDeleteReceipts = false;
+  bool _canExportReceipts = false;
+  bool _canViewReportSummary = false;
+  bool _canExportReports = false;
+  bool _canViewSyncLogs = false;
+  bool _canRetryFailedSync = false;
+  bool _canRunManualBackup = false;
+  bool _canRestoreBackup = false;
+  bool _canManageNotificationTemplates = false;
+  bool _canSendBulkNotifications = false;
+  bool _canManageMarketRateRefresh = false;
+  bool _canManageSecuritySettings = false;
 
   @override
   void dispose() {
@@ -229,7 +264,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
       }
       final debtLimit = double.tryParse(_debtLimitController.text.trim()) ?? 0;
 
-      await PBService.createUser(
+      final createdUser = await PBService.createUser(
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
         password: _passwordController.text,
@@ -263,6 +298,81 @@ class _AddUserDialogState extends State<AddUserDialog> {
         canManageSubscription: _canManageSubscription,
         debtLimit: debtLimit,
       );
+
+      if (widget.role == 'employee') {
+        try {
+          await PBService.updateUser(
+            createdUser.id,
+            <String, dynamic>{
+              'can_view_customers': _canViewCustomers,
+              'can_add_customers': _canAddCustomers,
+              'can_edit_customers': _canEditCustomers,
+              'can_delete_customers': _canDeleteCustomers,
+              'can_view_debts': _canViewDebts,
+              'can_add_debts': _canAddDebts,
+              'can_edit_debts': _canEditDebts,
+              'can_delete_debts': _canDeleteDebts,
+              'can_record_payments': _canRecordPayments,
+              'can_view_financial_reports': _canViewFinancialReports,
+              'can_export_data': _canExportData,
+              'can_send_notifications': _canSendNotifications,
+              'can_set_debt_limit': _canSetDebtLimit,
+              'can_set_due_date': _canSetDueDate,
+              'can_import_data': _canImportData,
+              'can_refund_payments': _canRefundPayments,
+              'can_restore_debts': _canRestoreDebts,
+              'can_manage_receipts': _canManageReceipts,
+              'can_manage_notifications': _canManageNotifications,
+              'can_approve_customers': _canApproveCustomers,
+              'can_manage_employees': _canManageEmployees,
+              'can_view_audit_log': _canViewAuditLog,
+              'can_manage_backup': _canManageBackup,
+              'can_manage_daftar_sync': _canManageDaftarSync,
+              'can_manage_subscription': _canManageSubscription,
+              'can_view_dashboard': _canViewDashboard,
+              'can_view_recent_activity': _canViewRecentActivity,
+              'can_view_transactions': _canViewTransactions,
+              'can_edit_payments': _canEditPayments,
+              'can_delete_payments': _canDeletePayments,
+              'can_create_statements': _canCreateStatements,
+              'can_manage_customer_links': _canManageCustomerLinks,
+              'can_pin_customers': _canPinCustomers,
+              'can_manage_vip_customers': _canManageVipCustomers,
+              'can_merge_customer_identities': _canMergeCustomerIdentities,
+              'can_view_market_rates': _canViewMarketRates,
+              'can_view_intelligence': _canViewIntelligence,
+              'can_manage_collections': _canManageCollections,
+              'can_view_expiry': _canViewExpiry,
+              'can_manage_expiry': _canManageExpiry,
+              'can_manage_settings': _canManageSettings,
+              'can_view_customer_phone': _canViewCustomerPhone,
+              'can_view_customer_notes': _canViewCustomerNotes,
+              'can_edit_customer_notes': _canEditCustomerNotes,
+              'can_view_customer_balances': _canViewCustomerBalances,
+              'can_view_payment_history': _canViewPaymentHistory,
+              'can_create_receipts': _canCreateReceipts,
+              'can_edit_receipts': _canEditReceipts,
+              'can_delete_receipts': _canDeleteReceipts,
+              'can_export_receipts': _canExportReceipts,
+              'can_view_report_summary': _canViewReportSummary,
+              'can_export_reports': _canExportReports,
+              'can_view_sync_logs': _canViewSyncLogs,
+              'can_retry_failed_sync': _canRetryFailedSync,
+              'can_run_manual_backup': _canRunManualBackup,
+              'can_restore_backup': _canRestoreBackup,
+              'can_manage_notification_templates': _canManageNotificationTemplates,
+              'can_send_bulk_notifications': _canSendBulkNotifications,
+              'can_manage_market_rate_refresh': _canManageMarketRateRefresh,
+              'can_manage_security_settings': _canManageSecuritySettings,
+            },
+          );
+        } catch (_) {
+          try {
+            await PBService.deleteUser(createdUser.id);
+          } catch (_) {}
+          rethrow;
+        }
+      }
 
       if (mounted) {
         AppHelpers.showSnackBar(context, 'بە سەرکەوتوویی زیادکرا');
@@ -611,7 +721,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
         ),
         const SizedBox(height: 6),
         Text(
-          'تەنها ئەو کارانە چالاک بکە کە پێویستی پێیان هەیە.',
+          '60 دەسەڵات بەردەستن؛ تەنها ئەوانە چالاک بکە کە پێویستی پێیان هەیە.',
           style: TextStyle(
             fontSize: 11.5,
             height: 1.5,
@@ -757,6 +867,181 @@ class _AddUserDialogState extends State<AddUserDialog> {
                 'بەڕێوەبردنی بەشداری',
                 _canManageSubscription,
                 (v) => setState(() => _canManageSubscription = v),
+              ),
+              _buildSwitch(
+                'بینینی داشبۆرد',
+                _canViewDashboard,
+                (v) => setState(() => _canViewDashboard = v),
+              ),
+              _buildSwitch(
+                'بینینی چالاکییە نوێکان',
+                _canViewRecentActivity,
+                (v) => setState(() => _canViewRecentActivity = v),
+              ),
+              _buildSwitch(
+                'بینینی مێژووی مامەڵەکان',
+                _canViewTransactions,
+                (v) => setState(() => _canViewTransactions = v),
+              ),
+              _buildSwitch(
+                'دەستکاریکردنی پارەدانەوە',
+                _canEditPayments,
+                (v) => setState(() => _canEditPayments = v),
+              ),
+              _buildSwitch(
+                'سڕینەوەی پارەدانەوە',
+                _canDeletePayments,
+                (v) => setState(() => _canDeletePayments = v),
+              ),
+              _buildSwitch(
+                'دروستکردنی کەشف و بەڵگەنامە',
+                _canCreateStatements,
+                (v) => setState(() => _canCreateStatements = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی لینکی کڕیار',
+                _canManageCustomerLinks,
+                (v) => setState(() => _canManageCustomerLinks = v),
+              ),
+              _buildSwitch(
+                'Pin کردنی کڕیار',
+                _canPinCustomers,
+                (v) => setState(() => _canPinCustomers = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی VIP',
+                _canManageVipCustomers,
+                (v) => setState(() => _canManageVipCustomers = v),
+              ),
+              _buildSwitch(
+                'یەکخستنی ناسنامەی دووبارە',
+                _canMergeCustomerIdentities,
+                (v) => setState(() => _canMergeCustomerIdentities = v),
+              ),
+              _buildSwitch(
+                'بینینی نرخی بازاڕ',
+                _canViewMarketRates,
+                (v) => setState(() => _canViewMarketRates = v),
+              ),
+              _buildSwitch(
+                'بینینی ناوەندی زیرەکی',
+                _canViewIntelligence,
+                (v) => setState(() => _canViewIntelligence = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی بەدواداچوونی قەرز',
+                _canManageCollections,
+                (v) => setState(() => _canManageCollections = v),
+              ),
+              _buildSwitch(
+                'بینینی کاڵای بەسەرچوو',
+                _canViewExpiry,
+                (v) => setState(() => _canViewExpiry = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی کاڵای بەسەرچوو',
+                _canManageExpiry,
+                (v) => setState(() => _canManageExpiry = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی ڕێکخستنەکان',
+                _canManageSettings,
+                (v) => setState(() => _canManageSettings = v),
+              ),
+              _buildSwitch(
+                'بینینی ژمارەی مۆبایلی کڕیار',
+                _canViewCustomerPhone,
+                (v) => setState(() => _canViewCustomerPhone = v),
+              ),
+              _buildSwitch(
+                'بینینی تێبینییەکانی کڕیار',
+                _canViewCustomerNotes,
+                (v) => setState(() => _canViewCustomerNotes = v),
+              ),
+              _buildSwitch(
+                'دەستکاریکردنی تێبینییەکانی کڕیار',
+                _canEditCustomerNotes,
+                (v) => setState(() => _canEditCustomerNotes = v),
+              ),
+              _buildSwitch(
+                'بینینی باڵانسی کڕیار',
+                _canViewCustomerBalances,
+                (v) => setState(() => _canViewCustomerBalances = v),
+              ),
+              _buildSwitch(
+                'بینینی مێژووی پارەدانەوە',
+                _canViewPaymentHistory,
+                (v) => setState(() => _canViewPaymentHistory = v),
+              ),
+              _buildSwitch(
+                'دروستکردنی پسووڵە',
+                _canCreateReceipts,
+                (v) => setState(() => _canCreateReceipts = v),
+              ),
+              _buildSwitch(
+                'دەستکاریکردنی پسووڵە',
+                _canEditReceipts,
+                (v) => setState(() => _canEditReceipts = v),
+              ),
+              _buildSwitch(
+                'سڕینەوەی پسووڵە',
+                _canDeleteReceipts,
+                (v) => setState(() => _canDeleteReceipts = v),
+              ),
+              _buildSwitch(
+                'هەناردەکردنی پسووڵە',
+                _canExportReceipts,
+                (v) => setState(() => _canExportReceipts = v),
+              ),
+              _buildSwitch(
+                'بینینی پوختەی ڕاپۆرت',
+                _canViewReportSummary,
+                (v) => setState(() => _canViewReportSummary = v),
+              ),
+              _buildSwitch(
+                'هەناردەکردنی ڕاپۆرت',
+                _canExportReports,
+                (v) => setState(() => _canExportReports = v),
+              ),
+              _buildSwitch(
+                'بینینی Sync Logs',
+                _canViewSyncLogs,
+                (v) => setState(() => _canViewSyncLogs = v),
+              ),
+              _buildSwitch(
+                'دووبارە هەوڵدانی Sync شکستخواردوو',
+                _canRetryFailedSync,
+                (v) => setState(() => _canRetryFailedSync = v),
+              ),
+              _buildSwitch(
+                'Backup ـی دەستی',
+                _canRunManualBackup,
+                (v) => setState(() => _canRunManualBackup = v),
+              ),
+              _buildSwitch(
+                'گەڕاندنەوەی Backup',
+                _canRestoreBackup,
+                (v) => setState(() => _canRestoreBackup = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی قاڵبی ئاگادارکردنەوە',
+                _canManageNotificationTemplates,
+                (v) => setState(() => _canManageNotificationTemplates = v),
+              ),
+              _buildSwitch(
+                'ناردنی ئاگادارکردنەوەی بەکۆمەڵ',
+                _canSendBulkNotifications,
+                (v) => setState(() => _canSendBulkNotifications = v),
+              ),
+              _buildSwitch(
+                'نوێکردنەوەی نرخی بازاڕ',
+                _canManageMarketRateRefresh,
+                (v) => setState(() => _canManageMarketRateRefresh = v),
+              ),
+              _buildSwitch(
+                'بەڕێوەبردنی ڕێکخستنەکانی ئاسایش',
+                _canManageSecuritySettings,
+                (v) => setState(() => _canManageSecuritySettings = v),
                 isLast: true,
               ),
             ],
