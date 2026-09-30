@@ -12,14 +12,18 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
                 _buildStatChip(
                   Icons.receipt_long_outlined,
                   'قەرزی تۆمارکراو',
-                  AppHelpers.formatCurrency(_employeeStats['totalDebtsCreated'] ?? 0),
+                  AppHelpers.formatCurrency(
+                    _employeeStats['totalDebtsCreated'] ?? 0,
+                  ),
                   Colors.orange,
                 ),
                 const SizedBox(width: 10),
                 _buildStatChip(
                   Icons.payments_outlined,
                   'پارەی وەرگیراو',
-                  AppHelpers.formatCurrency(_employeeStats['totalPaymentsCollected'] ?? 0),
+                  AppHelpers.formatCurrency(
+                    _employeeStats['totalPaymentsCollected'] ?? 0,
+                  ),
                   Colors.green,
                 ),
               ],
@@ -93,7 +97,9 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
                             size: 16,
                             color: selected
                                 ? AppColors.primary
-                                : (isDark ? AppDarkColors.textSecondary : const Color(0xFF98A2B3)),
+                                : (isDark
+                                    ? AppDarkColors.textSecondary
+                                    : const Color(0xFF98A2B3)),
                           ),
                           const SizedBox(width: 5),
                           Flexible(
@@ -103,10 +109,14 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11.5,
-                                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                                 color: selected
                                     ? AppColors.primary
-                                    : (isDark ? AppDarkColors.textSecondary : const Color(0xFF667085)),
+                                    : (isDark
+                                        ? AppDarkColors.textSecondary
+                                        : const Color(0xFF667085)),
                               ),
                             ),
                           ),
@@ -136,7 +146,9 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
             color: isDark ? AppDarkColors.card : Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE9EDF3),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : const Color(0xFFE9EDF3),
             ),
           ),
           child: Row(
@@ -150,7 +162,9 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(
-                  _isActive ? Icons.check_circle_outline_rounded : Icons.block_rounded,
+                  _isActive
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.block_rounded,
                   color: accent,
                   size: 20,
                 ),
@@ -165,15 +179,21 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w800,
-                        color: isDark ? AppDarkColors.textPrimary : const Color(0xFF344054),
+                        color: isDark
+                            ? AppDarkColors.textPrimary
+                            : const Color(0xFF344054),
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _isActive ? 'دەتوانێت بچێتە ژوورەوە' : 'ناتوانێت بچێتە ژوورەوە',
+                      _isActive
+                          ? 'دەتوانێت بچێتە ژوورەوە'
+                          : 'ناتوانێت بچێتە ژوورەوە',
                       style: TextStyle(
                         fontSize: 11,
-                        color: isDark ? AppDarkColors.textSecondary : const Color(0xFF98A2B3),
+                        color: isDark
+                            ? AppDarkColors.textSecondary
+                            : const Color(0xFF98A2B3),
                       ),
                     ),
                   ],
@@ -192,216 +212,353 @@ extension _UserProfileEmployeeManagement on _UserProfileScreenState {
   }
 
   Widget _buildEmployeePermissionsCard() {
-    final auth = context.read<AuthProvider>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final canEdit = auth.userRole == 'admin';
-
-    final permissions = <({IconData icon, String title, bool value, ValueChanged<bool> onChanged})>[
-      (icon: Icons.visibility_outlined, title: 'بینینی کڕیارەکان', value: _canViewCustomers, onChanged: (v) => _setProfileState(() => _canViewCustomers = v)),
-      (icon: Icons.person_add_alt_1_outlined, title: 'زیادکردنی کڕیار', value: _canAddCustomers, onChanged: (v) => _setProfileState(() => _canAddCustomers = v)),
-      (icon: Icons.edit_outlined, title: 'دەستکاریکردنی کڕیار', value: _canEditCustomers, onChanged: (v) => _setProfileState(() => _canEditCustomers = v)),
-      (icon: Icons.delete_outline_rounded, title: 'سڕینەوەی کڕیار', value: _canDeleteCustomers, onChanged: (v) => _setProfileState(() => _canDeleteCustomers = v)),
-      (icon: Icons.receipt_long_outlined, title: 'بینینی قەرزەکان', value: _canViewDebts, onChanged: (v) => _setProfileState(() => _canViewDebts = v)),
-      (icon: Icons.add_card_outlined, title: 'زیادکردنی قەرز', value: _canAddDebts, onChanged: (v) => _setProfileState(() => _canAddDebts = v)),
-      (icon: Icons.edit_note_outlined, title: 'دەستکاریکردنی قەرز', value: _canEditDebts, onChanged: (v) => _setProfileState(() => _canEditDebts = v)),
-      (icon: Icons.delete_sweep_outlined, title: 'سڕینەوەی قەرز', value: _canDeleteDebts, onChanged: (v) => _setProfileState(() => _canDeleteDebts = v)),
-      (icon: Icons.payments_outlined, title: 'تۆمارکردنی پارەدانەوە', value: _canRecordPayments, onChanged: (v) => _setProfileState(() => _canRecordPayments = v)),
-      (icon: Icons.account_balance_wallet_outlined, title: 'دانانی سنووری قەرز', value: _canSetDebtLimit, onChanged: (v) => _setProfileState(() => _canSetDebtLimit = v)),
-      (icon: Icons.event_available_outlined, title: 'دانانی بەرواری دانەوە', value: _canSetDueDate, onChanged: (v) => _setProfileState(() => _canSetDueDate = v)),
-      (icon: Icons.analytics_outlined, title: 'بینینی ڕاپۆرتی دارایی', value: _canViewFinancialReports, onChanged: (v) => _setProfileState(() => _canViewFinancialReports = v)),
-      (icon: Icons.file_upload_outlined, title: 'هەناردەکردنی داتا', value: _canExportData, onChanged: (v) => _setProfileState(() => _canExportData = v)),
-      (icon: Icons.file_download_outlined, title: 'هاوردەکردنی داتا', value: _canImportData, onChanged: (v) => _setProfileState(() => _canImportData = v)),
-      (icon: Icons.notifications_active_outlined, title: 'ناردنی ئاگادارکردنەوە', value: _canSendNotifications, onChanged: (v) => _setProfileState(() => _canSendNotifications = v)),
-      (icon: Icons.undo_rounded, title: 'گەڕاندنەوەی پارەدانەوە', value: _canRefundPayments, onChanged: (v) => _setProfileState(() => _canRefundPayments = v)),
-      (icon: Icons.restore_from_trash_outlined, title: 'گەڕاندنەوەی قەرزی سڕاوە', value: _canRestoreDebts, onChanged: (v) => _setProfileState(() => _canRestoreDebts = v)),
-      (icon: Icons.receipt_outlined, title: 'بەڕێوەبردنی پسووڵە', value: _canManageReceipts, onChanged: (v) => _setProfileState(() => _canManageReceipts = v)),
-      (icon: Icons.notifications_outlined, title: 'بەڕێوەبردنی ئاگادارکردنەوە', value: _canManageNotifications, onChanged: (v) => _setProfileState(() => _canManageNotifications = v)),
-      (icon: Icons.how_to_reg_outlined, title: 'پەسەندکردنی کڕیار', value: _canApproveCustomers, onChanged: (v) => _setProfileState(() => _canApproveCustomers = v)),
-      (icon: Icons.badge_outlined, title: 'بەڕێوەبردنی کارمەندان', value: _canManageEmployees, onChanged: (v) => _setProfileState(() => _canManageEmployees = v)),
-      (icon: Icons.fact_check_outlined, title: 'بینینی Audit Log', value: _canViewAuditLog, onChanged: (v) => _setProfileState(() => _canViewAuditLog = v)),
-      (icon: Icons.backup_outlined, title: 'بەڕێوەبردنی Backup', value: _canManageBackup, onChanged: (v) => _setProfileState(() => _canManageBackup = v)),
-      (icon: Icons.sync_rounded, title: 'بەڕێوەبردنی Daftar Sync', value: _canManageDaftarSync, onChanged: (v) => _setProfileState(() => _canManageDaftarSync = v)),
-      (icon: Icons.workspace_premium_outlined, title: 'بەڕێوەبردنی بەشداری', value: _canManageSubscription, onChanged: (v) => _setProfileState(() => _canManageSubscription = v)),
-      (icon: Icons.dashboard_outlined, title: 'بینینی داشبۆرد', value: _canViewDashboard, onChanged: (v) => _setProfileState(() => _canViewDashboard = v)),
-      (icon: Icons.history_rounded, title: 'بینینی چالاکییە نوێکان', value: _canViewRecentActivity, onChanged: (v) => _setProfileState(() => _canViewRecentActivity = v)),
-      (icon: Icons.swap_horiz_rounded, title: 'بینینی مێژووی مامەڵەکان', value: _canViewTransactions, onChanged: (v) => _setProfileState(() => _canViewTransactions = v)),
-      (icon: Icons.edit_note_rounded, title: 'دەستکاریکردنی پارەدانەوە', value: _canEditPayments, onChanged: (v) => _setProfileState(() => _canEditPayments = v)),
-      (icon: Icons.delete_forever_outlined, title: 'سڕینەوەی پارەدانەوە', value: _canDeletePayments, onChanged: (v) => _setProfileState(() => _canDeletePayments = v)),
-      (icon: Icons.description_outlined, title: 'دروستکردنی کەشف و بەڵگەنامە', value: _canCreateStatements, onChanged: (v) => _setProfileState(() => _canCreateStatements = v)),
-      (icon: Icons.link_rounded, title: 'بەڕێوەبردنی لینکی کڕیار', value: _canManageCustomerLinks, onChanged: (v) => _setProfileState(() => _canManageCustomerLinks = v)),
-      (icon: Icons.push_pin_outlined, title: 'Pin کردنی کڕیار', value: _canPinCustomers, onChanged: (v) => _setProfileState(() => _canPinCustomers = v)),
-      (icon: Icons.workspace_premium_outlined, title: 'بەڕێوەبردنی VIP', value: _canManageVipCustomers, onChanged: (v) => _setProfileState(() => _canManageVipCustomers = v)),
-      (icon: Icons.merge_type_rounded, title: 'یەکخستنی ناسنامەی دووبارە', value: _canMergeCustomerIdentities, onChanged: (v) => _setProfileState(() => _canMergeCustomerIdentities = v)),
-      (icon: Icons.currency_exchange_rounded, title: 'بینینی نرخی بازاڕ', value: _canViewMarketRates, onChanged: (v) => _setProfileState(() => _canViewMarketRates = v)),
-      (icon: Icons.auto_graph_rounded, title: 'بینینی ناوەندی زیرەکی', value: _canViewIntelligence, onChanged: (v) => _setProfileState(() => _canViewIntelligence = v)),
-      (icon: Icons.event_repeat_rounded, title: 'بەڕێوەبردنی بەدواداچوونی قەرز', value: _canManageCollections, onChanged: (v) => _setProfileState(() => _canManageCollections = v)),
-      (icon: Icons.inventory_2_outlined, title: 'بینینی کاڵای بەسەرچوو', value: _canViewExpiry, onChanged: (v) => _setProfileState(() => _canViewExpiry = v)),
-      (icon: Icons.inventory_2_rounded, title: 'بەڕێوەبردنی کاڵای بەسەرچوو', value: _canManageExpiry, onChanged: (v) => _setProfileState(() => _canManageExpiry = v)),
-      (icon: Icons.settings_outlined, title: 'بەڕێوەبردنی ڕێکخستنەکان', value: _canManageSettings, onChanged: (v) => _setProfileState(() => _canManageSettings = v)),
-    ];
+    final user = _user;
+    if (user == null) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isDark ? AppDarkColors.card : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE9EDF3),
-            ),
-          ),
-          child: Column(
-            children: [
-              ...List.generate(permissions.length, (index) {
-                final item = permissions[index];
-                return _permissionTile(
-                  icon: item.icon,
-                  title: item.title,
-                  value: item.value,
-                  enabled: canEdit,
-                  onChanged: item.onChanged,
-                  showDivider: index != permissions.length - 1,
-                );
-              }),
-              if (canEdit) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: _isSaving ? null : _saveEmployeePermissions,
-                    icon: const Icon(Icons.check_rounded, size: 18),
-                    label: const Text('پاشەکەوتکردنی دەسەڵاتەکان'),
-                    style: ElevatedButton.styleFrom(
-                      elevation: 0,
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
+        child: _EmployeePermissionsEditor(
+          user: user,
+          canEdit: context.read<AuthProvider>().userRole == 'admin',
+          onSaved: _loadData,
         ),
       ),
     );
   }
+}
 
-  Widget _permissionTile({
-    required IconData icon,
-    required String title,
-    required bool value,
-    required bool enabled,
-    required ValueChanged<bool> onChanged,
-    bool showDivider = true,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 17, color: AppColors.primary),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppDarkColors.textPrimary : const Color(0xFF344054),
-                  ),
-                ),
-              ),
-              Switch.adaptive(
-                value: value,
-                onChanged: enabled ? onChanged : null,
-              ),
-            ],
-          ),
-        ),
-        if (showDivider)
-          Divider(
-            height: 1,
-            color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFF0F2F5),
-          ),
-      ],
-    );
+class _EmployeePermissionSpec {
+  const _EmployeePermissionSpec({
+    required this.key,
+    required this.title,
+    required this.group,
+    required this.icon,
+  });
+
+  final String key;
+  final String title;
+  final String group;
+  final IconData icon;
+}
+
+const _employeePermissionSpecs = <_EmployeePermissionSpec>[
+  _EmployeePermissionSpec(key: 'can_view_customers', title: 'بینینی کڕیارەکان', group: 'کڕیار', icon: Icons.visibility_outlined),
+  _EmployeePermissionSpec(key: 'can_add_customers', title: 'زیادکردنی کڕیار', group: 'کڕیار', icon: Icons.person_add_alt_1_outlined),
+  _EmployeePermissionSpec(key: 'can_edit_customers', title: 'دەستکاریکردنی کڕیار', group: 'کڕیار', icon: Icons.edit_outlined),
+  _EmployeePermissionSpec(key: 'can_delete_customers', title: 'سڕینەوەی کڕیار', group: 'کڕیار', icon: Icons.delete_outline_rounded),
+  _EmployeePermissionSpec(key: 'can_approve_customers', title: 'پەسەندکردنی کڕیار', group: 'کڕیار', icon: Icons.how_to_reg_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_customer_links', title: 'بەڕێوەبردنی لینکی کڕیار', group: 'کڕیار', icon: Icons.link_rounded),
+  _EmployeePermissionSpec(key: 'can_pin_customers', title: 'Pin کردنی کڕیار', group: 'کڕیار', icon: Icons.push_pin_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_vip_customers', title: 'بەڕێوەبردنی VIP', group: 'کڕیار', icon: Icons.workspace_premium_outlined),
+  _EmployeePermissionSpec(key: 'can_merge_customer_identities', title: 'یەکخستنی ناسنامەی دووبارە', group: 'کڕیار', icon: Icons.merge_type_rounded),
+  _EmployeePermissionSpec(key: 'can_view_customer_phone', title: 'بینینی ژمارەی مۆبایلی کڕیار', group: 'کڕیار', icon: Icons.phone_outlined),
+  _EmployeePermissionSpec(key: 'can_view_customer_notes', title: 'بینینی تێبینییەکانی کڕیار', group: 'کڕیار', icon: Icons.sticky_note_2_outlined),
+  _EmployeePermissionSpec(key: 'can_edit_customer_notes', title: 'دەستکاریکردنی تێبینییەکانی کڕیار', group: 'کڕیار', icon: Icons.edit_note_outlined),
+  _EmployeePermissionSpec(key: 'can_view_customer_balances', title: 'بینینی باڵانسی کڕیار', group: 'کڕیار', icon: Icons.account_balance_wallet_outlined),
+
+  _EmployeePermissionSpec(key: 'can_view_debts', title: 'بینینی قەرزەکان', group: 'قەرز و پارە', icon: Icons.receipt_long_outlined),
+  _EmployeePermissionSpec(key: 'can_add_debts', title: 'زیادکردنی قەرز', group: 'قەرز و پارە', icon: Icons.add_card_outlined),
+  _EmployeePermissionSpec(key: 'can_edit_debts', title: 'دەستکاریکردنی قەرز', group: 'قەرز و پارە', icon: Icons.edit_note_outlined),
+  _EmployeePermissionSpec(key: 'can_delete_debts', title: 'سڕینەوەی قەرز', group: 'قەرز و پارە', icon: Icons.delete_sweep_outlined),
+  _EmployeePermissionSpec(key: 'can_record_payments', title: 'تۆمارکردنی پارەدانەوە', group: 'قەرز و پارە', icon: Icons.payments_outlined),
+  _EmployeePermissionSpec(key: 'can_set_debt_limit', title: 'دانانی سنووری قەرز', group: 'قەرز و پارە', icon: Icons.account_balance_wallet_outlined),
+  _EmployeePermissionSpec(key: 'can_set_due_date', title: 'دانانی بەرواری دانەوە', group: 'قەرز و پارە', icon: Icons.event_available_outlined),
+  _EmployeePermissionSpec(key: 'can_refund_payments', title: 'گەڕاندنەوەی پارەدانەوە', group: 'قەرز و پارە', icon: Icons.undo_rounded),
+  _EmployeePermissionSpec(key: 'can_restore_debts', title: 'گەڕاندنەوەی قەرزی سڕاوە', group: 'قەرز و پارە', icon: Icons.restore_from_trash_outlined),
+  _EmployeePermissionSpec(key: 'can_view_transactions', title: 'بینینی مێژووی مامەڵەکان', group: 'قەرز و پارە', icon: Icons.swap_horiz_rounded),
+  _EmployeePermissionSpec(key: 'can_edit_payments', title: 'دەستکاریکردنی پارەدانەوە', group: 'قەرز و پارە', icon: Icons.edit_note_rounded),
+  _EmployeePermissionSpec(key: 'can_delete_payments', title: 'سڕینەوەی پارەدانەوە', group: 'قەرز و پارە', icon: Icons.delete_forever_outlined),
+  _EmployeePermissionSpec(key: 'can_view_payment_history', title: 'بینینی مێژووی پارەدانەوە', group: 'قەرز و پارە', icon: Icons.history_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_collections', title: 'بەڕێوەبردنی بەدواداچوونی قەرز', group: 'قەرز و پارە', icon: Icons.event_repeat_rounded),
+
+  _EmployeePermissionSpec(key: 'can_view_financial_reports', title: 'بینینی ڕاپۆرتی دارایی', group: 'پسووڵە و ڕاپۆرت', icon: Icons.analytics_outlined),
+  _EmployeePermissionSpec(key: 'can_export_data', title: 'هەناردەکردنی داتا', group: 'پسووڵە و ڕاپۆرت', icon: Icons.file_upload_outlined),
+  _EmployeePermissionSpec(key: 'can_import_data', title: 'هاوردەکردنی داتا', group: 'پسووڵە و ڕاپۆرت', icon: Icons.file_download_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_receipts', title: 'بەڕێوەبردنی پسووڵە', group: 'پسووڵە و ڕاپۆرت', icon: Icons.receipt_outlined),
+  _EmployeePermissionSpec(key: 'can_create_statements', title: 'دروستکردنی کەشف و بەڵگەنامە', group: 'پسووڵە و ڕاپۆرت', icon: Icons.description_outlined),
+  _EmployeePermissionSpec(key: 'can_create_receipts', title: 'دروستکردنی پسووڵە', group: 'پسووڵە و ڕاپۆرت', icon: Icons.note_add_outlined),
+  _EmployeePermissionSpec(key: 'can_edit_receipts', title: 'دەستکاریکردنی پسووڵە', group: 'پسووڵە و ڕاپۆرت', icon: Icons.edit_document),
+  _EmployeePermissionSpec(key: 'can_delete_receipts', title: 'سڕینەوەی پسووڵە', group: 'پسووڵە و ڕاپۆرت', icon: Icons.delete_outline_rounded),
+  _EmployeePermissionSpec(key: 'can_export_receipts', title: 'هەناردەکردنی پسووڵە', group: 'پسووڵە و ڕاپۆرت', icon: Icons.ios_share_outlined),
+  _EmployeePermissionSpec(key: 'can_view_report_summary', title: 'بینینی پوختەی ڕاپۆرت', group: 'پسووڵە و ڕاپۆرت', icon: Icons.summarize_outlined),
+  _EmployeePermissionSpec(key: 'can_export_reports', title: 'هەناردەکردنی ڕاپۆرت', group: 'پسووڵە و ڕاپۆرت', icon: Icons.download_outlined),
+
+  _EmployeePermissionSpec(key: 'can_send_notifications', title: 'ناردنی ئاگادارکردنەوە', group: 'کارمەند و ئاگادارکردنەوە', icon: Icons.notifications_active_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_notifications', title: 'بەڕێوەبردنی ئاگادارکردنەوە', group: 'کارمەند و ئاگادارکردنەوە', icon: Icons.notifications_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_notification_templates', title: 'بەڕێوەبردنی قاڵبی ئاگادارکردنەوە', group: 'کارمەند و ئاگادارکردنەوە', icon: Icons.dynamic_feed_outlined),
+  _EmployeePermissionSpec(key: 'can_send_bulk_notifications', title: 'ناردنی ئاگادارکردنەوەی بەکۆمەڵ', group: 'کارمەند و ئاگادارکردنەوە', icon: Icons.campaign_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_employees', title: 'بەڕێوەبردنی کارمەندان', group: 'کارمەند و ئاگادارکردنەوە', icon: Icons.badge_outlined),
+  _EmployeePermissionSpec(key: 'can_view_audit_log', title: 'بینینی Audit Log', group: 'کارمەند و ئاگادارکردنەوە', icon: Icons.fact_check_outlined),
+
+  _EmployeePermissionSpec(key: 'can_manage_backup', title: 'بەڕێوەبردنی Backup', group: 'سیستەم و ئاسایش', icon: Icons.backup_outlined),
+  _EmployeePermissionSpec(key: 'can_run_manual_backup', title: 'Backup ـی دەستی', group: 'سیستەم و ئاسایش', icon: Icons.cloud_upload_outlined),
+  _EmployeePermissionSpec(key: 'can_restore_backup', title: 'گەڕاندنەوەی Backup', group: 'سیستەم و ئاسایش', icon: Icons.restore_page_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_daftar_sync', title: 'بەڕێوەبردنی Daftar Sync', group: 'سیستەم و ئاسایش', icon: Icons.sync_rounded),
+  _EmployeePermissionSpec(key: 'can_view_sync_logs', title: 'بینینی Sync Logs', group: 'سیستەم و ئاسایش', icon: Icons.list_alt_outlined),
+  _EmployeePermissionSpec(key: 'can_retry_failed_sync', title: 'دووبارە هەوڵدانی Sync شکستخواردوو', group: 'سیستەم و ئاسایش', icon: Icons.sync_problem_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_subscription', title: 'بەڕێوەبردنی بەشداری', group: 'سیستەم و ئاسایش', icon: Icons.workspace_premium_outlined),
+  _EmployeePermissionSpec(key: 'can_view_dashboard', title: 'بینینی داشبۆرد', group: 'سیستەم و ئاسایش', icon: Icons.dashboard_outlined),
+  _EmployeePermissionSpec(key: 'can_view_recent_activity', title: 'بینینی چالاکییە نوێکان', group: 'سیستەم و ئاسایش', icon: Icons.history_rounded),
+  _EmployeePermissionSpec(key: 'can_view_market_rates', title: 'بینینی نرخی بازاڕ', group: 'سیستەم و ئاسایش', icon: Icons.currency_exchange_rounded),
+  _EmployeePermissionSpec(key: 'can_manage_market_rate_refresh', title: 'نوێکردنەوەی نرخی بازاڕ', group: 'سیستەم و ئاسایش', icon: Icons.refresh_rounded),
+  _EmployeePermissionSpec(key: 'can_view_intelligence', title: 'بینینی ناوەندی زیرەکی', group: 'سیستەم و ئاسایش', icon: Icons.auto_graph_rounded),
+  _EmployeePermissionSpec(key: 'can_view_expiry', title: 'بینینی کاڵای بەسەرچوو', group: 'سیستەم و ئاسایش', icon: Icons.inventory_2_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_expiry', title: 'بەڕێوەبردنی کاڵای بەسەرچوو', group: 'سیستەم و ئاسایش', icon: Icons.inventory_2_rounded),
+  _EmployeePermissionSpec(key: 'can_manage_settings', title: 'بەڕێوەبردنی ڕێکخستنەکان', group: 'سیستەم و ئاسایش', icon: Icons.settings_outlined),
+  _EmployeePermissionSpec(key: 'can_manage_security_settings', title: 'بەڕێوەبردنی ڕێکخستنەکانی ئاسایش', group: 'سیستەم و ئاسایش', icon: Icons.security_outlined),
+];
+
+class _EmployeePermissionsEditor extends StatefulWidget {
+  const _EmployeePermissionsEditor({
+    required this.user,
+    required this.canEdit,
+    required this.onSaved,
+  });
+
+  final RecordModel user;
+  final bool canEdit;
+  final Future<void> Function() onSaved;
+
+  @override
+  State<_EmployeePermissionsEditor> createState() =>
+      _EmployeePermissionsEditorState();
+}
+
+class _EmployeePermissionsEditorState
+    extends State<_EmployeePermissionsEditor> {
+  late Map<String, bool> _draft;
+  bool _saving = false;
+  bool _dirty = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resetDraft();
   }
 
-  Future<void> _saveEmployeePermissions() async {
-    if (_isSaving) return;
-    _setProfileState(() => _isSaving = true);
-    try {
-      await PBService.updateUser(widget.userId, {
-        'can_add_customers': _canAddCustomers,
-        'can_set_debt_limit': _canSetDebtLimit,
-        'can_set_due_date': _canSetDueDate,
-        'can_edit_debts': _canEditDebts,
-        'can_send_notifications': _canSendNotifications,
-        'can_view_customers': _canViewCustomers,
-        'can_edit_customers': _canEditCustomers,
-        'can_delete_customers': _canDeleteCustomers,
-        'can_view_debts': _canViewDebts,
-        'can_add_debts': _canAddDebts,
-        'can_delete_debts': _canDeleteDebts,
-        'can_record_payments': _canRecordPayments,
-        'can_view_financial_reports': _canViewFinancialReports,
-        'can_export_data': _canExportData,
-        'can_import_data': _canImportData,
-        'can_refund_payments': _canRefundPayments,
-        'can_restore_debts': _canRestoreDebts,
-        'can_manage_receipts': _canManageReceipts,
-        'can_manage_notifications': _canManageNotifications,
-        'can_approve_customers': _canApproveCustomers,
-        'can_manage_employees': _canManageEmployees,
-        'can_view_audit_log': _canViewAuditLog,
-        'can_manage_backup': _canManageBackup,
-        'can_manage_daftar_sync': _canManageDaftarSync,
-        'can_manage_subscription': _canManageSubscription,
-        'can_view_dashboard': _canViewDashboard,
-        'can_view_recent_activity': _canViewRecentActivity,
-        'can_view_transactions': _canViewTransactions,
-        'can_edit_payments': _canEditPayments,
-        'can_delete_payments': _canDeletePayments,
-        'can_create_statements': _canCreateStatements,
-        'can_manage_customer_links': _canManageCustomerLinks,
-        'can_pin_customers': _canPinCustomers,
-        'can_manage_vip_customers': _canManageVipCustomers,
-        'can_merge_customer_identities': _canMergeCustomerIdentities,
-        'can_view_market_rates': _canViewMarketRates,
-        'can_view_intelligence': _canViewIntelligence,
-        'can_manage_collections': _canManageCollections,
-        'can_view_expiry': _canViewExpiry,
-        'can_manage_expiry': _canManageExpiry,
-        'can_manage_settings': _canManageSettings,
-      });
-      if (!mounted) return;
-      AppHelpers.showSnackBar(context, 'دەسەڵاتەکان نوێکرانەوە');
-      await _loadData();
-    } catch (_) {
-      if (mounted) {
-        AppHelpers.showSnackBar(context, 'نەتوانرا دەسەڵاتەکان پاشەکەوت بکرێن', isError: true);
-      }
-    } finally {
-      if (mounted) _setProfileState(() => _isSaving = false);
+  @override
+  void didUpdateWidget(covariant _EmployeePermissionsEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user != widget.user && !_dirty && !_saving) {
+      _resetDraft();
     }
   }
 
-  // ═══════════════════════════════════════════
-  // ── Secure Password Management ──
-  // ═══════════════════════════════════════════
+  void _resetDraft() {
+    _draft = {
+      for (final spec in _employeePermissionSpecs)
+        spec.key: widget.user.getBoolValue(spec.key),
+    };
+    _dirty = false;
+  }
+
+  Future<void> _save() async {
+    if (_saving || !_dirty || !widget.canEdit) return;
+    setState(() => _saving = true);
+    try {
+      await PBService.updateUser(widget.user.id, Map<String, dynamic>.from(_draft));
+      if (!mounted) return;
+      setState(() => _dirty = false);
+      AppHelpers.showSnackBar(context, 'هەموو ٦٠ دەسەڵاتەکە نوێکرانەوە');
+      await widget.onSaved();
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showSnackBar(
+        context,
+        AppHelpers.backendErrorMessage(
+          e,
+          fallback: 'نەتوانرا دەسەڵاتەکان پاشەکەوت بکرێن',
+        ),
+        isError: true,
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final enabledCount = _draft.values.where((value) => value).length;
+    final groups = <String, List<_EmployeePermissionSpec>>{};
+    for (final spec in _employeePermissionSpecs) {
+      groups.putIfAbsent(spec.group, () => []).add(spec);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppDarkColors.card : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFE9EDF3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'دەسەڵاتەکانی کارمەند',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: isDark
+                            ? AppDarkColors.textPrimary
+                            : const Color(0xFF344054),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$enabledCount لە ٦٠ دەسەڵات چالاکە',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isDark
+                            ? AppDarkColors.textSecondary
+                            : const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (widget.canEdit)
+                PopupMenuButton<String>(
+                  tooltip: 'کرداری خێرا',
+                  onSelected: (value) {
+                    setState(() {
+                      final newValue = value == 'all';
+                      for (final spec in _employeePermissionSpecs) {
+                        _draft[spec.key] = newValue;
+                      }
+                      _dirty = true;
+                    });
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'all', child: Text('هەمووی چالاک بکە')),
+                    PopupMenuItem(value: 'none', child: Text('هەمووی ناچالاک بکە')),
+                  ],
+                  icon: const Icon(Icons.more_horiz_rounded),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...groups.entries.map((entry) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: Text(
+                      entry.key,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  ...List.generate(entry.value.length, (index) {
+                    final spec = entry.value[index];
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  spec.icon,
+                                  size: 17,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  spec.title,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? AppDarkColors.textPrimary
+                                        : const Color(0xFF344054),
+                                  ),
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: _draft[spec.key] ?? false,
+                                onChanged: widget.canEdit && !_saving
+                                    ? (value) {
+                                        setState(() {
+                                          _draft[spec.key] = value;
+                                          _dirty = true;
+                                        });
+                                      }
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (index != entry.value.length - 1)
+                          Divider(
+                            height: 1,
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.05)
+                                : const Color(0xFFF0F2F5),
+                          ),
+                      ],
+                    );
+                  }),
+                ],
+              ),
+            );
+          }),
+          if (widget.canEdit)
+            SizedBox(
+              height: 46,
+              child: ElevatedButton.icon(
+                onPressed: _saving || !_dirty ? null : _save,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 17,
+                        height: 17,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check_rounded, size: 18),
+                label: Text(
+                  _saving
+                      ? 'پاشەکەوت دەکرێت...'
+                      : 'پاشەکەوتکردنی ٦٠ دەسەڵات',
+                ),
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
