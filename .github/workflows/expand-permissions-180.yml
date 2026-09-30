@@ -5,6 +5,7 @@ on:
     branches: [user-source]
     paths:
       - 'scripts/expand_permissions_to_180.py'
+      - 'scripts/fix_expand_180_contract.py'
       - '.github/workflows/expand-permissions-180.yml'
   workflow_dispatch:
 
@@ -22,6 +23,9 @@ jobs:
 
       - name: Apply 180-permission patch
         run: python3 scripts/expand_permissions_to_180.py
+
+      - name: Repair generated contract parser
+        run: python3 scripts/fix_expand_180_contract.py
 
       - name: Verify 180-permission contract
         run: python3 scripts/verify_employee_permissions_contract.py
