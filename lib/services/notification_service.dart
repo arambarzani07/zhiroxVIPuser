@@ -43,7 +43,7 @@ class NotificationService {
   /// Initialize local notifications and OneSignal push notifications.
   ///
   /// OneSignal is enabled only when the release/build provides:
-  /// --dart-define=ONESIGNAL_APP_ID=<app-id>
+  /// `--dart-define=ONESIGNAL_APP_ID=<app-id>`
   static Future<void> init() async {
     if (_initialized) return;
 
