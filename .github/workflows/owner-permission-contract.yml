@@ -7,15 +7,20 @@ on:
     paths:
       - 'lib/security/owner_permission_registry.dart'
       - 'lib/services/owner_permission_service.dart'
+      - 'lib/services/owner_plan_control_service.dart'
       - 'lib/screens/auth/owner_permission_center_screen.dart'
       - 'lib/screens/auth/owner_market_permission_matrix_screen.dart'
+      - 'lib/screens/auth/owner_plan_market_control_screen.dart'
       - 'scripts/verify_owner_permission_registry.py'
       - 'scripts/verify_owner_permission_enforcement.py'
       - 'scripts/verify_owner_account_admin_governance.py'
       - 'scripts/verify_owner_permission_catalog_chain.py'
       - 'scripts/verify_owner_market_permission_matrix.py'
+      - 'scripts/verify_owner_plan_market_controls.py'
       - 'supabase/migrations/**owner_permission**.sql'
       - 'supabase/migrations/**owner_market_permission**.sql'
+      - 'supabase/migrations/**owner_plan_resource**.sql'
+      - 'supabase/migrations/**tenant_profile_plan_limits**.sql'
       - 'supabase/migrations/**owner_account_admin**.sql'
       - 'supabase/functions/owner-account-recovery/index.ts'
       - 'supabase/functions/account-admin/index.ts'
@@ -24,15 +29,20 @@ on:
     paths:
       - 'lib/security/owner_permission_registry.dart'
       - 'lib/services/owner_permission_service.dart'
+      - 'lib/services/owner_plan_control_service.dart'
       - 'lib/screens/auth/owner_permission_center_screen.dart'
       - 'lib/screens/auth/owner_market_permission_matrix_screen.dart'
+      - 'lib/screens/auth/owner_plan_market_control_screen.dart'
       - 'scripts/verify_owner_permission_registry.py'
       - 'scripts/verify_owner_permission_enforcement.py'
       - 'scripts/verify_owner_account_admin_governance.py'
       - 'scripts/verify_owner_permission_catalog_chain.py'
       - 'scripts/verify_owner_market_permission_matrix.py'
+      - 'scripts/verify_owner_plan_market_controls.py'
       - 'supabase/migrations/**owner_permission**.sql'
       - 'supabase/migrations/**owner_market_permission**.sql'
+      - 'supabase/migrations/**owner_plan_resource**.sql'
+      - 'supabase/migrations/**tenant_profile_plan_limits**.sql'
       - 'supabase/migrations/**owner_account_admin**.sql'
       - 'supabase/functions/owner-account-recovery/index.ts'
       - 'supabase/functions/account-admin/index.ts'
@@ -56,3 +66,5 @@ jobs:
         run: python3 scripts/verify_owner_permission_catalog_chain.py
       - name: Verify Owner market permission matrix
         run: python3 scripts/verify_owner_market_permission_matrix.py
+      - name: Verify plan-linked market limits
+        run: python3 scripts/verify_owner_plan_market_controls.py
