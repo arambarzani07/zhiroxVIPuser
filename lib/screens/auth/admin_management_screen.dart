@@ -325,7 +325,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
             if (_isLoading && _admins.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(child: CircularProgressIndicator()),
+                child: OwnerStatePanel.loading(),
               )
             else if (_loadError != null && _admins.isEmpty)
               SliverFillRemaining(
