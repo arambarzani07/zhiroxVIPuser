@@ -477,7 +477,7 @@ allowed = set(re.findall(r"'(can_[a-z0-9_]+)'", allowed_match.group(1)))
 compare("set_employee_permissions_v2", allowed, expected)
 
 sync_to_profile = set(re.findall(
-    r"^\\s*(can_[a-z0-9_]+)\\s*=\\s*new\\.\\1\\s*,?\\s*$",
+    r"^\\s*(?:set\\s+)?(can_[a-z0-9_]+)\\s*=\\s*new\\.\\1\\s*,?\\s*$",
     migration_text,
     re.M,
 ))

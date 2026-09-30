@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/permissions/additional_employee_permissions.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -85,6 +86,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
   bool _canSendBulkNotifications = false;
   bool _canManageMarketRateRefresh = false;
   bool _canManageSecuritySettings = false;
+  final Map<String, bool> _additionalPermissions = newAdditionalEmployeePermissionState();
 
   String? _employeePasswordError(String value) {
     if (value.isEmpty) return 'تکایە وشەی نهێنی بنووسە';
@@ -342,6 +344,9 @@ class _AddUserDialogState extends State<AddUserDialog> {
         canSendBulkNotifications: _canSendBulkNotifications,
         canManageMarketRateRefresh: _canManageMarketRateRefresh,
         canManageSecuritySettings: _canManageSecuritySettings,
+        extraPermissions: widget.role == 'employee'
+            ? _additionalPermissions
+            : const <String, bool>{},
         debtLimit: debtLimit,
       );
 
@@ -686,7 +691,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
         ),
         const SizedBox(height: 6),
         Text(
-          '60 دەسەڵات بەردەستن؛ تەنها ئەوانە چالاک بکە کە پێویستی پێیان هەیە.',
+          '180 دەسەڵات بەردەستن؛ تەنها ئەوانە چالاک بکە کە پێویستی پێیان هەیە.',
           style: TextStyle(
             fontSize: 11.5,
             height: 1.5,
@@ -1012,8 +1017,78 @@ class _AddUserDialogState extends State<AddUserDialog> {
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        ..._buildAdditionalPermissionGroups(isDark),
       ],
     );
+  }
+
+  List<Widget> _buildAdditionalPermissionGroups(bool isDark) {
+    final groups = <String, List<AdditionalEmployeePermissionSpec>>{};
+    for (final spec in additionalEmployeePermissionSpecs) {
+      groups.putIfAbsent(spec.group, () => <AdditionalEmployeePermissionSpec>[])
+          .add(spec);
+    }
+
+    return groups.entries.map((entry) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: isDark ? AppDarkColors.surface : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE4E7EC),
+          ),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 7),
+              child: Row(
+                children: [
+                  Icon(entry.value.first.icon, size: 17, color: AppColors.primary),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      entry.key,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isDark
+                            ? AppDarkColors.textPrimary
+                            : const Color(0xFF344054),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${entry.value.where((spec) => _additionalPermissions[spec.key] == true).length}/${entry.value.length}',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: isDark
+                          ? AppDarkColors.textSecondary
+                          : const Color(0xFF667085),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(
+              height: 1,
+              color: isDark ? AppDarkColors.cardBorder : const Color(0xFFE4E7EC),
+            ),
+            ...List.generate(entry.value.length, (index) {
+              final spec = entry.value[index];
+              return _buildSwitch(
+                spec.title,
+                _additionalPermissions[spec.key] ?? false,
+                (value) => setState(() => _additionalPermissions[spec.key] = value),
+                isLast: index == entry.value.length - 1,
+              );
+            }),
+          ],
+        ),
+      );
+    }).toList(growable: false);
   }
 
   Widget _sectionLabel(String label, IconData icon, bool isDark) {

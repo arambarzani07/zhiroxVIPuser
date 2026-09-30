@@ -242,7 +242,7 @@ class _EmployeePermissionSpec {
   final IconData icon;
 }
 
-const _employeePermissionSpecs = <_EmployeePermissionSpec>[
+final _employeePermissionSpecs = <_EmployeePermissionSpec>[
   _EmployeePermissionSpec(key: 'can_view_customers', title: 'بینینی کڕیارەکان', group: 'کڕیار', icon: Icons.visibility_outlined),
   _EmployeePermissionSpec(key: 'can_add_customers', title: 'زیادکردنی کڕیار', group: 'کڕیار', icon: Icons.person_add_alt_1_outlined),
   _EmployeePermissionSpec(key: 'can_edit_customers', title: 'دەستکاریکردنی کڕیار', group: 'کڕیار', icon: Icons.edit_outlined),
@@ -307,6 +307,16 @@ const _employeePermissionSpecs = <_EmployeePermissionSpec>[
   _EmployeePermissionSpec(key: 'can_manage_expiry', title: 'بەڕێوەبردنی کاڵای بەسەرچوو', group: 'سیستەم و ئاسایش', icon: Icons.inventory_2_rounded),
   _EmployeePermissionSpec(key: 'can_manage_settings', title: 'بەڕێوەبردنی ڕێکخستنەکان', group: 'سیستەم و ئاسایش', icon: Icons.settings_outlined),
   _EmployeePermissionSpec(key: 'can_manage_security_settings', title: 'بەڕێوەبردنی ڕێکخستنەکانی ئاسایش', group: 'سیستەم و ئاسایش', icon: Icons.security_outlined),
+
+  ...additionalEmployeePermissionSpecs.map(
+    (spec) => _EmployeePermissionSpec(
+      key: spec.key,
+      title: spec.title,
+      group: spec.group,
+      icon: spec.icon,
+    ),
+  ),
+
 ];
 
 class _EmployeePermissionsEditor extends StatefulWidget {
@@ -360,7 +370,7 @@ class _EmployeePermissionsEditorState
       await PBService.updateUser(widget.user.id, Map<String, dynamic>.from(_draft));
       if (!mounted) return;
       setState(() => _dirty = false);
-      AppHelpers.showSnackBar(context, 'هەموو ٦٠ دەسەڵاتەکە نوێکرانەوە');
+      AppHelpers.showSnackBar(context, 'هەموو ١٨٠ دەسەڵاتەکە نوێکرانەوە');
       await widget.onSaved();
     } catch (e) {
       if (!mounted) return;
@@ -418,7 +428,7 @@ class _EmployeePermissionsEditorState
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '$enabledCount لە ٦٠ دەسەڵات چالاکە',
+                      '$enabledCount لە ١٨٠ دەسەڵات چالاکە',
                       style: TextStyle(
                         fontSize: 11.5,
                         color: isDark
@@ -545,7 +555,7 @@ class _EmployeePermissionsEditorState
                 label: Text(
                   _saving
                       ? 'پاشەکەوت دەکرێت...'
-                      : 'پاشەکەوتکردنی ٦٠ دەسەڵات',
+                      : 'پاشەکەوتکردنی ١٨٠ دەسەڵات',
                 ),
                 style: ElevatedButton.styleFrom(
                   elevation: 0,

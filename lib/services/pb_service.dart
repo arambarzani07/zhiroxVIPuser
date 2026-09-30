@@ -454,6 +454,7 @@ class PBService {
     bool canSendBulkNotifications = false,
     bool canManageMarketRateRefresh = false,
     bool canManageSecuritySettings = false,
+    Map<String, bool> extraPermissions = const <String, bool>{},
     double debtLimit = 0,
   }) {
     return _invokeCreateAccount({
@@ -525,6 +526,7 @@ class PBService {
       'can_send_bulk_notifications': canSendBulkNotifications,
       'can_manage_market_rate_refresh': canManageMarketRateRefresh,
       'can_manage_security_settings': canManageSecuritySettings,
+      ...extraPermissions,
       'debt_limit': debtLimit,
     });
   }
