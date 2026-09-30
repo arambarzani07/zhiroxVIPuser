@@ -136,7 +136,10 @@ class ZhiroxApp extends StatelessWidget {
           darkTheme: AppDesign.darkTheme,
           locale: const Locale('ckb'),
           builder: (context, child) {
-            return Directionality(
+            final auth = context.watch<AuthProvider>();
+            final isOwner =
+                auth.user?.getBoolValue('is_system_owner') ?? false;
+            final content = Directionality(
               textDirection: TextDirection.rtl,
               child: _OnlineOnlyGate(
                 child: PlatformOperationsGate(
@@ -144,6 +147,12 @@ class ZhiroxApp extends StatelessWidget {
                 ),
               ),
             );
+
+            if (!isOwner) return content;
+            final ownerTheme = Theme.of(context).brightness == Brightness.dark
+                ? AppDesign.ownerDarkTheme
+                : AppDesign.ownerLightTheme;
+            return Theme(data: ownerTheme, child: content);
           },
           home: const AuthWrapper(),
         ),
