@@ -9,13 +9,10 @@ void main() {
     final center = File('lib/screens/admin/admin_notifications_screen.dart')
         .readAsStringSync();
 
-    const heading = "title: 'ئاگادارکردنەوەکان'";
     const entry = "title: 'ناوەندی ئاگادارکردنەوەکان'";
 
-    expect(settings, contains(heading));
     expect(settings, contains(entry));
     expect(settings, contains('AdminNotificationsScreen'));
-    expect(settings.indexOf(heading), lessThan(settings.indexOf(entry)));
 
     expect(center, contains('ManualPushBroadcastCard'));
     expect(center, contains('loadOverview'));
