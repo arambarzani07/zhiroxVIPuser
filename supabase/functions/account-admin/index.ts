@@ -434,30 +434,11 @@ Deno.serve(async (req) => {
         .range(from, from + perPage - 1);
       if (error) return json({ error: error.message }, 400);
 
-      const adminIds = (admins ?? []).map((row: any) => row.id);
-      const counts = new Map<string, { employee: number; customer: number }>();
-      if (adminIds.length > 0) {
-        const { data: members, error: membersError } = await admin
-          .from("profiles")
-          .select("admin_id,role")
-          .in("admin_id", adminIds)
-          .in("role", ["employee", "customer"]);
-        if (membersError) return json({ error: membersError.message }, 400);
-        for (const member of members ?? []) {
-          const current = counts.get(member.admin_id) ?? { employee: 0, customer: 0 };
-          if (member.role === "employee") current.employee += 1;
-          if (member.role === "customer") current.customer += 1;
-          counts.set(member.admin_id, current);
-        }
-      }
-
+      // System Owner admin management is platform/account metadata only.
+      // Do not inspect tenant members or business content while listing markets.
       const totalItems = count ?? 0;
       return json({
-        admins: (admins ?? []).map((row: any) => ({
-          admin: row,
-          employee_count: counts.get(row.id)?.employee ?? 0,
-          customer_count: counts.get(row.id)?.customer ?? 0,
-        })),
+        admins: (admins ?? []).map((row: any) => ({ admin: row })),
         total_items: totalItems,
         total_pages: Math.max(1, Math.ceil(totalItems / perPage)),
         page,
