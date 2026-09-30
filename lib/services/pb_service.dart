@@ -179,9 +179,10 @@ class PBService {
   static Future<RecordModel> _invokeCreateAccount(Map<String, dynamic> body) async {
     await ensureInitialized();
     try {
+      final isEmployee = body['role']?.toString() == 'employee';
       final response = await client.functions.invoke(
-        'account-admin',
-        body: {'action': 'create_user', ...body},
+        isEmployee ? 'employee-create' : 'account-admin',
+        body: isEmployee ? body : {'action': 'create_user', ...body},
       );
       final data = response.data;
       if (data is! Map || data['user'] is! Map) {
