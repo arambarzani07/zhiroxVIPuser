@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "lib/security/owner_permission_registry.dart"
 BATCH_1 = ROOT / "supabase/migrations/20260930145254_owner_permission_enforcement_batch_1.sql"
 BATCH_2 = ROOT / "supabase/migrations/20260930154013_owner_permission_enforcement_batch_2.sql"
+BATCH_3 = ROOT / "supabase/migrations/20260930155118_owner_permission_enforcement_batch_3.sql"
+RECOVERY_EDGE = ROOT / "supabase/functions/owner-account-recovery/index.ts"
 
 BATCH_2_FUNCTION_KEYS = {
     "get_system_owner_subscription_overview": {
@@ -53,6 +55,52 @@ BATCH_2_FUNCTION_KEYS = {
     },
 }
 
+BATCH_3_FUNCTION_KEYS = {
+    "get_system_owner_recovery_device_overview": {
+        "owner_view_admin_devices",
+    },
+    "get_system_owner_recovery_device_page": {
+        "owner_view_admin_profile",
+        "owner_view_admin_devices",
+        "owner_view_admin_status",
+    },
+    "set_system_owner_admin_device_policy": {
+        "owner_block_device",
+        "owner_unblock_device",
+    },
+    "set_system_owner_admin_device_authorization": {
+        "owner_block_device",
+        "owner_unblock_device",
+        "owner_revoke_admin_device",
+    },
+    "authorize_system_owner_admin_recovery_service": {
+        "owner_reset_admin_password",
+        "owner_revoke_admin_sessions",
+        "owner_revoke_admin_device",
+    },
+    "complete_system_owner_admin_recovery_service": {
+        "owner_reset_admin_password",
+        "owner_revoke_admin_sessions",
+        "owner_revoke_admin_device",
+    },
+    "get_system_owner_backup_resilience_overview": {
+        "owner_view_backup_health",
+    },
+    "get_system_owner_backup_resilience_page": {
+        "owner_view_backup_health",
+        "owner_view_market_backups",
+    },
+    "set_system_owner_backup_monitoring_policy": {
+        "owner_view_market_backups",
+        "owner_verify_backup",
+    },
+}
+
+BATCH_3_SERVICE_FUNCTIONS = {
+    "authorize_system_owner_admin_recovery_service",
+    "complete_system_owner_admin_recovery_service",
+}
+
 BATCH_1_REQUIRED_KEYS = {
     "owner_view_platform_dashboard",
     "owner_view_all_markets",
@@ -83,22 +131,25 @@ def function_body(sql: str, name: str) -> str:
     )
     match = pattern.search(sql)
     if not match:
-        fail(f"missing function definition in batch 2: {name}")
+        fail(f"missing function definition: {name}")
     return match.group(1)
 
 
 def main() -> None:
-    for path in (REGISTRY, BATCH_1, BATCH_2):
+    for path in (REGISTRY, BATCH_1, BATCH_2, BATCH_3, RECOVERY_EDGE):
         if not path.exists():
             fail(f"missing contract file: {path.relative_to(ROOT)}")
 
     registry = REGISTRY.read_text(encoding="utf-8")
     batch_1 = BATCH_1.read_text(encoding="utf-8")
     batch_2 = BATCH_2.read_text(encoding="utf-8")
+    batch_3 = BATCH_3.read_text(encoding="utf-8")
+    recovery_edge = RECOVERY_EDGE.read_text(encoding="utf-8")
 
     all_expected_keys = set(BATCH_1_REQUIRED_KEYS)
-    for keys in BATCH_2_FUNCTION_KEYS.values():
-        all_expected_keys.update(keys)
+    for contract in (BATCH_2_FUNCTION_KEYS, BATCH_3_FUNCTION_KEYS):
+        for keys in contract.values():
+            all_expected_keys.update(keys)
 
     missing_registry = sorted(
         key for key in all_expected_keys if f"'{key}'" not in registry
@@ -122,6 +173,19 @@ def main() -> None:
         if missing:
             fail(f"{name} lost required permission keys: {missing}")
 
+    for name, keys in BATCH_3_FUNCTION_KEYS.items():
+        body = function_body(batch_3, name)
+        if name in BATCH_3_SERVICE_FUNCTIONS:
+            if "private.system_owner_has_permission" not in body:
+                fail(f"{name} is missing actor-aware service permission enforcement")
+            if "service_role_required" not in body:
+                fail(f"{name} must remain service-role only")
+        elif "private.assert_system_owner_permission" not in body:
+            fail(f"{name} is missing central permission enforcement")
+        missing = sorted(key for key in keys if f"'{key}'" not in body)
+        if missing:
+            fail(f"{name} lost required permission keys: {missing}")
+
     # Mutations must authenticate the Owner explicitly before changing state.
     for name in (
         "set_system_owner_subscription",
@@ -133,19 +197,54 @@ def main() -> None:
         if "private.require_system_owner()" not in body:
             fail(f"{name} must authenticate the System Owner explicitly")
 
-    # The migration must keep the RPCs unavailable to anon/public while
-    # retaining authenticated invocation (the function itself authorizes).
-    for name in BATCH_2_FUNCTION_KEYS:
-        if f"function public.{name}" not in batch_2:
-            fail(f"missing RPC grant/revoke surface for {name}")
-    if "from public, anon;" not in batch_2 or "to authenticated;" not in batch_2:
-        fail("batch 2 RPC grant/revoke contract changed")
+    for name in (
+        "set_system_owner_admin_device_policy",
+        "set_system_owner_admin_device_authorization",
+        "set_system_owner_backup_monitoring_policy",
+    ):
+        body = function_body(batch_3, name)
+        if "private.require_system_owner()" not in body:
+            fail(f"{name} must authenticate the System Owner explicitly")
+
+    # The recovery Edge Function must authorize before changing Auth state.
+    preflight = recovery_edge.find('"authorize_system_owner_admin_recovery_service"')
+    password_update = recovery_edge.find("admin.auth.admin.updateUserById(")
+    finalizer = recovery_edge.find('"complete_system_owner_admin_recovery_service"')
+    if preflight < 0 or password_update < 0 or finalizer < 0:
+        fail("recovery Edge Function lost preflight/password/finalizer stages")
+    if not (preflight < password_update < finalizer):
+        fail("recovery Edge Function must authorize before password update and finalize after it")
+    if 'return json({ error: "owner_permission_denied" }, 403);' not in recovery_edge:
+        fail("recovery Edge Function must fail closed on permission denial")
+
+    # Service preflight/finalizer must not be callable directly by authenticated users.
+    if (
+        "authorize_system_owner_admin_recovery_service(uuid,uuid)\n  from public, anon, authenticated;"
+        not in batch_3
+        or "complete_system_owner_admin_recovery_service(uuid,uuid,text)\n  from public, anon, authenticated;"
+        not in batch_3
+    ):
+        fail("batch 3 recovery service RPC revoke contract changed")
+    if (
+        "authorize_system_owner_admin_recovery_service(uuid,uuid)\n  to service_role;"
+        not in batch_3
+        or "complete_system_owner_admin_recovery_service(uuid,uuid,text)\n  to service_role;"
+        not in batch_3
+    ):
+        fail("batch 3 recovery service RPC grant contract changed")
+
+    # Public Owner RPCs remain unavailable to anon/public and callable only after
+    # authenticated invocation; authorization is enforced inside the functions.
+    for sql, label in ((batch_2, "batch 2"), (batch_3, "batch 3")):
+        if "from public, anon;" not in sql or "to authenticated;" not in sql:
+            fail(f"{label} RPC grant/revoke contract changed")
 
     print(
         "OWNER_PERMISSION_ENFORCEMENT_OK "
         f"batch1_keys={len(BATCH_1_REQUIRED_KEYS)} "
         f"batch2_functions={len(BATCH_2_FUNCTION_KEYS)} "
-        f"batch2_unique_keys={len(set().union(*BATCH_2_FUNCTION_KEYS.values()))}"
+        f"batch3_functions={len(BATCH_3_FUNCTION_KEYS)} "
+        f"protected_unique_keys={len(all_expected_keys)}"
     )
 
 
