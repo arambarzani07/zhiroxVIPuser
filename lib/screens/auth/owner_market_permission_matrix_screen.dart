@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/screens/auth/owner_plan_market_control_screen.dart';
 import 'package:zhirox/services/owner_permission_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/widgets/app_design.dart';
@@ -69,12 +70,12 @@ class _OwnerMarketPermissionMatrixScreenState
     setState(() {
       _loadingMatrix = true;
       _error = null;
+      _selectedMarketId = adminId;
     });
     try {
       final matrix = await OwnerPermissionService.fetchMarketMatrix(adminId);
       if (!mounted) return;
       setState(() {
-        _selectedMarketId = adminId;
         _matrix = matrix;
         _draftModes
           ..clear()
@@ -190,9 +191,6 @@ class _OwnerMarketPermissionMatrixScreenState
         _saving = false;
         _error = error;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('پاشەکەوتکردن سەرکەوتوو نەبوو: $error')),
-      );
     }
   }
 
@@ -205,6 +203,18 @@ class _OwnerMarketPermissionMatrixScreenState
       appBar: AppBar(
         title: const Text('دەسەڵات بەپێی مارکێت'),
         actions: [
+          IconButton(
+            tooltip: 'پلان و سنوور',
+            onPressed: _saving
+                ? null
+                : () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OwnerPlanMarketControlScreen(),
+                      ),
+                    ),
+            icon: const Icon(Icons.layers_rounded),
+          ),
           IconButton(
             tooltip: 'نوێکردنەوە',
             onPressed: _loadingMatrix || _selectedMarketId == null
@@ -241,39 +251,55 @@ class _OwnerMarketPermissionMatrixScreenState
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: InputDecorator(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _selectedMarketId,
                         decoration: const InputDecoration(
                           labelText: 'مارکێت هەڵبژێرە',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.storefront_rounded),
                         ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            value: _selectedMarketId,
-                            items: _markets
-                                .map(
-                                  (market) => DropdownMenuItem<String>(
-                                    value: market.id,
-                                    child: Text(
-                                      '${market.displayName} — ${market.adminName}',
-                                      overflow: TextOverflow.ellipsis,
+                        items: _markets
+                            .map(
+                              (market) => DropdownMenuItem<String>(
+                                value: market.id,
+                                child: Text(
+                                  '${market.displayName} — ${market.adminName}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: _saving
+                            ? null
+                            : (value) {
+                                if (value != null) _selectMarket(value);
+                              },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _saving
+                              ? null
+                              : () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const OwnerPlanMarketControlScreen(),
                                     ),
                                   ),
-                                )
-                                .toList(growable: false),
-                            onChanged: _saving
-                                ? null
-                                : (value) {
-                                    if (value != null) _selectMarket(value);
-                                  },
+                          icon: const Icon(Icons.layers_rounded),
+                          label: const Text(
+                            'پلان + سنووری کارمەند / کڕیار / ئامێر',
                           ),
                         ),
                       ),
                     ),
                     if (_error != null)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                         child: Material(
                           color: Theme.of(context)
                               .colorScheme
@@ -341,9 +367,8 @@ class _OwnerMarketPermissionMatrixScreenState
                               .titleLarge
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
-                        const SizedBox(height: 3),
                         Text(
-                          '${matrix.count} کۆی دەسەڵات • ${matrix.editableCount} بۆ مارکێت/بەڕێوەبەر • ${matrix.count - matrix.editableCount} پلاتفۆرم-only',
+                          '${matrix.count} کۆی دەسەڵات • ${matrix.editableCount} بۆ مارکێت/بەڕێوەبەر',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
@@ -351,30 +376,27 @@ class _OwnerMarketPermissionMatrixScreenState
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               const Text(
                 'Inherit = یاسای گشتی • Allow = ڕێگەپێدان بۆ ئەم مارکێتە • Deny = قەدەغەکردن تەنها بۆ ئەم مارکێتە.',
                 style: TextStyle(height: 1.5),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  OutlinedButton.icon(
+                  OutlinedButton(
                     onPressed: _saving ? null : () => _setAllEditable('inherit'),
-                    icon: const Icon(Icons.settings_backup_restore_rounded),
-                    label: const Text('هەمووی Inherit'),
+                    child: const Text('هەمووی Inherit'),
                   ),
-                  OutlinedButton.icon(
+                  OutlinedButton(
                     onPressed: _saving ? null : () => _setAllEditable('allow'),
-                    icon: const Icon(Icons.check_circle_outline_rounded),
-                    label: const Text('Allow هەموو'),
+                    child: const Text('Allow هەموو'),
                   ),
-                  OutlinedButton.icon(
+                  OutlinedButton(
                     onPressed: _saving ? null : () => _setAllEditable('deny'),
-                    icon: const Icon(Icons.block_rounded),
-                    label: const Text('Deny هەموو'),
+                    child: const Text('Deny هەموو'),
                   ),
                 ],
               ),
@@ -395,8 +417,8 @@ class _OwnerMarketPermissionMatrixScreenState
           contentPadding: EdgeInsets.zero,
           value: _editableOnly,
           onChanged: (value) => setState(() => _editableOnly = value),
-          title: const Text('تەنها دەسەڵاتە جێبەجێکراوەکانی مارکێت پیشان بدە'),
-          subtitle: const Text('platform-only ـەکان قوفڵن و ناتوانرێن بۆ مارکێت بگۆڕدرێن'),
+          title: const Text('تەنها دەسەڵاتەکانی مارکێت پیشان بدە'),
+          subtitle: const Text('platform-only ـەکان قوفڵن'),
         ),
         if (filtered.isEmpty)
           const AppSurface(
@@ -419,7 +441,7 @@ class _OwnerMarketPermissionMatrixScreenState
                   subtitle: Text('${entry.value.length} دەسەڵات'),
                   children: [
                     for (var i = 0; i < entry.value.length; i++) ...[
-                      _MarketPermissionTile(
+                      _PermissionTile(
                         permission: entry.value[i],
                         mode: _draftModes[entry.value[i].key] ??
                             entry.value[i].mode,
@@ -441,8 +463,8 @@ class _OwnerMarketPermissionMatrixScreenState
   }
 }
 
-class _MarketPermissionTile extends StatelessWidget {
-  const _MarketPermissionTile({
+class _PermissionTile extends StatelessWidget {
+  const _PermissionTile({
     required this.permission,
     required this.mode,
     required this.changed,
@@ -459,7 +481,7 @@ class _MarketPermissionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       leading: CircleAvatar(
         radius: 18,
         backgroundColor: _riskColor(permission.riskLevel, context)
@@ -491,26 +513,11 @@ class _MarketPermissionTile extends StatelessWidget {
             ),
         ],
       ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 5),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              permission.key,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontFamily: 'monospace',
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              permission.applicable
-                  ? '${permission.scopeType == 'admin' ? 'بەڕێوەبەر' : 'مارکێت'} • effective: ${permission.effectiveAllowed ? 'Allow' : 'Deny'}'
-                  : 'Platform-only',
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ],
-        ),
+      subtitle: Text(
+        permission.applicable
+            ? '${permission.scopeType == 'admin' ? 'بەڕێوەبەر' : 'مارکێت'} • ${permission.key}'
+            : 'Platform-only • ${permission.key}',
+        style: Theme.of(context).textTheme.bodySmall,
       ),
       trailing: permission.applicable
           ? DropdownButton<String>(
@@ -577,10 +584,7 @@ class _ReasonDialogState extends State<_ReasonDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('پاشگەزبوونەوە'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('بەردەوام'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('بەردەوام')),
       ],
     );
   }
