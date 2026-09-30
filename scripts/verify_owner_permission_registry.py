@@ -67,15 +67,15 @@ def fail(message: str) -> None:
 
 
 def _dart_scopes(raw: str) -> tuple[str, ...]:
-    return tuple(
+    return tuple(sorted(
         scope
         for scope in ("platform", "market", "admin")
         if f"OwnerPermissionScope.{scope}" in raw
-    )
+    ))
 
 
 def _sql_scopes(raw: str) -> tuple[str, ...]:
-    return tuple(re.findall(r"'([^']+)'", raw))
+    return tuple(sorted(re.findall(r"'([^']+)'", raw)))
 
 
 def verify_migration(dart_entries: list[re.Match[str]]) -> None:
