@@ -4,6 +4,8 @@ workflows:
     max_build_duration: 60
     environment:
       flutter: stable
+      vars:
+        ONESIGNAL_DISABLE_LOCATION: "true"
     scripts:
       - flutter --version
       - flutter clean
@@ -20,6 +22,8 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      vars:
+        ONESIGNAL_DISABLE_LOCATION: "true"
     scripts:
       - flutter --version
       - flutter clean
@@ -38,7 +42,8 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        BUNDLE_ID: com.karoxghafoor.zhirox
+        BUNDLE_ID: com.karoxghafoor.zhirox.user
+        ONESIGNAL_DISABLE_LOCATION: "true"
     scripts:
       - flutter --version
       - flutter clean
