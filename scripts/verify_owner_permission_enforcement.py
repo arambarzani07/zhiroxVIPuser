@@ -11,7 +11,8 @@ BATCH_1 = ROOT / "supabase/migrations/20260930145254_owner_permission_enforcemen
 BATCH_2 = ROOT / "supabase/migrations/20260930154013_owner_permission_enforcement_batch_2.sql"
 BATCH_3 = ROOT / "supabase/migrations/20260930155118_owner_permission_enforcement_batch_3.sql"
 BATCH_4 = ROOT / "supabase/migrations/20260930155931_owner_permission_enforcement_batch_4.sql"
-BATCH_5 = ROOT / "supabase/migrations/20260930160738_owner_permission_enforcement_batch_5.sql"
+BATCH_5A = ROOT / "supabase/migrations/20260930160656_owner_permission_enforcement_batch_5.sql"
+BATCH_5B = ROOT / "supabase/migrations/20260930160738_owner_permission_enforcement_batch_5.sql"
 RECOVERY_EDGE = ROOT / "supabase/functions/owner-account-recovery/index.ts"
 
 BATCH_2_FUNCTION_KEYS = {
@@ -64,7 +65,24 @@ BATCH_4_FUNCTION_KEYS = {
     },
 }
 
-BATCH_5_FUNCTION_KEYS = {
+BATCH_5A_FUNCTION_KEYS = {
+    "get_system_owner_health_overview": {
+        "owner_view_platform_metrics",
+        "owner_view_database_health",
+        "owner_view_backup_health",
+        "owner_view_billing_history",
+        "owner_view_owner_audit",
+    },
+    "get_system_owner_platform_audit_page": {"owner_view_owner_audit"},
+    "get_system_owner_infrastructure_overview": {"owner_view_backend_health", "owner_view_queue_health"},
+    "get_system_owner_infrastructure_jobs_page": {"owner_view_backend_health", "owner_view_queue_health"},
+    "get_system_owner_incident_overview": {"owner_view_platform_activity"},
+    "get_system_owner_incidents_page": {"owner_view_platform_activity"},
+    "create_system_owner_incident": {"owner_refresh_platform_config", "owner_publish_update_message"},
+    "update_system_owner_incident": {"owner_refresh_platform_config", "owner_publish_update_message"},
+}
+
+BATCH_5B_FUNCTION_KEYS = {
     "get_system_owner_admins_page": "owner_view_all_admins",
     "get_system_owner_branding_overview": "owner_view_all_markets",
     "get_system_owner_branding_page": "owner_view_all_markets",
@@ -142,24 +160,24 @@ def verify_function_contract(sql: str, contract: dict[str, set[str]], *, service
             fail(f"{name} lost required permission keys: {missing}")
 
 
-def verify_batch_5(sql: str) -> None:
+def verify_batch_5b(sql: str) -> None:
     if "owner_permission_injection_pattern_missing" not in sql:
-        fail("batch 5 must fail closed when a legacy function cannot be patched")
+        fail("batch 5B must fail closed when a legacy function cannot be patched")
     if "private.assert_system_owner_permission" not in sql:
-        fail("batch 5 lost the central Owner permission guard")
-    for name, key in BATCH_5_FUNCTION_KEYS.items():
+        fail("batch 5B lost the central Owner permission guard")
+    for name, key in BATCH_5B_FUNCTION_KEYS.items():
         if f"public.{name}" not in sql:
-            fail(f"batch 5 lost protected function: {name}")
+            fail(f"batch 5B lost protected function: {name}")
         if f"'{key}'" not in sql:
-            fail(f"batch 5 lost permission key {key} for {name}")
+            fail(f"batch 5B lost permission key {key} for {name}")
     if "owner_access_console" not in sql or "get_system_owner_permission_catalog" not in sql:
         fail("Owner permission catalog must require owner_access_console")
     if "from public, anon;" not in sql or "to authenticated;" not in sql:
-        fail("batch 5 catalog RPC grant/revoke contract changed")
+        fail("batch 5B catalog RPC grant/revoke contract changed")
 
 
 def main() -> None:
-    paths = (REGISTRY, BATCH_1, BATCH_2, BATCH_3, BATCH_4, BATCH_5, RECOVERY_EDGE)
+    paths = (REGISTRY, BATCH_1, BATCH_2, BATCH_3, BATCH_4, BATCH_5A, BATCH_5B, RECOVERY_EDGE)
     for path in paths:
         if not path.exists():
             fail(f"missing contract file: {path.relative_to(ROOT)}")
@@ -169,14 +187,15 @@ def main() -> None:
     batch_2 = BATCH_2.read_text(encoding="utf-8")
     batch_3 = BATCH_3.read_text(encoding="utf-8")
     batch_4 = BATCH_4.read_text(encoding="utf-8")
-    batch_5 = BATCH_5.read_text(encoding="utf-8")
+    batch_5a = BATCH_5A.read_text(encoding="utf-8")
+    batch_5b = BATCH_5B.read_text(encoding="utf-8")
     recovery_edge = RECOVERY_EDGE.read_text(encoding="utf-8")
 
     all_expected_keys = set(BATCH_1_REQUIRED_KEYS)
-    for contract in (BATCH_2_FUNCTION_KEYS, BATCH_3_FUNCTION_KEYS, BATCH_4_FUNCTION_KEYS):
+    for contract in (BATCH_2_FUNCTION_KEYS, BATCH_3_FUNCTION_KEYS, BATCH_4_FUNCTION_KEYS, BATCH_5A_FUNCTION_KEYS):
         for keys in contract.values():
             all_expected_keys.update(keys)
-    all_expected_keys.update(BATCH_5_FUNCTION_KEYS.values())
+    all_expected_keys.update(BATCH_5B_FUNCTION_KEYS.values())
     all_expected_keys.add("owner_access_console")
 
     missing_registry = sorted(key for key in all_expected_keys if f"'{key}'" not in registry)
@@ -192,7 +211,8 @@ def main() -> None:
     verify_function_contract(batch_2, BATCH_2_FUNCTION_KEYS)
     verify_function_contract(batch_3, BATCH_3_FUNCTION_KEYS, service_functions=BATCH_3_SERVICE_FUNCTIONS)
     verify_function_contract(batch_4, BATCH_4_FUNCTION_KEYS)
-    verify_batch_5(batch_5)
+    verify_function_contract(batch_5a, BATCH_5A_FUNCTION_KEYS)
+    verify_batch_5b(batch_5b)
 
     for name in (
         "set_system_owner_subscription",
@@ -213,6 +233,10 @@ def main() -> None:
 
     for name in ("set_system_owner_operations_state", "set_system_owner_release_policy"):
         if "private.require_system_owner()" not in function_body(batch_4, name):
+            fail(f"{name} must authenticate the System Owner explicitly")
+
+    for name in ("create_system_owner_incident", "update_system_owner_incident"):
+        if "private.require_system_owner()" not in function_body(batch_5a, name):
             fail(f"{name} must authenticate the System Owner explicitly")
 
     preflight = recovery_edge.find('"authorize_system_owner_admin_recovery_service"')
@@ -236,7 +260,12 @@ def main() -> None:
     ):
         fail("batch 3 recovery service RPC grant contract changed")
 
-    for sql, label in ((batch_2, "batch 2"), (batch_3, "batch 3"), (batch_4, "batch 4")):
+    for sql, label in (
+        (batch_2, "batch 2"),
+        (batch_3, "batch 3"),
+        (batch_4, "batch 4"),
+        (batch_5a, "batch 5A"),
+    ):
         if "from public, anon;" not in sql or "to authenticated;" not in sql:
             fail(f"{label} RPC grant/revoke contract changed")
 
@@ -246,7 +275,8 @@ def main() -> None:
         f"batch2_functions={len(BATCH_2_FUNCTION_KEYS)} "
         f"batch3_functions={len(BATCH_3_FUNCTION_KEYS)} "
         f"batch4_functions={len(BATCH_4_FUNCTION_KEYS)} "
-        f"batch5_functions={len(BATCH_5_FUNCTION_KEYS) + 1} "
+        f"batch5a_functions={len(BATCH_5A_FUNCTION_KEYS)} "
+        f"batch5b_functions={len(BATCH_5B_FUNCTION_KEYS) + 1} "
         f"protected_unique_keys={len(all_expected_keys)}"
     )
 
