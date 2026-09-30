@@ -11,7 +11,7 @@ BATCH_1 = ROOT / "supabase/migrations/20260930145254_owner_permission_enforcemen
 BATCH_2 = ROOT / "supabase/migrations/20260930154013_owner_permission_enforcement_batch_2.sql"
 BATCH_3 = ROOT / "supabase/migrations/20260930155118_owner_permission_enforcement_batch_3.sql"
 BATCH_4 = ROOT / "supabase/migrations/20260930155931_owner_permission_enforcement_batch_4.sql"
-BATCH_5 = ROOT / "supabase/migrations/20260930160700_owner_permission_enforcement_batch_5.sql"
+BATCH_5 = ROOT / "supabase/migrations/20260930160738_owner_permission_enforcement_batch_5.sql"
 RECOVERY_EDGE = ROOT / "supabase/functions/owner-account-recovery/index.ts"
 
 BATCH_2_FUNCTION_KEYS = {
