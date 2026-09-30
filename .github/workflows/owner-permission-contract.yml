@@ -9,6 +9,7 @@ on:
       - 'scripts/verify_owner_permission_registry.py'
       - 'scripts/verify_owner_permission_enforcement.py'
       - 'supabase/migrations/**owner_permission**.sql'
+      - 'supabase/functions/owner-account-recovery/index.ts'
       - '.github/workflows/owner-permission-contract.yml'
   pull_request:
     paths:
@@ -16,6 +17,7 @@ on:
       - 'scripts/verify_owner_permission_registry.py'
       - 'scripts/verify_owner_permission_enforcement.py'
       - 'supabase/migrations/**owner_permission**.sql'
+      - 'supabase/functions/owner-account-recovery/index.ts'
       - '.github/workflows/owner-permission-contract.yml'
 
 permissions:
