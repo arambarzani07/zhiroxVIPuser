@@ -94,6 +94,13 @@ checks = {
         "CODE_SIGN_ENTITLEMENTS=Runner/Runner.entitlements",
         "APS_ENVIRONMENT=production",
     ],
+    "ios/Podfile": [
+        "CODE_SIGN_ENTITLEMENTS",
+        "Runner/Runner.entitlements",
+        "APS_ENVIRONMENT",
+        "development",
+        "production",
+    ],
     "codemagic.yaml": [
         "ONESIGNAL_DISABLE_LOCATION",
         "--dart-define=ONESIGNAL_APP_ID=",
