@@ -16,6 +16,7 @@
     {"name":"daftar-sync-gateway","path":"supabase/functions/daftar-sync-gateway","verify_jwt":false,"absent_policy":"block"},
     {"name":"debt-restore-admin","path":"supabase/functions/debt-restore-admin","verify_jwt":false,"absent_policy":"block"},
     {"name":"delete-account","path":"supabase/functions/delete-account","verify_jwt":true,"absent_policy":"block"},
+    {"name":"employee-create","path":"supabase/functions/employee-create","verify_jwt":true,"absent_policy":"block"},
     {"name":"fib-subscription-payment","path":"supabase/functions/fib-subscription-payment","verify_jwt":false,"absent_policy":"block"},
     {"name":"intelligence-ai","path":"supabase/functions/intelligence-ai","verify_jwt":true,"absent_policy":"block"},
     {"name":"legacy-import","path":"supabase/functions/legacy-import","verify_jwt":true,"absent_policy":"block"},
