@@ -26,8 +26,66 @@ export type OneSignalSendResult = {
   reason?: string;
 };
 
+type OneSignalRuntimeConfig = {
+  appId: string;
+  apiKey: string;
+};
+
 function env(name: string): string {
   return (Deno.env.get(name) ?? "").trim();
+}
+
+function serviceKey(): string {
+  const modern = env("SUPABASE_SECRET_KEYS");
+  if (modern) {
+    try {
+      const parsed = JSON.parse(modern) as Record<string, string>;
+      const value = parsed.default ?? Object.values(parsed)[0];
+      if (value) return String(value).trim();
+    } catch (_) {}
+  }
+  return env("SUPABASE_SERVICE_ROLE_KEY");
+}
+
+async function loadRuntimeConfig(): Promise<OneSignalRuntimeConfig> {
+  let appId = env("ONESIGNAL_APP_ID");
+  let apiKey = env("ONESIGNAL_REST_API_KEY");
+  if (appId && apiKey) return { appId, apiKey };
+
+  const supabaseUrl = env("SUPABASE_URL");
+  const key = serviceKey();
+  if (!supabaseUrl || !key) return { appId, apiKey };
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/rpc/get_onesignal_runtime_config_service`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": key,
+          "Authorization": `Bearer ${key}`,
+        },
+        body: "{}",
+      },
+    );
+    if (!response.ok) {
+      console.warn("OneSignal Vault config lookup failed", response.status);
+      return { appId, apiKey };
+    }
+
+    const payload = await response.json();
+    const row = Array.isArray(payload) ? payload[0] : payload;
+    appId ||= String(row?.app_id ?? "").trim();
+    apiKey ||= String(row?.rest_api_key ?? "").trim();
+  } catch (error) {
+    console.warn(
+      "OneSignal Vault config lookup deferred",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  return { appId, apiKey };
 }
 
 function isUuid(value: string): boolean {
@@ -106,8 +164,7 @@ async function sendOneSignal(params: {
   idempotencyKey: string;
   logContext: string;
 }): Promise<OneSignalSendResult> {
-  const appId = env("ONESIGNAL_APP_ID");
-  const apiKey = env("ONESIGNAL_REST_API_KEY");
+  const { appId, apiKey } = await loadRuntimeConfig();
   if (!appId || !apiKey) {
     return {
       attempted: false,
