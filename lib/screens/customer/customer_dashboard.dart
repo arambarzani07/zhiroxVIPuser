@@ -11,6 +11,7 @@ import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 
 import 'package:zhirox/screens/customer/notifications_screen.dart';
+import 'package:zhirox/screens/customer/telegram_settings_dialog.dart';
 import 'package:zhirox/services/connectivity_service.dart';
 
 class CustomerDashboard extends StatefulWidget {
@@ -393,8 +394,19 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                           ),
                         ),
                       ),
-                      Stack(
-                        clipBehavior: Clip.none,
+                      IconButton(
+              tooltip: 'Telegram',
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const TelegramSettingsDialog(),
+              ),
+              icon: Icon(
+                Icons.telegram_rounded,
+                color: textPrimary,
+              ),
+            ),
+            Stack(
+              clipBehavior: Clip.none,
                         children: [
                           IconButton(
                             tooltip: 'ئاگادارکردنەوەکان',
