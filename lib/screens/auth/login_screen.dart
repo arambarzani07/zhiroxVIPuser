@@ -47,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
         raw.contains('credential') ||
         raw.contains('password') ||
         raw.contains('unauthorized')) {
-      return 'ژمارە مۆبایل یان وشەی نهێنی هەڵەیە.';
+      return 'ئیمەیل یان وشەی نهێنی هەڵەیە.';
     }
     if (raw.contains('locked') || raw.contains('too many')) {
       return 'هەوڵی زۆر دراوە. کەمێک چاوەڕێ بکە و دووبارە هەوڵ بدە.';
@@ -189,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'ژمارە مۆبایل و وشەی نهێنی هەژمارەکەت بنووسە.',
+                                    'ئیمەیل و وشەی نهێنی هەژمارەکەت بنووسە.',
                                     style: TextStyle(
                                       fontSize: 11.5,
                                       height: 1.5,
@@ -202,16 +202,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                     enabled: !auth.isLoading,
                                     keyboardType: TextInputType.emailAddress,
                                     textInputAction: TextInputAction.next,
-                                    autofillHints: const [AutofillHints.telephoneNumber],
+                                    autofillHints: const [AutofillHints.email],
                                     textDirection: TextDirection.ltr,
                                     decoration: const InputDecoration(
-                                      labelText: 'ئیمەیل یان ژمارە مۆبایل',
-                                      hintText: 'name@example.com یان 07xxxxxxxxx',
-                                      prefixIcon: Icon(Icons.phone_iphone_rounded),
+                                      labelText: 'ئیمەیل',
+                                      hintText: 'name@example.com',
+                                      prefixIcon: Icon(Icons.email_outlined),
                                     ),
-                                    validator: (value) => value == null || value.trim().isEmpty
-                                        ? 'ئیمەیل یان ژمارە مۆبایل بنووسە'
-                                        : null,
+                                    validator: (value) {
+                                      final email = value?.trim() ?? '';
+                                      if (email.isEmpty) return 'ئیمەیل بنووسە';
+                                      if (!email.contains('@')) return 'ئیمەیلێکی دروست بنووسە';
+                                      return null;
+                                    },
                                   ),
                                   const SizedBox(height: 12),
                                   TextFormField(
