@@ -1,0 +1,79 @@
+name: Telegram Secure Integration Contract
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - 'lib/screens/customer/notifications_screen.dart'
+      - 'lib/screens/customer/telegram_settings_dialog.dart'
+      - 'lib/services/telegram_integration_service.dart'
+      - 'supabase/functions/send-telegram/**'
+      - 'supabase/functions/telegram-integration/**'
+      - 'supabase/functions/telegram-webhook/**'
+      - 'supabase/migrations/*telegram*'
+      - '.github/workflows/telegram-secure-integration-contract.yml'
+  pull_request:
+    branches: [user-source]
+    paths:
+      - 'lib/screens/customer/notifications_screen.dart'
+      - 'lib/screens/customer/telegram_settings_dialog.dart'
+      - 'lib/services/telegram_integration_service.dart'
+      - 'supabase/functions/send-telegram/**'
+      - 'supabase/functions/telegram-integration/**'
+      - 'supabase/functions/telegram-webhook/**'
+      - 'supabase/migrations/*telegram*'
+      - '.github/workflows/telegram-secure-integration-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  telegram-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check Telegram Edge Functions
+        run: |
+          deno check supabase/functions/send-telegram/index.ts
+          deno check supabase/functions/telegram-integration/index.ts
+          deno check supabase/functions/telegram-webhook/index.ts
+
+      - name: Verify client never owns Telegram bot credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            lib/screens/customer/notifications_screen.dart
+            lib/screens/customer/telegram_settings_dialog.dart
+            lib/services/telegram_integration_service.dart
+          )
+
+          if grep -nE 'telegram_bot_token|telegram_chat_id' "${files[@]}"; then
+            echo 'ERROR: Telegram credentials must not be stored or requested by the Flutter UI.' >&2
+            exit 1
+          fi
+
+          if grep -n 'api.telegram.org/bot' lib/services/telegram_integration_service.dart; then
+            echo 'ERROR: Flutter must not call Telegram Bot API directly.' >&2
+            exit 1
+          fi
+
+          grep -q "functions.invoke(" lib/services/telegram_integration_service.dart
+          grep -q "'telegram-integration'" lib/services/telegram_integration_service.dart
+
+      - name: Verify backend-only Telegram delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'get_telegram_runtime_config_service' supabase/functions/send-telegram/index.ts
+          grep -q 'get_telegram_connection_for_service' supabase/functions/send-telegram/index.ts
+          grep -q 'X-Telegram-Bot-Api-Secret-Token' supabase/functions/telegram-webhook/index.ts
+          grep -q 'create_telegram_link_code_service' supabase/functions/telegram-integration/index.ts
