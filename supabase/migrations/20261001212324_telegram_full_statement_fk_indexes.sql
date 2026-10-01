@@ -1,0 +1,2 @@
+create index if not exists telegram_full_statement_jobs_customer_idx on private.telegram_full_statement_jobs(customer_id);
+create index if not exists telegram_full_statement_jobs_market_idx on private.telegram_full_statement_jobs(market_id);
