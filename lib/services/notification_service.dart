@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -22,6 +24,9 @@ class NotificationService {
       StreamController<Map<String, dynamic>>.broadcast();
 
   static StreamSubscription<AuthState>? _authSubscription;
+  static RealtimeChannel? _realtimeChannel;
+  static String? _realtimeRecipientUserId;
+  static final Set<String> _realtimeSeenEventIds = <String>{};
   static String? _oneSignalExternalId;
   static String? _runtimeOneSignalAppId;
   static bool _initialized = false;
@@ -77,11 +82,13 @@ class NotificationService {
     return '';
   }
 
-  /// Initialize local notifications and OneSignal push notifications.
+  /// Initialize local notifications, Supabase Realtime fallback and OneSignal.
   ///
-  /// OneSignal first uses the optional build value
-  /// `--dart-define=ONESIGNAL_APP_ID=your-app-id`. If that value is absent,
-  /// the public App ID is loaded from the `onesignal-config` backend function.
+  /// Realtime is intentionally independent from OneSignal. This lets the app
+  /// receive notifications while it is running even when the current iOS
+  /// signing provider does not expose an APNs credential. iOS can still
+  /// suspend a background/force-quit app, so APNs remains required for a
+  /// reliable remote wake-up.
   static Future<void> init() async {
     if (_initialized) return;
 
@@ -99,10 +106,41 @@ class NotificationService {
       iOS: iosSettings,
     );
 
-    await _plugin.initialize(settings);
+    await _plugin.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload?.trim() ?? '';
+        if (payload.isEmpty) return;
+        try {
+          final decoded = jsonDecode(payload);
+          if (decoded is Map) {
+            _remoteNotificationClickController.add(
+              Map<String, dynamic>.from(decoded),
+            );
+          }
+        } catch (_) {}
+      },
+    );
     _initialized = true;
 
     if (kIsWeb) return;
+
+    try {
+      await PBService.ensureInitialized();
+      final currentUserId = PBService.client.auth.currentUser?.id;
+      await _syncRealtimeIdentity(currentUserId);
+
+      _authSubscription ??=
+          PBService.client.auth.onAuthStateChange.listen((state) {
+        final userId = state.session?.user.id;
+        unawaited(_syncRealtimeIdentity(userId));
+        unawaited(_syncOneSignalIdentity(userId));
+      });
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Realtime notification initialization failed: $error');
+      }
+    }
 
     final appId = await _resolveOneSignalAppId();
     if (appId.isEmpty) return;
@@ -119,18 +157,152 @@ class NotificationService {
         );
       });
 
-      await PBService.ensureInitialized();
       await _syncOneSignalIdentity(PBService.client.auth.currentUser?.id);
-
-      _authSubscription ??=
-          PBService.client.auth.onAuthStateChange.listen((state) {
-        unawaited(_syncOneSignalIdentity(state.session?.user.id));
-      });
     } catch (error) {
       _oneSignalReady = false;
       if (kDebugMode) {
         debugPrint('OneSignal initialization failed: $error');
       }
+    }
+  }
+
+  static Future<void> _syncRealtimeIdentity(String? userId) async {
+    final normalized = userId?.trim() ?? '';
+
+    if (normalized.isEmpty) {
+      final oldChannel = _realtimeChannel;
+      _realtimeChannel = null;
+      _realtimeRecipientUserId = null;
+      _realtimeSeenEventIds.clear();
+      if (oldChannel != null) {
+        try {
+          await PBService.client.removeChannel(oldChannel);
+        } catch (_) {}
+      }
+      return;
+    }
+
+    if (_realtimeRecipientUserId == normalized && _realtimeChannel != null) {
+      return;
+    }
+
+    final oldChannel = _realtimeChannel;
+    if (oldChannel != null) {
+      try {
+        await PBService.client.removeChannel(oldChannel);
+      } catch (_) {}
+    }
+
+    _realtimeSeenEventIds.clear();
+    _realtimeRecipientUserId = normalized;
+
+    final channel = PBService.client.channel(
+      'app-notifications-$normalized',
+    );
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.insert,
+      schema: 'public',
+      table: 'app_realtime_notifications',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'recipient_user_id',
+        value: normalized,
+      ),
+      callback: (payload) {
+        unawaited(_handleRealtimeRecord(payload.newRecord));
+      },
+    );
+    channel.subscribe();
+    _realtimeChannel = channel;
+
+    // Realtime does not replay inserts that happened while iOS had the app
+    // suspended. Catch up on recent unseen rows whenever the app/session starts.
+    await _drainPendingRealtime(normalized);
+  }
+
+  static Future<void> _drainPendingRealtime(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cursorKey = 'app_notification_cursor_$userId';
+      final savedCursor = prefs.getString(cursorKey);
+      final since = DateTime.tryParse(savedCursor ?? '') ??
+          DateTime.now().toUtc().subtract(const Duration(minutes: 10));
+
+      final rows = await PBService.client
+          .from('app_realtime_notifications')
+          .select()
+          .eq('recipient_user_id', userId)
+          .gt('created_at', since.toUtc().toIso8601String())
+          .order('created_at', ascending: true)
+          .limit(30);
+
+      for (final row in rows) {
+        await _handleRealtimeRecord(Map<String, dynamic>.from(row));
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Realtime notification catch-up failed: $error');
+      }
+    }
+  }
+
+  static Future<void> _handleRealtimeRecord(
+    Map<String, dynamic> record,
+  ) async {
+    final currentUserId = PBService.client.auth.currentUser?.id;
+    final recipient = record['recipient_user_id']?.toString() ?? '';
+    if (currentUserId == null || recipient != currentUserId) return;
+
+    final eventId = record['id']?.toString().trim() ?? '';
+    if (eventId.isEmpty || !_realtimeSeenEventIds.add(eventId)) return;
+
+    final expiresAt = DateTime.tryParse(record['expires_at']?.toString() ?? '');
+    if (expiresAt != null && expiresAt.isBefore(DateTime.now().toUtc())) {
+      await _saveRealtimeCursor(currentUserId, record['created_at']?.toString());
+      return;
+    }
+
+    final title = record['title']?.toString().trim() ?? '';
+    final body = record['body']?.toString().trim() ?? '';
+    if (title.isEmpty || body.isEmpty) return;
+
+    final rawData = record['data'];
+    final clickData = <String, dynamic>{
+      if (rawData is Map) ...Map<String, dynamic>.from(rawData),
+      'event_id': eventId,
+      'event_type': record['event_type']?.toString() ?? 'general',
+    };
+
+    await show(
+      title: title,
+      body: body,
+      id: _notificationIdForEvent(eventId),
+      payload: clickData,
+    );
+    await _saveRealtimeCursor(currentUserId, record['created_at']?.toString());
+  }
+
+  static int _notificationIdForEvent(String eventId) {
+    final compact = eventId.replaceAll('-', '');
+    if (compact.length >= 8) {
+      final parsed = int.tryParse(compact.substring(0, 8), radix: 16);
+      if (parsed != null) return parsed & 0x7fffffff;
+    }
+    return eventId.hashCode & 0x7fffffff;
+  }
+
+  static Future<void> _saveRealtimeCursor(
+    String userId,
+    String? rawCreatedAt,
+  ) async {
+    final createdAt = DateTime.tryParse(rawCreatedAt ?? '');
+    if (createdAt == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'app_notification_cursor_$userId';
+    final previous = DateTime.tryParse(prefs.getString(key) ?? '');
+    if (previous == null || createdAt.isAfter(previous)) {
+      await prefs.setString(key, createdAt.toUtc().toIso8601String());
     }
   }
 
@@ -168,7 +340,8 @@ class NotificationService {
   static Future<bool> requestPermission() async {
     if (_oneSignalReady) {
       try {
-        return await OneSignal.Notifications.requestPermission(true);
+        final granted = await OneSignal.Notifications.requestPermission(true);
+        if (granted) return true;
       } catch (_) {}
     }
 
@@ -178,9 +351,7 @@ class NotificationService {
 
   /// Check if notification permission is granted.
   static Future<bool> isPermissionGranted() async {
-    if (_oneSignalReady) {
-      return OneSignal.Notifications.permission;
-    }
+    if (_oneSignalReady && OneSignal.Notifications.permission) return true;
     return await Permission.notification.isGranted;
   }
 
@@ -189,6 +360,7 @@ class NotificationService {
     required String title,
     required String body,
     int id = 0,
+    Map<String, dynamic>? payload,
   }) async {
     const androidDetails = AndroidNotificationDetails(
       'zhirox_debts',
@@ -211,7 +383,13 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    await _plugin.show(id, title, body, details);
+    await _plugin.show(
+      id,
+      title,
+      body,
+      details,
+      payload: payload == null ? null : jsonEncode(payload),
+    );
   }
 
   /// Schedule one generic expiry summary. Keep the IDs in a separate range
