@@ -1,0 +1,42 @@
+name: Market rate integration lock
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - 'supabase/functions/market-exchange-rate/index.ts'
+      - '.github/workflows/market-rate-lock.yml'
+  pull_request:
+    branches: [user-source]
+    paths:
+      - 'supabase/functions/market-exchange-rate/index.ts'
+      - '.github/workflows/market-rate-lock.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-market-rate-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify locked Telegram market-rate integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          file='supabase/functions/market-exchange-rate/index.ts'
+          expected='ecb6523a56f0c0d76a36b6493968896ef1345402'
+          actual="$(git hash-object "$file")"
+
+          if [[ "$actual" != "$expected" ]]; then
+            echo 'ERROR: The Telegram market-rate integration is locked by product decision.' >&2
+            echo "Expected blob: $expected" >&2
+            echo "Actual blob:   $actual" >&2
+            echo 'Do not modify source, parser, 60-second cache, or transport unless the owner explicitly unlocks this integration.' >&2
+            exit 1
+          fi
+
+          echo 'Locked Telegram market-rate integration is unchanged.'
