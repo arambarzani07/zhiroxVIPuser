@@ -10,16 +10,33 @@ class TelegramSettingsDialog extends StatefulWidget {
   State<TelegramSettingsDialog> createState() => _TelegramSettingsDialogState();
 }
 
-class _TelegramSettingsDialogState extends State<TelegramSettingsDialog> {
+class _TelegramSettingsDialogState extends State<TelegramSettingsDialog>
+    with WidgetsBindingObserver {
   TelegramIntegrationStatus? _status;
   bool _loading = true;
   bool _working = false;
+  bool _awaitingTelegramReturn = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _awaitingTelegramReturn) {
+      _awaitingTelegramReturn = false;
+      _refresh();
+    }
   }
 
   Future<void> _refresh() async {
@@ -48,17 +65,22 @@ class _TelegramSettingsDialogState extends State<TelegramSettingsDialog> {
     });
     try {
       final link = await TelegramIntegrationService.createConnectLink();
+      _awaitingTelegramReturn = true;
       final opened = await launchUrl(link.url, mode: LaunchMode.externalApplication);
-      if (!opened) throw Exception('telegram_launch_failed');
+      if (!opened) {
+        _awaitingTelegramReturn = false;
+        throw Exception('telegram_launch_failed');
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'لە ${link.botUsername} کلیک لە Start بکە، پاشان بگەڕێوە و «نوێکردنەوە» بکە.',
+            'لە ${link.botUsername} کلیک لە Start بکە؛ کاتێک دەگەڕێیتەوە، دۆخەکە خۆکارانە نوێ دەبێتەوە.',
           ),
         ),
       );
     } catch (error) {
+      _awaitingTelegramReturn = false;
       if (!mounted) return;
       setState(() => _error = TelegramIntegrationService.userMessage(error));
     } finally {
