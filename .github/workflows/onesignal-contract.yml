@@ -20,6 +20,7 @@ on:
       - 'ios/Flutter/Debug.xcconfig'
       - 'ios/Flutter/Release.xcconfig'
       - 'codemagic.yaml'
+      - '.github/workflows/ios-unsigned-ipa.yml'
       - 'scripts/verify_onesignal_integration.py'
       - '.github/workflows/onesignal-contract.yml'
   workflow_dispatch:
