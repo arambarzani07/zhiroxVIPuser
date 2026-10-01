@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ku" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>ZHIROX OneSignal Setup</title>
+<style>
+:root{color-scheme:light dark}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#f4f5fb;color:#111}.wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}.card{width:min(560px,100%);background:#fff;border:1px solid #e4e6ef;border-radius:22px;padding:24px;box-shadow:0 14px 40px rgba(0,0,0,.08)}h1{margin:0 0 10px;font-size:25px}p{line-height:1.7;color:#555}.badge{display:inline-block;padding:6px 10px;border-radius:999px;background:#eef0ff;color:#4346c8;font-weight:700;font-size:13px;margin-bottom:14px}label{display:block;margin:20px 0 8px;font-weight:800}input{width:100%;box-sizing:border-box;padding:15px;border:1px solid #b9bdca;border-radius:13px;font-size:16px;direction:ltr;background:#fff;color:#111}button{width:100%;border:0;border-radius:13px;padding:15px;margin-top:16px;font-weight:800;font-size:17px;background:#5454e8;color:#fff}.note{font-size:13px;color:#777;margin-top:14px}.bad{color:#b42318;font-weight:700}@media(prefers-color-scheme:dark){body{background:#0f1015;color:#fff}.card{background:#171820;border-color:#2c2f3b}p,.note{color:#b7b9c3}input{background:#101117;color:#fff;border-color:#404452}.badge{background:#292b47;color:#cfd1ff}}
+</style>
+</head>
+<body>
+<div class="wrap"><main class="card">
+<div class="badge">ZHIROX Production</div>
+<h1>OneSignal → Supabase</h1>
+<p>REST API Key ـەکەت لێرە دابنێ. ئەم پەڕەیە key ـەکە هەڵناگرێت؛ ڕاستەوخۆ بۆ Supabase Vault دەنێرێت.</p>
+<div id="error" class="bad" hidden>لینکی setup نادروستە یان token نییە.</div>
+<form id="setupForm" method="post" autocomplete="off">
+<label for="key">REST API Key</label>
+<input id="key" name="rest_api_key" type="password" required minlength="20" autocomplete="off" autocapitalize="off" spellcheck="false">
+<button type="submit">هەڵگرتن لە Supabase</button>
+</form>
+<p class="note">دوای Save، ئەم token ـە یەکجارەیە و نابێت دووبارە بەکاربهێندرێت.</p>
+</main></div>
+<script>
+(function(){
+  const params=new URLSearchParams(location.search);
+  const token=(params.get('token')||'').trim();
+  const form=document.getElementById('setupForm');
+  const error=document.getElementById('error');
+  if(token.length<32){form.hidden=true;error.hidden=false;return;}
+  form.action='https://madoflmbretqghqbqaak.supabase.co/functions/v1/onesignal-secure-setup?token='+encodeURIComponent(token);
+})();
+</script>
+</body>
+</html>
