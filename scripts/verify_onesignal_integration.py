@@ -113,6 +113,16 @@ checks = {
         "--dart-define=ONESIGNAL_APP_ID=",
         "com.karoxghafoor.zhirox.user",
     ],
+    ".github/workflows/ios-unsigned-ipa.yml": [
+        "CODE_SIGN_ENTITLEMENTS=Runner/Runner.entitlements",
+        "APS_ENVIRONMENT=production",
+        "Package signer-ready IPA with production push entitlement",
+        "<key>aps-environment</key>",
+        "<string>production</string>",
+        "codesign --force --deep --sign - Payload/Runner.app",
+        "--entitlements /tmp/zhirox-signer-entitlements.plist",
+        "Print :aps-environment",
+    ],
 }
 
 errors: list[str] = []
