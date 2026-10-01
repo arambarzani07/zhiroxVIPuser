@@ -53,6 +53,7 @@ const menuKeyboard = {
   keyboard: [
     [{ text: "💰 قەرزی ماوە" }, { text: "🧾 کۆتا پارەدان" }],
     [{ text: "📋 کەشف حساب" }, { text: "🌐 هەژماری من" }],
+    [{ text: "📄 PDF کەشف حساب" }, { text: "🧾 PDF پسووڵە" }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -117,6 +118,23 @@ function statementText(data: any): string {
     return `${index + 1}. ${kind} • ${formatIqd(r?.amount)}\n   ${formatDate(r?.occurred_at)}${note ? ` • ${note.slice(0, 80)}` : ""}`;
   });
   return `📋 10 مامەڵەی کۆتایی\n\n${lines.join("\n\n")}\n\n💰 قەرزی ماوە: ${formatIqd(data?.remaining_iqd)}`;
+}
+
+async function requestPdf(supabaseUrl: string, botToken: string, chatId: string, action: "statement" | "receipt") {
+  const internal = await sha256Hex(`${botToken}:customer-pdf`);
+  const response = await fetch(`${supabaseUrl}/functions/v1/telegram-customer-pdf`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-zhirox-telegram-internal": internal,
+    },
+    body: JSON.stringify({ chat_id: chatId, action }),
+    signal: AbortSignal.timeout(30000),
+  });
+  let body: any = {};
+  try { body = await response.json(); } catch (_) {}
+  if (!response.ok) throw new Error("pdf_failed");
+  return body;
 }
 
 Deno.serve(async (req: Request) => {
@@ -204,6 +222,29 @@ Deno.serve(async (req: Request) => {
 
   if (text === "📋 کەشف حساب" || /^\/statement(?:@\w+)?$/.test(text)) {
     await sendMessage(botToken, chatId, statementText(current), true);
+    return new Response("ok", { status: 200 });
+  }
+
+  if (text === "📄 PDF کەشف حساب" || /^\/statementpdf(?:@\w+)?$/.test(text)) {
+    await sendMessage(botToken, chatId, "📄 کەشف حسابی PDF دروست دەکرێت…", false);
+    try {
+      await requestPdf(supabaseUrl, botToken, chatId, "statement");
+    } catch (_) {
+      await sendMessage(botToken, chatId, "❌ نەتوانرا PDF دروست بکرێت. دووبارە هەوڵ بدەوە.", true);
+    }
+    return new Response("ok", { status: 200 });
+  }
+
+  if (text === "🧾 PDF پسووڵە" || /^\/receiptpdf(?:@\w+)?$/.test(text)) {
+    await sendMessage(botToken, chatId, "🧾 پسووڵەی PDF دروست دەکرێت…", false);
+    try {
+      const result = await requestPdf(supabaseUrl, botToken, chatId, "receipt");
+      if (result?.sent === false && result?.reason === "no_transactions") {
+        await sendMessage(botToken, chatId, "هێشتا هیچ مامەڵەیەک نییە بۆ دروستکردنی پسووڵە.", true);
+      }
+    } catch (_) {
+      await sendMessage(botToken, chatId, "❌ نەتوانرا پسووڵەی PDF دروست بکرێت. دووبارە هەوڵ بدەوە.", true);
+    }
     return new Response("ok", { status: 200 });
   }
 
