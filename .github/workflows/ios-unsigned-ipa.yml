@@ -310,10 +310,23 @@ jobs:
           cd ios
           pod install
 
-      - name: Wire CocoaPods xcconfig
+      - name: Wire CocoaPods xcconfig and push entitlement
         run: |
-          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Debug.xcconfig
-          printf '%s\n%s\n' '#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"' '#include "Generated.xcconfig"' > ios/Flutter/Release.xcconfig
+          cat > ios/Flutter/Debug.xcconfig <<'EOF'
+          #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
+          #include "Generated.xcconfig"
+          CODE_SIGN_ENTITLEMENTS=Runner/Runner.entitlements
+          APS_ENVIRONMENT=development
+          EOF
+          cat > ios/Flutter/Release.xcconfig <<'EOF'
+          #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
+          #include "Generated.xcconfig"
+          CODE_SIGN_ENTITLEMENTS=Runner/Runner.entitlements
+          APS_ENVIRONMENT=production
+          EOF
+          grep -Fx 'CODE_SIGN_ENTITLEMENTS=Runner/Runner.entitlements' ios/Flutter/Release.xcconfig
+          grep -Fx 'APS_ENVIRONMENT=production' ios/Flutter/Release.xcconfig
+          grep -F '<key>aps-environment</key>' ios/Runner/Runner.entitlements
 
       - name: Analyze strictly
         run: flutter analyze
@@ -334,7 +347,7 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "$DISPLAY_NAME"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx "$GITHUB_RUN_NUMBER"
 
-      - name: Package signer-safe unsigned IPA
+      - name: Package signer-ready IPA with production push entitlement
         run: |
           set -euo pipefail
           rm -rf Payload "$IPA_FILE"
@@ -344,6 +357,27 @@ jobs:
           find Payload -type f -name CodeResources -delete
           find Payload -type f -name embedded.mobileprovision -delete
           xattr -cr Payload || true
+
+          cat > /tmp/zhirox-signer-entitlements.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>aps-environment</key>
+            <string>production</string>
+          </dict>
+          </plist>
+          EOF
+
+          # Ad-hoc signing is metadata only: it makes the production push
+          # entitlement discoverable to re-signing tools such as iKurd. The
+          # resulting IPA still requires final signing with a real certificate
+          # and provisioning profile before installation.
+          /usr/bin/codesign --force --deep --sign - Payload/Runner.app
+          /usr/bin/codesign --force --sign - --entitlements /tmp/zhirox-signer-entitlements.plist --generate-entitlement-der Payload/Runner.app
+          /usr/bin/codesign -d --entitlements :- Payload/Runner.app 2>/dev/null > /tmp/zhirox-embedded-entitlements.plist
+          /usr/libexec/PlistBuddy -c 'Print :aps-environment' /tmp/zhirox-embedded-entitlements.plist | grep -Fx 'production'
+
           /usr/bin/zip -qry "$IPA_FILE" Payload
           unzip -t "$IPA_FILE"
 
@@ -419,7 +453,7 @@ jobs:
             else
               if gh release create "$UPDATE_TAG" "$IPA_FILE" "$UPDATE_MANIFEST" \
                 --title "$UPDATE_TITLE" \
-                --notes "Latest unsigned IPA and Auto Update Center manifest. Updated automatically by GitHub Actions." \
+                --notes "Latest signer-ready IPA and Auto Update Center manifest. Final signing is still required before installation." \
                 --target "$GITHUB_SHA"; then
                 echo "Release created and assets published successfully."
                 exit 0
@@ -473,7 +507,7 @@ jobs:
           else
             gh release create user-latest "$IPA_FILE" "$UPDATE_MANIFEST" active-release.json rollback-index.json \
               --title "$UPDATE_TITLE" \
-              --notes "Active user manifest and retained rollback index." --target "$GITHUB_SHA"
+              --notes "Active user manifest and retained rollback index. IPA contains signer-ready production push entitlement metadata and still requires final signing." --target "$GITHUB_SHA"
           fi
 
       - name: Verify rollback release contracts
