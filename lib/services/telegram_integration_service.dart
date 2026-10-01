@@ -63,7 +63,7 @@ class TelegramIntegrationService {
       final error = data['error']?.toString();
       if (error != null && error.isNotEmpty) throw Exception(error);
       return data;
-    } on FunctionsException catch (error) {
+    } on FunctionException catch (error) {
       final details = error.details;
       if (details is Map && details['error'] != null) {
         throw Exception(details['error'].toString());
