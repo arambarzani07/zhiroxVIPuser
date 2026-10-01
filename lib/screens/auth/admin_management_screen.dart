@@ -84,6 +84,18 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
         raw.contains('connection')) {
       return 'پەیوەندی بە سێرڤەر نەکرا. ئینتەرنێتەکەت بپشکنە و دووبارە هەوڵ بدە.';
     }
+    if (raw.contains('owner_permission_denied')) {
+      return 'دەسەڵاتی گۆڕینی وشەی نهێنی ئەم هەژمارەت نییە یان پێویستە دووبارە ناسنامەکەت پشتڕاست بکەیتەوە.';
+    }
+    if (raw.contains('invalid_input')) {
+      return 'وشەی نهێنی دەبێت لانیکەم ١٢ پیت بێت و پیتی گەورە/بچووک، ژمارە و هێمای تێدا بێت.';
+    }
+    if (raw.contains('admin_not_found')) {
+      return 'هەژماری بەڕێوەبەری ئەم مارکێتە نەدۆزرایەوە.';
+    }
+    if (raw.contains('recovery_finalize_failed')) {
+      return 'وشەی نهێنی گۆڕدرا، بەڵام پاککردنەوەی session ـە کۆنەکان تەواو نەبوو؛ دووبارە وشەی نهێنی مەگۆڕە، سەرەتا پشکنین بکە.';
+    }
     if (raw.contains('system_owner_required') ||
         raw.contains('forbidden') ||
         raw.contains('unauthorized') ||
@@ -353,6 +365,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                       data: _admins[index],
                       isDark: isDark,
                       onRenew: _showRenewDialog,
+                      onResetPassword: _showResetPasswordDialog,
                     ),
                     childCount: _admins.length,
                   ),
@@ -804,6 +817,195 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     }
   }
 
+  Future<void> _showResetPasswordDialog(
+    String adminId,
+    String marketName,
+  ) async {
+    final passwordCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    final reasonCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool loading = false;
+    bool obscure = true;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final isDark = Theme.of(ctx).brightness == Brightness.dark;
+            final textSecondary = isDark
+                ? AppDarkColors.textSecondary
+                : const Color(0xFF667085);
+
+            return AlertDialog(
+              backgroundColor: isDark ? AppDarkColors.card : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              title: Row(
+                children: [
+                  const Icon(
+                    Icons.lock_reset_rounded,
+                    color: AppColors.primary,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'گۆڕینی وشەی نهێنی • $marketName',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'وشەی نهێنی نوێ بۆ هەژماری بەڕێوەبەری ئەم مارکێتە دابنێ. دوای گۆڕین، session و ئامێرە کۆنەکان دەرکرێن.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.5,
+                            color: textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildField(
+                          passwordCtrl,
+                          'وشەی نهێنی نوێ',
+                          Icons.lock_outline_rounded,
+                          isDark: isDark,
+                          obscureText: obscure,
+                          isPassword: true,
+                          isLtr: true,
+                          onToggle: () {
+                            if (ctx.mounted) {
+                              setDialogState(() => obscure = !obscure);
+                            }
+                          },
+                          validator: (value) {
+                            final v = value ?? '';
+                            if (v.length < 12 ||
+                                !RegExp(r'[a-z]').hasMatch(v) ||
+                                !RegExp(r'[A-Z]').hasMatch(v) ||
+                                !RegExp(r'[0-9]').hasMatch(v) ||
+                                !RegExp(r'[^A-Za-z0-9]').hasMatch(v)) {
+                              return 'لانیکەم ١٢ پیت + پیتی گەورە/بچووک + ژمارە + هێما';
+                            }
+                            if (v.length > 128) {
+                              return 'وشەی نهێنی زۆر درێژە';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildField(
+                          confirmCtrl,
+                          'دووبارەکردنەوەی وشەی نهێنی',
+                          Icons.lock_reset_rounded,
+                          isDark: isDark,
+                          obscureText: obscure,
+                          isLtr: true,
+                          matchCtrl: passwordCtrl,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildField(
+                          reasonCtrl,
+                          'هۆکاری گۆڕین',
+                          Icons.notes_rounded,
+                          isDark: isDark,
+                          hint: 'بۆ نموونە: لەبیرچوونەوەی وشەی نهێنی',
+                          validator: (value) {
+                            final v = value?.trim() ?? '';
+                            if (v.length < 3) {
+                              return 'هۆکاری گۆڕین بنووسە';
+                            }
+                            if (v.length > 500) {
+                              return 'هۆکار زۆر درێژە';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: loading ? null : () => Navigator.pop(ctx),
+                  child: const Text('پاشگەزبوونەوە'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: loading
+                      ? null
+                      : () async {
+                          final form = formKey.currentState;
+                          if (form == null || !form.validate()) return;
+                          FocusScope.of(ctx).unfocus();
+                          setDialogState(() => loading = true);
+                          try {
+                            await PBService.recoverOwnerAdminAccount(
+                              adminId: adminId,
+                              newPassword: passwordCtrl.text,
+                              reason: reasonCtrl.text.trim(),
+                            );
+                            if (!ctx.mounted || !mounted) return;
+                            Navigator.pop(ctx);
+                            AppHelpers.showSnackBar(
+                              context,
+                              'وشەی نهێنی $marketName نوێکرایەوە و session ـە کۆنەکان دەرکران.',
+                            );
+                          } catch (e) {
+                            if (ctx.mounted) {
+                              setDialogState(() => loading = false);
+                            }
+                            if (mounted) {
+                              AppHelpers.showSnackBar(
+                                context,
+                                _friendlyError(e),
+                                isError: true,
+                              );
+                            }
+                          }
+                        },
+                  icon: loading
+                      ? const SizedBox(
+                          width: 17,
+                          height: 17,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.lock_reset_rounded, size: 19),
+                  label: Text(loading ? 'چاوەڕوانبە...' : 'گۆڕینی وشەی نهێنی'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      passwordCtrl.dispose();
+      confirmCtrl.dispose();
+      reasonCtrl.dispose();
+    }
+  }
+
   Widget _buildField(
     TextEditingController controller,
     String label,
@@ -865,11 +1067,13 @@ class _AdminCard extends StatelessWidget {
     required this.data,
     required this.isDark,
     required this.onRenew,
+    required this.onResetPassword,
   });
 
   final Map<String, dynamic> data;
   final bool isDark;
   final void Function(String, String) onRenew;
+  final void Function(String, String) onResetPassword;
 
   @override
   Widget build(BuildContext context) {
@@ -991,6 +1195,11 @@ class _AdminCard extends StatelessWidget {
                         admin.id,
                         subscriptionPlan.isEmpty ? 'custom' : subscriptionPlan,
                       );
+                    } else if (value == 'reset_password') {
+                      onResetPassword(
+                        admin.id,
+                        marketName.isEmpty ? 'مارکێت' : marketName,
+                      );
                     }
                   },
                   itemBuilder: (context) => const [
@@ -1005,6 +1214,20 @@ class _AdminCard extends StatelessWidget {
                           ),
                           SizedBox(width: 10),
                           Text('نوێکردنەوەی بەشداری'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'reset_password',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.lock_reset_rounded,
+                            size: 19,
+                            color: AppColors.primary,
+                          ),
+                          SizedBox(width: 10),
+                          Text('گۆڕینی وشەی نهێنی'),
                         ],
                       ),
                     ),
