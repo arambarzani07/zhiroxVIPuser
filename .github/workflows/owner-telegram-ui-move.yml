@@ -2,36 +2,36 @@ name: Move Telegram token UI to Owner
 
 on:
   push:
-    branches: [owner-source]
+    branches:
+      - owner-source
     paths:
-      - .github/workflows/owner-telegram-ui-move.yml
+      - '.github/workflows/owner-telegram-ui-move.yml'
 
 permissions:
   contents: write
 
 jobs:
-  move-ui:
+  move_ui:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Owner
+        uses: actions/checkout@v4
         with:
           ref: owner-source
           fetch-depth: 0
 
-      - name: Link Telegram Bot from Owner dashboard
-        shell: python
+      - name: Patch Owner dashboard
         run: |
+          python3 - <<'PY'
           from pathlib import Path
-
           path = Path('lib/screens/auth/owner_dashboard.dart')
           text = path.read_text()
-
           old_import = "import 'package:zhirox/screens/auth/owner_operations_center_screen.dart';\n"
           new_import = old_import + "import 'package:zhirox/screens/auth/owner_telegram_bot_settings_screen.dart';\n"
           if "owner_telegram_bot_settings_screen.dart" not in text:
-              assert old_import in text, 'Owner operations import not found'
+              if old_import not in text:
+                  raise SystemExit('Owner operations import not found')
               text = text.replace(old_import, new_import, 1)
-
           marker = """                _OwnerRow(
                   title: 'ئۆپەراسیۆن',
                   subtitle: 'Maintenance، status و ئاگادارکردنەوەی گشتی',
@@ -41,7 +41,7 @@ jobs:
                       _open(context, const OwnerOperationsCenterScreen()),
                 ),
 """
-          telegram_row = marker + """                _OwnerRow(
+          row = marker + """                _OwnerRow(
                   title: 'Telegram Bot',
                   subtitle: 'Bot Token، Webhook و دۆخی پەیوەندی',
                   icon: Icons.telegram_rounded,
@@ -53,31 +53,31 @@ jobs:
                 ),
 """
           if "const OwnerTelegramBotSettingsScreen()" not in text:
-              assert marker in text, 'Owner operations row not found'
-              text = text.replace(marker, telegram_row, 1)
-
+              if marker not in text:
+                  raise SystemExit('Owner operations row not found')
+              text = text.replace(marker, row, 1)
           path.write_text(text)
+          PY
 
       - name: Commit Owner navigation
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib/screens/auth/owner_dashboard.dart
-          git diff --cached --quiet || git commit -m "move Telegram bot token control to Owner app"
-          git push origin HEAD:owner-source
+          if ! git diff --cached --quiet; then
+            git commit -m "move Telegram bot token control to Owner app"
+            git push origin HEAD:owner-source
+          fi
 
-      - name: Remove Telegram token management from User app
-        shell: bash
+      - name: Cleanup User token UI
         run: |
           git fetch origin user-source
           git checkout -B user-source origin/user-source
-          python <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
-
           path = Path('lib/screens/admin/admin_settings_screen.dart')
           text = path.read_text()
           text = text.replace("import 'package:zhirox/screens/admin/telegram_bot_settings_screen.dart';\n", "")
-
           block = """                      if (auth.user?.getBoolValue('is_system_owner') ?? false)
                         _SettingsRow(
                           icon: Icons.telegram_rounded,
@@ -89,18 +89,19 @@ jobs:
                           ),
                         ),
 """
-          assert block in text, 'User Telegram settings row not found'
-          text = text.replace(block, '', 1)
-          path.write_text(text)
-
-          for name in [
+          if block not in text:
+              raise SystemExit('User Telegram settings row not found')
+          path.write_text(text.replace(block, '', 1))
+          for name in (
               'lib/screens/admin/telegram_bot_settings_screen.dart',
               'lib/services/telegram_admin_service.dart',
-          ]:
+          ):
               file = Path(name)
               if file.exists():
                   file.unlink()
           PY
           git add -A lib/screens/admin/admin_settings_screen.dart lib/screens/admin/telegram_bot_settings_screen.dart lib/services/telegram_admin_service.dart
-          git diff --cached --quiet || git commit -m "keep Telegram token management out of User app"
-          git push origin HEAD:user-source
+          if ! git diff --cached --quiet; then
+            git commit -m "keep Telegram token management out of User app"
+            git push origin HEAD:user-source
+          fi
