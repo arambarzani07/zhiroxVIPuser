@@ -12,6 +12,7 @@ import 'package:zhirox/screens/admin/legacy_import_screen.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
 import 'package:zhirox/screens/admin/receipt_settings_screen.dart';
 import 'package:zhirox/screens/admin/subscription_payment_screen.dart';
+import 'package:zhirox/screens/admin/telegram_bot_settings_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -158,6 +159,16 @@ class AdminSettingsScreen extends StatelessWidget {
                         onTap: () =>
                             _open(context, const AdminNotificationsScreen()),
                       ),
+                      if (auth.user?.getBoolValue('is_system_owner') ?? false)
+                        _SettingsRow(
+                          icon: Icons.telegram_rounded,
+                          title: 'Telegram Bot',
+                          subtitle: 'Bot Token، Webhook و دۆخی پەیوەندی',
+                          onTap: () => _open(
+                            context,
+                            const TelegramBotSettingsScreen(),
+                          ),
+                        ),
                       _SettingsRow(
                         icon: Icons.sync_rounded,
                         title: 'پەیوەندی Daftar',
