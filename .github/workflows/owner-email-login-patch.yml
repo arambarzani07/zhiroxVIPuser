@@ -1,0 +1,51 @@
+name: Patch Owner login to email only
+
+on:
+  push:
+    branches: [owner-source]
+    paths:
+      - .github/workflows/owner-email-login-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: owner-source
+          fetch-depth: 0
+
+      - name: Make Owner login email-only
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('lib/screens/auth/login_screen.dart')
+          s = p.read_text()
+          replacements = {
+            "return 'ژمارە مۆبایل یان وشەی نهێنی هەڵەیە.';": "return 'ئیمەیل یان وشەی نهێنی هەڵەیە.';",
+            "'ژمارە مۆبایل و وشەی نهێنی هەژمارەکەت بنووسە.',": "'ئیمەیل و وشەی نهێنی هەژمارەکەت بنووسە.',",
+            "autofillHints: const [AutofillHints.telephoneNumber],": "autofillHints: const [AutofillHints.email],",
+            "labelText: 'ئیمەیل یان ژمارە مۆبایل',": "labelText: 'ئیمەیل',",
+            "hintText: 'name@example.com یان 07xxxxxxxxx',": "hintText: 'name@example.com',",
+            "prefixIcon: Icon(Icons.phone_iphone_rounded),": "prefixIcon: Icon(Icons.email_outlined),",
+            "? 'ئیمەیل یان ژمارە مۆبایل بنووسە'": "? 'ئیمەیل بنووسە'",
+          }
+          for old, new in replacements.items():
+              assert old in s, f'missing expected text: {old}'
+              s = s.replace(old, new, 1)
+          old_validator = "validator: (value) => value == null || value.trim().isEmpty\n                                        ? 'ئیمەیل بنووسە'\n                                        : null,"
+          new_validator = "validator: (value) {\n                                      final email = value?.trim() ?? '';\n                                      if (email.isEmpty) return 'ئیمەیل بنووسە';\n                                      if (!email.contains('@')) return 'ئیمەیلێکی دروست بنووسە';\n                                      return null;\n                                    },"
+          assert old_validator in s, 'email validator anchor not found'
+          s = s.replace(old_validator, new_validator, 1)
+          p.write_text(s)
+
+      - name: Commit Owner email login
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/auth/login_screen.dart
+          git diff --cached --quiet || git commit -m "use email-only login for Owner app"
+          git push origin HEAD:owner-source
