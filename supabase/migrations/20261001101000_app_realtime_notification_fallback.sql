@@ -18,6 +18,9 @@ alter table public.app_realtime_notifications
 create index if not exists app_realtime_notifications_recipient_created_idx
   on public.app_realtime_notifications (recipient_user_id, created_at desc);
 
+create index if not exists app_realtime_notifications_market_id_idx
+  on public.app_realtime_notifications (market_id);
+
 alter table public.app_realtime_notifications enable row level security;
 
 revoke all on public.app_realtime_notifications from anon;
