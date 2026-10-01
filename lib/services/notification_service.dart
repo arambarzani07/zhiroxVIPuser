@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -216,28 +215,25 @@ class NotificationService {
     _realtimeChannel = channel;
 
     // Realtime does not replay inserts that happened while iOS had the app
-    // suspended. Catch up on recent unseen rows whenever the app/session starts.
+    // suspended. Catch up on recent undelivered rows whenever the app starts.
     await _drainPendingRealtime(normalized);
   }
 
   static Future<void> _drainPendingRealtime(String userId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final cursorKey = 'app_notification_cursor_$userId';
-      final savedCursor = prefs.getString(cursorKey);
-      final since = DateTime.tryParse(savedCursor ?? '') ??
-          DateTime.now().toUtc().subtract(const Duration(minutes: 10));
-
+      final since = DateTime.now().toUtc().subtract(const Duration(days: 1));
       final rows = await PBService.client
           .from('app_realtime_notifications')
           .select()
           .eq('recipient_user_id', userId)
-          .gt('created_at', since.toUtc().toIso8601String())
+          .gt('created_at', since.toIso8601String())
           .order('created_at', ascending: true)
-          .limit(30);
+          .limit(100);
 
       for (final row in rows) {
-        await _handleRealtimeRecord(Map<String, dynamic>.from(row));
+        final record = Map<String, dynamic>.from(row);
+        if (record['delivered_at'] != null) continue;
+        await _handleRealtimeRecord(record);
       }
     } catch (error) {
       if (kDebugMode) {
@@ -252,13 +248,14 @@ class NotificationService {
     final currentUserId = PBService.client.auth.currentUser?.id;
     final recipient = record['recipient_user_id']?.toString() ?? '';
     if (currentUserId == null || recipient != currentUserId) return;
+    if (record['delivered_at'] != null) return;
 
     final eventId = record['id']?.toString().trim() ?? '';
     if (eventId.isEmpty || !_realtimeSeenEventIds.add(eventId)) return;
 
     final expiresAt = DateTime.tryParse(record['expires_at']?.toString() ?? '');
     if (expiresAt != null && expiresAt.isBefore(DateTime.now().toUtc())) {
-      await _saveRealtimeCursor(currentUserId, record['created_at']?.toString());
+      await _markRealtimeDelivered(currentUserId, eventId);
       return;
     }
 
@@ -279,7 +276,7 @@ class NotificationService {
       id: _notificationIdForEvent(eventId),
       payload: clickData,
     );
-    await _saveRealtimeCursor(currentUserId, record['created_at']?.toString());
+    await _markRealtimeDelivered(currentUserId, eventId);
   }
 
   static int _notificationIdForEvent(String eventId) {
@@ -291,18 +288,20 @@ class NotificationService {
     return eventId.hashCode & 0x7fffffff;
   }
 
-  static Future<void> _saveRealtimeCursor(
+  static Future<void> _markRealtimeDelivered(
     String userId,
-    String? rawCreatedAt,
+    String eventId,
   ) async {
-    final createdAt = DateTime.tryParse(rawCreatedAt ?? '');
-    if (createdAt == null) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'app_notification_cursor_$userId';
-    final previous = DateTime.tryParse(prefs.getString(key) ?? '');
-    if (previous == null || createdAt.isAfter(previous)) {
-      await prefs.setString(key, createdAt.toUtc().toIso8601String());
+    try {
+      await PBService.client
+          .from('app_realtime_notifications')
+          .update({'delivered_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('id', eventId)
+          .eq('recipient_user_id', userId);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Could not mark realtime notification delivered: $error');
+      }
     }
   }
 
