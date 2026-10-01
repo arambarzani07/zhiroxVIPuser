@@ -5,7 +5,8 @@ class AutoPilotDashboardService {
 
   static Future<Map<String, dynamic>> load() async {
     await PBService.ensureInitialized();
-    final raw = await PBService.client.rpc('get_my_autopilot_dashboard');
+    final response = await PBService.client.functions.invoke('autopilot-dashboard');
+    final raw = response.data;
     if (raw is! Map) {
       throw Exception('invalid_autopilot_dashboard');
     }
