@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/screens/auth/owner_telegram_digest_screen.dart';
 import 'package:zhirox/services/telegram_admin_service.dart';
 import 'package:zhirox/widgets/app_design.dart';
 
@@ -56,7 +57,6 @@ class _OwnerTelegramBotSettingsScreenState
       setState(() => _error = 'Bot Token بنووسە');
       return;
     }
-
     setState(() {
       _saving = true;
       _error = null;
@@ -102,8 +102,7 @@ class _OwnerTelegramBotSettingsScreenState
               ),
             ],
           ),
-        ) ??
-        false;
+        ) ?? false;
     if (!ok) return;
 
     setState(() {
@@ -178,10 +177,7 @@ class _OwnerTelegramBotSettingsScreenState
                                   : configured
                                       ? 'Token هەیە، بەڵام پشتڕاست نییە'
                                       : 'هێشتا چالاک نەکراوە',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         if ((status?.botUsername ?? '').isNotEmpty) ...[
                           const SizedBox(height: 3),
@@ -202,19 +198,11 @@ class _OwnerTelegramBotSettingsScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Bot Token',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
+                  Text('Bot Token', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 6),
                   Text(
                     'Token تەنها لێرە دەنێردرێت بۆ backend. لە ئامێر هەڵناگیرێت و دوای پشتڕاستکردنەوە لە Supabase Vault پارێزراو دەبێت.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: 14),
                   TextField(
@@ -229,23 +217,13 @@ class _OwnerTelegramBotSettingsScreenState
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         onPressed: () => setState(() => _obscure = !_obscure),
-                        icon: Icon(
-                          _obscure
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
+                        icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
                       ),
                     ),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 10),
-                    Text(
-                      _error!,
-                      style: TextStyle(
-                        color: scheme.error,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    Text(_error!, style: TextStyle(color: scheme.error, fontWeight: FontWeight.w700)),
                   ],
                   const SizedBox(height: 14),
                   SizedBox(
@@ -253,11 +231,7 @@ class _OwnerTelegramBotSettingsScreenState
                     child: FilledButton.icon(
                       onPressed: _saving ? null : _save,
                       icon: _saving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.verified_user_outlined),
                       label: const Text('پشتڕاستکردنەوە و چالاککردن'),
                     ),
@@ -278,6 +252,27 @@ class _OwnerTelegramBotSettingsScreenState
             ),
             const SizedBox(height: 14),
             AppSurface(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                minTileHeight: 74,
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFF0B9270).withValues(alpha: 0.10),
+                  foregroundColor: const Color(0xFF0B9270),
+                  child: const Icon(Icons.summarize_rounded),
+                ),
+                title: const Text('Daily Owner Digest', style: TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: const Text('Telegramی Owner پەیوەست بکە • کورتەی ڕۆژانە 08:30'),
+                trailing: const Icon(Icons.chevron_left_rounded),
+                onTap: configured
+                    ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(builder: (_) => const OwnerTelegramDigestScreen()),
+                        )
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 14),
+            AppSurface(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -286,10 +281,7 @@ class _OwnerTelegramBotSettingsScreenState
                   Expanded(
                     child: Text(
                       'ئەم ڕێکخستنە سراسەرییە و تەنها System Owner دەستی پێ دەگات. Admin، Employee و Customer ناتوانن Bot Token ببینن یان بگۆڕن.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            height: 1.7,
-                          ),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, height: 1.7),
                     ),
                   ),
                 ],
