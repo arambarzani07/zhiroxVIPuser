@@ -19,6 +19,7 @@ import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/widgets/app_design.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/auto_update_gate.dart';
+import 'package:zhirox/widgets/owner_push_route_gate.dart';
 import 'package:zhirox/widgets/platform_operations_gate.dart';
 
 @pragma('vm:entry-point')
@@ -286,7 +287,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         if (!auth.isLoggedIn) return const LoginScreen();
 
         if (auth.user?.getBoolValue('is_system_owner') ?? false) {
-          return const OwnerDashboard();
+          return const OwnerPushRouteGate(child: OwnerDashboard());
         }
 
         if (auth.userRole == 'admin' && auth.subscriptionDaysLeft <= 0) {
