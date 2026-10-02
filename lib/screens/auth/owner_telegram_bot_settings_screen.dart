@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/screens/auth/owner_critical_alerts_screen.dart';
 import 'package:zhirox/screens/auth/owner_telegram_digest_screen.dart';
 import 'package:zhirox/services/telegram_admin_service.dart';
 import 'package:zhirox/widgets/app_design.dart';
@@ -269,6 +270,32 @@ class _OwnerTelegramBotSettingsScreenState
                           MaterialPageRoute<void>(builder: (_) => const OwnerTelegramDigestScreen()),
                         )
                     : null,
+              ),
+            ),
+            const SizedBox(height: 14),
+            AppSurface(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                minTileHeight: 74,
+                leading: CircleAvatar(
+                  backgroundColor: scheme.error.withValues(alpha: 0.10),
+                  foregroundColor: scheme.error,
+                  child: const Icon(Icons.crisis_alert_rounded),
+                ),
+                title: const Text(
+                  'Critical Alerts',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: const Text(
+                  'Attention، Failed، Dead-letter و Critical Risk',
+                ),
+                trailing: const Icon(Icons.chevron_left_rounded),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const OwnerCriticalAlertsScreen(),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 14),
