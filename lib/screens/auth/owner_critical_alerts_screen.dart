@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/services/notification_service.dart';
 import 'package:zhirox/services/owner_critical_alert_service.dart';
+import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/widgets/app_design.dart';
 
 class OwnerCriticalAlertsScreen extends StatefulWidget {
@@ -18,11 +21,87 @@ class _OwnerCriticalAlertsScreenState extends State<OwnerCriticalAlertsScreen> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _items = const [];
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
     unawaited(_load());
+    unawaited(_subscribeRealtime());
+  }
+
+  @override
+  void dispose() {
+    final channel = _channel;
+    if (channel != null) {
+      unawaited(Supabase.instance.client.removeChannel(channel));
+    }
+    super.dispose();
+  }
+
+  Future<void> _subscribeRealtime() async {
+    try {
+      await PBService.ensureInitialized();
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id ?? '';
+      if (userId.isEmpty || !mounted) return;
+
+      final previous = _channel;
+      if (previous != null) await client.removeChannel(previous);
+
+      final channel = client
+          .channel('owner-critical-alerts:$userId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'app_realtime_notifications',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'recipient_user_id',
+              value: userId,
+            ),
+            callback: (payload) {
+              unawaited(_handleRealtimeRow(payload.newRecord));
+            },
+          )
+          .subscribe();
+      _channel = channel;
+    } catch (_) {
+      // Pull-to-refresh remains available if a realtime connection is unavailable.
+    }
+  }
+
+  Future<void> _handleRealtimeRow(Map<String, dynamic> raw) async {
+    final type = raw['event_type']?.toString() ?? '';
+    if (type != 'owner_autopilot_critical' &&
+        type != 'owner_autopilot_recovery') {
+      return;
+    }
+
+    final row = Map<String, dynamic>.from(raw);
+    final id = row['id']?.toString() ?? '';
+    if (mounted) {
+      setState(() {
+        final withoutDuplicate = _items
+            .where((item) => item['id']?.toString() != id)
+            .toList(growable: false);
+        _items = [row, ...withoutDuplicate].take(100).toList(growable: false);
+      });
+    }
+
+    try {
+      await NotificationService.init();
+      await NotificationService.show(
+        title: row['title']?.toString() ?? 'ZHIROX AutoPilot',
+        body: row['body']?.toString() ?? '',
+        id: id.isEmpty
+            ? DateTime.now().millisecondsSinceEpoch.remainder(100000)
+            : id.hashCode & 0x7fffffff,
+      );
+      if (id.isNotEmpty) {
+        await OwnerCriticalAlertService.markDelivered(id);
+      }
+    } catch (_) {}
   }
 
   Future<void> _load() async {
