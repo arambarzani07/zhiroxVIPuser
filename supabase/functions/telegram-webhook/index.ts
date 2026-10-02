@@ -188,6 +188,7 @@ function decisionDetailText(item: any): string {
   const severity = String(item?.severity ?? "info");
   const icon = severity === "critical" ? "🔴" : severity === "warning" ? "🟠" : "🔵";
   const status = String(item?.status ?? "open");
+  const snoozedUntil = item?.snoozed_until ? formatDate(item.snoozed_until) : null;
   return [
     `📥 ${icon} ${String(item?.title ?? "Decision").slice(0, 180)}`,
     "",
@@ -195,8 +196,9 @@ function decisionDetailText(item: any): string {
     "",
     `Status: ${status} • Severity: ${severity}`,
     `🕒 ${formatDate(item?.last_seen_at)}`,
+    ...(snoozedUntil ? [`💤 Snoozed until: ${snoozedUntil}`] : []),
     "",
-    "🔒 Acknowledge تەنها دۆخی بڕیارەکە دەگۆڕێت؛ هیچ financial action ـێک ناکات.",
+    "🔒 Acknowledge/Snooze/Reopen تەنها workflow ـی بڕیار دەگۆڕن؛ هیچ financial action ـێک ناکەن.",
   ].join("\n");
 }
 
@@ -288,19 +290,30 @@ async function buildOwnerActionKeyboard(admin: any, botToken: string, ownerId: s
     const openMarket = await issueOwnerActionButton(admin, botToken, ownerId, "🏪 مارکێت", "market", "market", market.id, { base_query: baseQuery, market_name: market.name });
     if (evidence || recommend) rows.push([evidence, recommend].filter(Boolean));
     if (openMarket) rows.push([openMarket]);
-  } else if (decisionId && intent !== "decision_ack") {
+  } else if (decisionId) {
     const evidence = await issueOwnerActionButton(admin, botToken, ownerId, "🔎 Evidence", "evidence", "decision", decisionId, {});
     const recommend = await issueOwnerActionButton(admin, botToken, ownerId, "💡 پێشنیار", "recommend", "decision", decisionId, {});
-    const ack = await issueOwnerActionButton(admin, botToken, ownerId, "✅ Acknowledge", "ack", "decision", decisionId, {});
     if (evidence || recommend) rows.push([evidence, recommend].filter(Boolean));
-    if (ack) rows.push([ack]);
+
+    const item = await getDecision(admin, ownerId, decisionId);
+    const status = String(item?.status ?? "open");
+    const snooze1h = await issueOwnerActionButton(admin, botToken, ownerId, "⏰ Snooze 1h", "snooze_60", "decision", decisionId, {});
+    const snooze6h = await issueOwnerActionButton(admin, botToken, ownerId, "💤 Snooze 6h", "snooze_360", "decision", decisionId, {});
+    if (status === "acknowledged") {
+      const reopen = await issueOwnerActionButton(admin, botToken, ownerId, "🔓 Reopen", "reopen", "decision", decisionId, {});
+      if (reopen) rows.push([reopen]);
+    } else if (status === "open") {
+      const ack = await issueOwnerActionButton(admin, botToken, ownerId, "✅ Acknowledge", "ack", "decision", decisionId, {});
+      if (ack) rows.push([ack]);
+    }
+    if (snooze1h || snooze6h) rows.push([snooze1h, snooze6h].filter(Boolean));
   } else {
     const baseQuery = baseQueryForIntent(intent);
     if (baseQuery) {
       const evidence = await issueOwnerActionButton(admin, botToken, ownerId, "🔎 Evidence", "evidence", null, null, { base_query: baseQuery });
       if (evidence) rows.push([evidence]);
     }
-    if (["brief", "health", "risk", "changes", "decisions", "decision_ack"].some((x) => intent.includes(x))) {
+    if (["brief", "health", "risk", "changes", "decisions", "decision_ack", "decision_transition"].some((x) => intent.includes(x))) {
       const decisions = await issueOwnerActionButton(admin, botToken, ownerId, "📥 Decision Inbox", "decisions", null, null, {});
       if (decisions) rows.push([decisions]);
     }
@@ -417,17 +430,25 @@ async function handleOwnerActionCallback(admin: any, botToken: string, query: an
     }
 
     if (entityType === "decision" && isUuid(entityId)) {
-      if (action === "ack") {
-        const { data: ack, error: ackError } = await admin.rpc("acknowledge_owner_decision_service", {
+      if (["ack", "snooze_60", "snooze_360", "reopen"].includes(action)) {
+        const { data: transition, error: transitionError } = await admin.rpc("transition_owner_decision_service", {
           p_owner_user_id: ownerId,
           p_decision_id: entityId,
+          p_action: action,
         });
-        if (ackError || ack?.ok !== true) throw new Error("ack_failed");
-        const title = String(ack?.title ?? "Decision").slice(0, 180);
-        const output = ack?.already_acknowledged === true
-          ? `✅ ${title}\n\nپێشتر Acknowledge کراوە.`
-          : `✅ ${title}\n\nAcknowledge کرا. هیچ financial action ـێک جێبەجێ نەکرا.`;
-        await sendOwnerSmartMessage(admin, botToken, chatId, ownerId, output, { intent: "decision_ack" });
+        if (transitionError || transition?.ok !== true) throw new Error("decision_transition_failed");
+        const title = String(transition?.title ?? "Decision").slice(0, 180);
+        let output = `✅ ${title}\n\n`;
+        if (action === "ack") output += "Acknowledge کرا. هیچ financial action ـێک جێبەجێ نەکرا.";
+        else if (action === "snooze_60") output += `⏰ بۆ 1 کاتژمێر Snooze کرا.\nدووبارە لە ${formatDate(transition?.snoozed_until)} دەردەکەوێت ئەگەر هێشتا کێشەکە ماوە.`;
+        else if (action === "snooze_360") output += `💤 بۆ 6 کاتژمێر Snooze کرا.\nدووبارە لە ${formatDate(transition?.snoozed_until)} دەردەکەوێت ئەگەر هێشتا کێشەکە ماوە.`;
+        else output += "🔓 بڕیارەکە دووبارە کرایەوە.";
+        const item = await getDecision(admin, ownerId, entityId);
+        await sendOwnerSmartMessage(admin, botToken, chatId, ownerId, output, {
+          intent: "decision_transition",
+          entity: { type: "decision", id: entityId },
+          evidence: item ?? {},
+        });
         return new Response("ok", { status: 200 });
       }
 
