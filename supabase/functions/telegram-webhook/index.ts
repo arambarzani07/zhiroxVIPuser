@@ -63,6 +63,7 @@ const menuKeyboard = {
 
 const ownerMenuKeyboard = {
   keyboard: [
+    [{ text: "💬 Ask ZHIROX" }],
     [{ text: "🧠 Executive Brief" }, { text: "📥 Decision Inbox" }],
     [{ text: "🔄 چی گۆڕاوە؟" }, { text: "📊 دۆخی AutoPilot" }],
     [{ text: "🕒 Daily Digest" }],
@@ -319,6 +320,15 @@ async function ownerChangesText(admin: any, ownerId: string): Promise<string> {
   return lines.join("\n");
 }
 
+async function ownerAsk(admin: any, ownerId: string, question: string): Promise<any> {
+  const { data, error } = await admin.rpc("ask_owner_telegram_os_service", {
+    p_owner_user_id: ownerId,
+    p_text: question,
+  });
+  if (error) throw error;
+  return data && typeof data === "object" ? data : {};
+}
+
 function statementText(data: any): string {
   const rows = Array.isArray(data?.recent) ? data.recent : [];
   if (!rows.length) {
@@ -396,7 +406,7 @@ Deno.serve(async (req: Request) => {
         await sendOwnerMessage(
           botToken,
           chatId,
-          "✅ Telegramی System Owner پەیوەستە.\n🧠 ZHIROX Telegram OS چالاکە.\nDaily Digest هەر ڕۆژ 08:30 بە کاتی عێراق دەنێردرێت.",
+          "✅ Telegramی System Owner پەیوەستە.\n🧠 ZHIROX Telegram OS + Ask ZHIROX چالاکە.\nDaily Digest هەر ڕۆژ 08:30 بە کاتی عێراق دەنێردرێت.",
         );
         return new Response("ok", { status: 200 });
       }
@@ -446,7 +456,7 @@ Deno.serve(async (req: Request) => {
       await sendOwnerMessage(
         botToken,
         chatId,
-        "✅ Telegramی System Owner بە سەرکەوتوویی پەیوەست کرا.\n🧠 Executive Brief، Decision Inbox و Changes چالاکن.\nDaily Owner Digest هەر ڕۆژ 08:30 بە کاتی عێراق دەنێردرێت.",
+        "✅ Telegramی System Owner بە سەرکەوتوویی پەیوەست کرا.\n💬 Ask ZHIROX، Executive Brief، Decision Inbox و Changes چالاکن.\nDaily Owner Digest هەر ڕۆژ 08:30 بە کاتی عێراق دەنێردرێت.",
       );
     } else {
       await sendMessage(
@@ -463,7 +473,11 @@ Deno.serve(async (req: Request) => {
   if (owner) {
     if (text === "/menu" || text === "menu") {
       await auditOwnerCommand(admin, owner, "menu");
-      await sendOwnerMessage(botToken, chatId, "🧠 ZHIROX Telegram OS\nخزمەتگوزارییەکی Owner هەڵبژێرە.");
+      await sendOwnerMessage(
+        botToken,
+        chatId,
+        "🧠 ZHIROX Telegram OS\n\n💬 دەتوانیت بە زمانی ئاسایی بپرسیت، یان یەکێک لە دوگمەکان هەڵبژێریت.",
+      );
       return new Response("ok", { status: 200 });
     }
 
@@ -529,12 +543,38 @@ Deno.serve(async (req: Request) => {
       return new Response("ok", { status: 200 });
     }
 
-    await auditOwnerCommand(admin, owner, "unknown", "ignored");
-    await sendOwnerMessage(
-      botToken,
-      chatId,
-      "🧠 ZHIROX Telegram OS\nفرمانەکە نەناسرا.\n\n/brief • /decisions • /changes • /health",
-    );
+    if (text.startsWith("/") && text !== "/ask") {
+      await auditOwnerCommand(admin, owner, "unknown_slash", "ignored", { text: text.slice(0, 80) });
+      await sendOwnerMessage(
+        botToken,
+        chatId,
+        "💬 Ask ZHIROX\n\nبە زمانی ئاسایی بپرسە، یان: /brief • /decisions • /changes • /health",
+      );
+      return new Response("ok", { status: 200 });
+    }
+
+    try {
+      const question = text === "💬 Ask ZHIROX" || text === "/ask"
+        ? "help"
+        : text.slice(0, 500);
+      const result = await ownerAsk(admin, owner, question);
+      const intent = String(result?.intent ?? "help").slice(0, 64);
+      const confidence = String(result?.confidence ?? "unknown").slice(0, 32);
+      const output = String(result?.message ?? "").trim() ||
+        "💬 Ask ZHIROX\n\nنەتوانرا وەڵامێکی ڕوون دروست بکرێت.";
+      await auditOwnerCommand(admin, owner, `ask:${intent}`, "ok", {
+        confidence,
+        question: question.slice(0, 180),
+      });
+      await sendOwnerMessage(botToken, chatId, output);
+    } catch (_) {
+      await auditOwnerCommand(admin, owner, "ask", "failed", { question: text.slice(0, 180) });
+      await sendOwnerMessage(
+        botToken,
+        chatId,
+        "❌ Ask ZHIROX لەم ساتەدا نەتوانی وەڵام بدات. فرمانە بنەڕەتییەکان هەر کار دەکەن.",
+      );
+    }
     return new Response("ok", { status: 200 });
   }
 
