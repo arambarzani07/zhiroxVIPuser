@@ -17,8 +17,8 @@ function serviceKey(): string {
 }
 
 async function sha256Hex(value: string): Promise<string> {
-  const data = new TextEncoder().encode(value);
-  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  const bytes = new TextEncoder().encode(value);
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
   return Array.from(hash).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
@@ -41,6 +41,10 @@ function randomHex(byteLength = 32): string {
     .join("");
 }
 
+function isUuid(value: unknown): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? ""));
+}
+
 async function loadBotToken(admin: any): Promise<string> {
   const direct = env("TELEGRAM_BOT_TOKEN");
   if (direct) return direct;
@@ -50,7 +54,7 @@ async function loadBotToken(admin: any): Promise<string> {
   return String(row?.bot_token ?? "").trim();
 }
 
-const menuKeyboard = {
+const customerMenuKeyboard = {
   keyboard: [
     [{ text: "💰 قەرزی ماوە" }, { text: "🧾 کۆتا پارەدان" }],
     [{ text: "📋 کەشف حساب" }, { text: "🌐 هەژماری من" }],
@@ -80,12 +84,8 @@ async function telegramApi(token: string, method: string, body: Record<string, u
     signal: AbortSignal.timeout(8000),
   });
   let payload: any = {};
-  try {
-    payload = await response.json();
-  } catch (_) {}
-  if (!response.ok || payload?.ok !== true) {
-    throw new Error(`telegram_${method}_failed`);
-  }
+  try { payload = await response.json(); } catch (_) {}
+  if (!response.ok || payload?.ok !== true) throw new Error(`telegram_${method}_failed`);
   return payload.result;
 }
 
@@ -95,7 +95,7 @@ async function sendMessage(token: string, chatId: string, text: string, withMenu
       chat_id: chatId,
       text,
       disable_web_page_preview: true,
-      ...(withMenu ? { reply_markup: menuKeyboard } : {}),
+      ...(withMenu ? { reply_markup: customerMenuKeyboard } : {}),
     });
   } catch (_) {}
 }
@@ -112,13 +112,8 @@ async function sendOwnerMessage(token: string, chatId: string, text: string) {
 }
 
 function asInt(value: unknown): number {
-  const number = Number(value ?? 0);
-  return Number.isFinite(number) ? Math.trunc(number) : 0;
-}
-
-function signed(value: unknown): string {
-  const number = asInt(value);
-  return number > 0 ? `+${number}` : String(number);
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
 }
 
 function formatIqd(value: unknown): string {
@@ -141,17 +136,13 @@ function formatDate(value: unknown): string {
 }
 
 async function snapshot(admin: any, chatId: string): Promise<any | null> {
-  const { data, error } = await admin.rpc("get_telegram_customer_snapshot_service", {
-    p_chat_id: chatId,
-  });
+  const { data, error } = await admin.rpc("get_telegram_customer_snapshot_service", { p_chat_id: chatId });
   if (error) throw error;
   return data && typeof data === "object" ? data : null;
 }
 
 async function ownerByChat(admin: any, chatId: string): Promise<string | null> {
-  const { data, error } = await admin.rpc("get_telegram_system_owner_by_chat_service", {
-    p_chat_id: chatId,
-  });
+  const { data, error } = await admin.rpc("get_telegram_system_owner_by_chat_service", { p_chat_id: chatId });
   if (error) return null;
   return data ? String(data) : null;
 }
@@ -173,153 +164,6 @@ async function auditOwnerCommand(
   } catch (_) {}
 }
 
-function deltaLines(delta: any): string[] {
-  const fields: Array<[string, string]> = [
-    ["attention", "Attention"],
-    ["degraded", "Degraded"],
-    ["active_queue", "Queue"],
-    ["retrying", "Retry"],
-    ["dead_letter", "Dead-letter"],
-    ["risk_high", "High Risk"],
-    ["risk_critical", "Critical Risk"],
-    ["telegram_linked_customers", "Telegram linked"],
-  ];
-  const lines: string[] = [];
-  for (const [key, label] of fields) {
-    const value = asInt(delta?.[key]);
-    if (value !== 0) lines.push(`• ${label}: ${signed(value)}`);
-  }
-  return lines;
-}
-
-async function ownerOverviewText(admin: any): Promise<string> {
-  const { data, error } = await admin.rpc("get_system_owner_autopilot_overview_service", {
-    p_search: "",
-    p_health: "all",
-    p_page: 1,
-    p_per_page: 100,
-  });
-  if (error) throw error;
-  const o = data?.overview ?? {};
-  const items = Array.isArray(data?.items) ? data.items : [];
-  const bad = items
-    .filter((x: any) => String(x?.health?.status ?? "") !== "healthy")
-    .slice(0, 5);
-  const lines = [
-    "📊 ZHIROX • AutoPilot Status",
-    "",
-    `🏪 مارکێت: ${asInt(o.total_markets)} • Healthy ${asInt(o.healthy)} • Degraded ${asInt(o.degraded)} • Attention ${asInt(o.attention)}`,
-    `⚙️ Queue ${asInt(o.active_queue)} • Retry ${asInt(o.retrying)} • Dead-letter ${asInt(o.dead_letter)}`,
-    `🤖 AutoPilot ON ${asInt(o.autopilot_enabled)} • OFF ${asInt(o.autopilot_disabled)}`,
-    `📨 Telegram linked ${asInt(o.telegram_linked_customers)}`,
-    `🛡️ Risk ${asInt(o.risk_total)} • High ${asInt(o.risk_high)} • Critical ${asInt(o.risk_critical)}`,
-  ];
-  if (bad.length) {
-    lines.push("", "⚠️ پێویستی بە سەرنج:");
-    for (const market of bad) {
-      lines.push(`• ${String(market?.market_name ?? "مارکێت")} — ${String(market?.health?.status ?? "attention")}`);
-    }
-  } else {
-    lines.push("", "✅ هیچ مارکێتێکی کێشەدار نییە.");
-  }
-  return lines.join("\n");
-}
-
-async function ownerExecutiveBriefText(admin: any, ownerId: string): Promise<string> {
-  const { data, error } = await admin.rpc("get_owner_executive_brief_service", {
-    p_owner_user_id: ownerId,
-  });
-  if (error) throw error;
-  const current = data?.current ?? {};
-  const delta = data?.delta_24h ?? {};
-  const decisions = data?.decisions ?? {};
-  const markets = Array.isArray(data?.markets) ? data.markets : [];
-  const problemMarkets = markets
-    .filter((m: any) => String(m?.health?.status ?? "healthy") !== "healthy")
-    .slice(0, 3);
-  const changes = deltaLines(delta);
-  const lines = [
-    "🧠 ZHIROX • Executive Brief",
-    `🕒 ${formatDate(data?.generated_at)}`,
-    "",
-    `🏪 ${asInt(current.total_markets)} مارکێت • Healthy ${asInt(current.healthy)} • Degraded ${asInt(current.degraded)} • Attention ${asInt(current.attention)}`,
-    `⚙️ Queue ${asInt(current.active_queue)} • Retry ${asInt(current.retrying)} • Dead-letter ${asInt(current.dead_letter)}`,
-    `🛡️ Risk ${asInt(current.risk_total)} • High ${asInt(current.risk_high)} • Critical ${asInt(current.risk_critical)}`,
-    `📨 Telegram linked ${asInt(current.telegram_linked_customers)}`,
-    `📥 Decision Inbox ${asInt(decisions.total)} • Critical ${asInt(decisions.critical)} • Warning ${asInt(decisions.warning)}`,
-  ];
-  if (problemMarkets.length) {
-    lines.push("", "⚠️ مارکێتە پێویست بە سەرنجەکان:");
-    for (const market of problemMarkets) {
-      lines.push(`• ${String(market?.market_name ?? "مارکێت")} — ${String(market?.health?.status ?? "attention")}`);
-    }
-  } else {
-    lines.push("", "✅ دۆخی هەموو مارکێتەکان سالمە.");
-  }
-  if (changes.length) {
-    lines.push("", `🔄 گۆڕان لە ${formatDate(delta?.reference_at)}:`, ...changes);
-  } else {
-    lines.push("", "🔄 هیچ گۆڕانکارییەکی گرنگ لە baseline ـی بەردەست نییە.");
-  }
-  if (asInt(decisions.total) === 0) {
-    lines.push("", "✅ ئێستا هیچ بڕیارێکی فوری لە Owner پێویست نییە.");
-  }
-  return lines.join("\n");
-}
-
-async function ownerDecisionInboxText(admin: any, ownerId: string): Promise<string> {
-  const { data, error } = await admin.rpc("get_owner_decision_inbox_service", {
-    p_owner_user_id: ownerId,
-    p_limit: 10,
-  });
-  if (error) throw error;
-  const items = Array.isArray(data?.items) ? data.items : [];
-  if (!items.length) {
-    return "📥 ZHIROX • Decision Inbox\n\n✅ ئێستا هیچ بڕیارێکی چالاک پێویست نییە.";
-  }
-  const lines = [
-    "📥 ZHIROX • Decision Inbox",
-    `Critical ${asInt(data?.critical)} • Warning ${asInt(data?.warning)} • Total ${asInt(data?.total)}`,
-    "",
-  ];
-  for (const [index, item] of items.entries()) {
-    const severity = String(item?.severity ?? "info");
-    const icon = severity === "critical" ? "🔴" : severity === "warning" ? "🟠" : "🔵";
-    lines.push(`${index + 1}. ${icon} ${String(item?.title ?? "Decision").slice(0, 160)}`);
-    const body = String(item?.body ?? "").trim();
-    if (body) lines.push(`   ${body.slice(0, 220)}`);
-    lines.push(`   🕒 ${formatDate(item?.last_seen_at)}`);
-  }
-  lines.push("", "ℹ️ ئەم قۆناغە read-only ـە؛ هیچ گۆڕانکارییەکی دارایی خۆکار ناکرێت.");
-  return lines.join("\n");
-}
-
-async function ownerChangesText(admin: any, ownerId: string): Promise<string> {
-  const { data, error } = await admin.rpc("get_owner_changes_since_last_check_service", {
-    p_owner_user_id: ownerId,
-    p_mark_seen: true,
-  });
-  if (error) throw error;
-  const changes = deltaLines(data?.delta ?? {});
-  const notifications = Array.isArray(data?.notifications) ? data.notifications : [];
-  const lines = [
-    "🔄 ZHIROX • چی گۆڕاوە؟",
-    `لە ${formatDate(data?.since)} تا ${formatDate(data?.generated_at)}`,
-  ];
-  if (!changes.length && !notifications.length) {
-    lines.push("", "✅ هیچ گۆڕانکارییەکی گرنگ یان alert ـی نوێ تۆمار نەکراوە.");
-    return lines.join("\n");
-  }
-  if (changes.length) lines.push("", "📊 گۆڕانی دۆخ:", ...changes);
-  if (notifications.length) {
-    lines.push("", `🔔 Alert/Event نوێ: ${asInt(data?.notification_count)}`);
-    for (const event of notifications.slice(0, 5)) {
-      lines.push(`• ${String(event?.title ?? event?.event_type ?? "Event").slice(0, 170)} — ${formatDate(event?.created_at)}`);
-    }
-  }
-  return lines.join("\n");
-}
-
 async function ownerAsk(admin: any, ownerId: string, question: string): Promise<any> {
   const { data, error } = await admin.rpc("ask_owner_telegram_os_service", {
     p_owner_user_id: ownerId,
@@ -329,11 +173,294 @@ async function ownerAsk(admin: any, ownerId: string, question: string): Promise<
   return data && typeof data === "object" ? data : {};
 }
 
+async function getDecision(admin: any, ownerId: string, decisionId: string): Promise<any | null> {
+  if (!isUuid(decisionId)) return null;
+  const { data, error } = await admin.rpc("get_owner_decision_by_id_service", {
+    p_owner_user_id: ownerId,
+    p_decision_id: decisionId,
+  });
+  if (error) throw error;
+  return data && typeof data === "object" ? data : null;
+}
+
+function decisionDetailText(item: any): string {
+  if (!item) return "📥 Decision\n\nئەم بڕیارە نەدۆزرایەوە.";
+  const severity = String(item?.severity ?? "info");
+  const icon = severity === "critical" ? "🔴" : severity === "warning" ? "🟠" : "🔵";
+  const status = String(item?.status ?? "open");
+  return [
+    `📥 ${icon} ${String(item?.title ?? "Decision").slice(0, 180)}`,
+    "",
+    String(item?.body ?? "وردەکاری بەردەست نییە.").slice(0, 1200),
+    "",
+    `Status: ${status} • Severity: ${severity}`,
+    `🕒 ${formatDate(item?.last_seen_at)}`,
+    "",
+    "🔒 Acknowledge تەنها دۆخی بڕیارەکە دەگۆڕێت؛ هیچ financial action ـێک ناکات.",
+  ].join("\n");
+}
+
+function decisionRecommendationText(item: any): string {
+  const actions = Array.isArray(item?.recommended_actions) ? item.recommended_actions : [];
+  const lines = [
+    `💡 Recommendations • ${String(item?.title ?? "Decision").slice(0, 160)}`,
+    "",
+  ];
+  if (!actions.length) {
+    lines.push("• هیچ هەنگاوی تایبەت تۆمار نەکراوە؛ evidence ـەکە بپشکنە.");
+  } else {
+    actions.slice(0, 5).forEach((a: any, i: number) => {
+      const value = typeof a === "string" ? a : String(a?.label ?? a?.title ?? a?.action ?? JSON.stringify(a));
+      lines.push(`${i + 1}. ${value.slice(0, 400)}`);
+    });
+  }
+  lines.push("", "🔒 ئەمانە پێشنیارن؛ هیچ action ـێک خۆکار جێبەجێ ناکرێت.");
+  return lines.join("\n");
+}
+
+async function issueOwnerActionButton(
+  admin: any,
+  botToken: string,
+  ownerId: string,
+  label: string,
+  action: string,
+  entityType: string | null,
+  entityId: string | null,
+  payload: Record<string, unknown>,
+): Promise<any | null> {
+  const raw = randomHex(12);
+  const tokenHash = await sha256Hex(raw);
+  const { error } = await admin.rpc("create_owner_telegram_action_token_service", {
+    p_owner_user_id: ownerId,
+    p_token_hash: tokenHash,
+    p_action: action,
+    p_entity_type: entityType,
+    p_entity_id: entityId && isUuid(entityId) ? entityId : null,
+    p_payload: payload,
+    p_ttl_seconds: 300,
+  });
+  if (error) return null;
+  const signature = (await sha256Hex(`${raw}:${botToken}:owner-action`)).slice(0, 12);
+  return { text: label, callback_data: `za:${raw}:${signature}` };
+}
+
+function inferDecisionId(result: any): string | null {
+  const candidates = [
+    result?.entity?.type === "decision" ? result?.entity?.id : null,
+    result?.decision_id,
+    result?.evidence?.id,
+    result?.evidence?.item?.id,
+  ];
+  for (const value of candidates) if (isUuid(value)) return String(value);
+  return null;
+}
+
+function inferMarket(result: any): { id: string | null; name: string | null } {
+  const idCandidates = [result?.market_id, result?.entity?.type === "market" ? result?.entity?.id : null, result?.evidence?.market_id];
+  const nameCandidates = [result?.market_name, result?.entity?.type === "market" ? result?.entity?.name : null, result?.evidence?.market_name];
+  let id: string | null = null;
+  let name: string | null = null;
+  for (const value of idCandidates) if (isUuid(value)) { id = String(value); break; }
+  for (const value of nameCandidates) {
+    const v = String(value ?? "").trim();
+    if (v) { name = v.slice(0, 140); break; }
+  }
+  return { id, name };
+}
+
+function baseQueryForIntent(intent: string): string | null {
+  if (intent.includes("brief")) return "ئەمڕۆ چی گرنگە؟";
+  if (intent === "health") return "دۆخی سیستەم چیە؟";
+  if (intent === "risk") return "ڕیسک چۆنە؟";
+  return null;
+}
+
+async function buildOwnerActionKeyboard(admin: any, botToken: string, ownerId: string, result: any): Promise<any | null> {
+  const intent = String(result?.intent ?? "help");
+  const market = inferMarket(result);
+  const decisionId = inferDecisionId(result);
+  const rows: any[][] = [];
+
+  if (market.id || market.name) {
+    const baseQuery = `دۆخی ${market.name ?? "مارکێتەکە"} چیە؟`;
+    const evidence = await issueOwnerActionButton(admin, botToken, ownerId, "🔎 Evidence", "evidence", "market", market.id, { base_query: baseQuery, market_name: market.name });
+    const recommend = await issueOwnerActionButton(admin, botToken, ownerId, "💡 پێشنیار", "recommend", "market", market.id, { base_query: baseQuery, market_name: market.name });
+    const openMarket = await issueOwnerActionButton(admin, botToken, ownerId, "🏪 مارکێت", "market", "market", market.id, { base_query: baseQuery, market_name: market.name });
+    if (evidence || recommend) rows.push([evidence, recommend].filter(Boolean));
+    if (openMarket) rows.push([openMarket]);
+  } else if (decisionId && intent !== "decision_ack") {
+    const evidence = await issueOwnerActionButton(admin, botToken, ownerId, "🔎 Evidence", "evidence", "decision", decisionId, {});
+    const recommend = await issueOwnerActionButton(admin, botToken, ownerId, "💡 پێشنیار", "recommend", "decision", decisionId, {});
+    const ack = await issueOwnerActionButton(admin, botToken, ownerId, "✅ Acknowledge", "ack", "decision", decisionId, {});
+    if (evidence || recommend) rows.push([evidence, recommend].filter(Boolean));
+    if (ack) rows.push([ack]);
+  } else {
+    const baseQuery = baseQueryForIntent(intent);
+    if (baseQuery) {
+      const evidence = await issueOwnerActionButton(admin, botToken, ownerId, "🔎 Evidence", "evidence", null, null, { base_query: baseQuery });
+      if (evidence) rows.push([evidence]);
+    }
+    if (["brief", "health", "risk", "changes", "decisions", "decision_ack"].some((x) => intent.includes(x))) {
+      const decisions = await issueOwnerActionButton(admin, botToken, ownerId, "📥 Decision Inbox", "decisions", null, null, {});
+      if (decisions) rows.push([decisions]);
+    }
+  }
+
+  return rows.length ? { inline_keyboard: rows } : null;
+}
+
+async function sendOwnerSmartMessage(admin: any, botToken: string, chatId: string, ownerId: string, text: string, result: any) {
+  try {
+    const inline = await buildOwnerActionKeyboard(admin, botToken, ownerId, result);
+    await telegramApi(botToken, "sendMessage", {
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true,
+      ...(inline ? { reply_markup: inline } : {}),
+    });
+  } catch (_) {
+    await sendOwnerMessage(botToken, chatId, text);
+  }
+}
+
+async function sendAskResult(admin: any, botToken: string, chatId: string, ownerId: string, question: string) {
+  const result = await ownerAsk(admin, ownerId, question.slice(0, 500));
+  const intent = String(result?.intent ?? "help").slice(0, 64);
+  const confidence = String(result?.confidence ?? "unknown").slice(0, 32);
+  const output = String(result?.message ?? "").trim() || "💬 Ask ZHIROX\n\nنەتوانرا وەڵامێکی ڕوون دروست بکرێت.";
+  await auditOwnerCommand(admin, ownerId, `ask:${intent}`, "ok", { confidence, question: question.slice(0, 180) });
+  await sendOwnerSmartMessage(admin, botToken, chatId, ownerId, output, result);
+  return result;
+}
+
+async function ownerDecisionInboxText(admin: any, ownerId: string): Promise<string> {
+  const { data, error } = await admin.rpc("get_owner_decision_inbox_service", { p_owner_user_id: ownerId, p_limit: 10 });
+  if (error) throw error;
+  const items = Array.isArray(data?.items) ? data.items : [];
+  if (!items.length) return "📥 ZHIROX • Decision Inbox\n\n✅ ئێستا هیچ بڕیارێکی چالاک پێویست نییە.";
+  const lines = ["📥 ZHIROX • Decision Inbox", `Critical ${asInt(data?.critical)} • Warning ${asInt(data?.warning)} • Total ${asInt(data?.total)}`, ""];
+  for (const [index, item] of items.entries()) {
+    const severity = String(item?.severity ?? "info");
+    const icon = severity === "critical" ? "🔴" : severity === "warning" ? "🟠" : "🔵";
+    lines.push(`${index + 1}. ${icon} ${String(item?.title ?? "Decision").slice(0, 160)}`);
+    const body = String(item?.body ?? "").trim();
+    if (body) lines.push(`   ${body.slice(0, 220)}`);
+    lines.push(`   🕒 ${formatDate(item?.last_seen_at)}`);
+  }
+  lines.push("", "ℹ️ بڵێ «یەکەم»، «دووەم»... بۆ وردەکاری، یان inline action ـەکان بەکاربهێنە.");
+  return lines.join("\n");
+}
+
+async function handleOwnerActionCallback(admin: any, botToken: string, query: any): Promise<Response> {
+  const callbackId = String(query?.id ?? "");
+  const chatId = query?.message?.chat?.id != null ? String(query.message.chat.id) : "";
+  const data = String(query?.data ?? "");
+  if (!callbackId || !chatId || !data) return new Response("ok", { status: 200 });
+
+  const ownerId = await ownerByChat(admin, chatId);
+  if (!ownerId) {
+    try { await telegramApi(botToken, "answerCallbackQuery", { callback_query_id: callbackId, text: "Owner access نییە.", show_alert: true }); } catch (_) {}
+    return new Response("ok", { status: 200 });
+  }
+
+  const match = data.match(/^za:([0-9a-f]{24}):([0-9a-f]{12})$/i);
+  if (!match) {
+    try { await telegramApi(botToken, "answerCallbackQuery", { callback_query_id: callbackId, text: "Action نادروستە.", show_alert: true }); } catch (_) {}
+    return new Response("ok", { status: 200 });
+  }
+
+  const raw = match[1].toLowerCase();
+  const suppliedSig = match[2].toLowerCase();
+  const expectedSig = (await sha256Hex(`${raw}:${botToken}:owner-action`)).slice(0, 12);
+  if (!(await secureEqual(suppliedSig, expectedSig))) {
+    await auditOwnerCommand(admin, ownerId, "action_card_signature", "rejected");
+    try { await telegramApi(botToken, "answerCallbackQuery", { callback_query_id: callbackId, text: "Signature نادروستە.", show_alert: true }); } catch (_) {}
+    return new Response("ok", { status: 200 });
+  }
+
+  const tokenHash = await sha256Hex(raw);
+  const { data: consumed, error } = await admin.rpc("consume_owner_telegram_action_token_service", {
+    p_owner_user_id: ownerId,
+    p_token_hash: tokenHash,
+  });
+  if (error || consumed?.ok !== true) {
+    await auditOwnerCommand(admin, ownerId, "action_card_consume", "expired_or_used");
+    try { await telegramApi(botToken, "answerCallbackQuery", { callback_query_id: callbackId, text: "⏱️ دوگمەکە بەسەرچووە یان پێشتر بەکارهاتووە.", show_alert: true }); } catch (_) {}
+    return new Response("ok", { status: 200 });
+  }
+
+  try { await telegramApi(botToken, "answerCallbackQuery", { callback_query_id: callbackId, text: "✅ وەرگیرا" }); } catch (_) {}
+
+  const action = String(consumed?.action ?? "");
+  const entityType = String(consumed?.entity_type ?? "");
+  const entityId = String(consumed?.entity_id ?? "");
+  const payload = consumed?.payload && typeof consumed.payload === "object" ? consumed.payload : {};
+  await auditOwnerCommand(admin, ownerId, `action:${action}`, "ok", { entity_type: entityType || null, entity_id: entityId || null });
+
+  try {
+    if (action === "decisions") {
+      const text = await ownerDecisionInboxText(admin, ownerId);
+      const result = await ownerAsk(admin, ownerId, "بڕیارەکانم پیشان بدە");
+      await sendOwnerSmartMessage(admin, botToken, chatId, ownerId, text, { ...result, intent: "decisions" });
+      return new Response("ok", { status: 200 });
+    }
+
+    if (entityType === "market") {
+      const baseQuery = String(payload?.base_query ?? "").trim();
+      if (!baseQuery) throw new Error("market_query_missing");
+      let result = await ownerAsk(admin, ownerId, baseQuery);
+      if (action === "evidence") result = await ownerAsk(admin, ownerId, "وردەکاری");
+      if (action === "recommend") result = await ownerAsk(admin, ownerId, "چی پێشنیار دەکەیت؟");
+      const output = String(result?.message ?? "").trim() || "نەتوانرا وەڵام دروست بکرێت.";
+      await sendOwnerSmartMessage(admin, botToken, chatId, ownerId, output, result);
+      return new Response("ok", { status: 200 });
+    }
+
+    if (entityType === "decision" && isUuid(entityId)) {
+      if (action === "ack") {
+        const { data: ack, error: ackError } = await admin.rpc("acknowledge_owner_decision_service", {
+          p_owner_user_id: ownerId,
+          p_decision_id: entityId,
+        });
+        if (ackError || ack?.ok !== true) throw new Error("ack_failed");
+        const title = String(ack?.title ?? "Decision").slice(0, 180);
+        const output = ack?.already_acknowledged === true
+          ? `✅ ${title}\n\nپێشتر Acknowledge کراوە.`
+          : `✅ ${title}\n\nAcknowledge کرا. هیچ financial action ـێک جێبەجێ نەکرا.`;
+        await sendOwnerSmartMessage(admin, botToken, chatId, ownerId, output, { intent: "decision_ack" });
+        return new Response("ok", { status: 200 });
+      }
+
+      const item = await getDecision(admin, ownerId, entityId);
+      if (!item) throw new Error("decision_not_found");
+      const output = action === "recommend" ? decisionRecommendationText(item) : decisionDetailText(item);
+      await sendOwnerSmartMessage(admin, botToken, chatId, ownerId, output, {
+        intent: action === "recommend" ? "decision_recommendation" : "decision_detail",
+        entity: { type: "decision", id: entityId },
+        evidence: item,
+      });
+      return new Response("ok", { status: 200 });
+    }
+
+    const baseQuery = String(payload?.base_query ?? "").trim();
+    if (action === "evidence" && baseQuery) {
+      await ownerAsk(admin, ownerId, baseQuery);
+      const result = await ownerAsk(admin, ownerId, "بۆچی؟");
+      await sendOwnerSmartMessage(admin, botToken, chatId, ownerId, String(result?.message ?? ""), result);
+      return new Response("ok", { status: 200 });
+    }
+
+    throw new Error("unsupported_action");
+  } catch (_) {
+    await auditOwnerCommand(admin, ownerId, `action:${action}`, "failed");
+    await sendOwnerMessage(botToken, chatId, "❌ Action Card لەم ساتەدا نەتوانرا جێبەجێ بکرێت. داتای دارایی نەگۆڕدرا.");
+    return new Response("ok", { status: 200 });
+  }
+}
+
 function statementText(data: any): string {
   const rows = Array.isArray(data?.recent) ? data.recent : [];
-  if (!rows.length) {
-    return `📋 کەشف حساب\n\nهیچ مامەڵەیەک تۆمار نەکراوە.\n\nقەرزی ماوە: ${formatIqd(data?.remaining_iqd)}`;
-  }
+  if (!rows.length) return `📋 کەشف حساب\n\nهیچ مامەڵەیەک تۆمار نەکراوە.\n\nقەرزی ماوە: ${formatIqd(data?.remaining_iqd)}`;
   const lines = rows.map((r: any, index: number) => {
     const kind = String(r?.kind ?? "") === "payment" ? "✅ پارەدان" : "🧾 قەرز";
     const note = String(r?.note ?? "").trim();
@@ -342,26 +469,16 @@ function statementText(data: any): string {
   return `📋 10 مامەڵەی کۆتایی\n\n${lines.join("\n\n")}\n\n💰 قەرزی ماوە: ${formatIqd(data?.remaining_iqd)}`;
 }
 
-async function requestPdf(
-  supabaseUrl: string,
-  botToken: string,
-  chatId: string,
-  action: "statement" | "receipt",
-) {
+async function requestPdf(supabaseUrl: string, botToken: string, chatId: string, action: "statement" | "receipt") {
   const internal = await sha256Hex(`${botToken}:customer-pdf`);
   const response = await fetch(`${supabaseUrl}/functions/v1/telegram-customer-pdf`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-zhirox-telegram-internal": internal,
-    },
+    headers: { "Content-Type": "application/json", "x-zhirox-telegram-internal": internal },
     body: JSON.stringify({ chat_id: chatId, action }),
     signal: AbortSignal.timeout(30000),
   });
   let body: any = {};
-  try {
-    body = await response.json();
-  } catch (_) {}
+  try { body = await response.json(); } catch (_) {}
   if (!response.ok) throw new Error("pdf_failed");
   return body;
 }
@@ -372,25 +489,18 @@ Deno.serve(async (req: Request) => {
   const supabaseUrl = env("SUPABASE_URL");
   const secret = serviceKey();
   if (!supabaseUrl || !secret) return new Response("unavailable", { status: 503 });
-
-  const admin = createClient(supabaseUrl, secret, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const admin = createClient(supabaseUrl, secret, { auth: { persistSession: false, autoRefreshToken: false } });
   const botToken = await loadBotToken(admin);
   if (!botToken) return new Response("unavailable", { status: 503 });
 
   const expectedSecret = await sha256Hex(botToken);
   const providedSecret = req.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
-  if (!providedSecret || !(await secureEqual(providedSecret, expectedSecret))) {
-    return new Response("forbidden", { status: 403 });
-  }
+  if (!providedSecret || !(await secureEqual(providedSecret, expectedSecret))) return new Response("forbidden", { status: 403 });
 
   let update: any;
-  try {
-    update = await req.json();
-  } catch (_) {
-    return new Response("ok", { status: 200 });
-  }
+  try { update = await req.json(); } catch (_) { return new Response("ok", { status: 200 }); }
+
+  if (update?.callback_query) return handleOwnerActionCallback(admin, botToken, update.callback_query);
 
   const message = update?.message;
   const chatId = message?.chat?.id != null ? String(message.chat.id) : "";
@@ -403,29 +513,13 @@ Deno.serve(async (req: Request) => {
     if (!code) {
       const owner = await ownerByChat(admin, chatId);
       if (owner) {
-        await sendOwnerMessage(
-          botToken,
-          chatId,
-          "✅ Telegramی System Owner پەیوەستە.\n🧠 ZHIROX Telegram OS + Ask ZHIROX چالاکە.\nDaily Digest هەر ڕۆژ 08:30 بە کاتی عێراق دەنێردرێت.",
-        );
+        await sendOwnerMessage(botToken, chatId, "✅ Telegramی System Owner پەیوەستە.\n🧠 ZHIROX Telegram OS + Intelligent Action Cards چالاکە.\nDaily Digest هەر ڕۆژ 08:30 بە کاتی عێراق دەنێردرێت.");
         return new Response("ok", { status: 200 });
       }
       try {
         const current = await snapshot(admin, chatId);
-        if (current) {
-          await sendMessage(
-            botToken,
-            chatId,
-            `بەخێربێیت بۆ ZHIROX • ${String(current.market_name ?? "ZHIROX")}\nدوگمەی خوارەوە هەڵبژێرە.`,
-            true,
-          );
-        } else {
-          await sendMessage(
-            botToken,
-            chatId,
-            "بۆ پەیوەستکردنی Telegram، لە ناو ZHIROX → Telegram → «پەیوەستکردن» کلیک بکە.",
-          );
-        }
+        if (current) await sendMessage(botToken, chatId, `بەخێربێیت بۆ ZHIROX • ${String(current.market_name ?? "ZHIROX")}\nدوگمەی خوارەوە هەڵبژێرە.`, true);
+        else await sendMessage(botToken, chatId, "بۆ پەیوەستکردنی Telegram، لە ناو ZHIROX → Telegram → «پەیوەستکردن» کلیک بکە.");
       } catch (_) {}
       return new Response("ok", { status: 200 });
     }
@@ -440,31 +534,14 @@ Deno.serve(async (req: Request) => {
       p_telegram_username: username || null,
     });
     if (error || !data) {
-      await sendMessage(
-        botToken,
-        chatId,
-        "❌ لینکی پەیوەستکردن بەسەرچووە یان دروست نییە. تکایە لە ZHIROX لینکێکی نوێ دروست بکە.",
-      );
+      await sendMessage(botToken, chatId, "❌ لینکی پەیوەستکردن بەسەرچووە یان دروست نییە. تکایە لە ZHIROX لینکێکی نوێ دروست بکە.");
       return new Response("ok", { status: 200 });
     }
-    const { data: linkedProfile } = await admin
-      .from("profiles")
-      .select("is_system_owner")
-      .eq("id", data)
-      .maybeSingle();
+    const { data: linkedProfile } = await admin.from("profiles").select("is_system_owner").eq("id", data).maybeSingle();
     if (linkedProfile?.is_system_owner === true) {
-      await sendOwnerMessage(
-        botToken,
-        chatId,
-        "✅ Telegramی System Owner بە سەرکەوتوویی پەیوەست کرا.\n💬 Ask ZHIROX، Executive Brief، Decision Inbox و Changes چالاکن.\nDaily Owner Digest هەر ڕۆژ 08:30 بە کاتی عێراق دەنێردرێت.",
-      );
+      await sendOwnerMessage(botToken, chatId, "✅ Telegramی System Owner بە سەرکەوتوویی پەیوەست کرا.\n💬 Ask ZHIROX + signed Action Cards چالاکن.\nDaily Owner Digest هەر ڕۆژ 08:30 بە کاتی عێراق دەنێردرێت.");
     } else {
-      await sendMessage(
-        botToken,
-        chatId,
-        "✅ Telegram بە سەرکەوتوویی پەیوەست کرا.\nئێستا دەتوانیت بە دوگمەکانی خوارەوە زانیاری هەژمارەکەت ببینیت.",
-        true,
-      );
+      await sendMessage(botToken, chatId, "✅ Telegram بە سەرکەوتوویی پەیوەست کرا.\nئێستا دەتوانیت بە دوگمەکانی خوارەوە زانیاری هەژمارەکەت ببینیت.", true);
     }
     return new Response("ok", { status: 200 });
   }
@@ -473,121 +550,41 @@ Deno.serve(async (req: Request) => {
   if (owner) {
     if (text === "/menu" || text === "menu") {
       await auditOwnerCommand(admin, owner, "menu");
-      await sendOwnerMessage(
-        botToken,
-        chatId,
-        "🧠 ZHIROX Telegram OS\n\n💬 دەتوانیت بە زمانی ئاسایی بپرسیت، یان یەکێک لە دوگمەکان هەڵبژێریت.",
-      );
-      return new Response("ok", { status: 200 });
-    }
-
-    if (text === "🧠 Executive Brief" || /^\/brief(?:@\w+)?$/.test(text)) {
-      try {
-        const output = await ownerExecutiveBriefText(admin, owner);
-        await auditOwnerCommand(admin, owner, "brief", "ok");
-        await sendOwnerMessage(botToken, chatId, output);
-      } catch (_) {
-        await auditOwnerCommand(admin, owner, "brief", "failed");
-        await sendOwnerMessage(botToken, chatId, "❌ نەتوانرا Executive Brief بخوێندرێتەوە.");
-      }
-      return new Response("ok", { status: 200 });
-    }
-
-    if (text === "📥 Decision Inbox" || /^\/decisions(?:@\w+)?$/.test(text)) {
-      try {
-        const output = await ownerDecisionInboxText(admin, owner);
-        await auditOwnerCommand(admin, owner, "decisions", "ok");
-        await sendOwnerMessage(botToken, chatId, output);
-      } catch (_) {
-        await auditOwnerCommand(admin, owner, "decisions", "failed");
-        await sendOwnerMessage(botToken, chatId, "❌ نەتوانرا Decision Inbox بخوێندرێتەوە.");
-      }
-      return new Response("ok", { status: 200 });
-    }
-
-    if (text === "🔄 چی گۆڕاوە؟" || /^\/changes(?:@\w+)?$/.test(text)) {
-      try {
-        const output = await ownerChangesText(admin, owner);
-        await auditOwnerCommand(admin, owner, "changes", "ok");
-        await sendOwnerMessage(botToken, chatId, output);
-      } catch (_) {
-        await auditOwnerCommand(admin, owner, "changes", "failed");
-        await sendOwnerMessage(botToken, chatId, "❌ نەتوانرا گۆڕانکارییە نوێکان بخوێندرێنەوە.");
-      }
-      return new Response("ok", { status: 200 });
-    }
-
-    if (
-      text === "📊 دۆخی AutoPilot" ||
-      /^\/health(?:@\w+)?$/.test(text) ||
-      /^\/digest(?:@\w+)?$/.test(text)
-    ) {
-      try {
-        const output = await ownerOverviewText(admin);
-        await auditOwnerCommand(admin, owner, "health", "ok");
-        await sendOwnerMessage(botToken, chatId, output);
-      } catch (_) {
-        await auditOwnerCommand(admin, owner, "health", "failed");
-        await sendOwnerMessage(botToken, chatId, "❌ نەتوانرا دۆخی AutoPilot بخوێندرێتەوە.");
-      }
+      await sendOwnerMessage(botToken, chatId, "🧠 ZHIROX Telegram OS\n\n💬 بە زمانی ئاسایی بپرسە یان دوگمەکان بەکاربهێنە. Action Cards ـەکان 5 خولەک کار دەکەن.");
       return new Response("ok", { status: 200 });
     }
 
     if (text === "🕒 Daily Digest") {
       await auditOwnerCommand(admin, owner, "daily_digest_info", "ok");
-      await sendOwnerMessage(
-        botToken,
-        chatId,
-        "🕒 Daily Owner Digest\n\nهەر ڕۆژ 08:30 بە کاتی عێراق دەنێردرێت.\nئەگەر failure بێت هەر 15 خولەک retry دەکرێت تا سەرکەوتن، و لە هەر ڕۆژێک تەنها یەکجار دەنێردرێت.",
-      );
+      await sendOwnerMessage(botToken, chatId, "🕒 Daily Owner Digest\n\nهەر ڕۆژ 08:30 بە کاتی عێراق دەنێردرێت.\nئەگەر failure بێت هەر 15 خولەک retry دەکرێت تا سەرکەوتن، و لە هەر ڕۆژێک تەنها یەکجار دەنێردرێت.");
       return new Response("ok", { status: 200 });
     }
 
-    if (text.startsWith("/") && text !== "/ask") {
+    let question = text;
+    if (text === "🧠 Executive Brief" || /^\/brief(?:@\w+)?$/.test(text)) question = "ئەمڕۆ چی گرنگە؟";
+    else if (text === "📥 Decision Inbox" || /^\/decisions(?:@\w+)?$/.test(text)) question = "بڕیارەکانم پیشان بدە";
+    else if (text === "🔄 چی گۆڕاوە؟" || /^\/changes(?:@\w+)?$/.test(text)) question = "چی گۆڕاوە؟";
+    else if (text === "📊 دۆخی AutoPilot" || /^\/health(?:@\w+)?$/.test(text) || /^\/digest(?:@\w+)?$/.test(text)) question = "دۆخی سیستەم چیە؟";
+    else if (text === "💬 Ask ZHIROX" || text === "/ask") question = "help";
+    else if (text.startsWith("/")) {
       await auditOwnerCommand(admin, owner, "unknown_slash", "ignored", { text: text.slice(0, 80) });
-      await sendOwnerMessage(
-        botToken,
-        chatId,
-        "💬 Ask ZHIROX\n\nبە زمانی ئاسایی بپرسە، یان: /brief • /decisions • /changes • /health",
-      );
+      await sendOwnerMessage(botToken, chatId, "💬 Ask ZHIROX\n\nبە زمانی ئاسایی بپرسە، یان: /brief • /decisions • /changes • /health");
       return new Response("ok", { status: 200 });
     }
 
     try {
-      const question = text === "💬 Ask ZHIROX" || text === "/ask"
-        ? "help"
-        : text.slice(0, 500);
-      const result = await ownerAsk(admin, owner, question);
-      const intent = String(result?.intent ?? "help").slice(0, 64);
-      const confidence = String(result?.confidence ?? "unknown").slice(0, 32);
-      const output = String(result?.message ?? "").trim() ||
-        "💬 Ask ZHIROX\n\nنەتوانرا وەڵامێکی ڕوون دروست بکرێت.";
-      await auditOwnerCommand(admin, owner, `ask:${intent}`, "ok", {
-        confidence,
-        question: question.slice(0, 180),
-      });
-      await sendOwnerMessage(botToken, chatId, output);
+      await sendAskResult(admin, botToken, chatId, owner, question);
     } catch (_) {
-      await auditOwnerCommand(admin, owner, "ask", "failed", { question: text.slice(0, 180) });
-      await sendOwnerMessage(
-        botToken,
-        chatId,
-        "❌ Ask ZHIROX لەم ساتەدا نەتوانی وەڵام بدات. فرمانە بنەڕەتییەکان هەر کار دەکەن.",
-      );
+      await auditOwnerCommand(admin, owner, "ask", "failed", { question: question.slice(0, 180) });
+      await sendOwnerMessage(botToken, chatId, "❌ Ask ZHIROX لەم ساتەدا نەتوانی وەڵام بدات. فرمانە بنەڕەتییەکان هەر کار دەکەن.");
     }
     return new Response("ok", { status: 200 });
   }
 
   let current: any = null;
-  try {
-    current = await snapshot(admin, chatId);
-  } catch (_) {}
+  try { current = await snapshot(admin, chatId); } catch (_) {}
   if (!current) {
-    await sendMessage(
-      botToken,
-      chatId,
-      "🔒 ئەم Telegram ـە بە هەژماری ZHIROX پەیوەست نییە. سەرەتا لە ZHIROX → Telegram پەیوەستی بکە.",
-    );
+    await sendMessage(botToken, chatId, "🔒 ئەم Telegram ـە بە هەژماری ZHIROX پەیوەست نییە. سەرەتا لە ZHIROX → Telegram پەیوەستی بکە.");
     return new Response("ok", { status: 200 });
   }
 
@@ -595,17 +592,10 @@ Deno.serve(async (req: Request) => {
     await sendMessage(botToken, chatId, "خزمەتگوزارییەک هەڵبژێرە:", true);
     return new Response("ok", { status: 200 });
   }
-
   if (text === "💰 قەرزی ماوە" || /^\/balance(?:@\w+)?$/.test(text)) {
-    await sendMessage(
-      botToken,
-      chatId,
-      `💰 قەرزی ماوە\n\n${formatIqd(current.remaining_iqd)}\n\n🏪 ${String(current.market_name ?? "ZHIROX")}\n🕒 ${formatDate(current.as_of)}`,
-      true,
-    );
+    await sendMessage(botToken, chatId, `💰 قەرزی ماوە\n\n${formatIqd(current.remaining_iqd)}\n\n🏪 ${String(current.market_name ?? "ZHIROX")}\n🕒 ${formatDate(current.as_of)}`, true);
     return new Response("ok", { status: 200 });
   }
-
   if (text === "🧾 کۆتا پارەدان" || /^\/lastpayment(?:@\w+)?$/.test(text)) {
     const payment = current.last_payment;
     const msg = payment
@@ -614,81 +604,44 @@ Deno.serve(async (req: Request) => {
     await sendMessage(botToken, chatId, msg, true);
     return new Response("ok", { status: 200 });
   }
-
   if (text === "📋 کەشف حساب" || /^\/statement(?:@\w+)?$/.test(text)) {
     await sendMessage(botToken, chatId, statementText(current), true);
     return new Response("ok", { status: 200 });
   }
-
   if (text === "📄 PDF کەشف حساب" || /^\/statementpdf(?:@\w+)?$/.test(text)) {
-    await sendMessage(botToken, chatId, "📄 کەشف حسابی PDF دروست دەکرێت…", false);
-    try {
-      await requestPdf(supabaseUrl, botToken, chatId, "statement");
-    } catch (_) {
-      await sendMessage(botToken, chatId, "❌ نەتوانرا PDF دروست بکرێت. دووبارە هەوڵ بدەوە.", true);
-    }
+    await sendMessage(botToken, chatId, "📄 کەشف حسابی PDF دروست دەکرێت…");
+    try { await requestPdf(supabaseUrl, botToken, chatId, "statement"); }
+    catch (_) { await sendMessage(botToken, chatId, "❌ نەتوانرا PDF دروست بکرێت. دووبارە هەوڵ بدەوە.", true); }
     return new Response("ok", { status: 200 });
   }
-
   if (text === "🧾 PDF پسووڵە" || /^\/receiptpdf(?:@\w+)?$/.test(text)) {
-    await sendMessage(botToken, chatId, "🧾 پسووڵەی PDF دروست دەکرێت…", false);
+    await sendMessage(botToken, chatId, "🧾 پسووڵەی PDF دروست دەکرێت…");
     try {
       const result = await requestPdf(supabaseUrl, botToken, chatId, "receipt");
-      if (result?.sent === false && result?.reason === "no_transactions") {
-        await sendMessage(botToken, chatId, "هێشتا هیچ مامەڵەیەک نییە بۆ دروستکردنی پسووڵە.", true);
-      }
-    } catch (_) {
-      await sendMessage(botToken, chatId, "❌ نەتوانرا پسووڵەی PDF دروست بکرێت. دووبارە هەوڵ بدەوە.", true);
-    }
+      if (result?.sent === false && result?.reason === "no_transactions") await sendMessage(botToken, chatId, "هێشتا هیچ مامەڵەیەک نییە بۆ دروستکردنی پسووڵە.", true);
+    } catch (_) { await sendMessage(botToken, chatId, "❌ نەتوانرا پسووڵەی PDF دروست بکرێت. دووبارە هەوڵ بدەوە.", true); }
     return new Response("ok", { status: 200 });
   }
-
   if (text === "📚 کەشفی تەواو PDF" || /^\/fullstatementpdf(?:@\w+)?$/.test(text)) {
-    const { data, error } = await admin.rpc("enqueue_telegram_full_statement_service", {
-      p_chat_id: chatId,
-    });
-    if (error || !data) {
-      await sendMessage(
-        botToken,
-        chatId,
-        "❌ نەتوانرا کەشف حسابی تەواو دەستپێبکرێت. دووبارە هەوڵ بدەوە.",
-        true,
-      );
-    } else {
+    const { data, error } = await admin.rpc("enqueue_telegram_full_statement_service", { p_chat_id: chatId });
+    if (error || !data) await sendMessage(botToken, chatId, "❌ نەتوانرا کەشف حسابی تەواو دەستپێبکرێت. دووبارە هەوڵ بدەوە.", true);
+    else {
       const total = Number(data.total_rows ?? 0);
       const parts = Number(data.total_parts ?? 1);
       const existing = Boolean(data.existing);
-      await sendMessage(
-        botToken,
-        chatId,
-        existing
-          ? `📚 کەشف حسابی تەواو پێشتر لە ڕیزدایە.\n${total.toLocaleString("en-US")} مامەڵە • ${parts} بەشی PDF`
-          : `📚 دروستکردنی کەشف حسابی تەواو دەستی پێکرد.\n${total.toLocaleString("en-US")} مامەڵە • ${parts} بەشی PDF\nبەشەکان خۆکار یەک بە یەک دەنێردرێن.`,
-        true,
-      );
+      await sendMessage(botToken, chatId, existing
+        ? `📚 کەشف حسابی تەواو پێشتر لە ڕیزدایە.\n${total.toLocaleString("en-US")} مامەڵە • ${parts} بەشی PDF`
+        : `📚 دروستکردنی کەشف حسابی تەواو دەستی پێکرد.\n${total.toLocaleString("en-US")} مامەڵە • ${parts} بەشی PDF\nبەشەکان خۆکار یەک بە یەک دەنێردرێن.`, true);
     }
     return new Response("ok", { status: 200 });
   }
-
   if (text === "🌐 هەژماری من" || /^\/account(?:@\w+)?$/.test(text)) {
     const rawToken = randomHex(32);
     const tokenHash = await sha256Hex(rawToken);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const { error } = await admin.rpc("create_telegram_customer_read_link_service", {
-      p_chat_id: chatId,
-      p_token_hash: tokenHash,
-      p_expires_at: expiresAt,
-    });
-    if (error) {
-      await sendMessage(botToken, chatId, "❌ نەتوانرا لینکی پارێزراو دروست بکرێت. دووبارە هەوڵ بدەوە.", true);
-    } else {
-      await sendMessage(
-        botToken,
-        chatId,
-        `🌐 هەژماری ZHIROX ـت\n\nلینکەکە 10 خولەک کار دەکات:\nhttps://push.zhirox.com/?token=${rawToken}`,
-        true,
-      );
-    }
+    const { error } = await admin.rpc("create_telegram_customer_read_link_service", { p_chat_id: chatId, p_token_hash: tokenHash, p_expires_at: expiresAt });
+    if (error) await sendMessage(botToken, chatId, "❌ نەتوانرا لینکی پارێزراو دروست بکرێت. دووبارە هەوڵ بدەوە.", true);
+    else await sendMessage(botToken, chatId, `🌐 هەژماری ZHIROX ـت\n\nلینکەکە 10 خولەک کار دەکات:\nhttps://push.zhirox.com/?token=${rawToken}`, true);
     return new Response("ok", { status: 200 });
   }
 
