@@ -10,32 +10,46 @@ import 'package:zhirox/services/pb_service.dart';
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+  static final StreamController<Map<String, dynamic>>
+      _remoteNotificationClickController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   static bool _initialized = false;
   static bool _oneSignalInitialized = false;
   static String? _oneSignalUserId;
+  static String? _oneSignalAppId;
+  static Map<String, dynamic>? _pendingRemoteClick;
   static StreamSubscription<AuthState>? _authSubscription;
+
+  static Stream<Map<String, dynamic>> get remoteNotificationClicks =>
+      _remoteNotificationClickController.stream;
+
+  static Map<String, dynamic>? consumePendingRemoteClick() {
+    final pending = _pendingRemoteClick;
+    _pendingRemoteClick = null;
+    return pending == null ? null : Map<String, dynamic>.from(pending);
+  }
 
   /// Initialize local notifications and the Owner native push channel.
   static Future<void> init() async {
-    if (_initialized) return;
+    if (!_initialized) {
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
+      const iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
 
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
+      const settings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      );
 
-    const settings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-
-    await _plugin.initialize(settings);
-    _initialized = true;
+      await _plugin.initialize(settings);
+      _initialized = true;
+    }
 
     // Owner push setup is intentionally non-blocking. A transient OneSignal
     // or network failure must never prevent the app from launching.
@@ -63,7 +77,18 @@ class NotificationService {
       if (appId.isEmpty) return;
 
       await OneSignal.initialize(appId);
+      _oneSignalAppId = appId;
       _oneSignalInitialized = true;
+
+      OneSignal.Notifications.addClickListener((event) {
+        final raw = event.notification.additionalData;
+        final data = raw == null
+            ? <String, dynamic>{}
+            : Map<String, dynamic>.from(raw);
+        if (data.isEmpty) return;
+        _pendingRemoteClick = data;
+        _remoteNotificationClickController.add(data);
+      });
 
       await _syncOneSignalIdentity(PBService.client.auth.currentUser?.id);
       _authSubscription ??= PBService.client.auth.onAuthStateChange.listen(
@@ -90,13 +115,56 @@ class NotificationService {
       if (_oneSignalUserId == normalized) return;
       await OneSignal.login(normalized);
       _oneSignalUserId = normalized;
+      await OneSignal.User.addTags({
+        'app_edition': 'owner',
+        'platform': defaultTargetPlatform.name,
+      });
     } catch (error) {
       debugPrint('Owner OneSignal identity sync deferred: $error');
     }
   }
 
+  static String _mask(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return '';
+    if (clean.length <= 8) return clean;
+    return '${clean.substring(0, 4)}••••${clean.substring(clean.length - 4)}';
+  }
+
+  /// Safe, secret-free diagnostic state for the Owner UI.
+  static Future<Map<String, dynamic>> pushDiagnostics() async {
+    await init();
+    if (!_oneSignalInitialized) {
+      await _initializeOneSignalOwnerPush();
+    }
+
+    final currentUserId = PBService.client.auth.currentUser?.id?.trim() ?? '';
+    final permission = await isPermissionGranted();
+    String subscriptionId = '';
+    if (_oneSignalInitialized) {
+      subscriptionId = OneSignal.User.pushSubscription.id?.trim() ?? '';
+    }
+
+    return <String, dynamic>{
+      'supported': _supportsNativePush,
+      'initialized': _oneSignalInitialized,
+      'permission': permission,
+      'identity_linked':
+          currentUserId.isNotEmpty && _oneSignalUserId == currentUserId,
+      'subscription_ready': subscriptionId.isNotEmpty,
+      'subscription_hint': _mask(subscriptionId),
+      'app_id_hint': _mask(_oneSignalAppId ?? ''),
+      'bundle_id': 'com.karoxghafoor.zhirox.owner',
+      'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+    };
+  }
+
   /// Request notification permission (Android 13+ & iOS).
   static Future<bool> requestPermission() async {
+    if (!_oneSignalInitialized && _supportsNativePush) {
+      await _initializeOneSignalOwnerPush();
+    }
+
     if (_oneSignalInitialized && _supportsNativePush) {
       try {
         if (OneSignal.Notifications.permission) return true;
