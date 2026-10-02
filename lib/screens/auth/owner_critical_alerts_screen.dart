@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/screens/auth/owner_push_diagnostics_screen.dart';
 import 'package:zhirox/services/notification_service.dart';
 import 'package:zhirox/services/owner_critical_alert_service.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -170,6 +171,15 @@ class _OwnerCriticalAlertsScreenState extends State<OwnerCriticalAlertsScreen> {
       appBar: AppBar(
         title: const Text('Critical Alerts'),
         actions: [
+          IconButton(
+            tooltip: 'Push Diagnostics',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const OwnerPushDiagnosticsScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.notifications_active_rounded),
+          ),
           IconButton(
             tooltip: 'نوێکردنەوە',
             onPressed: _loading ? null : () => unawaited(_load()),
