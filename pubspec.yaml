@@ -34,6 +34,7 @@ dependencies:
   share_plus: ^10.1.4
   cross_file: ^0.3.4+2
   file_picker: ^8.3.7
+  onesignal_flutter: 5.7.0
 
 dev_dependencies:
   flutter_test:
