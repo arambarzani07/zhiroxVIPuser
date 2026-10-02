@@ -287,7 +287,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         if (!auth.isLoggedIn) return const LoginScreen();
 
         if (auth.user?.getBoolValue('is_system_owner') ?? false) {
-          return const OwnerPushRouteGate(child: OwnerDashboard());
+          return const OwnerPushRouteGate(child: _OwnerDashboardEntry());
         }
 
         if (auth.userRole == 'admin' && auth.subscriptionDaysLeft <= 0) {
@@ -306,6 +306,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
         }
       },
     );
+  }
+}
+
+class _OwnerDashboardEntry extends StatelessWidget {
+  const _OwnerDashboardEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    return const OwnerDashboard();
   }
 }
 
