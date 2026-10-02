@@ -1,13 +1,22 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:zhirox/services/pb_service.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
   static bool _initialized = false;
+  static bool _oneSignalInitialized = false;
+  static String? _oneSignalUserId;
+  static StreamSubscription<AuthState>? _authSubscription;
 
-  /// Initialize the notification plugin (call once in main.dart)
+  /// Initialize local notifications and the Owner native push channel.
   static Future<void> init() async {
     if (_initialized) return;
 
@@ -27,20 +36,93 @@ class NotificationService {
 
     await _plugin.initialize(settings);
     _initialized = true;
+
+    // Owner push setup is intentionally non-blocking. A transient OneSignal
+    // or network failure must never prevent the app from launching.
+    unawaited(_initializeOneSignalOwnerPush());
   }
 
-  /// Request notification permission (Android 13+ & iOS)
+  static bool get _supportsNativePush {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.android;
+  }
+
+  static Future<void> _initializeOneSignalOwnerPush() async {
+    if (!_supportsNativePush || _oneSignalInitialized) return;
+
+    try {
+      await PBService.ensureInitialized();
+      final response = await PBService.client.functions.invoke(
+        'onesignal-config',
+        body: const <String, dynamic>{},
+      );
+      final data = response.data;
+      if (data is! Map) return;
+      final appId = (data['app_id'] ?? '').toString().trim();
+      if (appId.isEmpty) return;
+
+      await OneSignal.initialize(appId);
+      _oneSignalInitialized = true;
+
+      await _syncOneSignalIdentity(PBService.client.auth.currentUser?.id);
+      _authSubscription ??= PBService.client.auth.onAuthStateChange.listen(
+        (state) => unawaited(_syncOneSignalIdentity(state.session?.user.id)),
+      );
+    } catch (error) {
+      debugPrint('Owner OneSignal initialization deferred: $error');
+    }
+  }
+
+  static Future<void> _syncOneSignalIdentity(String? userId) async {
+    if (!_oneSignalInitialized) return;
+    final normalized = userId?.trim() ?? '';
+
+    try {
+      if (normalized.isEmpty) {
+        if (_oneSignalUserId != null) {
+          await OneSignal.logout();
+          _oneSignalUserId = null;
+        }
+        return;
+      }
+
+      if (_oneSignalUserId == normalized) return;
+      await OneSignal.login(normalized);
+      _oneSignalUserId = normalized;
+    } catch (error) {
+      debugPrint('Owner OneSignal identity sync deferred: $error');
+    }
+  }
+
+  /// Request notification permission (Android 13+ & iOS).
   static Future<bool> requestPermission() async {
+    if (_oneSignalInitialized && _supportsNativePush) {
+      try {
+        if (OneSignal.Notifications.permission) return true;
+        final canRequest = await OneSignal.Notifications.canRequest();
+        if (canRequest) {
+          return await OneSignal.Notifications.requestPermission(false);
+        }
+        return OneSignal.Notifications.permission;
+      } catch (error) {
+        debugPrint('OneSignal permission request deferred: $error');
+      }
+    }
+
     final status = await Permission.notification.request();
     return status.isGranted;
   }
 
-  /// Check if notification permission is granted
+  /// Check if notification permission is granted.
   static Future<bool> isPermissionGranted() async {
-    return await Permission.notification.isGranted;
+    if (_oneSignalInitialized && _supportsNativePush) {
+      return OneSignal.Notifications.permission;
+    }
+    return Permission.notification.isGranted;
   }
 
-  /// Show a local notification
+  /// Show a local notification.
   static Future<void> show({
     required String title,
     required String body,
@@ -70,7 +152,7 @@ class NotificationService {
     await _plugin.show(id, title, body, details);
   }
 
-  /// Show debt created notification
+  /// Show debt created notification.
   static Future<void> showDebtCreated({
     required String customerName,
     required String amount,
@@ -83,7 +165,7 @@ class NotificationService {
     );
   }
 
-  /// Show due date reminder notification
+  /// Show due date reminder notification.
   static Future<void> showDueReminder({
     required String customerName,
     required String amount,
