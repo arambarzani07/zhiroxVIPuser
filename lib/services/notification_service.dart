@@ -138,7 +138,7 @@ class NotificationService {
       await _initializeOneSignalOwnerPush();
     }
 
-    final currentUserId = PBService.client.auth.currentUser?.id?.trim() ?? '';
+    final currentUserId = PBService.client.auth.currentUser?.id.trim() ?? '';
     final permission = await isPermissionGranted();
     String subscriptionId = '';
     if (_oneSignalInitialized) {
