@@ -12,6 +12,7 @@ import 'package:zhirox/screens/auth/owner_health_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_incident_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_infrastructure_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_operations_center_screen.dart';
+import 'package:zhirox/screens/auth/owner_autopilot_control_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_telegram_bot_settings_screen.dart';
 import 'package:zhirox/screens/auth/owner_permission_center_screen.dart';
 import 'package:zhirox/screens/auth/owner_platform_center_screen.dart';
@@ -250,6 +251,16 @@ class _OwnerHome extends StatelessWidget {
                   tint: scheme.secondary,
                   onTap: () =>
                       _open(context, const OwnerOperationsCenterScreen()),
+                ),
+                _OwnerRow(
+                  title: 'AutoPilot Control Center',
+                  subtitle: 'Health، Queue، Telegram، PDF و Risk ـی هەموو مارکێتەکان',
+                  icon: Icons.hub_rounded,
+                  tint: const Color(0xFF0B9270),
+                  onTap: () => _open(
+                    context,
+                    const OwnerAutoPilotControlCenterScreen(),
+                  ),
                 ),
                 _OwnerRow(
                   title: 'Telegram Bot',
