@@ -1,0 +1,54 @@
+name: Hikvision Gateway Regression
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - 'gateway/hikvision/**'
+      - 'supabase/functions/hikvision-gateway/**'
+      - 'supabase/migrations/**hikvision**'
+      - 'supabase/tests/hikvision_gateway_v2.test.sql'
+      - '.github/workflows/hikvision-gateway-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hikvision-gateway-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  database-fencing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+      - name: Start local Supabase
+        run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      - name: Run Hikvision v2 fencing regression
+        run: supabase test db supabase/tests/hikvision_gateway_v2.test.sql
+
+  source-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check gateway Edge Function
+        run: deno check supabase/functions/hikvision-gateway/index.ts
+      - name: Compile-check Windows gateway Python
+        run: python3 -m py_compile gateway/hikvision/common.py gateway/hikvision/agent.py gateway/hikvision/setup.py
+      - name: Verify v2 protocol wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'GATEWAY_VERSION = "1.1.0"' gateway/hikvision/agent.py
+          grep -q 'heartbeat_job' gateway/hikvision/agent.py
+          grep -q 'hikvision_gateway_claim_v2_service' supabase/functions/hikvision-gateway/index.ts
+          grep -q 'stale_or_invalid_attempt' supabase/functions/hikvision-gateway/index.ts
