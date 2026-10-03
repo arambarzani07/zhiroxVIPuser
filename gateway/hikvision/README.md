@@ -43,3 +43,51 @@ This gateway links ZHIROX financial transactions to recorded Hikvision video wit
 
 Gateway log: `%LOCALAPPDATA%\ZHIROX\HikvisionGateway\gateway.log`.
 Encrypted config: `%LOCALAPPDATA%\ZHIROX\HikvisionGateway\config.json`.
+
+## Recorder preflight (before enabling automatic capture)
+
+Run `zhirox-hikvision-diagnose.exe` in a Windows terminal **on the market LAN**.
+The password is requested privately in the terminal, used in memory, and not saved.
+No gateway token is needed. Diagnostics do not alter NVR settings or platform access,
+and do not contact ZHIROX cloud or claim jobs. Search uses the recorder's search API;
+it does not change recordings.
+
+```powershell
+.\zhirox-hikvision-diagnose.exe --host 192.168.1.2 --channel 1
+```
+
+The default checks a moment two minutes ago to allow recordings to become available.
+The IP and cashier channel are examples; confirm them at the market.
+`nvr_access: ok` verifies authenticated ISAPI device information.
+`clock_status: ok` indicates the recorder clock is within 60 seconds of the PC clock.
+`found_at_requested_time` verifies that the returned segment contains the selected
+instant. `requested_window_covered` separately checks the full 15-second-before /
+30-second-after window. A neighboring segment is not accepted as evidence.
+
+To test the download at a known recorded local time (Baghdad offset `+03:00`):
+
+```powershell
+.\zhirox-hikvision-diagnose.exe --host 192.168.1.2 --channel 1 --at "2026-10-03T17:00:00+03:00" --download "$env:USERPROFILE\Desktop\zhirox-nvr-test.mp4"
+```
+
+Replace the sample timestamp with one you can verify in Playback.
+The download is a matching **NVR segment**, not yet an exactly trimmed 45-second clip.
+Open it in a video player and compare the camera and displayed time. A nonempty
+file/hash alone does not prove the video is playable or the NVR clock is correct.
+Existing files are never overwritten; failed partial downloads are removed.
+No diagnostic video is uploaded. Treat local recordings as private.
+
+If access returns HTTP 401/403, verify the local recorder account and playback
+permissions. If there is no response, confirm the actual LAN IP, HTTP(S) port, and
+that the PC is on the same reachable network. `not_found` means the selected
+channel/time has no matching search result; check Playback and recording schedule.
+Do not change Hik-Connect/Platform Access to run this test.
+
+After playback and time checks succeed, use the setup wizard with the one-time
+ZHIROX gateway token, enable the **Local Gateway** provider in ZHIROX, and create
+one genuine test transaction. Verify the job, uploaded clip, transaction link,
+and that Hik-Connect still works before leaving automatic capture enabled.
+
+Auto-start is **at this Windows user's logon**, not before anyone signs in after
+power restoration. Keep the same Windows user (DPAPI keys belong to that user),
+network access, and the PC awake. This is not an unattended Windows service.

@@ -3,7 +3,7 @@ name: Hikvision Gateway Windows
 on:
   workflow_dispatch:
   push:
-    branches: [user-source]
+    branches: [user-source, gateway-build-20261003]
     paths:
       - 'gateway/hikvision/**'
       - '.github/workflows/hikvision-gateway-windows.yml'
@@ -32,18 +32,40 @@ jobs:
         working-directory: gateway/hikvision
         run: pyinstaller --clean --onefile --name zhirox-hikvision-setup setup.py
 
+      - name: Test recorder diagnostics
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: python -m unittest test_diagnose.py
+
+      - name: Build recorder diagnostics
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: pyinstaller --clean --onefile --name zhirox-hikvision-diagnose diagnose.py
+
       - name: Build background gateway
         shell: pwsh
         working-directory: gateway/hikvision
         run: pyinstaller --clean --onefile --noconsole --name zhirox-hikvision-gateway agent.py
+
+      - name: Check Windows executables and DPAPI
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: |
+          .\dist\zhirox-hikvision-diagnose.exe --help
+          if ($LASTEXITCODE -ne 0) { throw "diagnostic executable smoke test failed" }
+          python -c "from common import protect_secret, unprotect_secret; assert unprotect_secret(protect_secret('windows-build-test')) == 'windows-build-test'; print('DPAPI round-trip passed')"
+          if ($LASTEXITCODE -ne 0) { throw "DPAPI smoke test failed" }
 
       - name: Stage artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/hikvision-gateway | Out-Null
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-setup.exe artifacts/hikvision-gateway/
+          Copy-Item gateway/hikvision/dist/zhirox-hikvision-diagnose.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-gateway.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/README.md artifacts/hikvision-gateway/ -ErrorAction SilentlyContinue
+          Copy-Item gateway/hikvision/01-check-nvr.cmd artifacts/hikvision-gateway/
+          Copy-Item gateway/hikvision/02-setup.cmd artifacts/hikvision-gateway/
           Get-FileHash artifacts/hikvision-gateway/*.exe -Algorithm SHA256 | Format-Table -AutoSize | Out-File artifacts/hikvision-gateway/SHA256.txt
 
       - uses: actions/upload-artifact@v4
