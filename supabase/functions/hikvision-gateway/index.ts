@@ -40,6 +40,14 @@ function safeId(value: unknown): string {
   return /^[0-9a-f-]{36}$/i.test(text) ? text : "";
 }
 
+function supportsAttemptFencing(version: string): boolean {
+  const match = version.trim().match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return major > 1 || (major === 1 && minor >= 1);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -61,12 +69,14 @@ Deno.serve(async (req: Request) => {
 
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch (_) { return json({ error: "invalid_json" }, 400); }
+
   const action = String(body.action ?? "ping").trim();
   const gatewayId = String(gateway.gateway_id);
   const marketId = String(gateway.market_id);
   const gatewayVersion = (req.headers.get("x-gateway-version") ?? "").slice(0, 120);
   const platform = (req.headers.get("x-gateway-platform") ?? "").slice(0, 120);
   const forwarded = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim().slice(0, 120);
+  const v2Gateway = supportsAttemptFencing(gatewayVersion);
 
   try {
     if (action === "ping") {
@@ -76,7 +86,13 @@ Deno.serve(async (req: Request) => {
         p_platform: platform,
         p_ip: forwarded || null,
       });
-      return json({ ok: true, gateway_id: gatewayId, market_id: marketId, server_time: new Date().toISOString() });
+      return json({
+        ok: true,
+        gateway_id: gatewayId,
+        market_id: marketId,
+        server_time: new Date().toISOString(),
+        capabilities: { attempt_fencing: v2Gateway },
+      });
     }
 
     if (action === "claim") {
@@ -86,28 +102,49 @@ Deno.serve(async (req: Request) => {
         p_platform: platform,
         p_ip: forwarded || null,
       });
-      const { data, error } = await admin.rpc("hikvision_gateway_claim_service", { p_gateway_id: gatewayId });
+      const rpc = v2Gateway ? "hikvision_gateway_claim_v2_service" : "hikvision_gateway_claim_service";
+      const { data, error } = await admin.rpc(rpc, { p_gateway_id: gatewayId });
       if (error) throw error;
       const job = Array.isArray(data) && data.length > 0 ? data[0] : null;
-      return json({ ok: true, job });
+      return json({ ok: true, job, protocol: v2Gateway ? 2 : 1 });
+    }
+
+    if (action === "heartbeat_job") {
+      const jobId = safeId(body.job_id);
+      const attemptToken = safeId(body.attempt_token);
+      if (!jobId || !attemptToken) return json({ error: "invalid_attempt" }, 400);
+      const { data, error } = await admin.rpc("hikvision_gateway_job_heartbeat_v2_service", {
+        p_gateway_id: gatewayId,
+        p_job_id: jobId,
+        p_attempt_token: attemptToken,
+      });
+      if (error) throw error;
+      if (data !== true) return json({ error: "stale_or_invalid_attempt" }, 409);
+      return json({ ok: true });
     }
 
     if (action === "prepare_upload") {
       const jobId = safeId(body.job_id);
+      const attemptToken = safeId(body.attempt_token);
       if (!jobId) return json({ error: "invalid_job_id" }, 400);
-      const { data, error } = await admin.rpc("hikvision_gateway_prepare_upload_service", {
-        p_gateway_id: gatewayId,
-        p_job_id: jobId,
-      });
+
+      const rpc = attemptToken
+        ? "hikvision_gateway_prepare_upload_v2_service"
+        : "hikvision_gateway_prepare_upload_service";
+      const args = attemptToken
+        ? { p_gateway_id: gatewayId, p_job_id: jobId, p_attempt_token: attemptToken }
+        : { p_gateway_id: gatewayId, p_job_id: jobId };
+      const { data, error } = await admin.rpc(rpc, args);
       if (error) throw error;
       const row = Array.isArray(data) && data.length > 0 ? data[0] : null;
-      if (!row) return json({ error: "job_not_claimed" }, 409);
+      if (!row) return json({ error: "stale_or_invalid_attempt" }, 409);
 
       const at = new Date(row.transaction_at);
       const yyyy = String(at.getUTCFullYear());
       const mm = String(at.getUTCMonth() + 1).padStart(2, "0");
       const dd = String(at.getUTCDate()).padStart(2, "0");
-      const path = `${marketId}/${yyyy}/${mm}/${dd}/${row.source_type}/${row.source_id}-${jobId}.mp4`;
+      const attemptSuffix = attemptToken ? `-a${Number(row.attempt_generation ?? 0)}` : "";
+      const path = `${marketId}/${yyyy}/${mm}/${dd}/${row.source_type}/${row.source_id}-${jobId}${attemptSuffix}.mp4`;
       const { data: signed, error: signedError } = await admin.storage
         .from("transaction-camera-clips")
         .createSignedUploadUrl(path);
@@ -115,6 +152,7 @@ Deno.serve(async (req: Request) => {
       return json({
         ok: true,
         job_id: jobId,
+        attempt_generation: row.attempt_generation ?? null,
         object_path: path,
         signed_upload_url: signed.signedUrl,
         upload_token: signed.token ?? null,
@@ -123,6 +161,7 @@ Deno.serve(async (req: Request) => {
 
     if (action === "complete") {
       const jobId = safeId(body.job_id);
+      const attemptToken = safeId(body.attempt_token);
       const objectPath = String(body.object_path ?? "").trim();
       if (!jobId || !objectPath.startsWith(`${marketId}/`) || objectPath.length > 1024) {
         return json({ error: "invalid_completion" }, 400);
@@ -134,34 +173,49 @@ Deno.serve(async (req: Request) => {
       const metadata = body.playback_metadata && typeof body.playback_metadata === "object"
         ? body.playback_metadata
         : {};
-      const { data, error } = await admin.rpc("hikvision_gateway_complete_service", {
+
+      const rpc = attemptToken
+        ? "hikvision_gateway_complete_v2_service"
+        : "hikvision_gateway_complete_service";
+      const args: Record<string, unknown> = {
         p_gateway_id: gatewayId,
         p_job_id: jobId,
         p_object_path: objectPath,
         p_thumbnail_path: null,
         p_content_sha256: sha || null,
-        p_byte_size: Number.isFinite(byteSize) ? Math.max(0, Math.trunc(byteSize!)) : null,
-        p_duration_seconds: Number.isFinite(duration) ? Math.max(0, Math.trunc(duration!)) : null,
+        p_byte_size: Number.isFinite(byteSize) ? Math.max(0, Math.trunc(byteSize as number)) : null,
+        p_duration_seconds: Number.isFinite(duration) ? Math.max(0, Math.trunc(duration as number)) : null,
         p_playback_metadata: metadata,
-      });
+      };
+      if (attemptToken) args.p_attempt_token = attemptToken;
+
+      const { data, error } = await admin.rpc(rpc, args);
       if (error) throw error;
-      if (data !== true) return json({ error: "stale_or_invalid_job" }, 409);
+      if (data !== true) return json({ error: "stale_or_invalid_attempt" }, 409);
       return json({ ok: true, status: "ready" });
     }
 
     if (action === "fail") {
       const jobId = safeId(body.job_id);
+      const attemptToken = safeId(body.attempt_token);
       if (!jobId) return json({ error: "invalid_job_id" }, 400);
       const reason = String(body.error ?? "gateway_failed").slice(0, 1000);
       const missing = body.missing === true;
-      const { data, error } = await admin.rpc("hikvision_gateway_fail_service", {
+
+      const rpc = attemptToken
+        ? "hikvision_gateway_fail_v2_service"
+        : "hikvision_gateway_fail_service";
+      const args: Record<string, unknown> = {
         p_gateway_id: gatewayId,
         p_job_id: jobId,
         p_error: reason,
         p_missing: missing,
-      });
+      };
+      if (attemptToken) args.p_attempt_token = attemptToken;
+
+      const { data, error } = await admin.rpc(rpc, args);
       if (error) throw error;
-      if (data !== true) return json({ error: "stale_or_invalid_job" }, 409);
+      if (data !== true) return json({ error: "stale_or_invalid_attempt" }, 409);
       return json({ ok: true, status: missing ? "missing" : "recorded" });
     }
 
