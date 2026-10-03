@@ -220,7 +220,7 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                             title: const Text('بەستنی خۆکاری ڤیدیۆ بە مامەلە'),
                           ),
                           DropdownButtonFormField<int>(
-                            value: _channel,
+                            initialValue: _channel,
                             decoration: const InputDecoration(labelText: 'کامێرای کاشێر'),
                             items: [for (var i = 1; i <= 16; i++) DropdownMenuItem(value: i, child: Text('Channel $i'))],
                             onChanged: _working ? null : (v) => setState(() => _channel = v ?? 1),
@@ -230,7 +230,7 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<int>(
-                                  value: _pre,
+                                  initialValue: _pre,
                                   decoration: const InputDecoration(labelText: 'پێش مامەلە'),
                                   items: [5, 10, 15, 20, 30, 45, 60]
                                       .map((v) => DropdownMenuItem(value: v, child: Text('$v چرکە')))
@@ -241,7 +241,7 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: DropdownButtonFormField<int>(
-                                  value: _post,
+                                  initialValue: _post,
                                   decoration: const InputDecoration(labelText: 'دوای مامەلە'),
                                   items: [10, 15, 30, 45, 60, 90, 120]
                                       .map((v) => DropdownMenuItem(value: v, child: Text('$v چرکە')))
@@ -253,7 +253,7 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<int>(
-                            value: _retention,
+                            initialValue: _retention,
                             decoration: const InputDecoration(labelText: 'ماوەی هەڵگرتنی ڤیدیۆ'),
                             items: [30, 60, 90, 180, 365]
                                 .map((v) => DropdownMenuItem(value: v, child: Text('$v ڕۆژ')))
