@@ -1,0 +1,54 @@
+name: Hikvision Gateway Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [user-source]
+    paths:
+      - 'gateway/hikvision/**'
+      - '.github/workflows/hikvision-gateway-windows.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: gateway/hikvision/requirements.txt
+
+      - name: Install dependencies
+        shell: pwsh
+        run: pip install -r gateway/hikvision/requirements.txt
+
+      - name: Build setup wizard
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: pyinstaller --clean --onefile --name zhirox-hikvision-setup setup.py
+
+      - name: Build background gateway
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: pyinstaller --clean --onefile --noconsole --name zhirox-hikvision-gateway agent.py
+
+      - name: Stage artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/hikvision-gateway | Out-Null
+          Copy-Item gateway/hikvision/dist/zhirox-hikvision-setup.exe artifacts/hikvision-gateway/
+          Copy-Item gateway/hikvision/dist/zhirox-hikvision-gateway.exe artifacts/hikvision-gateway/
+          Copy-Item gateway/hikvision/README.md artifacts/hikvision-gateway/ -ErrorAction SilentlyContinue
+          Get-FileHash artifacts/hikvision-gateway/*.exe -Algorithm SHA256 | Format-Table -AutoSize | Out-File artifacts/hikvision-gateway/SHA256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zhirox-hikvision-gateway-windows
+          path: artifacts/hikvision-gateway
+          if-no-files-found: error
+          retention-days: 30
