@@ -1,0 +1,315 @@
+from __future__ import annotations
+
+import base64
+import ctypes
+from ctypes import wintypes
+import getpass
+import hashlib
+import html
+import json
+import os
+import pathlib
+import subprocess
+import tempfile
+import time
+import uuid
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+import requests
+from requests.auth import HTTPDigestAuth
+
+GATEWAY_VERSION = "1.0.0"
+CLOUD_URL = "https://madoflmbretqghqbqaak.supabase.co/functions/v1/hikvision-gateway"
+APP_DIR = pathlib.Path(os.environ.get("LOCALAPPDATA", pathlib.Path.home())) / "ZHIROX" / "HikvisionGateway"
+CONFIG_PATH = APP_DIR / "config.json"
+LOG_PATH = APP_DIR / "gateway.log"
+TEMP_DIR = APP_DIR / "tmp"
+
+
+class DATA_BLOB(ctypes.Structure):
+    _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_byte))]
+
+
+def _blob(data: bytes):
+    buf = ctypes.create_string_buffer(data)
+    return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte))), buf
+
+
+def protect_secret(value: str) -> str:
+    if os.name != "nt":
+        raise RuntimeError("Windows DPAPI is required")
+    in_blob, in_buf = _blob(value.encode("utf-8"))
+    out_blob = DATA_BLOB()
+    if not ctypes.windll.crypt32.CryptProtectData(
+        ctypes.byref(in_blob), "ZHIROX Hikvision Gateway", None, None, None, 0,
+        ctypes.byref(out_blob),
+    ):
+        raise ctypes.WinError()
+    try:
+        data = ctypes.string_at(out_blob.pbData, out_blob.cbData)
+        return base64.b64encode(data).decode("ascii")
+    finally:
+        ctypes.windll.kernel32.LocalFree(out_blob.pbData)
+        del in_buf
+
+
+def unprotect_secret(value: str) -> str:
+    if os.name != "nt":
+        raise RuntimeError("Windows DPAPI is required")
+    raw = base64.b64decode(value)
+    in_blob, in_buf = _blob(raw)
+    out_blob = DATA_BLOB()
+    if not ctypes.windll.crypt32.CryptUnprotectData(
+        ctypes.byref(in_blob), None, None, None, None, 0, ctypes.byref(out_blob)
+    ):
+        raise ctypes.WinError()
+    try:
+        return ctypes.string_at(out_blob.pbData, out_blob.cbData).decode("utf-8")
+    finally:
+        ctypes.windll.kernel32.LocalFree(out_blob.pbData)
+        del in_buf
+
+
+def log(message: str) -> None:
+    APP_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().astimezone().isoformat(timespec="seconds")
+    with LOG_PATH.open("a", encoding="utf-8") as fh:
+        fh.write(f"{stamp} {message[:1200]}\n")
+
+
+def parse_iso(value: str) -> datetime:
+    text = value.strip().replace("Z", "+00:00")
+    dt = datetime.fromisoformat(text)
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def hik_time(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+@dataclass
+class GatewayConfig:
+    nvr_host: str
+    nvr_username: str
+    nvr_password: str
+    gateway_token: str
+    cloud_url: str = CLOUD_URL
+
+    @classmethod
+    def load(cls) -> "GatewayConfig":
+        raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        return cls(
+            nvr_host=str(raw["nvr_host"]),
+            nvr_username=str(raw.get("nvr_username", "admin")),
+            nvr_password=unprotect_secret(str(raw["nvr_password_dpapi"])),
+            gateway_token=unprotect_secret(str(raw["gateway_token_dpapi"])),
+            cloud_url=str(raw.get("cloud_url", CLOUD_URL)),
+        )
+
+    def save(self) -> None:
+        APP_DIR.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "nvr_host": self.nvr_host,
+            "nvr_username": self.nvr_username,
+            "nvr_password_dpapi": protect_secret(self.nvr_password),
+            "gateway_token_dpapi": protect_secret(self.gateway_token),
+            "cloud_url": self.cloud_url,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+        }
+        CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+class CloudClient:
+    def __init__(self, cfg: GatewayConfig):
+        self.url = cfg.cloud_url
+        self.token = cfg.gateway_token
+        self.session = requests.Session()
+
+    def call(self, action: str, **body: Any) -> dict[str, Any]:
+        headers = {
+            "x-zhirox-gateway-token": self.token,
+            "x-gateway-version": GATEWAY_VERSION,
+            "x-gateway-platform": "windows",
+            "Content-Type": "application/json",
+        }
+        response = self.session.post(
+            self.url,
+            headers=headers,
+            json={"action": action, **body},
+            timeout=35,
+        )
+        try:
+            data = response.json()
+        except Exception:
+            data = {}
+        if response.status_code >= 400:
+            raise RuntimeError(str(data.get("error") or f"cloud_http_{response.status_code}"))
+        return data
+
+    def upload(self, signed_url: str, file_path: pathlib.Path) -> None:
+        size = file_path.stat().st_size
+        if size > 100 * 1024 * 1024:
+            raise RuntimeError("clip_exceeds_100mb")
+        with file_path.open("rb") as fh:
+            response = requests.put(
+                signed_url,
+                data=fh,
+                headers={"Content-Type": "video/mp4", "x-upsert": "false"},
+                timeout=180,
+            )
+        if response.status_code >= 300:
+            raise RuntimeError(f"upload_http_{response.status_code}")
+
+
+class HikvisionClient:
+    def __init__(self, cfg: GatewayConfig):
+        self.host = cfg.nvr_host.strip().rstrip("/")
+        if not self.host.startswith("http://") and not self.host.startswith("https://"):
+            self.host = "http://" + self.host
+        self.auth = HTTPDigestAuth(cfg.nvr_username, cfg.nvr_password)
+        self.session = requests.Session()
+        self.session.auth = self.auth
+
+    def device_info(self) -> str:
+        r = self.session.get(f"{self.host}/ISAPI/System/deviceInfo", timeout=15)
+        r.raise_for_status()
+        return r.text
+
+    def _search_request(self, track_id: int, start: datetime, end: datetime, xmlns: Optional[str]) -> str:
+        ns = f' version="1.0" xmlns="{xmlns}"' if xmlns else ""
+        sid = "{" + str(uuid.uuid4()).upper() + "}"
+        return (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            f'<CMSearchDescription{ns}>'
+            f'<searchID>{sid}</searchID>'
+            f'<trackIDList><trackID>{track_id}</trackID></trackIDList>'
+            '<timeSpanList><timeSpan>'
+            f'<startTime>{hik_time(start)}</startTime>'
+            f'<endTime>{hik_time(end)}</endTime>'
+            '</timeSpan></timeSpanList>'
+            '<maxResults>40</maxResults><searchResultPostion>0</searchResultPostion>'
+            '<metadataList><metadataDescriptor>//recordType.meta.std-cgi.com</metadataDescriptor></metadataList>'
+            '</CMSearchDescription>'
+        )
+
+    def search_recording(self, channel_id: int, start: datetime, end: datetime, transaction_at: datetime) -> dict[str, Any]:
+        track_id = channel_id * 100 + 1
+        last_error = None
+        for xmlns in (
+            "http://www.hikvision.com/ver20/XMLSchema",
+            None,
+            "http://www.isapi.org/ver20/XMLSchema",
+        ):
+            xml = self._search_request(track_id, start, end, xmlns)
+            try:
+                r = self.session.post(
+                    f"{self.host}/ISAPI/ContentMgmt/search",
+                    data=xml.encode("utf-8"),
+                    headers={"Content-Type": "application/xml"},
+                    timeout=30,
+                )
+                if r.status_code >= 400:
+                    last_error = f"search_http_{r.status_code}"
+                    continue
+                root = ET.fromstring(r.content)
+                matches: list[dict[str, Any]] = []
+                for item in root.iter():
+                    if local_name(item.tag) != "searchMatchItem":
+                        continue
+                    data: dict[str, Any] = {}
+                    for child in item.iter():
+                        name = local_name(child.tag)
+                        if name in {"playbackURI", "startTime", "endTime", "metadataDescriptor"} and child.text:
+                            data[name] = child.text.strip()
+                    if data.get("playbackURI"):
+                        matches.append(data)
+                if not matches:
+                    return {"found": False, "track_id": track_id, "matches": 0}
+
+                tx = transaction_at.astimezone(timezone.utc)
+                def score(m: dict[str, Any]) -> float:
+                    try:
+                        a = parse_iso(str(m.get("startTime", ""))).astimezone(timezone.utc)
+                        b = parse_iso(str(m.get("endTime", ""))).astimezone(timezone.utc)
+                        if a <= tx <= b:
+                            return 0.0
+                        return min(abs((tx - a).total_seconds()), abs((tx - b).total_seconds()))
+                    except Exception:
+                        return 10**12
+
+                best = min(matches, key=score)
+                return {
+                    "found": True,
+                    "track_id": track_id,
+                    "playback_uri": html.unescape(str(best["playbackURI"])),
+                    "segment_start": best.get("startTime"),
+                    "segment_end": best.get("endTime"),
+                    "matches": len(matches),
+                }
+            except Exception as exc:
+                last_error = f"search_error:{type(exc).__name__}"
+        raise RuntimeError(last_error or "search_failed")
+
+    def download_recording(self, playback_uri: str, output_path: pathlib.Path) -> None:
+        safe_uri = playback_uri.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        body = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<downloadRequest version="1.0" xmlns="http://www.isapi.org/ver20/XMLSchema">'
+            f'<playbackURI>{safe_uri}</playbackURI>'
+            '</downloadRequest>'
+        )
+        with self.session.get(
+            f"{self.host}/ISAPI/ContentMgmt/download",
+            data=body.encode("utf-8"),
+            headers={"Content-Type": "application/xml"},
+            timeout=(20, 180),
+            stream=True,
+        ) as r:
+            r.raise_for_status()
+            content_type = (r.headers.get("content-type") or "").lower()
+            if "xml" in content_type:
+                raise RuntimeError("download_returned_xml")
+            with output_path.open("wb") as fh:
+                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        fh.write(chunk)
+
+
+def sha256_file(path: pathlib.Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def maybe_trim_with_ffmpeg(source: pathlib.Path, target: pathlib.Path, clip_start: datetime, segment_start: Optional[str], duration: int) -> bool:
+    ffmpeg = None
+    for candidate in ("ffmpeg.exe", str(APP_DIR / "ffmpeg.exe")):
+        try:
+            result = subprocess.run([candidate, "-version"], capture_output=True, timeout=5)
+            if result.returncode == 0:
+                ffmpeg = candidate
+                break
+        except Exception:
+            pass
+    if not ffmpeg or not segment_start:
+        return False
+    try:
+        segment_dt = parse_iso(segment_start)
+        offset = max(0.0, (clip_start.astimezone(timezone.utc) - segment_dt.astimezone(timezone.utc)).total_seconds())
+        result = subprocess.run(
+            [ffmpeg, "-y", "-ss", f"{offset:.3f}", "-i", str(source), "-t", str(max(1, duration)), "-c", "copy", "-movflags", "+faststart", str(target)],
+            capture_output=True,
+            timeout=120,
+        )
+        return result.returncode == 0 and target.exists() and target.stat().st_size > 0
+    except Exception:
+        return False
