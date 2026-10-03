@@ -49,7 +49,7 @@ class OwnerVisualExtension extends ThemeExtension<OwnerVisualExtension> {
 
 abstract final class AppDesign {
   static const double radiusSmall = 12;
-  static const double radiusMedium = 18;
+  static const double radiusMedium = 20;
   static const double radiusLarge = 28;
   static const double pagePadding = 16;
 
@@ -182,8 +182,8 @@ abstract final class AppDesign {
   }
 
   static ThemeData get ownerLightTheme {
-    const primary = Color(0xFF294CC8);
-    const background = Color(0xFFF4F6FB);
+    const primary = Color(0xFF3157E0);
+    const background = Color(0xFFF6F7FB);
     const soft = Color(0xFFE8EDFF);
     const outline = Color(0xFFDCE2EF);
     final scheme = ColorScheme.fromSeed(
@@ -238,7 +238,7 @@ abstract final class AppDesign {
         surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(radiusMedium),
           side: const BorderSide(color: outline),
         ),
       ),
@@ -275,7 +275,7 @@ abstract final class AppDesign {
   }
 
   static ThemeData get ownerDarkTheme {
-    const primary = Color(0xFF9AAEFF);
+    const primary = Color(0xFF8CA4FF);
     const background = Color(0xFF09101F);
     const surface = Color(0xFF111A2D);
     const card = Color(0xFF151F35);
@@ -333,7 +333,7 @@ abstract final class AppDesign {
         surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(radiusMedium),
           side: const BorderSide(color: outline),
         ),
       ),

@@ -25,6 +25,7 @@ import 'package:zhirox/screens/auth/owner_support_center_screen.dart';
 import 'package:zhirox/screens/auth/update_control_screen.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
+import 'package:zhirox/widgets/design_refresh.dart';
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -47,48 +48,35 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          _OwnerHome(onOpenMarkets: () => _select(1)),
-          _visited.contains(1)
-              ? const AdminManagementScreen()
-              : const SizedBox.shrink(),
-          _visited.contains(2)
-              ? const _OwnerSettings()
-              : const SizedBox.shrink(),
-        ],
-      ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: scheme.outlineVariant),
-          ),
+    return ZhiroxNavigationScaffold(
+      index: _currentIndex,
+      onSelected: _select,
+      pages: [
+        _OwnerHome(onOpenMarkets: () => _select(1)),
+        _visited.contains(1)
+            ? const AdminManagementScreen()
+            : const SizedBox.shrink(),
+        _visited.contains(2)
+            ? const ZhiroxPageFrame(child: _OwnerSettings())
+            : const SizedBox.shrink(),
+      ],
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.space_dashboard_outlined),
+          selectedIcon: Icon(Icons.space_dashboard_rounded),
+          label: 'سەرەکی',
         ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: _select,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.space_dashboard_outlined),
-              selectedIcon: Icon(Icons.space_dashboard_rounded),
-              label: 'سەرەکی',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.storefront_outlined),
-              selectedIcon: Icon(Icons.storefront_rounded),
-              label: 'مارکێتەکان',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.tune_outlined),
-              selectedIcon: Icon(Icons.tune_rounded),
-              label: 'ڕێکخستن',
-            ),
-          ],
+        NavigationDestination(
+          icon: Icon(Icons.storefront_outlined),
+          selectedIcon: Icon(Icons.storefront_rounded),
+          label: 'مارکێتەکان',
         ),
-      ),
+        NavigationDestination(
+          icon: Icon(Icons.tune_outlined),
+          selectedIcon: Icon(Icons.tune_rounded),
+          label: 'ڕێکخستن',
+        ),
+      ],
     );
   }
 }
@@ -99,10 +87,7 @@ class _OwnerHome extends StatelessWidget {
   final VoidCallback onOpenMarkets;
 
   void _open(BuildContext context, Widget page) {
-    Navigator.push(
-      context,
-      MaterialPageRoute<void>(builder: (_) => page),
-    );
+    Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
   }
 
   @override
@@ -110,222 +95,224 @@ class _OwnerHome extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 30),
-          children: [
-            const _OwnerTopHeader(),
-            const SizedBox(height: 16),
-            _OwnerHero(onOpenMarkets: onOpenMarkets),
-            const SizedBox(height: 16),
-            _QuickActions(
-              onMarkets: onOpenMarkets,
-              onPlatform: () =>
-                  _open(context, const OwnerPlatformCenterScreen()),
-              onPermissions: () =>
-                  _open(context, const OwnerPermissionCenterScreen()),
-              onSecurity: () =>
-                  _open(context, const OwnerSecurityCenterScreen()),
-            ),
-            const SizedBox(height: 24),
-            _OwnerGroup(
-              title: 'مارکێت و پلان',
-              subtitle: 'بەڕێوەبردنی هەژمار، پلان و دەسەڵات',
-              accent: scheme.primary,
-              children: [
-                _OwnerRow(
-                  title: 'کۆنترۆڵی پلاتفۆرم',
-                  subtitle: 'Lifecycle، سنوور، پشتیوانی و دۆخی هەژمار',
-                  icon: Icons.admin_panel_settings_rounded,
-                  tint: scheme.primary,
-                  onTap: () =>
-                      _open(context, const OwnerPlatformCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'پلان و تایبەتمەندی',
-                  subtitle: 'Standard / Pro / VIP و override ـی هەر مارکێت',
-                  icon: Icons.workspace_premium_rounded,
-                  tint: scheme.tertiary,
-                  onTap: () =>
-                      _open(context, const OwnerEntitlementsCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'دەسەڵاتەکانی Owner',
-                  subtitle: 'Scope، Risk و پالیسی دەستگەیشتن',
-                  icon: Icons.rule_folder_rounded,
-                  tint: scheme.tertiary,
-                  badge: '٢٠٠',
-                  onTap: () =>
-                      _open(context, const OwnerPermissionCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'بەشداری و پارەدان',
-                  subtitle: 'پلان، بەرواری کۆتایی و مێژووی بەشداری',
-                  icon: Icons.credit_card_rounded,
-                  tint: const Color(0xFFC47C00),
-                  onTap: () =>
-                      _open(context, const OwnerSubscriptionCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'پشتیوانی',
-                  subtitle: 'داواکاری، SLA و وەڵامی تەکنیکی',
-                  icon: Icons.support_agent_rounded,
-                  tint: scheme.secondary,
-                  onTap: () => _open(context, const OwnerSupportCenterScreen()),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            _OwnerGroup(
-              title: 'پاراستن و بەردەوامی',
-              subtitle: 'پاراستنی هەژمار، ئامێر و دۆخی خزمەتگوزاری',
-              accent: scheme.error,
-              children: [
-                _OwnerRow(
-                  title: 'ناوەندی پاراستن',
-                  subtitle: 'دانیشتن، قوفڵ و چوونەژوورەوەی گوماناوی',
-                  icon: Icons.shield_rounded,
-                  tint: scheme.error,
-                  onTap: () =>
-                      _open(context, const OwnerSecurityCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'هەژمار و ئامێر',
-                  subtitle: 'Recovery، device policy و پەسەندکردنی ئامێر',
-                  icon: Icons.phonelink_lock_rounded,
-                  tint: const Color(0xFF52677E),
-                  onTap: () =>
-                      _open(context, const OwnerRecoveryDeviceCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'پاشەکەوت و Recovery',
-                  subtitle: 'Backup health، restore و resilience',
-                  icon: Icons.cloud_done_rounded,
-                  tint: scheme.secondary,
-                  onTap: () =>
-                      _open(context, const OwnerBackupResilienceCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'تەندروستی سیستەم',
-                  subtitle: 'Platform health، audit و دۆخی خزمەتگوزاری',
-                  icon: Icons.monitor_heart_rounded,
-                  tint: const Color(0xFF0B9270),
-                  onTap: () =>
-                      _open(context, const OwnerHealthCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'ئامادەیی مارکێتەکان',
-                  subtitle: 'بەشداری، ئامێر، backup و app readiness',
-                  icon: Icons.fact_check_rounded,
-                  tint: const Color(0xFF3573C8),
-                  onTap: () =>
-                      _open(context, const OwnerReadinessCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'ڕووداوەکان',
-                  subtitle: 'Incident، کاریگەری و چارەسەرکردن',
-                  icon: Icons.crisis_alert_rounded,
-                  tint: scheme.error,
-                  onTap: () =>
-                      _open(context, const OwnerIncidentCenterScreen()),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            _OwnerGroup(
-              title: 'ژێرخان و ئۆپەراسیۆن',
-              subtitle: 'دۆمەین، automation و کۆنترۆڵی خزمەتگوزاری',
-              accent: scheme.secondary,
-              children: [
-                _OwnerRow(
-                  title: 'ژێرخان',
-                  subtitle: 'Queue، worker، ناردن و تەندروستی خزمەتگوزاری',
-                  icon: Icons.dns_rounded,
-                  tint: const Color(0xFF168B9A),
-                  onTap: () =>
-                      _open(context, const OwnerInfrastructureCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'ئۆپەراسیۆن',
-                  subtitle: 'Maintenance، status و ئاگادارکردنەوەی گشتی',
-                  icon: Icons.settings_input_antenna_rounded,
-                  tint: scheme.secondary,
-                  onTap: () =>
-                      _open(context, const OwnerOperationsCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'AutoPilot Control Center',
-                  subtitle: 'Health، Queue، Telegram، PDF و Risk ـی هەموو مارکێتەکان',
-                  icon: Icons.hub_rounded,
-                  tint: const Color(0xFF0B9270),
-                  onTap: () => _open(
-                    context,
-                    const OwnerAutoPilotControlCenterScreen(),
+        child: ZhiroxPageFrame(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 30),
+            children: [
+              const _OwnerTopHeader(),
+              const SizedBox(height: 16),
+              _OwnerHero(onOpenMarkets: onOpenMarkets),
+              const SizedBox(height: 16),
+              _QuickActions(
+                onMarkets: onOpenMarkets,
+                onPlatform: () =>
+                    _open(context, const OwnerPlatformCenterScreen()),
+                onPermissions: () =>
+                    _open(context, const OwnerPermissionCenterScreen()),
+                onSecurity: () =>
+                    _open(context, const OwnerSecurityCenterScreen()),
+              ),
+              const SizedBox(height: 24),
+              _OwnerGroup(
+                title: 'مارکێت و پلان',
+                subtitle: 'بەڕێوەبردنی هەژمار، پلان و دەسەڵات',
+                accent: scheme.primary,
+                children: [
+                  _OwnerRow(
+                    title: 'کۆنترۆڵی پلاتفۆرم',
+                    subtitle: 'دۆخی هەژمار، سنووری بەکارهێنان و پشتیوانی',
+                    icon: Icons.admin_panel_settings_rounded,
+                    tint: scheme.primary,
+                    onTap: () =>
+                        _open(context, const OwnerPlatformCenterScreen()),
                   ),
-                ),
-                _OwnerRow(
-                  title: 'Telegram Bot',
-                  subtitle: 'Bot Token، Webhook و دۆخی پەیوەندی',
-                  icon: Icons.telegram_rounded,
-                  tint: const Color(0xFF2AABEE),
-                  onTap: () => _open(
-                    context,
-                    const OwnerTelegramBotSettingsScreen(),
+                  _OwnerRow(
+                    title: 'پلان و تایبەتمەندی',
+                    subtitle: 'پلانەکان و تایبەتمەندییەکانی هەر مارکێت',
+                    icon: Icons.workspace_premium_rounded,
+                    tint: scheme.tertiary,
+                    onTap: () =>
+                        _open(context, const OwnerEntitlementsCenterScreen()),
                   ),
-                ),
-                _OwnerRow(
-                  title: 'دۆمەین و HTTPS',
-                  subtitle: 'DNS، CNAME و certificate',
-                  icon: Icons.language_rounded,
-                  tint: const Color(0xFF3B73C5),
-                  onTap: () =>
-                      _open(context, const OwnerDomainCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'کۆنترۆڵی وەشان',
-                  subtitle: 'Minimum version، forced update و فایلەکان',
-                  icon: Icons.system_update_rounded,
-                  tint: const Color(0xFF0C8F69),
-                  onTap: () => _open(context, const UpdateControlScreen()),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            _OwnerGroup(
-              title: 'پالیسی و ڕووکار',
-              subtitle: 'ناسنامە، پابەندبوون و دەستگەیشتنە تایبەتەکان',
-              accent: scheme.tertiary,
-              children: [
-                _OwnerRow(
-                  title: 'سیاسەت و پابەندبوون',
-                  subtitle: 'Policy، consent و retention ـی داتای تەکنیکی',
-                  icon: Icons.policy_rounded,
-                  tint: const Color(0xFFC47B17),
-                  onTap: () => _open(
-                    context,
-                    const OwnerPolicyComplianceCenterScreen(),
+                  _OwnerRow(
+                    title: 'دەسەڵاتەکانی خاوەن',
+                    subtitle: 'سنوور و ڕێساکانی دەستگەیشتن',
+                    icon: Icons.rule_folder_rounded,
+                    tint: scheme.tertiary,
+                    badge: '٢٠٠',
+                    onTap: () =>
+                        _open(context, const OwnerPermissionCenterScreen()),
                   ),
-                ),
-                _OwnerRow(
-                  title: 'ناسنامە و ڕووکار',
-                  subtitle: 'ناو، لۆگۆ و ڕەنگی تایبەتی مارکێت',
-                  icon: Icons.palette_rounded,
-                  tint: scheme.tertiary,
-                  onTap: () =>
-                      _open(context, const OwnerBrandingCenterScreen()),
-                ),
-                _OwnerRow(
-                  title: 'مۆڵەتی Import',
-                  subtitle: 'چالاک/ناچالاککردنی هێنانەژوورەوە بەپێی مارکێت',
-                  icon: Icons.move_to_inbox_rounded,
-                  tint: scheme.primary,
-                  onTap: () =>
-                      _open(context, const ImportPermissionScreen()),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            const _PrivacyBoundaryCard(),
-          ],
+                  _OwnerRow(
+                    title: 'بەشداری و پارەدان',
+                    subtitle: 'پلان، بەرواری کۆتایی و مێژووی بەشداری',
+                    icon: Icons.credit_card_rounded,
+                    tint: const Color(0xFFC47C00),
+                    onTap: () =>
+                        _open(context, const OwnerSubscriptionCenterScreen()),
+                  ),
+                  _OwnerRow(
+                    title: 'پشتیوانی',
+                    subtitle: 'داواکارییەکان و بەدواداچوونی وەڵامەکان',
+                    icon: Icons.support_agent_rounded,
+                    tint: scheme.secondary,
+                    onTap: () =>
+                        _open(context, const OwnerSupportCenterScreen()),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _OwnerGroup(
+                title: 'پاراستن و بەردەوامی',
+                subtitle: 'پاراستنی هەژمار، ئامێر و دۆخی خزمەتگوزاری',
+                accent: scheme.error,
+                children: [
+                  _OwnerRow(
+                    title: 'ناوەندی پاراستن',
+                    subtitle: 'دانیشتن، قوفڵ و چوونەژوورەوەی گوماناوی',
+                    icon: Icons.shield_rounded,
+                    tint: scheme.error,
+                    onTap: () =>
+                        _open(context, const OwnerSecurityCenterScreen()),
+                  ),
+                  _OwnerRow(
+                    title: 'هەژمار و ئامێر',
+                    subtitle: 'گەڕاندنەوەی هەژمار و پەسەندکردنی ئامێر',
+                    icon: Icons.phonelink_lock_rounded,
+                    tint: const Color(0xFF52677E),
+                    onTap: () =>
+                        _open(context, const OwnerRecoveryDeviceCenterScreen()),
+                  ),
+                  _OwnerRow(
+                    title: 'پاشەکەوت و گەڕاندنەوە',
+                    subtitle: 'دۆخی پاشەکەوت و گەڕاندنەوەی داتا',
+                    icon: Icons.cloud_done_rounded,
+                    tint: scheme.secondary,
+                    onTap: () => _open(
+                      context,
+                      const OwnerBackupResilienceCenterScreen(),
+                    ),
+                  ),
+                  _OwnerRow(
+                    title: 'تەندروستی سیستەم',
+                    subtitle: 'پشکنین و دۆخی خزمەتگوزارییەکان',
+                    icon: Icons.monitor_heart_rounded,
+                    tint: const Color(0xFF0B9270),
+                    onTap: () =>
+                        _open(context, const OwnerHealthCenterScreen()),
+                  ),
+                  _OwnerRow(
+                    title: 'ئامادەیی مارکێتەکان',
+                    subtitle: 'بەشداری، ئامێر، پاشەکەوت و ئامادەیی ئەپ',
+                    icon: Icons.fact_check_rounded,
+                    tint: const Color(0xFF3573C8),
+                    onTap: () =>
+                        _open(context, const OwnerReadinessCenterScreen()),
+                  ),
+                  _OwnerRow(
+                    title: 'ڕووداوەکان',
+                    subtitle: 'ڕووداو، کاریگەری و چارەسەرکردن',
+                    icon: Icons.crisis_alert_rounded,
+                    tint: scheme.error,
+                    onTap: () =>
+                        _open(context, const OwnerIncidentCenterScreen()),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _OwnerGroup(
+                title: 'ژێرخان و ئۆپەراسیۆن',
+                subtitle: 'دۆمەین، کارە خۆکارەکان و خزمەتگوزاری',
+                accent: scheme.secondary,
+                children: [
+                  _OwnerRow(
+                    title: 'ژێرخان',
+                    subtitle: 'Queue، worker، ناردن و تەندروستی خزمەتگوزاری',
+                    icon: Icons.dns_rounded,
+                    tint: const Color(0xFF168B9A),
+                    onTap: () =>
+                        _open(context, const OwnerInfrastructureCenterScreen()),
+                  ),
+                  _OwnerRow(
+                    title: 'ئۆپەراسیۆن',
+                    subtitle: 'Maintenance، status و ئاگادارکردنەوەی گشتی',
+                    icon: Icons.settings_input_antenna_rounded,
+                    tint: scheme.secondary,
+                    onTap: () =>
+                        _open(context, const OwnerOperationsCenterScreen()),
+                  ),
+                  _OwnerRow(
+                    title: 'AutoPilot Control Center',
+                    subtitle: 'Health، Queue، Telegram، PDF و Risk ـی هەموو مارکێتەکان',
+                    icon: Icons.hub_rounded,
+                    tint: const Color(0xFF0B9270),
+                    onTap: () => _open(
+                      context,
+                      const OwnerAutoPilotControlCenterScreen(),
+                    ),
+                  ),
+                  _OwnerRow(
+                    title: 'Telegram Bot',
+                    subtitle: 'Bot Token، Webhook و دۆخی پەیوەندی',
+                    icon: Icons.telegram_rounded,
+                    tint: const Color(0xFF2AABEE),
+                    onTap: () =>
+                        _open(context, const OwnerTelegramBotSettingsScreen()),
+                  ),
+                  _OwnerRow(
+                    title: 'دۆمەین و HTTPS',
+                    subtitle: 'DNS، CNAME و certificate',
+                    icon: Icons.language_rounded,
+                    tint: const Color(0xFF3B73C5),
+                    onTap: () =>
+                        _open(context, const OwnerDomainCenterScreen()),
+                  ),
+                  _OwnerRow(
+                    title: 'کۆنترۆڵی وەشان',
+                    subtitle: 'وەشانەکان و ڕێکخستنی نوێکردنەوە',
+                    icon: Icons.system_update_rounded,
+                    tint: const Color(0xFF0C8F69),
+                    onTap: () => _open(context, const UpdateControlScreen()),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _OwnerGroup(
+                title: 'پالیسی و ڕووکار',
+                subtitle: 'ناسنامە، پابەندبوون و دەستگەیشتنە تایبەتەکان',
+                accent: scheme.tertiary,
+                children: [
+                  _OwnerRow(
+                    title: 'سیاسەت و پابەندبوون',
+                    subtitle: 'ڕێسا، ڕەزامەندی و ماوەی پاراستنی داتا',
+                    icon: Icons.policy_rounded,
+                    tint: const Color(0xFFC47B17),
+                    onTap: () => _open(
+                      context,
+                      const OwnerPolicyComplianceCenterScreen(),
+                    ),
+                  ),
+                  _OwnerRow(
+                    title: 'ناسنامە و ڕووکار',
+                    subtitle: 'ناو، لۆگۆ و ڕەنگی تایبەتی مارکێت',
+                    icon: Icons.palette_rounded,
+                    tint: scheme.tertiary,
+                    onTap: () =>
+                        _open(context, const OwnerBrandingCenterScreen()),
+                  ),
+                  _OwnerRow(
+                    title: 'مۆڵەتی هێنانەژوورەوە',
+                    subtitle: 'چالاک/ناچالاککردنی هێنانەژوورەوە بەپێی مارکێت',
+                    icon: Icons.move_to_inbox_rounded,
+                    tint: scheme.primary,
+                    onTap: () => _open(context, const ImportPermissionScreen()),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const _PrivacyBoundaryCard(),
+            ],
+          ),
         ),
       ),
     );
@@ -379,7 +366,7 @@ class _OwnerTopHeader extends StatelessWidget {
                 'System Owner',
                 style: TextStyle(
                   color: scheme.primary,
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -489,42 +476,36 @@ class _OwnerHero extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Row(
+                ZhiroxActionGrid(
+                  maxColumns: 2,
                   children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: start,
-                          minimumSize: const Size(0, 46),
-                        ),
-                        onPressed: onOpenMarkets,
-                        icon: const Icon(Icons.storefront_rounded, size: 19),
-                        label: const Text('مارکێتەکان'),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: start,
                       ),
+                      onPressed: onOpenMarkets,
+                      icon: const Icon(Icons.storefront_rounded, size: 19),
+                      label: const Text('مارکێتەکان'),
                     ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.30),
-                          ),
-                          minimumSize: const Size(0, 46),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.30),
                         ),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const OwnerPermissionCenterScreen(),
-                          ),
-                        ),
-                        icon: const Icon(
-                          Icons.admin_panel_settings_rounded,
-                          size: 19,
-                        ),
-                        label: const Text('دەسەڵات'),
                       ),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => const OwnerPermissionCenterScreen(),
+                        ),
+                      ),
+                      icon: const Icon(
+                        Icons.admin_panel_settings_rounded,
+                        size: 19,
+                      ),
+                      label: const Text('دەسەڵات'),
                     ),
                   ],
                 ),
@@ -553,42 +534,31 @@ class _QuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Row(
+    return ZhiroxActionGrid(
       children: [
-        Expanded(
-          child: _QuickAction(
-            icon: Icons.storefront_rounded,
-            label: 'مارکێت',
-            tint: scheme.primary,
-            onTap: onMarkets,
-          ),
+        _QuickAction(
+          icon: Icons.storefront_rounded,
+          label: 'مارکێت',
+          tint: scheme.primary,
+          onTap: onMarkets,
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _QuickAction(
-            icon: Icons.dashboard_customize_rounded,
-            label: 'پلاتفۆرم',
-            tint: scheme.secondary,
-            onTap: onPlatform,
-          ),
+        _QuickAction(
+          icon: Icons.dashboard_customize_rounded,
+          label: 'پلاتفۆرم',
+          tint: scheme.secondary,
+          onTap: onPlatform,
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _QuickAction(
-            icon: Icons.rule_rounded,
-            label: 'دەسەڵات',
-            tint: scheme.tertiary,
-            onTap: onPermissions,
-          ),
+        _QuickAction(
+          icon: Icons.rule_rounded,
+          label: 'دەسەڵات',
+          tint: scheme.tertiary,
+          onTap: onPermissions,
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _QuickAction(
-            icon: Icons.shield_rounded,
-            label: 'پاراستن',
-            tint: scheme.error,
-            onTap: onSecurity,
-          ),
+        _QuickAction(
+          icon: Icons.shield_rounded,
+          label: 'پاراستن',
+          tint: scheme.error,
+          onTap: onSecurity,
         ),
       ],
     );
@@ -638,12 +608,12 @@ class _QuickAction extends StatelessWidget {
               const SizedBox(height: 7),
               Text(
                 label,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w900,
-                  fontSize: 10,
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -693,10 +663,8 @@ class _OwnerGroup extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w900, fontSize: 16),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -771,7 +739,7 @@ class _OwnerRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w900,
-                fontSize: 13,
+                fontSize: 14,
               ),
             ),
           ),
@@ -799,11 +767,11 @@ class _OwnerRow extends StatelessWidget {
         padding: const EdgeInsets.only(top: 3),
         child: Text(
           subtitle,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodySmall?.copyWith(
             color: scheme.onSurfaceVariant,
-            fontSize: 10.3,
+            fontSize: 12,
           ),
         ),
       ),
@@ -933,7 +901,9 @@ class _OwnerSettings extends StatelessWidget {
                       tint: scheme.secondary,
                     ),
                     title: const Text('کۆنترۆڵی نوێکردنەوە'),
-                    subtitle: const Text('Minimum version، forced update و فایل'),
+                    subtitle: const Text(
+                      'Minimum version، forced update و فایل',
+                    ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
                       context,
@@ -974,11 +944,7 @@ class _OwnerSettings extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Icon(
-                    Icons.verified_rounded,
-                    color: scheme.primary,
-                    size: 20,
-                  ),
+                  Icon(Icons.verified_rounded, color: scheme.primary, size: 20),
                 ],
               ),
             ),
