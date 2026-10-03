@@ -8,8 +8,7 @@ on:
       - 'supabase/config.toml'
       - 'supabase/functions/hikvision-gateway/**'
       - 'supabase/functions/hikvision-admin/**'
-      - 'supabase/migrations/20261003093000_add_hikvision_transaction_video_gateway.sql'
-      - 'supabase/migrations/20261003210000_harden_hikvision_gateway_attempt_fencing.sql'
+      - 'supabase/migrations/**hikvision**'
   workflow_dispatch:
 
 permissions:
@@ -25,7 +24,6 @@ jobs:
     timeout-minutes: 15
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       EXPECTED_PROJECT_REF: madoflmbretqghqbqaak
     steps:
@@ -37,29 +35,43 @@ jobs:
         with:
           version: 2.117.0
 
-      - name: Verify deployment identity and secrets
+      - name: Verify local Hikvision deployment bundle
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo 'SUPABASE_ACCESS_TOKEN is missing' >&2; exit 1; }
-          test -n "${SUPABASE_PROJECT_REF:-}" || { echo 'SUPABASE_PROJECT_REF is missing' >&2; exit 1; }
-          if [[ "$SUPABASE_PROJECT_REF" != "$EXPECTED_PROJECT_REF" ]]; then
-            echo "Refusing preflight for unexpected project ref: $SUPABASE_PROJECT_REF" >&2
-            exit 1
-          fi
-          echo "Project identity locked to $EXPECTED_PROJECT_REF"
+          test -f supabase/migrations/20261003093000_add_hikvision_transaction_video_gateway.sql
+          test -f supabase/migrations/20261003210000_harden_hikvision_gateway_attempt_fencing.sql
+          test -f supabase/migrations/20261003213000_add_hikvision_retention_lifecycle.sql
+          test -f supabase/functions/hikvision-gateway/index.ts
+          test -f supabase/functions/hikvision-admin/index.ts
+          grep -q 'hikvision_gateway_claim_v2_service' supabase/functions/hikvision-gateway/index.ts
+          grep -q 'hikvision_gateway_retention_due_service' supabase/functions/hikvision-gateway/index.ts
+          echo "Local Hikvision deployment bundle is complete."
 
-      - name: Link production project read-only for migration preflight
+      - name: Assess remote preflight credentials
+        id: remote
         shell: bash
         run: |
           set -euo pipefail
-          args=(--project-ref "$SUPABASE_PROJECT_REF")
-          if [[ -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
-            args+=(--password "$SUPABASE_DB_PASSWORD")
+          if [[ -n "${SUPABASE_ACCESS_TOKEN:-}" && -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+            echo "Remote dry-run credentials are available."
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::Remote Supabase dry-run skipped: add SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD repository secrets.'
           fi
-          supabase link "${args[@]}"
+
+      - name: Link production project for read-only migration preflight
+        if: steps.remote.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase link \
+            --project-ref "$EXPECTED_PROJECT_REF" \
+            --password "$SUPABASE_DB_PASSWORD"
 
       - name: Capture remote migration state
+        if: steps.remote.outputs.ready == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -67,6 +79,7 @@ jobs:
           supabase migration list --linked 2>&1 | tee preflight/migration-list.txt
 
       - name: Dry-run pending database migrations
+        if: steps.remote.outputs.ready == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -83,11 +96,21 @@ jobs:
             echo '- Required Hikvision migrations:'
             echo '  - `20261003093000_add_hikvision_transaction_video_gateway.sql`'
             echo '  - `20261003210000_harden_hikvision_gateway_attempt_fencing.sql`'
-            echo '- Gateway Edge Function uses custom token auth (`verify_jwt=false`).'
+            echo '  - `20261003213000_add_hikvision_retention_lifecycle.sql`'
+            echo '- Gateway Edge Function uses custom machine-token auth (`verify_jwt=false`).'
+            if [[ '${{ steps.remote.outputs.ready }}' == 'true' ]]; then
+              echo '- Remote migration dry-run: **executed**'
+            else
+              echo '- Remote migration dry-run: **blocked — repository Supabase credentials are missing**'
+            fi
             echo ''
             echo '### Pending migration dry-run'
             echo '```text'
-            if [[ -f preflight/db-push-dry-run.txt ]]; then tail -n 120 preflight/db-push-dry-run.txt; else echo 'dry-run did not execute'; fi
+            if [[ -f preflight/db-push-dry-run.txt ]]; then
+              tail -n 120 preflight/db-push-dry-run.txt
+            else
+              echo 'remote dry-run not executed'
+            fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
