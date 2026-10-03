@@ -67,18 +67,86 @@ function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
 }
 
-function extractAmounts(text: string) {
+type Span = { start: number; end: number };
+
+type AmountCandidate = {
+  raw: string;
+  value: number;
+  currency: "IQD" | "USD" | "unknown";
+  score: number;
+  context: string;
+};
+
+function overlaps(start: number, end: number, spans: Span[]): boolean {
+  return spans.some((span) => start < span.end && end > span.start);
+}
+
+function collectProtectedSpans(text: string): Span[] {
+  const spans: Span[] = [];
+  const patterns = [
+    /(?:\+?964\s?7\d{2}|07\d{2})[\s-]?\d{3}[\s-]?\d{4}/g,
+    /\b20\d{2}[\/-](?:0?[1-9]|1[0-2])[\/-](?:0?[1-9]|[12]\d|3[01])\b/g,
+    /\b(?:0?[1-9]|[12]\d|3[01])[\/-](?:0?[1-9]|1[0-2])[\/-]20\d{2}\b/g,
+    /\b(?:invoice|receipt|ref(?:erence)?|serial|order|id|فاتورة|وصل|ژمارە)\s*[:#-]?\s*\d{4,}\b/gi,
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const start = match.index ?? 0;
+      spans.push({ start, end: start + match[0].length });
+    }
+  }
+  return spans;
+}
+
+function amountScore(
+  value: number,
+  currency: "IQD" | "USD" | "unknown",
+  context: string,
+  positionRatio: number,
+): number {
+  let score = 0;
+  const lower = context.toLowerCase();
+
+  if (currency !== "unknown") score += 5;
+  if (/(grand\s*total|total\s*due|net\s*total|amount\s*due|total|کۆی\s*گشتی|کۆی|بڕ|المبلغ\s*الإجمالي|الإجمالي|المجموع|المبلغ|الصافي)/i.test(lower)) {
+    score += 10;
+  }
+  if (/(pay(?:ment)?|paid|balance|debt|قەرز|پارە|دفع|مدفوع|رصيد)/i.test(lower)) score += 3;
+  if (/(subtotal|tax|vat|discount|خصم|ضريبة|داشکاندن)/i.test(lower)) score -= 2;
+  if (/(phone|mobile|tel|هاتف|موبايل|ژمارەی\s*مۆبایل)/i.test(lower)) score -= 12;
+  if (/(invoice|receipt|reference|serial|order\s*no|فاتورة|رقم|وصل|ژمارە)/i.test(lower)) score -= 6;
+
+  if (Number.isInteger(value) && value >= 1900 && value <= 2099) score -= 12;
+  if (currency === "IQD" && value >= 1000) score += 2;
+  if (currency === "USD" && value > 0 && value <= 1_000_000) score += 2;
+  if (positionRatio >= 0.55) score += 1;
+  return score;
+}
+
+function extractAmounts(text: string): AmountCandidate[] {
   const normalized = normalizeDigits(text).replace(/\u00a0/g, " ");
-  const results: Array<{ raw: string; value: number; currency: "IQD" | "USD" | "unknown" }> = [];
+  const protectedSpans = collectProtectedSpans(normalized);
+  const results: AmountCandidate[] = [];
   const pattern = /(?:\$\s*)?\b\d{1,3}(?:[,. ]\d{3})+(?:[.,]\d{1,2})?\b|(?:\$\s*)?\b\d{3,9}(?:[.,]\d{1,2})?\b/g;
+
   for (const match of normalized.matchAll(pattern)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    if (overlaps(start, end, protectedSpans)) continue;
+
     const raw = match[0].trim();
-    const nearbyStart = Math.max(0, (match.index ?? 0) - 12);
-    const nearbyEnd = Math.min(normalized.length, (match.index ?? 0) + raw.length + 12);
-    const nearby = normalized.slice(nearbyStart, nearbyEnd).toLowerCase();
+    const rawDigits = raw.replace(/\D/g, "");
+    if (rawDigits.length >= 10) continue;
+
+    const nearbyStart = Math.max(0, start - 36);
+    const nearbyEnd = Math.min(normalized.length, end + 36);
+    const nearby = normalized.slice(nearbyStart, nearbyEnd);
+    const nearbyLower = nearby.toLowerCase();
+
     let currency: "IQD" | "USD" | "unknown" = "unknown";
-    if (/\$|usd|دۆلار|دولار/.test(nearby)) currency = "USD";
-    if (/iqd|د\.ع|دینار|دينار/.test(nearby)) currency = "IQD";
+    if (/\$|usd|دۆلار|دولار/.test(nearbyLower)) currency = "USD";
+    if (/iqd|د\.ع|دینار|دينار/.test(nearbyLower)) currency = "IQD";
+
     const cleaned = raw
       .replace(/\$/g, "")
       .replace(/\s/g, "")
@@ -87,13 +155,33 @@ function extractAmounts(text: string) {
       .replace(",", ".");
     const value = Number(cleaned);
     if (!Number.isFinite(value) || value <= 0 || value > 10_000_000_000) continue;
-    results.push({ raw, value, currency });
+    if (Number.isInteger(value) && value >= 1900 && value <= 2099) continue;
+
+    const score = amountScore(
+      value,
+      currency,
+      nearby,
+      normalized.length > 0 ? start / normalized.length : 0,
+    );
+    if (score < -4) continue;
+    results.push({
+      raw,
+      value,
+      currency,
+      score,
+      context: nearby.replace(/\s+/g, " ").trim().slice(0, 120),
+    });
   }
-  const dedup = new Map<string, { raw: string; value: number; currency: "IQD" | "USD" | "unknown" }>();
+
+  const dedup = new Map<string, AmountCandidate>();
   for (const item of results) {
-    dedup.set(`${item.value}:${item.currency}`, item);
+    const key = `${item.value}:${item.currency}`;
+    const previous = dedup.get(key);
+    if (!previous || item.score > previous.score) dedup.set(key, item);
   }
-  return [...dedup.values()].slice(0, 20);
+  return [...dedup.values()]
+    .sort((a, b) => b.score - a.score || b.value - a.value)
+    .slice(0, 20);
 }
 
 function extractDates(text: string): string[] {
@@ -147,15 +235,16 @@ Deno.serve(async (req: Request) => {
 
     const { data: profile } = await admin
       .from("profiles")
-      .select("id, admin_id, role, active, approved, is_system_owner")
+      .select("id, admin_id, role, active, approved, is_system_owner, can_add_debts")
       .eq("id", user.id)
       .maybeSingle();
     if (!profile || profile.active !== true || profile.approved !== true) {
       return json({ error: "account_inactive" }, 403);
     }
-    if (!["admin", "employee"].includes(String(profile.role)) && profile.is_system_owner !== true) {
-      return json({ error: "forbidden" }, 403);
-    }
+    const role = String(profile.role ?? "");
+    const isOwner = profile.is_system_owner === true;
+    const canUseOcr = isOwner || role === "admin" || (role === "employee" && profile.can_add_debts === true);
+    if (!canUseOcr) return json({ error: "forbidden" }, 403);
 
     let body: Record<string, unknown>;
     try {
@@ -247,24 +336,15 @@ Deno.serve(async (req: Request) => {
     const amounts = extractAmounts(fullText);
     const dates = extractDates(fullText);
     const phones = extractPhones(fullText);
-    const bestAmount = amounts.length > 0
-      ? amounts.reduce((best, item) => item.value > best.value ? item : best, amounts[0])
-      : null;
+    const bestAmount = amounts.length > 0 ? amounts[0] : null;
 
     return json({
       text: fullText,
       text_length: fullText.length,
       confidence,
       detected_languages: unique(languages),
-      candidates: {
-        amounts,
-        dates,
-        phones,
-      },
-      suggested: {
-        amount: bestAmount,
-        date: dates[0] ?? null,
-      },
+      candidates: { amounts, dates, phones },
+      suggested: { amount: bestAmount, date: dates[0] ?? null },
       requires_confirmation: true,
       persisted: false,
       provider: "google_cloud_vision",
