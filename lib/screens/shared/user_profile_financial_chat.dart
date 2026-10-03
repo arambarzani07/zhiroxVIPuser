@@ -1155,6 +1155,14 @@ extension _UserProfileFinancialChat on _UserProfileScreenState {
                       const SizedBox(height: 5),
                       _buildReceiptPreview(record, receiptPath, color, isDark),
                     ],
+                    TransactionVideoButton(
+                      sourceType: item.isGeneralPayment
+                          ? 'general_payment'
+                          : isPayment
+                              ? 'payment'
+                              : 'debt',
+                      sourceId: record.id,
+                    ),
                     if (overdueLabel != null) ...[
                       const SizedBox(height: 5),
                       Container(

@@ -1,0 +1,172 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:zhirox/providers/auth_provider.dart';
+import 'package:zhirox/services/transaction_video_service.dart';
+
+/// Load evidence only when opened, so scrolling a financial history does not
+/// create a request for every transaction. Playback currently requires admin.
+class TransactionVideoButton extends StatelessWidget {
+  const TransactionVideoButton({
+    super.key,
+    required this.sourceType,
+    required this.sourceId,
+  });
+
+  final String sourceType;
+  final String sourceId;
+
+  @override
+  Widget build(BuildContext context) {
+    if (context.watch<AuthProvider>().userRole != 'admin') {
+      return const SizedBox.shrink();
+    }
+    return TextButton.icon(
+      icon: const Icon(Icons.videocam_outlined, size: 18),
+      label: const Text('ڤیدیۆی مامەڵە'),
+      onPressed: () => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) =>
+            _TransactionVideoPanel(sourceType: sourceType, sourceId: sourceId),
+      ),
+    );
+  }
+}
+
+class _TransactionVideoPanel extends StatefulWidget {
+  const _TransactionVideoPanel({
+    required this.sourceType,
+    required this.sourceId,
+  });
+  final String sourceType;
+  final String sourceId;
+
+  @override
+  State<_TransactionVideoPanel> createState() => _TransactionVideoPanelState();
+}
+
+class _TransactionVideoPanelState extends State<_TransactionVideoPanel> {
+  Map<String, dynamic>? _evidence;
+  bool _loading = true;
+  bool _opening = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final evidence = await TransactionVideoService.status(
+        widget.sourceType,
+        widget.sourceId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _evidence = evidence);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(
+        () => _error =
+            'دۆخی کلیپ وەرنەگیرا. ئینتەرنێت بپشکنەوە و دووبارە هەوڵ بدە.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _open() async {
+    setState(() {
+      _opening = true;
+      _error = null;
+    });
+    try {
+      final uri = await TransactionVideoService.playback(
+        widget.sourceType,
+        widget.sourceId,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw StateError('video_open_failed');
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(
+        () => _error =
+            'کلیپەکە نەکرایەوە. دۆخەکە نوێ بکەرەوە و دووبارە هەوڵ بدە.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _opening = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _evidence?['status']?.toString();
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'ڤیدیۆی مامەڵە',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            if (_loading)
+              const Center(child: CircularProgressIndicator())
+            else if (_error == null) ...[
+              Text(TransactionVideoService.statusLabel(status)),
+              if (_evidence?['channel_id'] != null) ...[
+                const SizedBox(height: 8),
+                Text('کەناڵی کامێرا: ${_evidence!['channel_id']}'),
+              ],
+              if (status == 'ready') ...[
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _opening ? null : _open,
+                  icon: const Icon(Icons.play_circle_outline),
+                  label: Text(_opening ? 'دەکرێتەوە…' : 'بینینی ڤیدیۆ'),
+                ),
+              ],
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _loading || _opening ? null : _load,
+              icon: const Icon(Icons.refresh),
+              label: const Text('نوێکردنەوەی دۆخی کلیپ'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

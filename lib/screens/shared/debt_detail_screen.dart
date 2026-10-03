@@ -6,6 +6,7 @@ import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/screens/shared/add_debt_screen.dart';
 import 'package:zhirox/screens/shared/financial_payment_flow.dart';
+import 'package:zhirox/widgets/transaction_video_button.dart';
 import 'package:zhirox/screens/shared/financial_document_actions.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -730,6 +731,16 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                     ],
                   ),
                 ),
+              ),
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TransactionVideoButton(
+                sourceType: 'debt',
+                sourceId: widget.debtId,
               ),
             ),
           ),
@@ -1490,6 +1501,10 @@ class _DebtDetailScreenState extends State<DebtDetailScreen>
                         ? AppDarkColors.textSecondary
                         : const Color(0xFF98A2B3),
                   ),
+                ),
+                TransactionVideoButton(
+                  sourceType: 'payment',
+                  sourceId: payment.id,
                 ),
                 if (note.isNotEmpty) ...[
                   const SizedBox(height: 2),
