@@ -51,7 +51,7 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
     return result;
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool resetForm = true}) async {
     if (mounted) {
       setState(() {
         _loading = true;
@@ -64,7 +64,7 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
       if (!mounted) return;
       setState(() {
         _state = state;
-        if (config != null) {
+        if (config != null && resetForm) {
           _enabled = config.enabled;
           _autoCapture = config.autoCapture;
           _channel = config.cashierChannelId.clamp(1, 256);
@@ -112,7 +112,9 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
   Future<void> _connectCloud() async {
     if (_working) return;
     final current = _state?.config?.hikconnectServerAddress ?? '';
-    final initialServer = _cloudServers.values.contains(current) ? current : null;
+    final initialServer = _cloudServers.values.contains(current)
+        ? current
+        : null;
     final appKeyController = TextEditingController();
     final secretKeyController = TextEditingController();
     String? selectedServer = initialServer;
@@ -131,7 +133,7 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'هیچ PC یان Gateway ـێک لە مارکێت پێویست نییە. App Key و Secret Key تەنها بۆ backend دەنێردرێن و لە Supabase Vault پارێزراو دەبن.',
+                    'ئەم ڕێگایە پێویستی بە APIی فەرمی و پشتگیری ئامێرەکە هەیە. کلیلەکانی Cloud جیاوازن لە پاسۆردی NVR و تۆکنی Gateway؛ لە سێرڤەر هەڵدەگیرێن.',
                   ),
                   const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
@@ -139,7 +141,8 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                     isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'ناوچە / سێرڤەری Hik-Connect Team',
-                      helperText: 'هەمان ناوچەی Team / API Integration هەڵبژێرە',
+                      helperText:
+                          'هەمان ناوچەی Team / API Integration هەڵبژێرە',
                     ),
                     items: _cloudServers.entries
                         .map(
@@ -193,7 +196,9 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                 final server = selectedServer;
                 final appKey = appKeyController.text.trim();
                 final secretKey = secretKeyController.text.trim();
-                if (server == null || appKey.length < 8 || secretKey.length < 8) {
+                if (server == null ||
+                    appKey.length < 8 ||
+                    secretKey.length < 8) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('سێرڤەر، App Key و Secret Key پڕ بکەرەوە.'),
@@ -338,7 +343,8 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
 
   Future<void> _useLocalFallback() async {
     if (_working) return;
-    final ok = await showDialog<bool>(
+    final ok =
+        await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('گۆڕین بۆ Local Gateway'),
@@ -374,6 +380,28 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
 
   Future<void> _issueToken() async {
     if (_working) return;
+    if (_state?.gateway?.paired == true) {
+      final replace = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('گۆڕینی تۆکنی Gateway'),
+          content: const Text(
+            'تۆکنێک پێشتر تۆمار کراوە. گۆڕینی تۆکن پەیوەندی Gatewayی ئێستا دەوەستێنێت تا تۆکنی نوێ لە Windows تۆمار بکەیت. بۆ نوێکردنەوەی دۆخ پێویست بە گۆڕینی تۆکن نییە.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('پاشگەزبوونەوە'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('گۆڕینی تۆکن'),
+            ),
+          ],
+        ),
+      );
+      if (replace != true || !mounted) return;
+    }
     setState(() {
       _working = true;
       _error = null;
@@ -445,9 +473,19 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
     final gateway = _state?.gateway;
     final cloud = _state?.cloud;
     final cloudMode = config?.usesCloud == true;
-    final cloudReady = cloudMode &&
+    final cloudReady =
+        cloudMode &&
         cloud?.healthy == true &&
+        cloud?.lastTestAt != null &&
         (config?.hikconnectCameraId.isNotEmpty ?? false);
+    final dirty =
+        config != null &&
+        (_enabled != config.enabled ||
+            _autoCapture != config.autoCapture ||
+            _channel != config.cashierChannelId ||
+            _pre != config.preSeconds ||
+            _post != config.postSeconds ||
+            _retention != config.retentionDays);
     final preOptions = _optionsWithCurrent(
       _pre,
       const [0, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300],
@@ -468,96 +506,30 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Hikvision و ڤیدیۆی مامەلە')),
+      appBar: AppBar(
+        title: const Text('Hikvision و ڤیدیۆی مامەلە'),
+        actions: [
+          IconButton(
+            tooltip: 'نوێکردنەوەی دۆخ',
+            onPressed: _loading || _working
+                ? null
+                : () => _load(resetForm: false),
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
       body: _loading && _state == null
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _load,
+              onRefresh: () => _load(resetForm: false),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _CloudStatusCard(
-                    cloudMode: cloudMode,
-                    ready: cloudReady,
-                    configured: cloud?.configured == true,
-                    cameraName: config?.hikconnectCameraName ?? '',
-                    channel: config?.cashierChannelId ?? 1,
+                  _CaptureStatusCard(
+                    state: _state,
+                    lastSeen: _date(gateway?.lastSeenAt),
                     lastTest: _date(cloud?.lastTestAt),
-                    queued: gateway?.queued ?? 0,
-                    processing: gateway?.processing ?? 0,
-                    readyCount: gateway?.ready ?? 0,
-                    failed: gateway?.failed ?? 0,
-                  ),
-                  const SizedBox(height: 14),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Hik-Connect Cloud',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w900),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'ڕێگای سەرەکی: iPhone → ZHIROX → Hik-Connect Cloud → NVR. هیچ PC، Raspberry Pi یان Port Forwarding لە مارکێت پێویست نییە.',
-                          ),
-                          const SizedBox(height: 14),
-                          _Info(
-                            'دۆخی Cloud',
-                            cloud?.configured == true
-                                ? (cloudReady ? 'چالاک ✅' : 'پەیوەستە')
-                                : 'هێشتا پەیوەست نییە',
-                          ),
-                          _Info(
-                            'کامێرای کاشێر',
-                            (config?.hikconnectCameraName.isNotEmpty ?? false)
-                                ? config!.hikconnectCameraName
-                                : '—',
-                          ),
-                          _Info(
-                            'Channel',
-                            (config?.hikconnectCameraId.isNotEmpty ?? false)
-                                ? '${config!.cashierChannelId}'
-                                : '—',
-                          ),
-                          _Info('کۆتا تاقیکردنەوە', _date(cloud?.lastTestAt)),
-                          if (cloud?.lastError?.isNotEmpty == true) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              'Cloud: ${cloud!.lastError}',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 14),
-                          FilledButton.icon(
-                            onPressed: _working ? null : _connectCloud,
-                            icon: const Icon(Icons.cloud_done_rounded),
-                            label: Text(
-                              cloud?.configured == true
-                                  ? 'نوێکردنەوەی پەیوەندی Cloud'
-                                  : 'پەیوەستکردنی Hik-Connect Cloud',
-                            ),
-                          ),
-                          if (cloud?.configured == true) ...[
-                            const SizedBox(height: 10),
-                            OutlinedButton.icon(
-                              onPressed: _working ? null : _changeCloudCamera,
-                              icon: const Icon(Icons.videocam_rounded),
-                              label: const Text('هەڵبژاردن / گۆڕینی کامێرای کاشێر'),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
                   ),
                   const SizedBox(height: 14),
                   Card(
@@ -568,23 +540,22 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                         children: [
                           Text(
                             'ڕێکخستنی ڤیدیۆی مامەلە',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
+                            style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.w900),
                           ),
                           const SizedBox(height: 10),
-                          _Info('مۆدێلی NVR', config?.nvrModel ?? '—'),
-                          _Info('Firmware', config?.nvrFirmware ?? '—'),
-                          _Info('Timezone', config?.timezone ?? 'Asia/Baghdad'),
-                          const Divider(height: 26),
+                          Text('کۆی ماوەی کلیپ: ${_pre + _post} چرکە'),
+                          const SizedBox(height: 8),
                           SwitchListTile.adaptive(
                             contentPadding: EdgeInsets.zero,
                             value: _enabled,
                             onChanged: _working
                                 ? null
                                 : (value) => setState(() => _enabled = value),
-                            title: const Text('چالاککردنی Hikvision'),
+                            title: const Text('وەرگرتنی ڤیدیۆی مامەڵە'),
+                            subtitle: const Text(
+                              'ئەم ڕێکخستنە تەنها بۆ ZHIROX ـە.',
+                            ),
                           ),
                           SwitchListTile.adaptive(
                             contentPadding: EdgeInsets.zero,
@@ -592,7 +563,7 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                             onChanged: _working
                                 ? null
                                 : (value) =>
-                                    setState(() => _autoCapture = value),
+                                      setState(() => _autoCapture = value),
                             title: const Text('بەستنی خۆکاری ڤیدیۆ بە مامەلە'),
                           ),
                           if (!cloudMode) ...[
@@ -601,12 +572,12 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                               isExpanded: true,
                               menuMaxHeight: 420,
                               decoration: const InputDecoration(
-                                labelText: 'کامێرای کاشێر',
+                                labelText: 'کەناڵی کامێرای کاشێر لە NVR',
+                                helperText:
+                                    'ژمارەکە لە شاشەی NVR پشتڕاست بکەرەوە.',
                               ),
                               items: [
-                                for (var channel = 1;
-                                    channel <= 256;
-                                    channel++)
+                                for (var channel = 1; channel <= 256; channel++)
                                   DropdownMenuItem<int>(
                                     value: channel,
                                     child: Text('Channel $channel'),
@@ -614,9 +585,8 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                               ],
                               onChanged: _working
                                   ? null
-                                  : (value) => setState(
-                                        () => _channel = value ?? 1,
-                                      ),
+                                  : (value) =>
+                                        setState(() => _channel = value ?? 1),
                             ),
                             const SizedBox(height: 12),
                           ],
@@ -638,9 +608,8 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                                       .toList(),
                                   onChanged: _working
                                       ? null
-                                      : (value) => setState(
-                                            () => _pre = value ?? 15,
-                                          ),
+                                      : (value) =>
+                                            setState(() => _pre = value ?? 15),
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -660,9 +629,8 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                                       .toList(),
                                   onChanged: _working
                                       ? null
-                                      : (value) => setState(
-                                            () => _post = value ?? 30,
-                                          ),
+                                      : (value) =>
+                                            setState(() => _post = value ?? 30),
                                 ),
                               ),
                             ],
@@ -671,7 +639,8 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                           DropdownButtonFormField<int>(
                             initialValue: _retention,
                             decoration: const InputDecoration(
-                              labelText: 'ماوەی هەڵگرتنی ڤیدیۆ',
+                              labelText: 'ماوەی هەڵگرتنی کلیپ لە ZHIROX',
+                              helperText: 'ماوەی هەڵگرتنی تۆماری NVR ناگۆڕێت.',
                             ),
                             items: retentionOptions
                                 .map(
@@ -683,15 +652,22 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                                 .toList(),
                             onChanged: _working
                                 ? null
-                                : (value) => setState(
-                                      () => _retention = value ?? 90,
-                                    ),
+                                : (value) =>
+                                      setState(() => _retention = value ?? 90),
                           ),
                           const SizedBox(height: 16),
                           FilledButton.icon(
-                            onPressed: _working ? null : _save,
+                            onPressed: _working || _loading || !dirty
+                                ? null
+                                : _save,
                             icon: const Icon(Icons.save_outlined),
-                            label: const Text('پاشەکەوتکردنی ڕێکخستن'),
+                            label: Text(
+                              config == null
+                                  ? 'ڕێکخستنەکان هێشتا وەرنەگیراون'
+                                  : dirty
+                                  ? 'پاشەکەوتکردنی گۆڕانکاری'
+                                  : 'ڕێکخستنەکان پاشەکەوت کراون',
+                            ),
                           ),
                         ],
                       ),
@@ -700,17 +676,116 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                   const SizedBox(height: 14),
                   Card(
                     child: ExpansionTile(
+                      key: ValueKey('cloud-settings-$cloudMode'),
+                      initiallyExpanded: cloudMode,
+                      title: const Text('ڕێکخستنی Hik-Connect Cloud'),
+                      subtitle: Text(
+                        cloudMode
+                            ? 'ڕێگای هەڵبژێردراو بۆ کلیپ'
+                            : 'ڕێگای جێگرەوە؛ ئێستا بەکارناهێنرێت',
+                      ),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Hik-Connect Cloud',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                cloudMode
+                                    ? 'ڕێگای هەڵبژێردراو: Hik-Connect Cloud. وەرگرتنی کلیپ پێویستی بە دەستگەیشتنی API و پشتگیری NVR هەیە.'
+                                    : 'Cloud ئێستا بۆ وەرگرتنی کلیپ بەکارناهێنرێت. ڕێگای هەڵبژێردراو Local Gateway ـە.',
+                              ),
+                              const SizedBox(height: 14),
+                              _Info(
+                                'دۆخی Cloud',
+                                cloud?.configured == true
+                                    ? (!cloudMode
+                                          ? 'بۆ کلیپ ناچالاکە'
+                                          : cloudReady
+                                          ? 'API ئامادەیە؛ کلیپ دەبێت تاقی بکرێتەوە'
+                                          : cloud?.lastError?.isNotEmpty == true
+                                          ? 'پەیوەندی API هەڵەی هەیە'
+                                          : 'کلیل تۆمار کراوە؛ کامێرا هەڵبژێرە')
+                                    : 'هێشتا پەیوەست نییە',
+                              ),
+                              _Info(
+                                'کامێرای کاشێر',
+                                (config?.hikconnectCameraName.isNotEmpty ??
+                                        false)
+                                    ? config!.hikconnectCameraName
+                                    : '—',
+                              ),
+                              _Info(
+                                'Channel',
+                                (config?.hikconnectCameraId.isNotEmpty ?? false)
+                                    ? '${config!.cashierChannelId}'
+                                    : '—',
+                              ),
+                              _Info(
+                                'کۆتا تاقیکردنەوە',
+                                _date(cloud?.lastTestAt),
+                              ),
+                              if (cloudMode &&
+                                  cloud?.lastError?.isNotEmpty == true) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Cloud: ${cloud!.lastError}',
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 14),
+                              FilledButton.icon(
+                                onPressed: _working ? null : _connectCloud,
+                                icon: const Icon(Icons.cloud_done_rounded),
+                                label: Text(
+                                  cloud?.configured == true
+                                      ? 'نوێکردنەوەی پەیوەندی Cloud'
+                                      : 'پەیوەستکردنی Hik-Connect Cloud',
+                                ),
+                              ),
+                              if (cloud?.configured == true) ...[
+                                const SizedBox(height: 10),
+                                OutlinedButton.icon(
+                                  onPressed: _working
+                                      ? null
+                                      : _changeCloudCamera,
+                                  icon: const Icon(Icons.videocam_rounded),
+                                  label: const Text(
+                                    'هەڵبژاردن / گۆڕینی کامێرای کاشێر',
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Card(
+                    child: ExpansionTile(
                       title: const Text(
-                        'Fallback / Local Gateway',
+                        'ڕێکخستنی Local Gateway',
                         style: TextStyle(fontWeight: FontWeight.w800),
                       ),
-                      subtitle: const Text(
-                        'تەنها ئەگەر Hik-Connect Cloud بەردەست نەبێت',
+                      subtitle: Text(
+                        cloudMode
+                            ? 'ڕێگای جێگرەوە بە کۆمپیۆتەری مارکێت'
+                            : 'ڕێگای ئێستا بۆ وەرگرتنی کلیپ',
                       ),
                       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                       children: [
                         const Text(
-                          'ئەم ڕێگایە پێویستی بە ئامێرێکی هەمیشە چالاک لە تۆڕی مارکێت هەیە. بۆ بەکارهێنانی ئاسایی تۆ Cloud هەڵبژێرە.',
+                          'کۆمپیۆتەری مارکێت دەبێت هەڵکراوە بێت، Gateway کار بکات و دەستی بە NVR و ئینتەرنێت بگات. ئەمە پەیوەندی ئەپی Hik-Connect ناگۆڕێت.',
                         ),
                         const SizedBox(height: 12),
                         if (cloudMode)
@@ -723,8 +798,29 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                         TextButton.icon(
                           onPressed: _working ? null : _issueToken,
                           icon: const Icon(Icons.key_rounded),
-                          label: const Text('دروستکردنی Local Gateway Token'),
+                          label: Text(
+                            gateway?.paired == true
+                                ? 'گۆڕینی Gateway Token'
+                                : 'دروستکردنی Gateway Token',
+                          ),
                         ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Card(
+                    child: ExpansionTile(
+                      title: const Text('وردەکارییەکانی ئامێر'),
+                      childrenPadding: const EdgeInsets.all(16),
+                      children: [
+                        _Info('مۆدێلی NVR', config?.nvrModel ?? '—'),
+                        _Info('Firmware', config?.nvrFirmware ?? '—'),
+                        _Info('Timezone', config?.timezone ?? '—'),
+                        if (!cloudMode)
+                          _Info(
+                            'وەشانی Gateway',
+                            gateway?.gatewayVersion ?? '—',
+                          ),
                       ],
                     ),
                   ),
@@ -769,64 +865,77 @@ class _Info extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
-            Flexible(
-              child: Text(
-                value,
-                textAlign: TextAlign.end,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
+          ),
         ),
-      );
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
-class _CloudStatusCard extends StatelessWidget {
-  const _CloudStatusCard({
-    required this.cloudMode,
-    required this.ready,
-    required this.configured,
-    required this.cameraName,
-    required this.channel,
+class _CaptureStatusCard extends StatelessWidget {
+  const _CaptureStatusCard({
+    required this.state,
+    required this.lastSeen,
     required this.lastTest,
-    required this.queued,
-    required this.processing,
-    required this.readyCount,
-    required this.failed,
   });
 
-  final bool cloudMode;
-  final bool ready;
-  final bool configured;
-  final String cameraName;
-  final int channel;
+  final HikvisionAdminState? state;
+  final String lastSeen;
   final String lastTest;
-  final int queued;
-  final int processing;
-  final int readyCount;
-  final int failed;
 
   @override
   Widget build(BuildContext context) {
-    final color = ready
-        ? Colors.green
-        : (configured ? Colors.orange : Colors.grey);
-    final title = ready
-        ? 'Hik-Connect Cloud چالاکە ✅'
-        : configured
-            ? 'Cloud پەیوەستە — کامێرا هەڵبژێرە'
-            : 'Hik-Connect Cloud هێشتا پەیوەست نییە';
+    final config = state?.config;
+    final gateway = state?.gateway;
+    final cloud = state?.cloud;
+    final cloudMode = config?.usesCloud == true;
+    final seen = gateway?.lastSeenAt;
+    final age = seen == null ? null : DateTime.now().difference(seen);
+    final gatewayOnline =
+        gateway?.active == true &&
+        age != null &&
+        !age.isNegative &&
+        age.inMinutes < 3;
+    final cloudReady =
+        cloud?.healthy == true &&
+        cloud?.lastTestAt != null &&
+        (config?.hikconnectCameraId.isNotEmpty ?? false);
+    final connected = cloudMode ? cloudReady : gatewayOnline;
+    final enabled = config?.enabled == true;
+    final color = !enabled || config == null
+        ? Colors.grey
+        : connected
+        ? Colors.blue
+        : Colors.orange;
+    final title = config == null
+        ? 'دۆخی پەیوەندی هێشتا بەردەست نییە'
+        : !enabled
+        ? 'وەرگرتنی کلیپ ناچالاکە'
+        : cloudMode
+        ? cloudReady
+              ? 'Cloud API ئامادەیە'
+              : 'Cloud API هێشتا ئامادە نییە'
+        : gatewayOnline
+        ? 'Gateway بە ZHIROX پەیوەستە'
+        : gateway?.paired == true
+        ? 'Gateway تۆمار کراوە؛ پەیامی نوێ نەهاتووە'
+        : 'Gateway هێشتا تۆمار نەکراوە';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -835,12 +944,12 @@ class _CloudStatusCard extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Icon(
-                ready ? Icons.cloud_done_rounded : Icons.cloud_outlined,
+                cloudMode ? Icons.cloud_outlined : Icons.computer_rounded,
                 color: color,
               ),
               const SizedBox(width: 10),
@@ -852,22 +961,61 @@ class _CloudStatusCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
-            cloudMode && cameraName.isNotEmpty
-                ? '$cameraName • Channel $channel'
-                : 'هیچ ئامێری زیادە لە مارکێت پێویست نییە',
+            'ڕێگای کلیپ: ${config == null
+                ? 'هێشتا نادیارە'
+                : cloudMode
+                ? 'Hik-Connect Cloud'
+                : 'Local Gateway'}',
           ),
-          if (lastTest != '—') Text('کۆتا تاقیکردنەوە: $lastTest'),
+          if (config != null)
+            Text('کامێرای کاشێر: Channel ${config.cashierChannelId}'),
+          Text(
+            cloudMode
+                ? 'کۆتا تاقیکردنەوەی API: $lastTest'
+                : 'کۆتا پەیامی Gateway: $lastSeen',
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'پەیوەندی Gateway یان API بە تەنها سەرکەوتنی کلیپ پشتڕاست ناکاتەوە؛ کلیپی مامەڵە دەبێت بکرێتەوە.',
+          ),
+          if (config?.autoCapture == false)
+            const Text('بەستنی خۆکاری ڤیدیۆ بە مامەڵە ناچالاکە.'),
+          if ((gateway?.failed ?? 0) > 0)
+            const Text(
+              'هەندێک کلیپ سەرکەوتوو نەبوون؛ لۆگی Gateway بپشکنە بۆ هۆکاری هەڵە.',
+            ),
+          if (!cloudMode && gateway?.lastError?.isNotEmpty == true)
+            Text(
+              'Gateway: ${gateway!.lastError}',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          const SizedBox(height: 12),
+          Text(
+            config == null
+                ? 'هەنگاوی داهاتوو: دۆخ نوێ بکەرەوە تا ڕێکخستنەکان وەربگیرێن.'
+                : !enabled || config.autoCapture == false
+                ? 'هەنگاوی داهاتوو: بۆ کلیپی مامەڵە نوێکان، وەرگرتنی ڤیدیۆ و بەستنی خۆکار چالاک بکە.'
+                : !cloudMode && !gatewayOnline
+                ? 'هەنگاوی داهاتوو: لە Windows دڵنیابە Gateway کار دەکات و ئینتەرنێت هەیە.'
+                : cloudMode && !cloudReady
+                ? 'هەنگاوی داهاتوو: لە ڕێکخستنی Cloud، دەستگەیشتنی API و کامێرای کاشێر بپشکنە.'
+                : (gateway?.failed ?? 0) > 0
+                ? 'هەنگاوی داهاتوو: هۆکاری کلیپە سەرنەکەوتووەکان بپشکنە؛ دووبارە دروستکردنی تۆکن چارەسەری کلیپ نییە.'
+                : 'هەنگاوی داهاتوو: کلیپی مامەڵەیەک لە ZHIROX بکەرەوە بۆ پشتڕاستکردنەوە.',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _Chip('Queue', queued),
-              _Chip('Processing', processing),
-              _Chip('Ready', readyCount),
-              _Chip('Failed', failed),
+              _Chip('چاوەڕوان', gateway?.queued ?? 0),
+              _Chip('لە کاردایە', gateway?.processing ?? 0),
+              _Chip('ئامادە', gateway?.ready ?? 0),
+              _Chip('سەرنەکەوتوو', gateway?.failed ?? 0),
+              _Chip('تۆمار نەدۆزرایەوە', gateway?.missing ?? 0),
             ],
           ),
         ],
@@ -884,14 +1032,14 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(99),
-        ),
-        child: Text(
-          '$label: $value',
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.8),
+      borderRadius: BorderRadius.circular(99),
+    ),
+    child: Text(
+      '$label: $value',
+      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+    ),
+  );
 }

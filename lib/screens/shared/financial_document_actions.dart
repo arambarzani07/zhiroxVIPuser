@@ -25,10 +25,7 @@ class _ReceiptIdentity {
 class FinancialDocumentActions {
   FinancialDocumentActions._();
 
-  static String receiptUrl(
-    RecordModel debt, {
-    String? receiptPath,
-  }) {
+  static String receiptUrl(RecordModel debt, {String? receiptPath}) {
     final path = (receiptPath ?? debt.getStringValue('receipt_image')).trim();
     if (path.isEmpty) return '';
     return PBService.pb.getFileUrl(debt, path).toString();
@@ -67,9 +64,7 @@ class FinancialDocumentActions {
     );
   }
 
-  static Future<MarketReceiptSettings> _settings(
-    _ReceiptIdentity identity,
-  ) {
+  static Future<MarketReceiptSettings> _settings(_ReceiptIdentity identity) {
     return ReceiptSettingsService.load(
       adminId: identity.adminId,
       fallbackMarketName: identity.marketName,
@@ -127,7 +122,7 @@ class FinancialDocumentActions {
         context: context,
         showDragHandle: true,
         builder: (sheetContext) => SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -138,21 +133,21 @@ class FinancialDocumentActions {
                     'پسوولەی فەرمی',
                     style: TextStyle(fontWeight: FontWeight.w800),
                   ),
-                  subtitle: Text('چاپ یان Share بە PDF / Image'),
+                  subtitle: Text('شێوازی چاپ یان هاوبەشکردنی پسووڵە هەڵبژێرە.'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.print_outlined),
-                  title: const Text('چاپ / PDF'),
+                  title: const Text('پێشبینین و چاپ'),
                   onTap: () => Navigator.pop(sheetContext, 'print'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.picture_as_pdf_outlined),
-                  title: const Text('Share PDF'),
+                  title: const Text('هاوبەشکردن بە PDF'),
                   onTap: () => Navigator.pop(sheetContext, 'share_pdf'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.image_outlined),
-                  title: const Text('Share Image'),
+                  title: const Text('هاوبەشکردن بە وێنە'),
                   onTap: () => Navigator.pop(sheetContext, 'share_image'),
                 ),
               ],

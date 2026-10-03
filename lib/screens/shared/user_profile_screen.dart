@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pocketbase/pocketbase.dart';
@@ -181,7 +182,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_subscribeFinancialRealtime());
     });
-    _connectivitySub = ConnectivityService.instance.statusStream.listen((online) {
+    _connectivitySub = ConnectivityService.instance.statusStream.listen((
+      online,
+    ) {
       if (online && mounted) _loadData();
     });
   }
@@ -217,10 +220,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       final user = await PBService.getUser(widget.userId);
       if (!mounted) return;
       final role = user.getStringValue('role');
-      if (role == 'customer' && context.read<AuthProvider>().userRole == 'admin') {
+      if (role == 'customer' &&
+          context.read<AuthProvider>().userRole == 'admin') {
         try {
-          final raw = await PBService.client.rpc('get_my_customer_merge_group',
-              params: {'p_customer_id': widget.userId});
+          final raw = await PBService.client.rpc(
+            'get_my_customer_merge_group',
+            params: {'p_customer_id': widget.userId},
+          );
           if (raw is Map) _mergeGroup = Map<String, dynamic>.from(raw);
         } catch (_) {
           // Existing profiles still work while the new migration is rolled out.
@@ -250,7 +256,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         final snapshot = customerData[0];
         final page = customerData[1];
         debts = List<RecordModel>.from(page['debts'] as List? ?? const []);
-        payments = List<RecordModel>.from(page['payments'] as List? ?? const []);
+        payments = List<RecordModel>.from(
+          page['payments'] as List? ?? const [],
+        );
         financialEvents = List<RecordModel>.from(
           page['financialEvents'] as List? ?? const [],
         );
@@ -305,13 +313,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           _canAddDebts = user.getBoolValue('can_add_debts');
           _canDeleteDebts = user.getBoolValue('can_delete_debts');
           _canRecordPayments = user.getBoolValue('can_record_payments');
-          _canViewFinancialReports = user.getBoolValue('can_view_financial_reports');
+          _canViewFinancialReports = user.getBoolValue(
+            'can_view_financial_reports',
+          );
           _canExportData = user.getBoolValue('can_export_data');
           _canImportData = user.getBoolValue('can_import_data');
           _canRefundPayments = user.getBoolValue('can_refund_payments');
           _canRestoreDebts = user.getBoolValue('can_restore_debts');
           _canManageReceipts = user.getBoolValue('can_manage_receipts');
-          _canManageNotifications = user.getBoolValue('can_manage_notifications');
+          _canManageNotifications = user.getBoolValue(
+            'can_manage_notifications',
+          );
           _canApproveCustomers = user.getBoolValue('can_approve_customers');
           _canManageEmployees = user.getBoolValue('can_manage_employees');
           _canViewAuditLog = user.getBoolValue('can_view_audit_log');
@@ -319,15 +331,23 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           _canManageDaftarSync = user.getBoolValue('can_manage_daftar_sync');
           _canManageSubscription = user.getBoolValue('can_manage_subscription');
           _canViewDashboard = user.getBoolValue('can_view_dashboard');
-          _canViewRecentActivity = user.getBoolValue('can_view_recent_activity');
+          _canViewRecentActivity = user.getBoolValue(
+            'can_view_recent_activity',
+          );
           _canViewTransactions = user.getBoolValue('can_view_transactions');
           _canEditPayments = user.getBoolValue('can_edit_payments');
           _canDeletePayments = user.getBoolValue('can_delete_payments');
           _canCreateStatements = user.getBoolValue('can_create_statements');
-          _canManageCustomerLinks = user.getBoolValue('can_manage_customer_links');
+          _canManageCustomerLinks = user.getBoolValue(
+            'can_manage_customer_links',
+          );
           _canPinCustomers = user.getBoolValue('can_pin_customers');
-          _canManageVipCustomers = user.getBoolValue('can_manage_vip_customers');
-          _canMergeCustomerIdentities = user.getBoolValue('can_merge_customer_identities');
+          _canManageVipCustomers = user.getBoolValue(
+            'can_manage_vip_customers',
+          );
+          _canMergeCustomerIdentities = user.getBoolValue(
+            'can_merge_customer_identities',
+          );
           _canViewMarketRates = user.getBoolValue('can_view_market_rates');
           _canViewIntelligence = user.getBoolValue('can_view_intelligence');
           _canManageCollections = user.getBoolValue('can_manage_collections');
@@ -361,8 +381,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _financialHistoryError = null;
         _employeeStats = {};
         _isLoading = false;
-        _loadError =
-            'نەتوانرا زانیارییەکانی پروفایل باربکرێن. پەیوەندی ئینتەرنێت بپشکنە.';
+        _loadError = 'نەتوانرا زانیارییەکانی پروفایل باربکرێن. پەیوەندی ئینتەرنێت بپشکنە.';
       });
     } finally {
       _loadInFlight = false;
@@ -469,7 +488,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (!mounted) return;
       setState(() {
         _debts = List<RecordModel>.from(page['debts'] as List? ?? const []);
-        _payments = List<RecordModel>.from(page['payments'] as List? ?? const []);
+        _payments = List<RecordModel>.from(
+          page['payments'] as List? ?? const [],
+        );
         _financialEvents = List<RecordModel>.from(
           page['financialEvents'] as List? ?? const [],
         );
@@ -525,7 +546,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     List<RecordModel> current,
     List<RecordModel> incoming,
   ) {
-    final byId = <String, RecordModel>{for (final item in current) item.id: item};
+    final byId = <String, RecordModel>{
+      for (final item in current) item.id: item,
+    };
     for (final item in incoming) {
       byId[item.id] = item;
     }
@@ -537,11 +560,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     bool showError = true,
   }) async {
     if (!mounted || !_financialTimelineHasMore) return true;
-    if (_financialHistoryLoading || _financialTimelineCursor == null) return false;
+    if (_financialHistoryLoading || _financialTimelineCursor == null)
+      return false;
 
     final hadScroll = preserveScroll && _profileScrollController.hasClients;
-    final oldPixels = hadScroll ? _profileScrollController.position.pixels : 0.0;
-    final oldMax = hadScroll ? _profileScrollController.position.maxScrollExtent : 0.0;
+    final oldPixels = hadScroll
+        ? _profileScrollController.position.pixels
+        : 0.0;
+    final oldMax = hadScroll
+        ? _profileScrollController.position.maxScrollExtent
+        : 0.0;
     setState(() {
       _financialHistoryLoading = true;
       _financialHistoryError = null;
@@ -602,9 +630,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
-  Future<bool> _ensureAllFinancialHistoryLoaded({
-    bool showError = true,
-  }) async {
+  Future<bool> _ensureAllFinancialHistoryLoaded({bool showError = true}) async {
     var pages = 0;
     while (mounted && _financialTimelineHasMore) {
       if (pages++ > 10000) return false;
@@ -672,9 +698,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final confirm = await AppHelpers.showConfirmDialog(
       context,
       title: newActive ? 'چالاککردن' : 'ناچالاککردن',
-      message: newActive
-          ? 'ئایا دڵنیایت لە چالاککردنی ئەم کارمەندە؟'
-          : 'ئایا دڵنیایت لە ناچالاککردنی ئەم کارمەندە؟\nکارمەند ناتوانێت داخڵ ببێت.',
+      message: newActive ? 'ئایا دڵنیایت لە چالاککردنی ئەم کارمەندە؟' : 'ئایا دڵنیایت لە ناچالاککردنی ئەم کارمەندە؟\nکارمەند ناتوانێت داخڵ ببێت.',
     );
     if (!confirm) return;
 
@@ -689,7 +713,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
+        AppHelpers.showSnackBar(
+          context,
+          AppHelpers.backendErrorMessage(e),
+          isError: true,
+        );
       }
     }
   }
@@ -721,7 +749,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
+        AppHelpers.showSnackBar(
+          context,
+          AppHelpers.backendErrorMessage(e),
+          isError: true,
+        );
       }
     }
     if (mounted) setState(() => _isSaving = false);
@@ -756,7 +788,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.cloud_off_rounded, size: 42, color: Colors.orange),
+                const Icon(
+                  Icons.cloud_off_rounded,
+                  size: 42,
+                  color: Colors.orange,
+                ),
                 const SizedBox(height: 12),
                 Text(
                   _loadError!,
@@ -808,7 +844,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AppColors.primary, AppColors.primary.withValues(alpha: 0.88)],
+                  colors: [
+                    AppColors.primary,
+                    AppColors.primary.withValues(alpha: 0.88),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -891,8 +930,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 ),
                               ),
                               onSelected: (value) async {
-                                if (value == 'read_link' || value == 'revoke_link') {
-                                  await _manageReadLink(revoke: value == 'revoke_link');
+                                if (value == 'read_link' ||
+                                    value == 'revoke_link') {
+                                  await _manageReadLink(
+                                    revoke: value == 'revoke_link',
+                                  );
                                   return;
                                 }
                                 if (value == 'notify') {
@@ -904,11 +946,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   return;
                                 }
                                 if (value == 'logout') {
-                                  final confirm = await AppHelpers.showConfirmDialog(
-                                    context,
-                                    title: AppStrings.logout,
-                                    message: 'دڵنیایت لە چوونەدەرەوە؟',
-                                  );
+                                  final confirm =
+                                      await AppHelpers.showConfirmDialog(
+                                        context,
+                                        title: AppStrings.logout,
+                                        message: 'دڵنیایت لە چوونەدەرەوە؟',
+                                      );
                                   if (confirm && mounted) await auth.logout();
                                   return;
                                 }
@@ -917,7 +960,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 }
                               },
                               itemBuilder: (_) => [
-                                if (_isCustomer && auth.userRole == 'admin') ...[
+                                if (_isCustomer &&
+                                    auth.userRole == 'admin') ...[
                                   const PopupMenuItem<String>(
                                     value: 'read_link',
                                     child: Text('لینکی خوێندنەوەی کڕیار'),
@@ -934,7 +978,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     value: 'notify',
                                     child: Row(
                                       children: [
-                                        Icon(Icons.notifications_none_rounded, size: 19),
+                                        Icon(
+                                          Icons.notifications_none_rounded,
+                                          size: 19,
+                                        ),
                                         SizedBox(width: 10),
                                         Text('ناردنی ئاگادارکردنەوە'),
                                       ],
@@ -973,11 +1020,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     value: 'delete',
                                     child: Row(
                                       children: [
-                                        Icon(Icons.delete_outline_rounded,
-                                            size: 19, color: Colors.red),
+                                        Icon(
+                                          Icons.delete_outline_rounded,
+                                          size: 19,
+                                          color: Colors.red,
+                                        ),
                                         SizedBox(width: 10),
-                                        Text('سڕینەوە',
-                                            style: TextStyle(color: Colors.red)),
+                                        Text(
+                                          'سڕینەوە',
+                                          style: TextStyle(color: Colors.red),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -1033,8 +1085,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 phone.isNotEmpty
                                     ? Icons.phone_android
                                     : legacySourceId != null
-                                        ? Icons.badge_outlined
-                                        : Icons.phone_disabled_outlined,
+                                    ? Icons.badge_outlined
+                                    : Icons.phone_disabled_outlined,
                                 size: 14,
                                 color: Colors.white.withValues(alpha: 0.7),
                               ),
@@ -1043,8 +1095,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 phone.isNotEmpty
                                     ? phone
                                     : legacySourceId != null
-                                        ? 'کۆدی Daftar: $legacySourceId'
-                                        : 'ژمارە مۆبایل نییە',
+                                    ? 'کۆدی Daftar: $legacySourceId'
+                                    : 'ژمارە مۆبایل نییە',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.8),
                                   fontSize: 14,
@@ -1107,9 +1159,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           const SliverPadding(padding: EdgeInsets.only(bottom: 40)),
         ],
       ),
-      floatingActionButton: _isCustomer &&
-              _customerSection == 1 &&
-              _hasNewFinancialActivity
+      floatingActionButton:
+          _isCustomer && _customerSection == 1 && _hasNewFinancialActivity
           ? FloatingActionButton.extended(
               onPressed: _jumpToLatest,
               icon: const Icon(Icons.keyboard_arrow_down_rounded),
@@ -1119,9 +1170,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      bottomNavigationBar: _isCustomer &&
-              _customerSection == 1 &&
-              auth.userRole != 'customer'
+      bottomNavigationBar:
+          _isCustomer && _customerSection == 1 && auth.userRole != 'customer'
           ? _buildFinancialChatComposer(auth, isDark)
           : null,
     );
@@ -1133,17 +1183,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Future<void> _mergeDuplicateIdentity() async {
     try {
-      final raw = await PBService.client.rpc('find_my_duplicate_customers',
-          params: {'p_customer_id': widget.userId});
+      final raw = await PBService.client.rpc(
+        'find_my_duplicate_customers',
+        params: {'p_customer_id': widget.userId},
+      );
       if (!mounted) return;
       final candidates = raw is List
-          ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e))
-              .where((e) => e['already_linked'] != true).toList()
+          ? raw
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .where((e) => e['already_linked'] != true)
+                .toList()
           : <Map<String, dynamic>>[];
       if (candidates.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('کڕیارێکی هاوشێوە بە ناو یان ژمارە نەدۆزرایەوە.'),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('کڕیارێکی هاوشێوە بە ناو یان ژمارە نەدۆزرایەوە.'),
+          ),
+        );
         return;
       }
       final selected = await showDialog<Map<String, dynamic>>(
@@ -1152,15 +1209,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           title: const Text('یەکخستنی ناسنامەی دووبارە'),
           content: SizedBox(
             width: 360,
-            child: ListView(shrinkWrap: true, children: [
-              const Text('تۆمار و مامەڵەکانی هەر کڕیارێک لە ناسنامەی خۆیدا دەمێننەوە.'),
-              for (final item in candidates)
-                ListTile(
-                  title: Text(item['name']?.toString() ?? ''),
-                  subtitle: Text(item['phone']?.toString() ?? ''),
-                  onTap: () => Navigator.pop(ctx, item),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const Text(
+                  'تۆمار و مامەڵەکانی هەر کڕیارێک لە ناسنامەی خۆیدا دەمێننەوە.',
                 ),
-            ]),
+                for (final item in candidates)
+                  ListTile(
+                    title: Text(item['name']?.toString() ?? ''),
+                    subtitle: Text(item['phone']?.toString() ?? ''),
+                    onTap: () => Navigator.pop(ctx, item),
+                  ),
+              ],
+            ),
           ),
         ),
       );
@@ -1169,27 +1231,44 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('پشتڕاستکردنەوە'),
-          content: Text('دڵنیایت ${selected['name']} هەمان کڕیارە؟ '
-              'قەرز و پارەدانەوەکان ناگوازرێنەوە و ناسنامەکان دەتوانرێت دواتر جیابکرێنەوە.'),
+          content: Text(
+            'دڵنیایت ${selected['name']} هەمان کڕیارە؟ '
+            'قەرز و پارەدانەوەکان ناگوازرێنەوە و ناسنامەکان دەتوانرێت دواتر جیابکرێنەوە.',
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('پاشگەزبوونەوە')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('یەکخستن')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('پاشگەزبوونەوە'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('یەکخستن'),
+            ),
           ],
         ),
       );
       if (confirmed != true) return;
-      await PBService.client.rpc('merge_my_duplicate_customer', params: {
-        'p_canonical_id': widget.userId,
-        'p_duplicate_id': selected['id'],
-      });
+      await PBService.client.rpc(
+        'merge_my_duplicate_customer',
+        params: {
+          'p_canonical_id': widget.userId,
+          'p_duplicate_id': selected['id'],
+        },
+      );
       if (!mounted) return;
       await _loadData();
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(AppHelpers.backendErrorMessage(error,
-              fallback: 'یەکخستنی ناسنامە سەرکەوتوو نەبوو.')),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppHelpers.backendErrorMessage(
+                error,
+                fallback: 'یەکخستنی ناسنامە سەرکەوتوو نەبوو.',
+              ),
+            ),
+          ),
+        );
       }
     }
   }
@@ -1201,22 +1280,36 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         title: const Text('جیابوونەوەی ناسنامە'),
         content: const Text('داتای دارایی ناگۆڕێت. دڵنیایت؟'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('پاشگەزبوونەوە')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('جیاکردنەوە')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('پاشگەزبوونەوە'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('جیاکردنەوە'),
+          ),
         ],
       ),
     );
     if (confirmed != true) return;
     try {
-      await PBService.client.rpc('unmerge_my_duplicate_customer',
-          params: {'p_duplicate_id': duplicateId});
+      await PBService.client.rpc(
+        'unmerge_my_duplicate_customer',
+        params: {'p_duplicate_id': duplicateId},
+      );
       if (mounted) await _loadData();
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(AppHelpers.backendErrorMessage(error,
-              fallback: 'جیابوونەوە سەرکەوتوو نەبوو.')),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppHelpers.backendErrorMessage(
+                error,
+                fallback: 'جیابوونەوە سەرکەوتوو نەبوو.',
+              ),
+            ),
+          ),
+        );
       }
     }
   }
@@ -1230,41 +1323,60 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: Card(child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('ناسنامە پەیوەستکراوەکان',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            if (members.length > 1) ...[
-              Text('کۆی ماوەی گرووپ بە دینار: '
-                  '${AppHelpers.formatCurrency((_mergeGroup['total_remaining_iqd'] as num?)?.toDouble() ?? 0)}'),
-              const Text('مێژووی هەر ناسنامەیەک لە پەڕەی خۆی دەپارێزرێت.'),
-              for (final member in members)
-                ListTile(
-                  dense: true,
-                  title: Text(member['name']?.toString() ?? ''),
-                  subtitle: Text('ماوە: ${member['remaining_iqd'] ?? 0} د.ع'),
-                  onTap: member['id']?.toString() == widget.userId ? null : () =>
-                    Navigator.of(context).push(MaterialPageRoute<void>(
-                      builder: (_) => UserProfileScreen(userId: member['id'].toString()),
-                    )),
-                  trailing: canonical == widget.userId && member['id']?.toString() != canonical
-                      ? IconButton(
-                          tooltip: 'جیاکردنەوە',
-                          icon: const Icon(Icons.link_off_rounded),
-                          onPressed: () => _unmergeIdentity(member['id'].toString()),
-                        )
-                      : null,
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'ناسنامە پەیوەستکراوەکان',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-            ],
-            if (canonical == widget.userId)
-              TextButton.icon(
-                onPressed: _mergeDuplicateIdentity,
-                icon: const Icon(Icons.merge_rounded),
-                label: const Text('پەیوەستکردنی ناسنامەی دووبارە'),
-              ),
-          ]),
-        )),
+                if (members.length > 1) ...[
+                  Text(
+                    'کۆی ماوەی گرووپ بە دینار: '
+                    '${AppHelpers.formatCurrency((_mergeGroup['total_remaining_iqd'] as num?)?.toDouble() ?? 0)}',
+                  ),
+                  const Text('مێژووی هەر ناسنامەیەک لە پەڕەی خۆی دەپارێزرێت.'),
+                  for (final member in members)
+                    ListTile(
+                      dense: true,
+                      title: Text(member['name']?.toString() ?? ''),
+                      subtitle: Text(
+                        'ماوە: ${member['remaining_iqd'] ?? 0} د.ع',
+                      ),
+                      onTap: member['id']?.toString() == widget.userId
+                          ? null
+                          : () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => UserProfileScreen(
+                                  userId: member['id'].toString(),
+                                ),
+                              ),
+                            ),
+                      trailing:
+                          canonical == widget.userId &&
+                              member['id']?.toString() != canonical
+                          ? IconButton(
+                              tooltip: 'جیاکردنەوە',
+                              icon: const Icon(Icons.link_off_rounded),
+                              onPressed: () =>
+                                  _unmergeIdentity(member['id'].toString()),
+                            )
+                          : null,
+                    ),
+                ],
+                if (canonical == widget.userId)
+                  TextButton.icon(
+                    onPressed: _mergeDuplicateIdentity,
+                    icon: const Icon(Icons.merge_rounded),
+                    label: const Text('پەیوەستکردنی ناسنامەی دووبارە'),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1277,7 +1389,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final auth = context.read<AuthProvider>();
 
     final overview = <Widget>[
-      if (auth.userRole == 'admin') _buildMergedIdentityCard(),
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
@@ -1293,23 +1404,23 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               _buildStatChip(
                 Icons.pending_outlined,
                 'ماوە',
-                totalsComplete ? AppHelpers.formatCurrency(totalRemaining) : '—',
+                totalsComplete
+                    ? AppHelpers.formatCurrency(totalRemaining)
+                    : '—',
                 Colors.red,
               ),
             ],
           ),
         ),
       ),
-      if (auth.userRole == 'admin')
+      if (auth.userRole == 'admin' || auth.canCreateStatements)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
             child: OutlinedButton.icon(
-              onPressed: totalsComplete
-                  ? _generateCurrentFinancialStatement
-                  : _showIncompleteCurrencySummaryMessage,
+              onPressed: _showCustomerStatementMenu,
               icon: const Icon(Icons.receipt_long_rounded, size: 19),
-              label: const Text('کەشفی گشتی'),
+              label: const Text('کەشفی حیساب'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
                 foregroundColor: _accentColor,
@@ -1321,34 +1432,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ),
         ),
-      if (auth.canCreateStatements)
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
-            child: FilledButton.icon(
-              onPressed: _openPeriodStatement,
-              icon: const Icon(Icons.date_range_rounded, size: 19),
-              label: const Text('کەشفی حیسابی ماوە'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(50),
-                backgroundColor: _accentColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-          ),
-        ),
       if (!totalsComplete) _buildCurrencySummaryWarning(),
-      _buildDebtLimitCard(),
-      if (auth.canManageCustomerLinks)
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
-            child: CustomerPushCard(customerId: widget.userId),
-          ),
-        ),
     ];
 
     final transactions = auth.canViewTransactions
@@ -1375,6 +1459,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     final edit = <Widget>[
       _buildProfileEditor(),
+      if (auth.userRole == 'admin') _buildMergedIdentityCard(),
+      _buildDebtLimitCard(),
+      if (auth.canManageCustomerLinks)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+            child: CustomerPushCard(customerId: widget.userId),
+          ),
+        ),
     ];
 
     return [
@@ -1389,7 +1482,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Widget _buildCustomerSectionTabs() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    const labels = ['پوختە', 'چاتی دارایی', 'دەستکاری'];
+    const labels = ['پوختە', 'مامەڵەکان', 'هەژمار'];
     const icons = [
       Icons.space_dashboard_outlined,
       Icons.swap_horiz_rounded,
@@ -1449,8 +1542,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             color: selected
                                 ? _accentColor
                                 : (isDark
-                                    ? AppDarkColors.textSecondary
-                                    : Colors.grey[600]),
+                                      ? AppDarkColors.textSecondary
+                                      : Colors.grey[600]),
                           ),
                           const SizedBox(width: 5),
                           Flexible(
@@ -1466,8 +1559,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 color: selected
                                     ? _accentColor
                                     : (isDark
-                                        ? AppDarkColors.textSecondary
-                                        : Colors.grey[700]),
+                                          ? AppDarkColors.textSecondary
+                                          : Colors.grey[700]),
                               ),
                             ),
                           ),
@@ -1486,7 +1579,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   // ═══════════════════════════════════════════
   // ── Customer Chat Timeline ──  // Employee management UI/actions live in user_profile_employee_management.dart.
-
 
   // ═══════════════════════════════════════════
 
@@ -1665,7 +1757,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 if (!dialogContext.mounted) return;
                 Navigator.pop(dialogContext);
                 if (mounted) {
-                  AppHelpers.showSnackBar(context, 'لینکی push.zhirox.com کۆپی کرا');
+                  AppHelpers.showSnackBar(
+                    context,
+                    'لینکی push.zhirox.com کۆپی کرا',
+                  );
                 }
               },
               child: const Text('کۆپیکردنی لینک'),
@@ -1725,7 +1820,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         if (mounted) Navigator.pop(context);
       } catch (e) {
         if (mounted) {
-          AppHelpers.showSnackBar(context, AppHelpers.backendErrorMessage(e), isError: true);
+          AppHelpers.showSnackBar(
+            context,
+            AppHelpers.backendErrorMessage(e),
+            isError: true,
+          );
         }
       }
     }

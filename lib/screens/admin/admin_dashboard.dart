@@ -565,9 +565,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
           selectedIcon: Icons.inventory_2_rounded,
         ),
         ZhiroxDestination(
-          label: 'زیاتر',
-          icon: Icons.grid_view_outlined,
-          selectedIcon: Icons.grid_view_rounded,
+          label: 'ڕێکخستنەکان',
+          icon: Icons.tune_outlined,
+          selectedIcon: Icons.tune_rounded,
           badgeCount: pendingNavCount,
         ),
       ],

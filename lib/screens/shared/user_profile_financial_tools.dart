@@ -1,6 +1,52 @@
 part of 'user_profile_screen.dart';
 
 extension _UserProfileFinancialTools on _UserProfileScreenState {
+  Future<void> _showCustomerStatementMenu() async {
+    final auth = context.read<AuthProvider>();
+    if (auth.userRole != 'admin' && !auth.canCreateStatements) return;
+    final selection = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) => SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'کەشفی حیساب',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+            ),
+            if (auth.userRole == 'admin')
+              ListTile(
+                leading: const Icon(Icons.receipt_long_rounded),
+                title: const Text('کەشفی گشتی'),
+                subtitle: const Text('هەموو قەرز و پارەدانەکانی کڕیار'),
+                onTap: () => Navigator.pop(sheetContext, 'all'),
+              ),
+            if (auth.canCreateStatements)
+              ListTile(
+                leading: const Icon(Icons.date_range_rounded),
+                title: const Text('کەشفی ماوەی دیاریکراو'),
+                subtitle: const Text('بەرواری دەستپێک و کۆتایی هەڵبژێرە'),
+                onTap: () => Navigator.pop(sheetContext, 'period'),
+              ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || selection == null) return;
+    // Recheck after the sheet closes so an auth refresh cannot retain old access.
+    final currentAuth = context.read<AuthProvider>();
+    if (selection == 'all' && currentAuth.userRole == 'admin') {
+      await _generateCurrentFinancialStatement();
+    } else if (selection == 'period' && currentAuth.canCreateStatements) {
+      await _openPeriodStatement();
+    }
+  }
+
   DateTime _timelineDate(RecordModel record) {
     final customDate = record.getStringValue('custom_date');
     final created = record.getStringValue('created');
@@ -26,7 +72,8 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
         _ProfileTimelineItem(
           kind: 'payment',
           record: payment,
-          relatedDebt: debtsById[payment.getStringValue('debt')] ??
+          relatedDebt:
+              debtsById[payment.getStringValue('debt')] ??
               AppHelpers.expandedRecord(payment, 'debt'),
           date: _timelineDate(payment),
         ),
@@ -55,39 +102,42 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
     final query = _financialSearchController.text.trim().toLowerCase();
     final range = _financialDateRange;
 
-    return items.where((item) {
-      if (_financialTypeFilter != 'all' && item.kind != _financialTypeFilter) {
-        return false;
-      }
+    return items
+        .where((item) {
+          if (_financialTypeFilter != 'all' &&
+              item.kind != _financialTypeFilter) {
+            return false;
+          }
 
-      if (range != null &&
-          !isWithinFinancialDateRange(
-            item.date,
-            start: range.start,
-            end: range.end,
-          )) {
-        return false;
-      }
+          if (range != null &&
+              !isWithinFinancialDateRange(
+                item.date,
+                start: range.start,
+                end: range.end,
+              )) {
+            return false;
+          }
 
-      if (query.isEmpty) return true;
-      final record = item.record;
-      final searchable = <String>[
-        item.kind,
-        record.getStringValue('description'),
-        record.getStringValue('note'),
-        record.getStringValue('status'),
-        record.getStringValue('event_type'),
-        record.getStringValue('actor_name'),
-        record.getStringValue('currency'),
-        record.getDoubleValue('amount').toString(),
-        DateFormat('yyyy/MM/dd HH:mm').format(item.date),
-        if (item.relatedDebt != null)
-          item.relatedDebt!.getStringValue('description'),
-        if (item.relatedDebt != null)
-          item.relatedDebt!.getDoubleValue('amount').toString(),
-      ].join(' ').toLowerCase();
-      return searchable.contains(query);
-    }).toList(growable: false);
+          if (query.isEmpty) return true;
+          final record = item.record;
+          final searchable = <String>[
+            item.kind,
+            record.getStringValue('description'),
+            record.getStringValue('note'),
+            record.getStringValue('status'),
+            record.getStringValue('event_type'),
+            record.getStringValue('actor_name'),
+            record.getStringValue('currency'),
+            record.getDoubleValue('amount').toString(),
+            DateFormat('yyyy/MM/dd HH:mm').format(item.date),
+            if (item.relatedDebt != null)
+              item.relatedDebt!.getStringValue('description'),
+            if (item.relatedDebt != null)
+              item.relatedDebt!.getDoubleValue('amount').toString(),
+          ].join(' ').toLowerCase();
+          return searchable.contains(query);
+        })
+        .toList(growable: false);
   }
 
   String _timelineLedgerKey(_ProfileTimelineItem item) =>
@@ -100,7 +150,8 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
     }
 
     final debt = item.isPayment ? item.relatedDebt : item.record;
-    final currency = debt?.getStringValue('currency').trim().toUpperCase() ?? 'IQD';
+    final currency =
+        debt?.getStringValue('currency').trim().toUpperCase() ?? 'IQD';
     final dollarRate = debt?.getDoubleValue('dollar_rate') ?? 0;
 
     // Current writes use IQD as the canonical storage unit. Some legacy USD
@@ -168,7 +219,11 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
       ),
       child: Row(
         children: [
-          const Icon(Icons.currency_exchange_rounded, size: 17, color: Colors.orange),
+          const Icon(
+            Icons.currency_exchange_rounded,
+            size: 17,
+            color: Colors.orange,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -263,7 +318,7 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
     final dateLabel = _financialDateRange == null
         ? 'بەروار'
         : '${DateFormat('yyyy/MM/dd').format(_financialDateRange!.start)} — '
-            '${DateFormat('yyyy/MM/dd').format(_financialDateRange!.end)}';
+              '${DateFormat('yyyy/MM/dd').format(_financialDateRange!.end)}';
 
     Widget typeChip(String value, String label, IconData icon) {
       final selected = _financialTypeFilter == value;
@@ -281,8 +336,8 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
             color: selected
                 ? AppColors.primary
                 : (isDark
-                    ? AppDarkColors.textSecondary
-                    : const Color(0xFF667085)),
+                      ? AppDarkColors.textSecondary
+                      : const Color(0xFF667085)),
           ),
           label: Text(
             label,
@@ -296,8 +351,8 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
             color: selected
                 ? AppColors.primary.withValues(alpha: 0.28)
                 : (isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : const Color(0xFFE4E7EC)),
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : const Color(0xFFE4E7EC)),
           ),
         ),
       );
@@ -306,7 +361,8 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
     Widget quickChip(FinancialQuickRange preset, String label) {
       final resolved = resolveFinancialQuickRange(preset, DateTime.now());
       final active = _financialDateRange;
-      final selected = active != null &&
+      final selected =
+          active != null &&
           active.start.year == resolved.start.year &&
           active.start.month == resolved.start.month &&
           active.start.day == resolved.start.day &&
@@ -330,8 +386,8 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
             color: selected
                 ? AppColors.primary.withValues(alpha: 0.30)
                 : (isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : const Color(0xFFE4E7EC)),
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : const Color(0xFFE4E7EC)),
           ),
         ),
       );
@@ -428,7 +484,7 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
               TextButton.icon(
                 onPressed: _generateFilteredFinancialChatStatement,
                 icon: const Icon(Icons.ios_share_rounded, size: 15),
-                label: const Text('کەشف'),
+                label: const Text('کەشفی فلتەر'),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   textStyle: const TextStyle(
@@ -655,7 +711,8 @@ extension _UserProfileFinancialTools on _UserProfileScreenState {
             const Icon(Icons.cloud_off_rounded, color: Colors.orange, size: 28),
           const SizedBox(height: 9),
           Text(
-            error ?? 'بۆ گەڕان و فلتەری تەواو، مێژووی کۆنتر لە سێرڤەر بار دەکرێت...',
+            error ??
+                'بۆ گەڕان و فلتەری تەواو، مێژووی کۆنتر لە سێرڤەر بار دەکرێت...',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 11.5,

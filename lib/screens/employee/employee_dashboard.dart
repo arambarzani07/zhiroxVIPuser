@@ -122,9 +122,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
             selectedIcon: Icons.inventory_2_rounded,
           ),
         const ZhiroxDestination(
-          label: 'زیاتر',
-          icon: Icons.grid_view_outlined,
-          selectedIcon: Icons.grid_view_rounded,
+          label: 'ڕێکخستنەکان',
+          icon: Icons.tune_outlined,
+          selectedIcon: Icons.tune_rounded,
         ),
       ],
       onSelected: _selectTab,
