@@ -6,8 +6,12 @@ on:
     paths:
       - 'gateway/hikvision/**'
       - 'supabase/functions/hikvision-gateway/**'
+      - 'supabase/functions/hikvision-cloud-worker/**'
+      - 'supabase/functions/hikvision-admin/**'
       - 'supabase/migrations/**hikvision**'
+      - 'supabase/migrations/**hikconnect**'
       - 'supabase/tests/hikvision_gateway_v2.test.sql'
+      - 'supabase/tests/hikvision_cloud_provider.test.sql'
       - 'supabase/tests/hikvision_retention.test.sql'
       - '.github/workflows/hikvision-gateway-regression.yml'
   workflow_dispatch:
@@ -32,6 +36,8 @@ jobs:
         run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: Run Hikvision v2 fencing regression
         run: supabase test db supabase/tests/hikvision_gateway_v2.test.sql
+      - name: Run Hik-Connect cloud provider regression
+        run: supabase test db supabase/tests/hikvision_cloud_provider.test.sql
       - name: Run Hikvision retention regression
         run: supabase test db supabase/tests/hikvision_retention.test.sql
 
@@ -45,9 +51,13 @@ jobs:
           deno-version: v2.x
       - name: Type-check gateway Edge Function
         run: deno check supabase/functions/hikvision-gateway/index.ts
+      - name: Type-check cloud worker Edge Function
+        run: deno check supabase/functions/hikvision-cloud-worker/index.ts
+      - name: Type-check Hikvision admin Edge Function
+        run: deno check supabase/functions/hikvision-admin/index.ts
       - name: Compile-check Windows gateway Python
         run: python3 -m py_compile gateway/hikvision/common.py gateway/hikvision/agent.py gateway/hikvision/setup.py
-      - name: Verify v2 protocol and retention wiring
+      - name: Verify v2 protocol and cloud wiring
         shell: bash
         run: |
           set -euo pipefail
@@ -58,3 +68,7 @@ jobs:
           grep -q 'hikvision_gateway_retention_due_service' supabase/functions/hikvision-gateway/index.ts
           grep -q 'hikvision_retention_candidates_service' supabase/functions/hikvision-gateway/index.ts
           grep -q 'hikvision_mark_video_expired_service' supabase/functions/hikvision-gateway/index.ts
+          grep -q '/api/hccgw/platform/v1/token/get' supabase/functions/hikvision-cloud-worker/index.ts
+          grep -q '/api/hccgw/video/v1/video/save' supabase/functions/hikvision-cloud-worker/index.ts
+          grep -q '/api/hccgw/video/v1/video/download/url' supabase/functions/hikvision-cloud-worker/index.ts
+          grep -q 'hikvision_cloud_worker_auth_service' supabase/functions/hikvision-cloud-worker/index.ts
