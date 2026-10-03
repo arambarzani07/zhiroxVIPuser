@@ -34,7 +34,6 @@ async function sha256Hex(value: string): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
   return Array.from(digest).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-
 function cleanBase(raw: string): string { return raw.trim().replace(/\/+$/, ""); }
 function isAllowedHikHost(raw: string): boolean {
   try {
@@ -47,7 +46,6 @@ function isAllowedHikHost(raw: string): boolean {
       host.endsWith(".hikcentralconnectru.com");
   } catch (_) { return false; }
 }
-
 async function hikPost(
   root: string,
   path: string,
@@ -119,27 +117,55 @@ async function ensureCloudToken(admin: any, marketId: string): Promise<{ token: 
 
 async function listCloudCameras(admin: any, marketId: string): Promise<Record<string, unknown>[]> {
   const session = await ensureCloudToken(admin, marketId);
-  const result = await hikPost(session.areaDomain, "/api/hccgw/resource/v1/areas/cameras/get", session.token, {
-    pageIndex: 1,
-    pageSize: 500,
-    filter: {},
-  });
-  if (String(result.errorCode ?? "") !== "0") throw new Error(`hik_cameras_${String(result.errorCode ?? "unknown")}`);
+  const result = await hikPost(
+    session.areaDomain,
+    "/api/hccgw/resource/v1/devices/get",
+    session.token,
+    { pageIndex: 1, pageSize: 500, deviceCategory: "encodingDevice" },
+  );
+  if (String(result.errorCode ?? "") !== "0") {
+    throw new Error(`hik_devices_${String(result.errorCode ?? "unknown")}`);
+  }
   const payload = (result.data ?? {}) as Record<string, unknown>;
-  const raw = Array.isArray(payload.camera) ? payload.camera : [];
-  return raw.map((entry) => {
-    const camera = (entry ?? {}) as Record<string, unknown>;
-    const device = (camera.device ?? {}) as Record<string, unknown>;
-    const devInfo = (device.devInfo ?? {}) as Record<string, unknown>;
-    const channelInfo = (device.channelInfo ?? {}) as Record<string, unknown>;
-    return {
-      id: String(camera.id ?? ""),
-      name: String(camera.name ?? ""),
-      online: String(camera.online ?? "0") === "1",
-      device_serial: String(devInfo.serialNo ?? ""),
-      channel_no: Number(channelInfo.no ?? 0),
-    };
-  }).filter((camera) => String(camera.id).length > 0);
+  const devices = Array.isArray(payload.device) ? payload.device : [];
+  finalLoop:
+  for (const _ of <number>[]) { break finalLoop; }
+  const byId = new Map<string, Record<string, unknown>>();
+  for (let index = 0; index < devices.length; index++) {
+    const device = (devices[index] ?? {}) as Record<string, unknown>;
+    const serialNo = String(device.serialNo ?? "").trim();
+    if (!serialNo) continue;
+    const detail = await hikPost(
+      session.areaDomain,
+      "/api/hccgw/resource/v1/devicedetail/get",
+      session.token,
+      { deviceSerialNo: serialNo },
+    );
+    if (String(detail.errorCode ?? "") !== "0") continue;
+    const detailData = (detail.data ?? {}) as Record<string, unknown>;
+    const detailDevice = (detailData.device ?? {}) as Record<string, unknown>;
+    const baseInfo = (detailDevice.baseInfo ?? {}) as Record<string, unknown>;
+    const channels = Array.isArray(detailDevice.cameraChannel)
+      ? detailDevice.cameraChannel
+      : [];
+    for (const entry of channels) {
+      const channel = (entry ?? {}) as Record<string, unknown>;
+      const id = String(channel.id ?? "").trim();
+      const channelNo = Number(channel.no ?? 0);
+      if (!id || !Number.isFinite(channelNo) || channelNo < 1) continue;
+      byId.set(id, {
+        id,
+        name: String(channel.name ?? ""),
+        online: String(channel.online ?? "0") === "1",
+        device_serial: String(baseInfo.serialNo ?? serialNo),
+        channel_no: Math.trunc(channelNo),
+      });
+    }
+    if (index + 1 < devices.length) {
+      await new Promise((resolve) => setTimeout(resolve, 220));
+    }
+  }
+  return [...byId.values()];
 }
 
 Deno.serve(async (req: Request) => {
@@ -262,12 +288,7 @@ Deno.serve(async (req: Request) => {
       if (error) throw error;
       const row = Array.isArray(data) && data.length > 0 ? data[0] : null;
       if (!row) return json({ error: "gateway_not_registered" }, 409);
-      return json({
-        ok: true,
-        gateway_id: row.gateway_id,
-        gateway_token: token,
-        note: "Store this token only on the local market gateway. It is returned once and only its SHA-256 hash is stored in the cloud.",
-      });
+      return json({ ok: true, gateway_id: row.gateway_id, gateway_token: token });
     }
 
     if (action === "update_config") {
