@@ -8,6 +8,7 @@ import 'package:zhirox/screens/admin/collection_center_screen.dart';
 import 'package:zhirox/screens/admin/debt_restore_screen.dart';
 import 'package:zhirox/screens/admin/daftar_sync_dashboard_screen.dart';
 import 'package:zhirox/screens/admin/governance_center_screen.dart';
+import 'package:zhirox/screens/admin/hikvision_settings_screen.dart';
 import 'package:zhirox/screens/admin/intelligence_center_screen.dart';
 import 'package:zhirox/screens/admin/legacy_import_screen.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
@@ -157,6 +158,12 @@ class AdminSettingsScreen extends StatelessWidget {
                           context: context,
                           builder: (_) => const TelegramSettingsDialog(),
                         ),
+                      ),
+                      _SettingsRow(
+                        icon: Icons.videocam_rounded,
+                        title: 'Hikvision و ڤیدیۆی مامەلە',
+                        subtitle: 'Gateway، کامێرای کاشێر و بەستنی ڤیدیۆ بە مامەلە',
+                        onTap: () => _open(context, const HikvisionSettingsScreen()),
                       ),
                       _SettingsRow(
                         icon: Icons.notifications_active_outlined,
