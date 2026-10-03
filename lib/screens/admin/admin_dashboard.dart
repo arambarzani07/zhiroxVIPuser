@@ -16,6 +16,7 @@ import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/widgets/app_async_state.dart';
 import 'package:zhirox/widgets/zhirox_shell.dart';
+import 'package:zhirox/widgets/design_refresh.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -521,7 +522,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final pendingNavCount = (_stats['pendingRequests'] as num?)?.toInt() ?? 0;
 
     final screens = [
-      _buildNewDashboard(auth),
+      ZhiroxPageFrame(child: _buildNewDashboard(auth)),
       UserListScreen(
         key: const ValueKey('customers'),
         role: 'customer',
@@ -565,7 +566,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           selectedIcon: Icons.inventory_2_rounded,
         ),
         ZhiroxDestination(
-          label: 'زیاتر',
+          label: 'ڕێکخستن',
           icon: Icons.grid_view_outlined,
           selectedIcon: Icons.grid_view_rounded,
           badgeCount: pendingNavCount,

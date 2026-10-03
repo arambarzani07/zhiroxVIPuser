@@ -19,6 +19,7 @@ import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
+import 'package:zhirox/widgets/design_refresh.dart';
 
 class AdminSettingsScreen extends StatelessWidget {
   const AdminSettingsScreen({
@@ -45,206 +46,227 @@ class AdminSettingsScreen extends StatelessWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-              sliver: SliverToBoxAdapter(
-                child: _SettingsHeaderCard(marketName: auth.marketName),
+        child: ZhiroxPageFrame(
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+                sliver: SliverToBoxAdapter(
+                  child: _SettingsHeaderCard(marketName: auth.marketName),
+                ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
-              sliver: SliverList.list(
-                children: [
-                  _SettingsGroup(
-                    icon: Icons.tune_rounded,
-                    title: 'هەژمار و ڕووکار',
-                    children: [
-                      _SettingsRow(
-                        icon: isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                        title: isDark ? 'دۆخی ڕووناک' : 'دۆخی تاریک',
-                        subtitle: 'گۆڕینی ڕەنگی ڕووکار',
-                        onTap: () => context.read<ThemeProvider>().toggleTheme(),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.phone_android_rounded,
-                        title: 'ژمارەی مۆبایل',
-                        subtitle: (auth.user?.getStringValue('phone') ?? '').isEmpty
-                            ? 'ژمارە مۆبایلێکی نوێ دابنێ'
-                            : auth.user!.getStringValue('phone'),
-                        onTap: onChangePhone,
-                      ),
-                      _SettingsRow(
-                        icon: Icons.lock_outline_rounded,
-                        title: 'وشەی نهێنی',
-                        subtitle: 'گۆڕینی وشەی نهێنیی هەژمار',
-                        onTap: onChangePassword,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _SettingsGroup(
-                    icon: Icons.store_mall_directory_outlined,
-                    title: 'کاروبار و کڕیار',
-                    children: [
-                      _SettingsRow(
-                        icon: Icons.badge_outlined,
-                        title: 'کارمەندان',
-                        subtitle: 'هەژمار و دەسەڵاتی کارمەندان',
-                        onTap: () => _open(
-                          context,
-                          UserListScreen(role: 'employee', adminId: auth.userId),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+                sliver: SliverList.list(
+                  children: [
+                    _SettingsGroup(
+                      icon: Icons.tune_rounded,
+                      title: 'هەژمار و ڕووکار',
+                      children: [
+                        _SettingsRow(
+                          icon: isDark
+                              ? Icons.light_mode_outlined
+                              : Icons.dark_mode_outlined,
+                          title: isDark ? 'دۆخی ڕووناک' : 'دۆخی تاریک',
+                          subtitle: 'گۆڕینی ڕەنگی ڕووکار',
+                          onTap: () =>
+                              context.read<ThemeProvider>().toggleTheme(),
                         ),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.pending_actions_outlined,
-                        title: 'داواکارییەکان',
-                        subtitle: 'پەسەندکردن یان ڕەتکردنەوەی کڕیار',
-                        badge: pendingCount,
-                        onTap: () => _open(
-                          context,
-                          PendingRequestsScreen(adminId: auth.userId),
+                        _SettingsRow(
+                          icon: Icons.phone_android_rounded,
+                          title: 'ژمارەی مۆبایل',
+                          subtitle:
+                              (auth.user?.getStringValue('phone') ?? '').isEmpty
+                              ? 'ژمارە مۆبایلێکی نوێ دابنێ'
+                              : auth.user!.getStringValue('phone'),
+                          onTap: onChangePhone,
                         ),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.summarize_outlined,
-                        title: 'کەشفی حیساب و ڕاپۆرت',
-                        subtitle: 'ڕاپۆرتی قەرز و پارەدانەوە',
-                        onTap: onOpenReports,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _SettingsGroup(
-                    icon: Icons.insights_outlined,
-                    title: 'قەرز و زیرەکی',
-                    children: [
-                      _SettingsRow(
-                        icon: Icons.event_repeat_rounded,
-                        title: 'بەدواداچوونی قەرز',
-                        subtitle: 'Aging، پێشەنگی کڕیار و پلانی بەدواداچوون',
-                        onTap: () => _open(context, const CollectionCenterScreen()),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.auto_graph_rounded,
-                        title: 'ناوەندی زیرەکی',
-                        subtitle: 'هەڵسەنگاندن و ئاگاداریی دارایی',
-                        onTap: () => _open(
-                          context,
-                          const Scaffold(
-                            body: SafeArea(child: IntelligenceCenterScreen()),
+                        _SettingsRow(
+                          icon: Icons.lock_outline_rounded,
+                          title: 'وشەی نهێنی',
+                          subtitle: 'گۆڕینی وشەی نهێنیی هەژمار',
+                          onTap: onChangePassword,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _SettingsGroup(
+                      icon: Icons.store_mall_directory_outlined,
+                      title: 'کاروبار و کڕیار',
+                      children: [
+                        _SettingsRow(
+                          icon: Icons.badge_outlined,
+                          title: 'کارمەندان',
+                          subtitle: 'هەژمار و دەسەڵاتی کارمەندان',
+                          onTap: () => _open(
+                            context,
+                            UserListScreen(
+                              role: 'employee',
+                              adminId: auth.userId,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _SettingsGroup(
-                    icon: Icons.hub_outlined,
-                    title: 'پەیوەندی و داتا',
-                    children: [
-                      _SettingsRow(
-                        icon: Icons.smart_toy_outlined,
-                        title: 'ZHIROX AutoPilot',
-                        subtitle: 'Health، Queue، Telegram، PDF، Risk و هەڵەکان',
-                        onTap: () => _open(context, const AutoPilotDashboardScreen()),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.telegram_rounded,
-                        title: 'پەیوەندی Telegram',
-                        subtitle: 'پەیوەستکردن، تاقیکردنەوە و پچڕاندنی Telegram',
-                        onTap: () => showDialog<void>(
-                          context: context,
-                          builder: (_) => const TelegramSettingsDialog(),
+                        _SettingsRow(
+                          icon: Icons.pending_actions_outlined,
+                          title: 'داواکارییەکان',
+                          subtitle: 'پەسەندکردن یان ڕەتکردنەوەی کڕیار',
+                          badge: pendingCount,
+                          onTap: () => _open(
+                            context,
+                            PendingRequestsScreen(adminId: auth.userId),
+                          ),
                         ),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.videocam_rounded,
-                        title: 'Hikvision و ڤیدیۆی مامەلە',
-                        subtitle: 'Gateway، کامێرای کاشێر و بەستنی ڤیدیۆ بە مامەلە',
-                        onTap: () => _open(context, const HikvisionSettingsScreen()),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.notifications_active_outlined,
-                        title: 'ناوەندی ئاگادارکردنەوەکان',
-                        subtitle: 'Push، مێژوو و ناردنی گشتی',
-                        onTap: () => _open(context, const AdminNotificationsScreen()),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.sync_rounded,
-                        title: 'پەیوەندی Daftar',
-                        subtitle: 'دۆخی Sync، مێژوو و هەڵەکان',
-                        onTap: () => _open(context, const DaftarSyncDashboardScreen()),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.move_to_inbox_rounded,
-                        title: 'گواستنەوەی داتای کۆن',
-                        subtitle: 'Import ـی کڕیار، قەرز و پارەدانەوە',
-                        onTap: () => _open(context, const LegacyImportScreen()),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _SettingsGroup(
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'دارایی و بەڵگەنامە',
-                    children: [
-                      _SettingsRow(
-                        icon: Icons.credit_card_rounded,
-                        title: 'بەشداری و FIB',
-                        subtitle: 'پلان و پارەدانی بەشداری',
-                        onTap: () => _open(context, const SubscriptionPaymentScreen()),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.receipt_long_outlined,
-                        title: 'ڕێکخستنی پسووڵە',
-                        subtitle: 'ناونیشان، ژمارە و شێوازی پسووڵە',
-                        onTap: () => _open(context, const ReceiptSettingsScreen()),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.restore_from_trash_outlined,
-                        title: 'قەرزە سڕاوەکان',
-                        subtitle: 'بینین و گەڕاندنەوەی قەرز',
-                        onTap: () => _open(context, const DebtRestoreScreen()),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _SettingsGroup(
-                    icon: Icons.verified_user_outlined,
-                    title: 'پاراستن و Backup',
-                    children: [
-                      _SettingsRow(
-                        icon: Icons.admin_panel_settings_outlined,
-                        title: 'دەسەڵات، Audit و Backup',
-                        subtitle: 'کۆنترۆڵی ورد و گەڕاندنەوەی داتا',
-                        onTap: () => _open(context, const GovernanceCenterScreen()),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  AppSurface(
-                    padding: EdgeInsets.zero,
-                    child: _SettingsRow(
-                      icon: Icons.logout_rounded,
-                      title: 'چوونەدەرەوە',
-                      subtitle: 'بە سەلامەتی لە هەژمارەکەت دەرچۆ',
-                      destructive: true,
-                      onTap: () async {
-                        final ok = await AppHelpers.showConfirmDialog(
-                          context,
-                          title: 'چوونەدەرەوە',
-                          message: 'دڵنیایت لە چوونەدەرەوە؟',
-                        );
-                        if (ok && context.mounted) auth.logout();
-                      },
+                        _SettingsRow(
+                          icon: Icons.summarize_outlined,
+                          title: 'کەشفی حیساب و ڕاپۆرت',
+                          subtitle: 'ڕاپۆرتی قەرز و پارەدانەوە',
+                          onTap: onOpenReports,
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    _SettingsGroup(
+                      icon: Icons.insights_outlined,
+                      title: 'قەرز و زیرەکی',
+                      children: [
+                        _SettingsRow(
+                          icon: Icons.event_repeat_rounded,
+                          title: 'بەدواداچوونی قەرز',
+                          subtitle: 'ماوەی قەرز و پلانی بەدواداچوونی کڕیار',
+                          onTap: () =>
+                              _open(context, const CollectionCenterScreen()),
+                        ),
+                        _SettingsRow(
+                          icon: Icons.auto_graph_rounded,
+                          title: 'ناوەندی زیرەکی',
+                          subtitle: 'هەڵسەنگاندن و ئاگاداریی دارایی',
+                          onTap: () => _open(
+                            context,
+                            const Scaffold(
+                              body: SafeArea(child: IntelligenceCenterScreen()),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _SettingsGroup(
+                      icon: Icons.hub_outlined,
+                      title: 'پەیوەندی و داتا',
+                      children: [
+                        _SettingsRow(
+                          icon: Icons.smart_toy_outlined,
+                          title: 'ZHIROX AutoPilot',
+                          subtitle: 'چاودێری سیستەم و کارە خۆکارەکان',
+                          onTap: () =>
+                              _open(context, const AutoPilotDashboardScreen()),
+                        ),
+                        _SettingsRow(
+                          icon: Icons.telegram_rounded,
+                          title: 'پەیوەندی Telegram',
+                          subtitle:
+                              'پەیوەستکردن، تاقیکردنەوە و پچڕاندنی Telegram',
+                          onTap: () => showDialog<void>(
+                            context: context,
+                            builder: (_) => const TelegramSettingsDialog(),
+                          ),
+                        ),
+                        _SettingsRow(
+                          icon: Icons.videocam_rounded,
+                          title: 'Hikvision و ڤیدیۆی مامەلە',
+                          subtitle:
+                              'Gateway، کامێرای کاشێر و بەستنی ڤیدیۆ بە مامەلە',
+                          onTap: () =>
+                              _open(context, const HikvisionSettingsScreen()),
+                        ),
+                        _SettingsRow(
+                          icon: Icons.notifications_active_outlined,
+                          title: 'ناوەندی ئاگادارکردنەوەکان',
+                          subtitle: 'مێژووی ئاگادارکردنەوە و ناردنی گشتی',
+                          onTap: () =>
+                              _open(context, const AdminNotificationsScreen()),
+                        ),
+                        _SettingsRow(
+                          icon: Icons.sync_rounded,
+                          title: 'پەیوەندی Daftar',
+                          subtitle: 'دۆخی هاوکاتکردن و مێژووی پەیوەندی',
+                          onTap: () =>
+                              _open(context, const DaftarSyncDashboardScreen()),
+                        ),
+                        _SettingsRow(
+                          icon: Icons.move_to_inbox_rounded,
+                          title: 'گواستنەوەی داتای کۆن',
+                          subtitle: 'Import ـی کڕیار، قەرز و پارەدانەوە',
+                          onTap: () =>
+                              _open(context, const LegacyImportScreen()),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _SettingsGroup(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'دارایی و بەڵگەنامە',
+                      children: [
+                        _SettingsRow(
+                          icon: Icons.credit_card_rounded,
+                          title: 'بەشداری و FIB',
+                          subtitle: 'پلان و پارەدانی بەشداری',
+                          onTap: () =>
+                              _open(context, const SubscriptionPaymentScreen()),
+                        ),
+                        _SettingsRow(
+                          icon: Icons.receipt_long_outlined,
+                          title: 'ڕێکخستنی پسووڵە',
+                          subtitle: 'ناونیشان، ژمارە و شێوازی پسووڵە',
+                          onTap: () =>
+                              _open(context, const ReceiptSettingsScreen()),
+                        ),
+                        _SettingsRow(
+                          icon: Icons.restore_from_trash_outlined,
+                          title: 'قەرزە سڕاوەکان',
+                          subtitle: 'بینین و گەڕاندنەوەی قەرز',
+                          onTap: () =>
+                              _open(context, const DebtRestoreScreen()),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _SettingsGroup(
+                      icon: Icons.verified_user_outlined,
+                      title: 'پاراستن و پاشەکەوت',
+                      children: [
+                        _SettingsRow(
+                          icon: Icons.admin_panel_settings_outlined,
+                          title: 'دەسەڵات، پشکنین و پاشەکەوت',
+                          subtitle: 'کۆنترۆڵی ورد و گەڕاندنەوەی داتا',
+                          onTap: () =>
+                              _open(context, const GovernanceCenterScreen()),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    AppSurface(
+                      padding: EdgeInsets.zero,
+                      child: _SettingsRow(
+                        icon: Icons.logout_rounded,
+                        title: 'چوونەدەرەوە',
+                        subtitle: 'بە سەلامەتی لە هەژمارەکەت دەرچۆ',
+                        destructive: true,
+                        onTap: () async {
+                          final ok = await AppHelpers.showConfirmDialog(
+                            context,
+                            title: 'چوونەدەرەوە',
+                            message: 'دڵنیایت لە چوونەدەرەوە؟',
+                          );
+                          if (ok && context.mounted) auth.logout();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -259,7 +281,9 @@ class _SettingsHeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final displayName = marketName.trim().isEmpty ? 'بەڕێوەبردنی سیستەم' : marketName.trim();
+    final displayName = marketName.trim().isEmpty
+        ? 'بەڕێوەبردنی سیستەم'
+        : marketName.trim();
 
     return Container(
       padding: const EdgeInsets.fromLTRB(15, 12, 15, 12),
@@ -277,7 +301,11 @@ class _SettingsHeaderCard extends StatelessWidget {
               color: scheme.primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(Icons.storefront_rounded, color: scheme.primary, size: 22),
+            child: Icon(
+              Icons.storefront_rounded,
+              color: scheme.primary,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -286,7 +314,8 @@ class _SettingsHeaderCard extends StatelessWidget {
               children: [
                 Text(
                   'ڕێکخستنەکان',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -294,9 +323,9 @@ class _SettingsHeaderCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -308,7 +337,11 @@ class _SettingsHeaderCard extends StatelessWidget {
 }
 
 class _SettingsGroup extends StatelessWidget {
-  const _SettingsGroup({required this.icon, required this.title, required this.children});
+  const _SettingsGroup({
+    required this.icon,
+    required this.title,
+    required this.children,
+  });
 
   final IconData icon;
   final String title;
@@ -334,9 +367,12 @@ class _SettingsGroup extends StatelessWidget {
                 child: Icon(icon, size: 16, color: scheme.primary),
               ),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
               ),
             ],
           ),
@@ -401,17 +437,18 @@ class _SettingsRow extends StatelessWidget {
       title: Text(
         title,
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: destructive ? AppColors.danger : null,
-            ),
+          fontWeight: FontWeight.w700,
+          color: destructive ? AppColors.danger : null,
+        ),
       ),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 2),
         child: Text(
           subtitle,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: scheme.onSurfaceVariant),
         ),
       ),
       trailing: badge > 0
