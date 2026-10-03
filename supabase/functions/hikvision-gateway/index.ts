@@ -49,7 +49,7 @@ function supportsAttemptFencing(version: string): boolean {
 }
 
 async function maybeSweepRetention(
-  admin: ReturnType<typeof createClient>,
+  admin: any,
   gatewayId: string,
   marketId: string,
 ): Promise<void> {
