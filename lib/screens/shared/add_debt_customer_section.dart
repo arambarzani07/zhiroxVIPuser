@@ -178,7 +178,7 @@ extension _AddDebtCustomerSection on _AddDebtScreenState {
       return;
     }
 
-    setState(() => _isLoading = true);
+    _setDebtEntryState(() => _isLoading = true);
     try {
       final bytes = await scanFile.readAsBytes();
       final response = await PBService.client.functions.invoke(
@@ -205,15 +205,15 @@ extension _AddDebtCustomerSection on _AddDebtScreenState {
       }
 
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      _setDebtEntryState(() => _isLoading = false);
       final accepted = await _showVisionOcrPreview(result);
       if (!mounted) return;
       if (accepted != true && previousImage != null && _receiptImage == null) {
-        setState(() => _receiptImage = previousImage);
+        _setDebtEntryState(() => _receiptImage = previousImage);
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      _setDebtEntryState(() => _isLoading = false);
       AppHelpers.showSnackBar(
         context,
         _visionOcrErrorMessage(e),
@@ -374,12 +374,12 @@ extension _AddDebtCustomerSection on _AddDebtScreenState {
 
     if (accepted == true && amount != null && amount > 0 && mounted) {
       if (currency == 'USD' || currency == 'IQD') {
-        setState(() => _currency = currency!);
+        _setDebtEntryState(() => _currency = currency!);
       }
       _setSimpleAmount(amount);
       if (parsedDate != null && !parsedDate.isAfter(DateTime.now())) {
         final now = DateTime.now();
-        setState(() {
+        _setDebtEntryState(() {
           _hasCustomDebtDate = true;
           _customDebtDate = DateTime(
             parsedDate.year,
