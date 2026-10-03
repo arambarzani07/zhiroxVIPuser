@@ -48,6 +48,74 @@ function supportsAttemptFencing(version: string): boolean {
   return major > 1 || (major === 1 && minor >= 1);
 }
 
+async function maybeSweepRetention(
+  admin: ReturnType<typeof createClient>,
+  gatewayId: string,
+  marketId: string,
+): Promise<void> {
+  const { data: due, error: dueError } = await admin.rpc(
+    "hikvision_gateway_retention_due_service",
+    { p_gateway_id: gatewayId },
+  );
+  if (dueError) {
+    console.error("hikvision-gateway retention_due", dueError.message.slice(0, 240));
+    return;
+  }
+  if (due !== true) return;
+
+  const { data: candidates, error: candidateError } = await admin.rpc(
+    "hikvision_retention_candidates_service",
+    { p_market_id: marketId, p_limit: 20 },
+  );
+  if (candidateError) {
+    console.error("hikvision-gateway retention_candidates", candidateError.message.slice(0, 240));
+    return;
+  }
+
+  const rows = Array.isArray(candidates) ? candidates : [];
+  for (const row of rows) {
+    const evidenceId = safeId(row?.evidence_id);
+    const objectPath = String(row?.object_path ?? "").trim();
+    const thumbnailPath = String(row?.thumbnail_path ?? "").trim();
+    if (!evidenceId || !objectPath.startsWith(`${marketId}/`)) {
+      console.error("hikvision-gateway retention rejected unsafe candidate");
+      continue;
+    }
+
+    const paths = [objectPath];
+    if (
+      thumbnailPath &&
+      thumbnailPath !== objectPath &&
+      thumbnailPath.startsWith(`${marketId}/`)
+    ) {
+      paths.push(thumbnailPath);
+    }
+
+    const { error: removeError } = await admin.storage
+      .from("transaction-camera-clips")
+      .remove(paths);
+    if (removeError) {
+      console.error("hikvision-gateway retention_remove", removeError.message.slice(0, 240));
+      continue;
+    }
+
+    const { data: marked, error: markError } = await admin.rpc(
+      "hikvision_mark_video_expired_service",
+      {
+        p_market_id: marketId,
+        p_evidence_id: evidenceId,
+        p_object_path: objectPath,
+      },
+    );
+    if (markError || marked !== true) {
+      console.error(
+        "hikvision-gateway retention_mark",
+        (markError?.message ?? "stale_candidate").slice(0, 240),
+      );
+    }
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -86,12 +154,13 @@ Deno.serve(async (req: Request) => {
         p_platform: platform,
         p_ip: forwarded || null,
       });
+      await maybeSweepRetention(admin, gatewayId, marketId);
       return json({
         ok: true,
         gateway_id: gatewayId,
         market_id: marketId,
         server_time: new Date().toISOString(),
-        capabilities: { attempt_fencing: v2Gateway },
+        capabilities: { attempt_fencing: v2Gateway, retention_sweep: true },
       });
     }
 
@@ -102,6 +171,7 @@ Deno.serve(async (req: Request) => {
         p_platform: platform,
         p_ip: forwarded || null,
       });
+      await maybeSweepRetention(admin, gatewayId, marketId);
       const rpc = v2Gateway ? "hikvision_gateway_claim_v2_service" : "hikvision_gateway_claim_service";
       const { data, error } = await admin.rpc(rpc, { p_gateway_id: gatewayId });
       if (error) throw error;
