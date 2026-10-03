@@ -1,0 +1,100 @@
+name: Hikvision Production Preflight
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - '.github/workflows/hikvision-production-preflight.yml'
+      - 'supabase/config.toml'
+      - 'supabase/functions/hikvision-gateway/**'
+      - 'supabase/functions/hikvision-admin/**'
+      - 'supabase/migrations/20261003093000_add_hikvision_transaction_video_gateway.sql'
+      - 'supabase/migrations/20261003210000_harden_hikvision_gateway_attempt_fencing.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hikvision-production-preflight
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      EXPECTED_PROJECT_REF: madoflmbretqghqbqaak
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: user-source
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Verify deployment identity and secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo 'SUPABASE_ACCESS_TOKEN is missing' >&2; exit 1; }
+          test -n "${SUPABASE_PROJECT_REF:-}" || { echo 'SUPABASE_PROJECT_REF is missing' >&2; exit 1; }
+          if [[ "$SUPABASE_PROJECT_REF" != "$EXPECTED_PROJECT_REF" ]]; then
+            echo "Refusing preflight for unexpected project ref: $SUPABASE_PROJECT_REF" >&2
+            exit 1
+          fi
+          echo "Project identity locked to $EXPECTED_PROJECT_REF"
+
+      - name: Link production project read-only for migration preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--project-ref "$SUPABASE_PROJECT_REF")
+          if [[ -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
+            args+=(--password "$SUPABASE_DB_PASSWORD")
+          fi
+          supabase link "${args[@]}"
+
+      - name: Capture remote migration state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preflight
+          supabase migration list --linked 2>&1 | tee preflight/migration-list.txt
+
+      - name: Dry-run pending database migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db push --linked --dry-run 2>&1 | tee preflight/db-push-dry-run.txt
+
+      - name: Summarize Hikvision readiness
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Hikvision production preflight'
+            echo '- Expected project: `madoflmbretqghqbqaak`'
+            echo '- Database mutation: **none** (dry-run only)'
+            echo '- Required Hikvision migrations:'
+            echo '  - `20261003093000_add_hikvision_transaction_video_gateway.sql`'
+            echo '  - `20261003210000_harden_hikvision_gateway_attempt_fencing.sql`'
+            echo '- Gateway Edge Function uses custom token auth (`verify_jwt=false`).'
+            echo ''
+            echo '### Pending migration dry-run'
+            echo '```text'
+            if [[ -f preflight/db-push-dry-run.txt ]]; then tail -n 120 preflight/db-push-dry-run.txt; else echo 'dry-run did not execute'; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hikvision-production-preflight-${{ github.run_id }}
+          path: preflight/
+          if-no-files-found: warn
+          retention-days: 30
