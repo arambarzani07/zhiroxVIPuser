@@ -33,3 +33,6 @@ verify_jwt = false
 
 [functions.hikvision-gateway]
 verify_jwt = false
+
+[functions.hikvision-cloud-worker]
+verify_jwt = false
