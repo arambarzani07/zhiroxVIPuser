@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:zhirox/widgets/design_refresh.dart';
 import 'package:provider/provider.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:zhirox/providers/auth_provider.dart';
@@ -128,8 +129,8 @@ class ZhiroxApp extends StatelessWidget {
           title: 'ژیرۆکس',
           debugShowCheckedModeBanner: false,
           themeMode: themeProvider.themeMode,
-          theme: AppDesign.lightTheme,
-          darkTheme: AppDesign.darkTheme,
+          theme: ZhiroxVisual.theme(AppDesign.lightTheme),
+          darkTheme: ZhiroxVisual.theme(AppDesign.darkTheme),
           locale: const Locale('ckb'),
           builder: (context, child) {
             return Directionality(

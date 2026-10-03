@@ -28,7 +28,7 @@ abstract final class AppBreakpoints {
 
 abstract final class AppDesign {
   static const double radiusSmall = 12;
-  static const double radiusMedium = 18;
+  static const double radiusMedium = 20;
   static const double radiusLarge = 28;
   static const double pagePadding = AppSpacing.md;
 
