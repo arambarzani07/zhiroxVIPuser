@@ -128,8 +128,6 @@ async function listCloudCameras(admin: any, marketId: string): Promise<Record<st
   }
   const payload = (result.data ?? {}) as Record<string, unknown>;
   const devices = Array.isArray(payload.device) ? payload.device : [];
-  finalLoop:
-  for (const _ of <number>[]) { break finalLoop; }
   const byId = new Map<string, Record<string, unknown>>();
   for (let index = 0; index < devices.length; index++) {
     const device = (devices[index] ?? {}) as Record<string, unknown>;
@@ -171,30 +169,19 @@ async function listCloudCameras(admin: any, marketId: string): Promise<Record<st
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-
   const url = env("SUPABASE_URL");
   const key = serviceKey();
   if (!url || !key) return json({ error: "server_not_configured" }, 500);
-
   const authHeader = req.headers.get("Authorization") ?? "";
   const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
   if (!bearer) return json({ error: "authentication_required" }, 401);
-
   const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: authData, error: authError } = await admin.auth.getUser(bearer);
   const user = authData.user;
   if (authError || !user) return json({ error: "authentication_required" }, 401);
-
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("id, role, active, approved, market_name")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (profileError || !profile || profile.role !== "admin" || profile.active !== true || profile.approved !== true) {
-    return json({ error: "admin_required" }, 403);
-  }
+  const { data: profile, error: profileError } = await admin.from("profiles").select("id, role, active, approved, market_name").eq("id", user.id).maybeSingle();
+  if (profileError || !profile || profile.role !== "admin" || profile.active !== true || profile.approved !== true) return json({ error: "admin_required" }, 403);
   const marketId = user.id;
-
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch (_) { return json({ error: "invalid_json" }, 400); }
   const action = String(body.action ?? "status").trim();
@@ -202,10 +189,7 @@ Deno.serve(async (req: Request) => {
   try {
     if (action === "status") {
       const [{ data: config, error: configError }, { data: statusRows, error: statusError }, { data: cloudRows, error: cloudError }] = await Promise.all([
-        admin.from("hikvision_market_config")
-          .select("enabled,auto_capture,nvr_label,nvr_host,nvr_model,nvr_firmware,cashier_channel_id,pre_seconds,post_seconds,timezone,retention_days,capture_provider,hikconnect_camera_id,hikconnect_camera_name,hikconnect_device_serial,hikconnect_server_address,updated_at")
-          .eq("market_id", marketId)
-          .maybeSingle(),
+        admin.from("hikvision_market_config").select("enabled,auto_capture,nvr_label,nvr_host,nvr_model,nvr_firmware,cashier_channel_id,pre_seconds,post_seconds,timezone,retention_days,capture_provider,hikconnect_camera_id,hikconnect_camera_name,hikconnect_device_serial,hikconnect_server_address,updated_at").eq("market_id", marketId).maybeSingle(),
         admin.rpc("hikvision_gateway_status_service", { p_market_id: marketId }),
         admin.rpc("hikvision_cloud_status_service", { p_market_id: marketId }),
       ]);
@@ -221,15 +205,8 @@ Deno.serve(async (req: Request) => {
       const serverAddress = cleanBase(String(body.server_address ?? ""));
       const appKey = String(body.app_key ?? "").trim();
       const secretKey = String(body.secret_key ?? "").trim();
-      if (!isAllowedHikHost(serverAddress) || appKey.length < 8 || secretKey.length < 8) {
-        return json({ error: "invalid_cloud_credentials" }, 400);
-      }
-      const { data, error } = await admin.rpc("hikvision_cloud_credentials_set_service", {
-        p_market_id: marketId,
-        p_server_address: serverAddress,
-        p_app_key: appKey,
-        p_secret_key: secretKey,
-      });
+      if (!isAllowedHikHost(serverAddress) || appKey.length < 8 || secretKey.length < 8) return json({ error: "invalid_cloud_credentials" }, 400);
+      const { data, error } = await admin.rpc("hikvision_cloud_credentials_set_service", { p_market_id: marketId, p_server_address: serverAddress, p_app_key: appKey, p_secret_key: secretKey });
       if (error || data !== true) throw error ?? new Error("credential_store_failed");
       try {
         const session = await ensureCloudToken(admin, marketId);
@@ -243,11 +220,7 @@ Deno.serve(async (req: Request) => {
 
     if (action === "cloud_cameras") {
       const cameras = await listCloudCameras(admin, marketId);
-      cameras.sort((a, b) => {
-        const ca = Number(a.channel_no ?? 9999);
-        const cb = Number(b.channel_no ?? 9999);
-        return ca - cb || String(a.name).localeCompare(String(b.name));
-      });
+      cameras.sort((a, b) => Number(a.channel_no ?? 9999) - Number(b.channel_no ?? 9999) || String(a.name).localeCompare(String(b.name)));
       return json({ ok: true, cameras });
     }
 
@@ -259,13 +232,7 @@ Deno.serve(async (req: Request) => {
       if (!camera) return json({ error: "camera_not_found" }, 404);
       const channelNo = Math.trunc(Number(camera.channel_no ?? 0));
       if (channelNo < 1 || channelNo > 256) return json({ error: "invalid_camera_channel" }, 409);
-      const { data, error } = await admin.rpc("hikvision_cloud_activate_camera_service", {
-        p_market_id: marketId,
-        p_camera_id: cameraId,
-        p_camera_name: String(camera.name ?? ""),
-        p_device_serial: String(camera.device_serial ?? ""),
-        p_channel_no: channelNo,
-      });
+      const { data, error } = await admin.rpc("hikvision_cloud_activate_camera_service", { p_market_id: marketId, p_camera_id: cameraId, p_camera_name: String(camera.name ?? ""), p_device_serial: String(camera.device_serial ?? ""), p_channel_no: channelNo });
       if (error || data !== true) throw error ?? new Error("camera_activation_failed");
       return json({ ok: true, camera, provider: "hikconnect_cloud" });
     }
@@ -281,10 +248,7 @@ Deno.serve(async (req: Request) => {
       crypto.getRandomValues(random);
       const token = `zg_${base64Url(random)}`;
       const hash = await sha256Hex(token);
-      const { data, error } = await admin.rpc("hikvision_gateway_rotate_token_service", {
-        p_market_id: marketId,
-        p_token_sha256: hash,
-      });
+      const { data, error } = await admin.rpc("hikvision_gateway_rotate_token_service", { p_market_id: marketId, p_token_sha256: hash });
       if (error) throw error;
       const row = Array.isArray(data) && data.length > 0 ? data[0] : null;
       if (!row) return json({ error: "gateway_not_registered" }, 409);
@@ -296,24 +260,9 @@ Deno.serve(async (req: Request) => {
       const pre = Math.trunc(Number(body.pre_seconds ?? 15));
       const post = Math.trunc(Number(body.post_seconds ?? 30));
       const retention = Math.trunc(Number(body.retention_days ?? 90));
-      if (channel < 1 || channel > 256 || pre < 0 || pre > 300 || post < 1 || post > 600 || retention < 1 || retention > 3650) {
-        return json({ error: "invalid_config" }, 400);
-      }
-      const update = {
-        enabled: body.enabled !== false,
-        auto_capture: body.auto_capture !== false,
-        cashier_channel_id: channel,
-        pre_seconds: pre,
-        post_seconds: post,
-        retention_days: retention,
-        updated_at: new Date().toISOString(),
-      };
-      const { data, error } = await admin
-        .from("hikvision_market_config")
-        .update(update)
-        .eq("market_id", marketId)
-        .select("enabled,auto_capture,cashier_channel_id,pre_seconds,post_seconds,retention_days,updated_at")
-        .single();
+      if (channel < 1 || channel > 256 || pre < 0 || pre > 300 || post < 1 || post > 600 || retention < 1 || retention > 3650) return json({ error: "invalid_config" }, 400);
+      const update = { enabled: body.enabled !== false, auto_capture: body.auto_capture !== false, cashier_channel_id: channel, pre_seconds: pre, post_seconds: post, retention_days: retention, updated_at: new Date().toISOString() };
+      const { data, error } = await admin.from("hikvision_market_config").update(update).eq("market_id", marketId).select("enabled,auto_capture,cashier_channel_id,pre_seconds,post_seconds,retention_days,updated_at").single();
       if (error) throw error;
       return json({ ok: true, config: data });
     }
@@ -321,24 +270,12 @@ Deno.serve(async (req: Request) => {
     if (action === "video_url") {
       const sourceType = String(body.source_type ?? "").trim();
       const sourceId = String(body.source_id ?? "").trim();
-      if (!["debt", "payment", "general_payment"].includes(sourceType) || !/^[0-9a-f-]{36}$/i.test(sourceId)) {
-        return json({ error: "invalid_transaction" }, 400);
-      }
-      const { data: evidence, error } = await admin
-        .from("transaction_video_evidence")
-        .select("status,object_path,channel_id,transaction_at,clip_start_at,clip_end_at,captured_at,playback_metadata")
-        .eq("market_id", marketId)
-        .eq("source_type", sourceType)
-        .eq("source_id", sourceId)
-        .maybeSingle();
+      if (!["debt", "payment", "general_payment"].includes(sourceType) || !/^[0-9a-f-]{36}$/i.test(sourceId)) return json({ error: "invalid_transaction" }, 400);
+      const { data: evidence, error } = await admin.from("transaction_video_evidence").select("status,object_path,channel_id,transaction_at,clip_start_at,clip_end_at,captured_at,playback_metadata").eq("market_id", marketId).eq("source_type", sourceType).eq("source_id", sourceId).maybeSingle();
       if (error) throw error;
       if (!evidence) return json({ error: "video_not_found" }, 404);
-      if (evidence.status !== "ready" || !evidence.object_path) {
-        return json({ ok: true, ready: false, evidence });
-      }
-      const { data: signed, error: signedError } = await admin.storage
-        .from("transaction-camera-clips")
-        .createSignedUrl(evidence.object_path, 600);
+      if (evidence.status !== "ready" || !evidence.object_path) return json({ ok: true, ready: false, evidence });
+      const { data: signed, error: signedError } = await admin.storage.from("transaction-camera-clips").createSignedUrl(evidence.object_path, 600);
       if (signedError || !signed?.signedUrl) throw signedError ?? new Error("signed_read_failed");
       return json({ ok: true, ready: true, signed_url: signed.signedUrl, expires_in: 600, evidence });
     }
