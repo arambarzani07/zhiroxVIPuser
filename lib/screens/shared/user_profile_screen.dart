@@ -560,8 +560,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     bool showError = true,
   }) async {
     if (!mounted || !_financialTimelineHasMore) return true;
-    if (_financialHistoryLoading || _financialTimelineCursor == null)
+    if (_financialHistoryLoading || _financialTimelineCursor == null) {
       return false;
+    }
 
     final hadScroll = preserveScroll && _profileScrollController.hasClients;
     final oldPixels = hadScroll
