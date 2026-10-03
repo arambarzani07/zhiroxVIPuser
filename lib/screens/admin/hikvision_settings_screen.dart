@@ -300,7 +300,7 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
           height: 420,
           child: ListView.separated(
             itemCount: cameras.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final camera = cameras[index];
               return ListTile(
