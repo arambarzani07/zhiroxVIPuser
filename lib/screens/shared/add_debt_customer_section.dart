@@ -40,11 +40,364 @@ extension _AddDebtCustomerSection on _AddDebtScreenState {
           ),
           const SizedBox(height: 10),
           _buildCustomerPicker(isDark),
-          // Show limit warning if selected
           if (_selectedCustomerId != null) _buildLimitWarning(),
+          if (widget.debt == null) ...[
+            const SizedBox(height: 12),
+            _buildVisionOcrAction(isDark),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildVisionOcrAction(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppDarkColors.surface
+            : AppColors.primary.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.document_scanner_outlined,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Google Vision OCR',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: isDark
+                            ? AppDarkColors.textPrimary
+                            : const Color(0xFF344054),
+                      ),
+                    ),
+                    Text(
+                      'وەسڵ بخوێنەوە و بڕ و بەروار وەک پێشنیار وەربگرە',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        height: 1.45,
+                        color: isDark
+                            ? AppDarkColors.textSecondary
+                            : const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _isLoading ? null : _scanReceiptWithVision,
+            icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+            label: const Text('سکانی وەسڵ بە Google Vision'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.35),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(11),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'OCR هیچ قەرزێک خۆکار تۆمار ناکات؛ پێشنیارەکان دەبێت پەسند بکرێن.',
+            style: TextStyle(
+              fontSize: 9.5,
+              color: isDark
+                  ? AppDarkColors.textSecondary
+                  : Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _scanReceiptWithVision() async {
+    if (_isLoading) return;
+
+    final previousImage = _receiptImage;
+    await _pickImage();
+    if (!mounted || _receiptImage == null) return;
+
+    final scanFile = _receiptImage!;
+    final size = await scanFile.length();
+    if (size <= 0 || size > 8 * 1024 * 1024) {
+      if (mounted) {
+        AppHelpers.showSnackBar(
+          context,
+          'قەبارەی وێنە بۆ OCR گونجاو نییە. وێنەیەکی بچووکتر هەڵبژێرە.',
+          isError: true,
+        );
+      }
+      return;
+    }
+
+    final path = scanFile.path.toLowerCase();
+    final mimeType = path.endsWith('.png')
+        ? 'image/png'
+        : path.endsWith('.webp')
+            ? 'image/webp'
+            : (path.endsWith('.jpg') || path.endsWith('.jpeg'))
+                ? 'image/jpeg'
+                : null;
+    if (mimeType == null) {
+      if (mounted) {
+        AppHelpers.showSnackBar(
+          context,
+          'جۆری وێنە بۆ Google Vision پشتگیری ناکرێت. JPG، PNG یان WebP بەکاربهێنە.',
+          isError: true,
+        );
+      }
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final bytes = await scanFile.readAsBytes();
+      final response = await PBService.client.functions.invoke(
+        'google-vision-ocr',
+        body: {
+          'imageBase64': base64Encode(bytes),
+          'mimeType': mimeType,
+          'languageHints': const ['ar', 'en', 'ckb'],
+        },
+      );
+
+      dynamic raw = response.data;
+      if (raw is String && raw.isNotEmpty) {
+        try {
+          raw = jsonDecode(raw);
+        } catch (_) {}
+      }
+      if (raw is! Map) {
+        throw StateError('invalid_ocr_response');
+      }
+      final result = Map<String, dynamic>.from(raw);
+      if (result['error'] != null) {
+        throw StateError(result['error'].toString());
+      }
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      final accepted = await _showVisionOcrPreview(result);
+      if (!mounted) return;
+      if (accepted != true && previousImage != null && _receiptImage == null) {
+        setState(() => _receiptImage = previousImage);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      AppHelpers.showSnackBar(
+        context,
+        _visionOcrErrorMessage(e),
+        isError: true,
+      );
+    }
+  }
+
+  String _visionOcrErrorMessage(Object error) {
+    final value = error.toString().toLowerCase();
+    if (value.contains('google_vision_not_configured')) {
+      return 'Google Vision هێشتا لە سێرڤەر چالاک نەکراوە.';
+    }
+    if (value.contains('unauthorized') || value.contains('401')) {
+      return 'دانیشتنت بەسەرچووە. دووبارە بچۆ ژوورەوە.';
+    }
+    if (value.contains('rate_limited') || value.contains('429')) {
+      return 'داواکاری OCR زۆر بووە. کەمێک دواتر دووبارە هەوڵ بدە.';
+    }
+    if (value.contains('timeout') || value.contains('504')) {
+      return 'Google Vision وەڵامی نەدایەوە. دووبارە هەوڵ بدە.';
+    }
+    if (value.contains('image_too_large') || value.contains('413')) {
+      return 'وێنەکە زۆر گەورەیە بۆ OCR.';
+    }
+    return 'نەتوانرا وێنەکە بە Google Vision بخوێندرێتەوە.';
+  }
+
+  Future<bool?> _showVisionOcrPreview(Map<String, dynamic> result) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final text = (result['text'] ?? '').toString().trim();
+    final suggestedRaw = result['suggested'];
+    final suggested = suggestedRaw is Map
+        ? Map<String, dynamic>.from(suggestedRaw)
+        : <String, dynamic>{};
+    final amountRaw = suggested['amount'];
+    final amountMap = amountRaw is Map
+        ? Map<String, dynamic>.from(amountRaw)
+        : <String, dynamic>{};
+    final amount = (amountMap['value'] as num?)?.toDouble();
+    final currency = amountMap['currency']?.toString();
+    final dateText = suggested['date']?.toString();
+    final parsedDate = dateText == null ? null : DateTime.tryParse(dateText);
+    final confidence = (result['confidence'] as num?)?.toDouble();
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: isDark ? AppDarkColors.card : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.document_scanner_rounded, color: AppColors.primary),
+              SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'پێشبینینی OCR',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520, maxHeight: 460),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(11),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          amount != null && amount > 0
+                              ? 'بڕی پێشنیارکراو: ${AppHelpers.formatCurrencyWithType(amount, currency == 'USD' ? 'USD' : _currency)}'
+                              : 'بڕێکی دڵنیابوونەوەی پێکراو نەدۆزرایەوە',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        if (dateText != null && dateText.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text('بەرواری دۆزراوە: $dateText'),
+                        ],
+                        if (confidence != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'دڵنیایی OCR: ${(confidence * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'دەقی خوێندراوە',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 5),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppDarkColors.inputFill
+                          : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: SelectableText(
+                      text.isEmpty
+                          ? 'هیچ دەقێک نەخوێندرایەوە.'
+                          : (text.length > 1800
+                              ? '${text.substring(0, 1800)}…'
+                              : text),
+                      style: const TextStyle(fontSize: 11.5, height: 1.55),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'تێبینی: ئەمانە تەنها پێشنیارن؛ پێش پاشەکەوتکردن بڕ و بەروار بپشکنە.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: Colors.orange,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('تەنها وێنەکە بهێڵەوە'),
+            ),
+            ElevatedButton.icon(
+              onPressed: amount == null || amount <= 0
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.check_rounded, size: 17),
+              label: const Text('پێشنیارەکان بەکاربهێنە'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (accepted == true && amount != null && amount > 0 && mounted) {
+      if (currency == 'USD' || currency == 'IQD') {
+        setState(() => _currency = currency!);
+      }
+      _setSimpleAmount(amount);
+      if (parsedDate != null && !parsedDate.isAfter(DateTime.now())) {
+        final now = DateTime.now();
+        setState(() {
+          _hasCustomDebtDate = true;
+          _customDebtDate = DateTime(
+            parsedDate.year,
+            parsedDate.month,
+            parsedDate.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
+          _showAdvancedDetails = true;
+        });
+      }
+      AppHelpers.showSnackBar(
+        context,
+        'پێشنیارەکانی OCR دانران؛ پێش پاشەکەوتکردن بپشکنە.',
+      );
+    }
+    return accepted;
   }
 
   Widget _buildCustomerPicker(bool isDark) {
@@ -227,10 +580,7 @@ extension _AddDebtCustomerSection on _AddDebtScreenState {
     );
   }
 
-  // Helper to check if customer is already over limit (just for UI indication in dropdown)
   bool _isOverLimit(RecordModel customer) {
-    // This is just a visual hint. Actual enforcement happens on save.
-    // For now, return false as we don't have balance for all customers yet.
     return false;
   }
 
