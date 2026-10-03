@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import getpass
+import os
 import pathlib
 import subprocess
 import sys
@@ -12,6 +13,32 @@ def ask(prompt: str, default: str = "") -> str:
     suffix = f" [{default}]" if default else ""
     value = input(f"{prompt}{suffix}: ").strip()
     return value or default
+
+
+def ask_secret(prompt: str) -> str:
+    """Echo a star for each typed or pasted character on Windows."""
+    if os.name != "nt":
+        return getpass.getpass(prompt)
+    import msvcrt
+    print(prompt, end="", flush=True)
+    chars: list[str] = []
+    while True:
+        char = msvcrt.getwch()
+        if char in ("\r", "\n"):
+            print()
+            return "".join(chars)
+        if char == "\x03":
+            raise KeyboardInterrupt
+        if char in ("\x00", "\xe0"):
+            msvcrt.getwch()
+            continue
+        if char == "\b":
+            if chars:
+                chars.pop()
+                print("\b \b", end="", flush=True)
+        elif char.isprintable():
+            chars.append(char)
+            print("*", end="", flush=True)
 
 
 def install_task(agent_exe: pathlib.Path) -> None:
@@ -32,8 +59,8 @@ def main() -> int:
 
     host = ask("NVR address", "192.168.1.2")
     username = ask("NVR username", "admin")
-    password = getpass.getpass("NVR password: ")
-    token = getpass.getpass("ZHIROX gateway token: ")
+    password = ask_secret("NVR password (typing shows *): ")
+    token = ask_secret("ZHIROX gateway token (typing shows *): ")
     if not password or len(token) < 32:
         print("Password or gateway token is missing.")
         return 2
