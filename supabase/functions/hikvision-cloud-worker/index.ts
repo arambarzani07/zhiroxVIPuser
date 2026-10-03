@@ -31,7 +31,8 @@ function serviceKey(): string {
 
 async function sha256Hex(value: string | Uint8Array): Promise<string> {
   const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  const source = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", source));
   return Array.from(digest).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
@@ -91,16 +92,16 @@ type Creds = {
   area_domain?: string | null;
 };
 
-async function getCreds(admin: ReturnType<typeof createClient>, marketId: string): Promise<Creds> {
+async function getCreds(admin: any, marketId: string): Promise<Creds> {
   const { data, error } = await admin.rpc("hikvision_cloud_credentials_get_service", { p_market_id: marketId });
   if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : null;
+  const row = Array.isArray(data) ? data[0] as Record<string, unknown> | undefined : undefined;
   if (!row?.server_address || !row?.app_key || !row?.secret_key) throw new Error("hikconnect_credentials_missing");
-  return row as Creds;
+  return row as unknown as Creds;
 }
 
 async function ensureToken(
-  admin: ReturnType<typeof createClient>,
+  admin: any,
   marketId: string,
   creds: Creds,
 ): Promise<{ token: string; areaDomain: string }> {
@@ -158,7 +159,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: claimRows, error: claimError } = await admin.rpc("hikvision_cloud_claim_service");
   if (claimError) return json({ error: "claim_failed" }, 500);
-  const job = Array.isArray(claimRows) ? claimRows[0] : null;
+  const job = Array.isArray(claimRows) ? claimRows[0] as Record<string, unknown> | undefined : undefined;
   if (!job?.job_id) return json({ ok: true, processed: 0 });
 
   const jobId = String(job.job_id);
