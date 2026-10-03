@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+import getpass
+import pathlib
+import subprocess
+import sys
+
+from common import APP_DIR, CONFIG_PATH, CloudClient, GatewayConfig, HikvisionClient
+
+
+def ask(prompt: str, default: str = "") -> str:
+    suffix = f" [{default}]" if default else ""
+    value = input(f"{prompt}{suffix}: ").strip()
+    return value or default
+
+
+def install_task(agent_exe: pathlib.Path) -> None:
+    task_name = "ZHIROX Hikvision Gateway"
+    command = [
+        "schtasks", "/Create", "/F", "/SC", "ONLOGON", "/RL", "HIGHEST",
+        "/TN", task_name, "/TR", f'\"{agent_exe}\"'
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "scheduled_task_failed")
+
+
+def main() -> int:
+    print("ZHIROX Hikvision Gateway Setup")
+    print("NVR password and gateway token are encrypted locally with Windows DPAPI.")
+    print("They are never written to Supabase or GitHub.\n")
+
+    host = ask("NVR address", "192.168.1.2")
+    username = ask("NVR username", "admin")
+    password = getpass.getpass("NVR password: ")
+    token = getpass.getpass("ZHIROX gateway token: ")
+    if not password or len(token) < 32:
+        print("Password or gateway token is missing.")
+        return 2
+
+    cfg = GatewayConfig(host, username, password, token)
+    hik = HikvisionClient(cfg)
+    cloud = CloudClient(cfg)
+
+    print("Testing NVR ISAPI...")
+    info = hik.device_info()
+    if "DS-7616NI-K2" not in info and "Network Video Recorder" not in info:
+        print("Warning: ISAPI answered, but the expected NVR model was not detected.")
+    print("NVR ISAPI: OK")
+
+    print("Testing secure cloud gateway...")
+    ping = cloud.call("ping")
+    if not ping.get("ok"):
+        raise RuntimeError("cloud_gateway_ping_failed")
+    print("Cloud gateway: OK")
+
+    cfg.save()
+    print(f"Encrypted config saved to: {CONFIG_PATH}")
+
+    base = pathlib.Path(sys.executable).resolve().parent
+    agent = base / "zhirox-hikvision-gateway.exe"
+    if agent.exists():
+        answer = ask("Start gateway automatically when this Windows user logs in? (y/n)", "y").lower()
+        if answer.startswith("y"):
+            install_task(agent)
+            print("Auto-start task installed.")
+    else:
+        print("Gateway EXE was not found beside the setup EXE; auto-start was skipped.")
+
+    print("Setup complete. You can now run zhirox-hikvision-gateway.exe.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        raise SystemExit(130)
+    except Exception as exc:
+        print(f"Setup failed: {type(exc).__name__}: {exc}")
+        raise SystemExit(1)
