@@ -50,6 +50,71 @@ class HikvisionGatewayStatus {
   }
 }
 
+class HikvisionCloudStatus {
+  const HikvisionCloudStatus({
+    required this.configured,
+    this.serverAddress,
+    this.areaDomain,
+    this.tokenExpiresAt,
+    this.lastTestAt,
+    this.lastError,
+  });
+
+  final bool configured;
+  final String? serverAddress;
+  final String? areaDomain;
+  final DateTime? tokenExpiresAt;
+  final DateTime? lastTestAt;
+  final String? lastError;
+
+  bool get healthy => configured && (lastError == null || lastError!.isEmpty);
+
+  factory HikvisionCloudStatus.fromMap(Map<String, dynamic> map) {
+    DateTime? time(String key) =>
+        DateTime.tryParse('${map[key] ?? ''}')?.toLocal();
+    String? text(String key) {
+      final value = '${map[key] ?? ''}'.trim();
+      return value.isEmpty ? null : value;
+    }
+
+    return HikvisionCloudStatus(
+      configured: map['configured'] == true,
+      serverAddress: text('server_address'),
+      areaDomain: text('area_domain'),
+      tokenExpiresAt: time('token_expires_at'),
+      lastTestAt: time('last_test_at'),
+      lastError: text('last_error'),
+    );
+  }
+}
+
+class HikvisionCloudCamera {
+  const HikvisionCloudCamera({
+    required this.id,
+    required this.name,
+    required this.online,
+    required this.deviceSerial,
+    required this.channelNo,
+  });
+
+  final String id;
+  final String name;
+  final bool online;
+  final String deviceSerial;
+  final int channelNo;
+
+  factory HikvisionCloudCamera.fromMap(Map<String, dynamic> map) =>
+      HikvisionCloudCamera(
+        id: '${map['id'] ?? ''}',
+        name: '${map['name'] ?? ''}',
+        online: map['online'] == true,
+        deviceSerial: '${map['device_serial'] ?? ''}',
+        channelNo: map['channel_no'] is num
+            ? (map['channel_no'] as num).toInt()
+            : int.tryParse('${map['channel_no'] ?? ''}') ?? 0,
+      );
+}
+
 class HikvisionMarketConfig {
   const HikvisionMarketConfig({
     required this.enabled,
@@ -63,6 +128,11 @@ class HikvisionMarketConfig {
     required this.postSeconds,
     required this.timezone,
     required this.retentionDays,
+    required this.captureProvider,
+    required this.hikconnectCameraId,
+    required this.hikconnectCameraName,
+    required this.hikconnectDeviceSerial,
+    required this.hikconnectServerAddress,
   });
 
   final bool enabled;
@@ -76,6 +146,13 @@ class HikvisionMarketConfig {
   final int postSeconds;
   final String timezone;
   final int retentionDays;
+  final String captureProvider;
+  final String hikconnectCameraId;
+  final String hikconnectCameraName;
+  final String hikconnectDeviceSerial;
+  final String hikconnectServerAddress;
+
+  bool get usesCloud => captureProvider == 'hikconnect_cloud';
 
   factory HikvisionMarketConfig.fromMap(Map<String, dynamic> map) {
     int integer(String key, int fallback) => map[key] is num
@@ -93,6 +170,12 @@ class HikvisionMarketConfig {
       postSeconds: integer('post_seconds', 30),
       timezone: '${map['timezone'] ?? 'Asia/Baghdad'}',
       retentionDays: integer('retention_days', 90),
+      captureProvider: '${map['capture_provider'] ?? 'local_gateway'}',
+      hikconnectCameraId: '${map['hikconnect_camera_id'] ?? ''}',
+      hikconnectCameraName: '${map['hikconnect_camera_name'] ?? ''}',
+      hikconnectDeviceSerial: '${map['hikconnect_device_serial'] ?? ''}',
+      hikconnectServerAddress:
+          '${map['hikconnect_server_address'] ?? ''}',
     );
   }
 }
@@ -102,11 +185,13 @@ class HikvisionAdminState {
     required this.marketName,
     this.config,
     this.gateway,
+    this.cloud,
   });
 
   final String marketName;
   final HikvisionMarketConfig? config;
   final HikvisionGatewayStatus? gateway;
+  final HikvisionCloudStatus? cloud;
 }
 
 class HikvisionAdminService {
@@ -142,6 +227,7 @@ class HikvisionAdminService {
     final data = await _invoke('status');
     final configRaw = data['config'];
     final gatewayRaw = data['gateway'];
+    final cloudRaw = data['cloud'];
     return HikvisionAdminState(
       marketName: '${data['market_name'] ?? ''}',
       config: configRaw is Map
@@ -150,7 +236,43 @@ class HikvisionAdminService {
       gateway: gatewayRaw is Map
           ? HikvisionGatewayStatus.fromMap(Map<String, dynamic>.from(gatewayRaw))
           : null,
+      cloud: cloudRaw is Map
+          ? HikvisionCloudStatus.fromMap(Map<String, dynamic>.from(cloudRaw))
+          : const HikvisionCloudStatus(configured: false),
     );
+  }
+
+  static Future<void> saveCloudCredentials({
+    required String serverAddress,
+    required String appKey,
+    required String secretKey,
+  }) async {
+    await _invoke('save_cloud_credentials', {
+      'server_address': serverAddress.trim(),
+      'app_key': appKey.trim(),
+      'secret_key': secretKey.trim(),
+    });
+  }
+
+  static Future<List<HikvisionCloudCamera>> cloudCameras() async {
+    final data = await _invoke('cloud_cameras');
+    final raw = data['cameras'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => HikvisionCloudCamera.fromMap(
+              Map<String, dynamic>.from(item),
+            ))
+        .where((camera) => camera.id.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  static Future<void> selectCloudCamera(String cameraId) async {
+    await _invoke('select_cloud_camera', {'camera_id': cameraId});
+  }
+
+  static Future<void> useLocalGateway() async {
+    await _invoke('use_local_gateway');
   }
 
   static Future<String> issueGatewayToken() async {
@@ -182,6 +304,18 @@ class HikvisionAdminService {
     final value = error.toString();
     if (value.contains('admin_required')) {
       return 'تەنها بەڕێوەبەری مارکێت دەتوانێت Hikvision ڕێکبخات.';
+    }
+    if (value.contains('invalid_cloud_credentials')) {
+      return 'App Key، Secret Key یان سێرڤەری Hik-Connect دروست نییە.';
+    }
+    if (value.contains('hikconnect_auth_failed')) {
+      return 'پەیوەندی بە Hik-Connect Team سەرکەوتوو نەبوو. AK/SK و ناونیشانی سێرڤەر بپشکنەوە.';
+    }
+    if (value.contains('camera_not_found')) {
+      return 'کامێراکە لە Hik-Connect Cloud نەدۆزرایەوە.';
+    }
+    if (value.contains('invalid_camera_channel')) {
+      return 'ژمارەی Channel ـی کامێراکە دروست نییە.';
     }
     if (value.contains('gateway_not_registered')) {
       return 'Gateway ـی ئەم مارکێتە هێشتا لە backend تۆمار نەکراوە.';
