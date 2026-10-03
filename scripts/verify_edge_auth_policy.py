@@ -50,6 +50,16 @@ contracts = {
         "hikvision_gateway_auth_service",
         'if (token.length < 32 || token.length > 256)',
     ),
+    # The Hik-Connect cloud worker is a cron/machine client. It authenticates
+    # with a high-entropy worker secret held in Vault. The request secret is
+    # hashed before the service-role-only auth RPC compares it with the stored
+    # SHA-256 digest; no ordinary Supabase user can invoke worker RPCs directly.
+    "hikvision-cloud-worker": (
+        "x-zhirox-hikvision-cloud-worker",
+        "sha256Hex(secret)",
+        "hikvision_cloud_worker_auth_service",
+        'if (secret.length < 32 || secret.length > 256)',
+    ),
 }
 
 unknown = sorted(false_jwt - set(contracts))
