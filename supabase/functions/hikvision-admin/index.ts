@@ -35,6 +35,113 @@ async function sha256Hex(value: string): Promise<string> {
   return Array.from(digest).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function cleanBase(raw: string): string { return raw.trim().replace(/\/+$/, ""); }
+function isAllowedHikHost(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    return host === "hikcentralconnect.com" ||
+      host.endsWith(".hikcentralconnect.com") ||
+      host === "hikcentralconnectru.com" ||
+      host.endsWith(".hikcentralconnectru.com");
+  } catch (_) { return false; }
+}
+
+async function hikPost(
+  root: string,
+  path: string,
+  token: string | null,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (!isAllowedHikHost(root)) throw new Error("untrusted_hikconnect_host");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Token = token;
+  const response = await fetch(`${cleanBase(root)}${path}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`hik_http_${response.status}`);
+  const data = await response.json();
+  if (!data || typeof data !== "object") throw new Error("hik_invalid_json");
+  return data as Record<string, unknown>;
+}
+
+type CloudCreds = {
+  server_address: string;
+  app_key: string;
+  secret_key: string;
+  access_token?: string | null;
+  token_expires_at?: string | null;
+  area_domain?: string | null;
+};
+
+async function getCloudCreds(admin: any, marketId: string): Promise<CloudCreds> {
+  const { data, error } = await admin.rpc("hikvision_cloud_credentials_get_service", { p_market_id: marketId });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] as Record<string, unknown> | undefined : undefined;
+  if (!row?.server_address || !row?.app_key || !row?.secret_key) throw new Error("hikconnect_credentials_missing");
+  return row as unknown as CloudCreds;
+}
+
+async function ensureCloudToken(admin: any, marketId: string): Promise<{ token: string; areaDomain: string }> {
+  const creds = await getCloudCreds(admin, marketId);
+  const expiry = creds.token_expires_at ? new Date(creds.token_expires_at).getTime() : 0;
+  if (creds.access_token && creds.area_domain && expiry > Date.now() + 5 * 60 * 1000) {
+    if (!isAllowedHikHost(creds.area_domain)) throw new Error("untrusted_cached_area_domain");
+    return { token: creds.access_token, areaDomain: cleanBase(creds.area_domain) };
+  }
+
+  const login = await hikPost(creds.server_address, "/api/hccgw/platform/v1/token/get", null, {
+    appKey: creds.app_key,
+    secretKey: creds.secret_key,
+  });
+  if (String(login.errorCode ?? "") !== "0") throw new Error(`hik_token_${String(login.errorCode ?? "unknown")}`);
+  const payload = (login.data ?? {}) as Record<string, unknown>;
+  const token = String(payload.accessToken ?? "").trim();
+  const areaDomain = cleanBase(String(payload.areaDomain ?? "").trim());
+  if (!token || !isAllowedHikHost(areaDomain)) throw new Error("hik_token_response_invalid");
+  const rawExpiry = Number(payload.expireTime ?? 0);
+  const expiryMs = rawExpiry > 10_000_000_000 ? rawExpiry : rawExpiry * 1000;
+  const expiresAt = Number.isFinite(expiryMs) && expiryMs > Date.now()
+    ? new Date(expiryMs)
+    : new Date(Date.now() + 6 * 24 * 60 * 60 * 1000);
+  const { data, error } = await admin.rpc("hikvision_cloud_token_cache_service", {
+    p_market_id: marketId,
+    p_access_token: token,
+    p_expires_at: expiresAt.toISOString(),
+    p_area_domain: areaDomain,
+  });
+  if (error || data !== true) throw error ?? new Error("token_cache_failed");
+  return { token, areaDomain };
+}
+
+async function listCloudCameras(admin: any, marketId: string): Promise<Record<string, unknown>[]> {
+  const session = await ensureCloudToken(admin, marketId);
+  const result = await hikPost(session.areaDomain, "/api/hccgw/resource/v1/areas/cameras/get", session.token, {
+    pageIndex: 1,
+    pageSize: 500,
+    filter: {},
+  });
+  if (String(result.errorCode ?? "") !== "0") throw new Error(`hik_cameras_${String(result.errorCode ?? "unknown")}`);
+  const payload = (result.data ?? {}) as Record<string, unknown>;
+  const raw = Array.isArray(payload.camera) ? payload.camera : [];
+  return raw.map((entry) => {
+    const camera = (entry ?? {}) as Record<string, unknown>;
+    const device = (camera.device ?? {}) as Record<string, unknown>;
+    const devInfo = (device.devInfo ?? {}) as Record<string, unknown>;
+    const channelInfo = (device.channelInfo ?? {}) as Record<string, unknown>;
+    return {
+      id: String(camera.id ?? ""),
+      name: String(camera.name ?? ""),
+      online: String(camera.online ?? "0") === "1",
+      device_serial: String(devInfo.serialNo ?? ""),
+      channel_no: Number(channelInfo.no ?? 0),
+    };
+  }).filter((camera) => String(camera.id).length > 0);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -68,17 +175,79 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (action === "status") {
-      const [{ data: config, error: configError }, { data: statusRows, error: statusError }] = await Promise.all([
+      const [{ data: config, error: configError }, { data: statusRows, error: statusError }, { data: cloudRows, error: cloudError }] = await Promise.all([
         admin.from("hikvision_market_config")
-          .select("enabled,auto_capture,nvr_label,nvr_host,nvr_model,nvr_firmware,cashier_channel_id,pre_seconds,post_seconds,timezone,retention_days,updated_at")
+          .select("enabled,auto_capture,nvr_label,nvr_host,nvr_model,nvr_firmware,cashier_channel_id,pre_seconds,post_seconds,timezone,retention_days,capture_provider,hikconnect_camera_id,hikconnect_camera_name,hikconnect_device_serial,hikconnect_server_address,updated_at")
           .eq("market_id", marketId)
           .maybeSingle(),
         admin.rpc("hikvision_gateway_status_service", { p_market_id: marketId }),
+        admin.rpc("hikvision_cloud_status_service", { p_market_id: marketId }),
       ]);
       if (configError) throw configError;
       if (statusError) throw statusError;
+      if (cloudError) throw cloudError;
       const gateway = Array.isArray(statusRows) && statusRows.length > 0 ? statusRows[0] : null;
-      return json({ ok: true, market_name: profile.market_name, config, gateway });
+      const cloud = Array.isArray(cloudRows) && cloudRows.length > 0 ? cloudRows[0] : { configured: false };
+      return json({ ok: true, market_name: profile.market_name, config, gateway, cloud });
+    }
+
+    if (action === "save_cloud_credentials") {
+      const serverAddress = cleanBase(String(body.server_address ?? ""));
+      const appKey = String(body.app_key ?? "").trim();
+      const secretKey = String(body.secret_key ?? "").trim();
+      if (!isAllowedHikHost(serverAddress) || appKey.length < 8 || secretKey.length < 8) {
+        return json({ error: "invalid_cloud_credentials" }, 400);
+      }
+      const { data, error } = await admin.rpc("hikvision_cloud_credentials_set_service", {
+        p_market_id: marketId,
+        p_server_address: serverAddress,
+        p_app_key: appKey,
+        p_secret_key: secretKey,
+      });
+      if (error || data !== true) throw error ?? new Error("credential_store_failed");
+      try {
+        const session = await ensureCloudToken(admin, marketId);
+        return json({ ok: true, connected: true, area_domain: session.areaDomain });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await admin.rpc("hikvision_cloud_mark_error_service", { p_market_id: marketId, p_error: message.slice(0, 500) });
+        return json({ error: "hikconnect_auth_failed" }, 422);
+      }
+    }
+
+    if (action === "cloud_cameras") {
+      const cameras = await listCloudCameras(admin, marketId);
+      cameras.sort((a, b) => {
+        const ca = Number(a.channel_no ?? 9999);
+        const cb = Number(b.channel_no ?? 9999);
+        return ca - cb || String(a.name).localeCompare(String(b.name));
+      });
+      return json({ ok: true, cameras });
+    }
+
+    if (action === "select_cloud_camera") {
+      const cameraId = String(body.camera_id ?? "").trim();
+      if (cameraId.length < 8 || cameraId.length > 128) return json({ error: "invalid_camera_id" }, 400);
+      const cameras = await listCloudCameras(admin, marketId);
+      const camera = cameras.find((item) => String(item.id) === cameraId);
+      if (!camera) return json({ error: "camera_not_found" }, 404);
+      const channelNo = Math.trunc(Number(camera.channel_no ?? 0));
+      if (channelNo < 1 || channelNo > 256) return json({ error: "invalid_camera_channel" }, 409);
+      const { data, error } = await admin.rpc("hikvision_cloud_activate_camera_service", {
+        p_market_id: marketId,
+        p_camera_id: cameraId,
+        p_camera_name: String(camera.name ?? ""),
+        p_device_serial: String(camera.device_serial ?? ""),
+        p_channel_no: channelNo,
+      });
+      if (error || data !== true) throw error ?? new Error("camera_activation_failed");
+      return json({ ok: true, camera, provider: "hikconnect_cloud" });
+    }
+
+    if (action === "use_local_gateway") {
+      const { data, error } = await admin.rpc("hikvision_use_local_gateway_service", { p_market_id: marketId });
+      if (error || data !== true) throw error ?? new Error("provider_update_failed");
+      return json({ ok: true, provider: "local_gateway" });
     }
 
     if (action === "issue_gateway_token") {
@@ -136,7 +305,7 @@ Deno.serve(async (req: Request) => {
       }
       const { data: evidence, error } = await admin
         .from("transaction_video_evidence")
-        .select("status,object_path,channel_id,transaction_at,clip_start_at,clip_end_at,captured_at")
+        .select("status,object_path,channel_id,transaction_at,clip_start_at,clip_end_at,captured_at,playback_metadata")
         .eq("market_id", marketId)
         .eq("source_type", sourceType)
         .eq("source_id", sourceId)
