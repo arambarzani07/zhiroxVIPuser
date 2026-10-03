@@ -8,6 +8,7 @@ on:
       - 'supabase/functions/hikvision-gateway/**'
       - 'supabase/migrations/**hikvision**'
       - 'supabase/tests/hikvision_gateway_v2.test.sql'
+      - 'supabase/tests/hikvision_retention.test.sql'
       - '.github/workflows/hikvision-gateway-regression.yml'
   workflow_dispatch:
 
@@ -31,6 +32,8 @@ jobs:
         run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: Run Hikvision v2 fencing regression
         run: supabase test db supabase/tests/hikvision_gateway_v2.test.sql
+      - name: Run Hikvision retention regression
+        run: supabase test db supabase/tests/hikvision_retention.test.sql
 
   source-contracts:
     runs-on: ubuntu-latest
@@ -44,7 +47,7 @@ jobs:
         run: deno check supabase/functions/hikvision-gateway/index.ts
       - name: Compile-check Windows gateway Python
         run: python3 -m py_compile gateway/hikvision/common.py gateway/hikvision/agent.py gateway/hikvision/setup.py
-      - name: Verify v2 protocol wiring
+      - name: Verify v2 protocol and retention wiring
         shell: bash
         run: |
           set -euo pipefail
@@ -52,3 +55,6 @@ jobs:
           grep -q 'heartbeat_job' gateway/hikvision/agent.py
           grep -q 'hikvision_gateway_claim_v2_service' supabase/functions/hikvision-gateway/index.ts
           grep -q 'stale_or_invalid_attempt' supabase/functions/hikvision-gateway/index.ts
+          grep -q 'hikvision_gateway_retention_due_service' supabase/functions/hikvision-gateway/index.ts
+          grep -q 'hikvision_retention_candidates_service' supabase/functions/hikvision-gateway/index.ts
+          grep -q 'hikvision_mark_video_expired_service' supabase/functions/hikvision-gateway/index.ts
