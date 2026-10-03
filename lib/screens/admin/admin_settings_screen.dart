@@ -13,6 +13,7 @@ import 'package:zhirox/screens/admin/legacy_import_screen.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
 import 'package:zhirox/screens/admin/receipt_settings_screen.dart';
 import 'package:zhirox/screens/admin/subscription_payment_screen.dart';
+import 'package:zhirox/screens/customer/telegram_settings_dialog.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
@@ -147,6 +148,15 @@ class AdminSettingsScreen extends StatelessWidget {
                         title: 'ZHIROX AutoPilot',
                         subtitle: 'Health، Queue، Telegram، PDF، Risk و هەڵەکان',
                         onTap: () => _open(context, const AutoPilotDashboardScreen()),
+                      ),
+                      _SettingsRow(
+                        icon: Icons.telegram_rounded,
+                        title: 'پەیوەندی Telegram',
+                        subtitle: 'پەیوەستکردن، تاقیکردنەوە و پچڕاندنی Telegram',
+                        onTap: () => showDialog<void>(
+                          context: context,
+                          builder: (_) => const TelegramSettingsDialog(),
+                        ),
                       ),
                       _SettingsRow(
                         icon: Icons.notifications_active_outlined,
