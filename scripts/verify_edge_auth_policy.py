@@ -40,6 +40,16 @@ contracts = {
         "authentication_required",
         "AbortSignal.timeout(10_000)",
     ),
+    # The Windows Hikvision gateway is a machine client, not a Supabase user.
+    # It authenticates with a high-entropy one-time-issued gateway token. Only
+    # the SHA-256 digest is sent to the service-role-only lookup RPC; the raw
+    # token is never persisted in Supabase.
+    "hikvision-gateway": (
+        "x-zhirox-gateway-token",
+        "sha256Hex(token)",
+        "hikvision_gateway_auth_service",
+        'if (token.length < 32 || token.length > 256)',
+    ),
 }
 
 unknown = sorted(false_jwt - set(contracts))
