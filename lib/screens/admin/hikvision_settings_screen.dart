@@ -27,6 +27,21 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
     _load();
   }
 
+  List<int> _optionsWithCurrent(
+    int current,
+    Iterable<int> presets, {
+    required int min,
+    required int max,
+  }) {
+    final values = <int>{
+      for (final value in presets)
+        if (value >= min && value <= max) value,
+    };
+    if (current >= min && current <= max) values.add(current);
+    final result = values.toList()..sort();
+    return result;
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -41,10 +56,10 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
         if (config != null) {
           _enabled = config.enabled;
           _autoCapture = config.autoCapture;
-          _channel = config.cashierChannelId;
-          _pre = config.preSeconds;
-          _post = config.postSeconds;
-          _retention = config.retentionDays;
+          _channel = config.cashierChannelId.clamp(1, 256);
+          _pre = config.preSeconds.clamp(0, 300);
+          _post = config.postSeconds.clamp(1, 600);
+          _retention = config.retentionDays.clamp(1, 3650);
         }
       });
     } catch (error) {
@@ -95,8 +110,14 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                 'Token ـی نوێ، token ـی کۆن ناچالاک دەکات. دوای دروستکردن دەبێت setup ـی Gateway لە کۆمپیوتەری کاشێر دووبارە جێبەجێ بکەیت.',
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('پاشگەزبوونەوە')),
-                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('دروستکردنی نوێ')),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('پاشگەزبوونەوە'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('دروستکردنی نوێ'),
+                ),
               ],
             ),
           ) ??
@@ -132,7 +153,10 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                     color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: SelectableText(token, style: const TextStyle(fontFamily: 'monospace')),
+                  child: SelectableText(
+                    token,
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
                 ),
               ],
             ),
@@ -150,7 +174,10 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
               icon: const Icon(Icons.copy_rounded),
               label: const Text('کۆپی'),
             ),
-            FilledButton(onPressed: () => Navigator.pop(context), child: const Text('تەواو')),
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('تەواو'),
+            ),
           ],
         ),
       );
@@ -173,6 +200,25 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
   Widget build(BuildContext context) {
     final config = _state?.config;
     final gateway = _state?.gateway;
+    final preOptions = _optionsWithCurrent(
+      _pre,
+      const [0, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300],
+      min: 0,
+      max: 300,
+    );
+    final postOptions = _optionsWithCurrent(
+      _post,
+      const [1, 5, 10, 15, 30, 45, 60, 90, 120, 180, 300, 600],
+      min: 1,
+      max: 600,
+    );
+    final retentionOptions = _optionsWithCurrent(
+      _retention,
+      const [1, 7, 14, 30, 60, 90, 180, 365, 730, 1825, 3650],
+      min: 1,
+      max: 3650,
+    );
+
     return Scaffold(
       appBar: AppBar(title: const Text('Hikvision و ڤیدیۆی مامەلە')),
       body: _loading && _state == null
@@ -200,7 +246,13 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text('NVR', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                          Text(
+                            'NVR',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
                           const SizedBox(height: 10),
                           _Info('مۆدێل', config?.nvrModel ?? '—'),
                           _Info('ناونیشان', config?.nvrHost ?? '—'),
@@ -210,20 +262,37 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                           SwitchListTile.adaptive(
                             contentPadding: EdgeInsets.zero,
                             value: _enabled,
-                            onChanged: _working ? null : (v) => setState(() => _enabled = v),
+                            onChanged: _working
+                                ? null
+                                : (value) => setState(() => _enabled = value),
                             title: const Text('چالاککردنی Hikvision'),
                           ),
                           SwitchListTile.adaptive(
                             contentPadding: EdgeInsets.zero,
                             value: _autoCapture,
-                            onChanged: _working ? null : (v) => setState(() => _autoCapture = v),
+                            onChanged: _working
+                                ? null
+                                : (value) => setState(() => _autoCapture = value),
                             title: const Text('بەستنی خۆکاری ڤیدیۆ بە مامەلە'),
                           ),
                           DropdownButtonFormField<int>(
                             initialValue: _channel,
-                            decoration: const InputDecoration(labelText: 'کامێرای کاشێر'),
-                            items: [for (var i = 1; i <= 16; i++) DropdownMenuItem(value: i, child: Text('Channel $i'))],
-                            onChanged: _working ? null : (v) => setState(() => _channel = v ?? 1),
+                            isExpanded: true,
+                            menuMaxHeight: 420,
+                            decoration: const InputDecoration(
+                              labelText: 'کامێرای کاشێر',
+                              helperText: 'Channel 1–256 پشتگیری دەکرێت',
+                            ),
+                            items: [
+                              for (var channel = 1; channel <= 256; channel++)
+                                DropdownMenuItem<int>(
+                                  value: channel,
+                                  child: Text('Channel $channel'),
+                                ),
+                            ],
+                            onChanged: _working
+                                ? null
+                                : (value) => setState(() => _channel = value ?? 1),
                           ),
                           const SizedBox(height: 12),
                           Row(
@@ -231,22 +300,40 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                               Expanded(
                                 child: DropdownButtonFormField<int>(
                                   initialValue: _pre,
-                                  decoration: const InputDecoration(labelText: 'پێش مامەلە'),
-                                  items: [5, 10, 15, 20, 30, 45, 60]
-                                      .map((v) => DropdownMenuItem(value: v, child: Text('$v چرکە')))
+                                  decoration: const InputDecoration(
+                                    labelText: 'پێش مامەلە',
+                                  ),
+                                  items: preOptions
+                                      .map(
+                                        (value) => DropdownMenuItem<int>(
+                                          value: value,
+                                          child: Text('$value چرکە'),
+                                        ),
+                                      )
                                       .toList(),
-                                  onChanged: _working ? null : (v) => setState(() => _pre = v ?? 15),
+                                  onChanged: _working
+                                      ? null
+                                      : (value) => setState(() => _pre = value ?? 15),
                                 ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: DropdownButtonFormField<int>(
                                   initialValue: _post,
-                                  decoration: const InputDecoration(labelText: 'دوای مامەلە'),
-                                  items: [10, 15, 30, 45, 60, 90, 120]
-                                      .map((v) => DropdownMenuItem(value: v, child: Text('$v چرکە')))
+                                  decoration: const InputDecoration(
+                                    labelText: 'دوای مامەلە',
+                                  ),
+                                  items: postOptions
+                                      .map(
+                                        (value) => DropdownMenuItem<int>(
+                                          value: value,
+                                          child: Text('$value چرکە'),
+                                        ),
+                                      )
                                       .toList(),
-                                  onChanged: _working ? null : (v) => setState(() => _post = v ?? 30),
+                                  onChanged: _working
+                                      ? null
+                                      : (value) => setState(() => _post = value ?? 30),
                                 ),
                               ),
                             ],
@@ -254,11 +341,20 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                           const SizedBox(height: 12),
                           DropdownButtonFormField<int>(
                             initialValue: _retention,
-                            decoration: const InputDecoration(labelText: 'ماوەی هەڵگرتنی ڤیدیۆ'),
-                            items: [30, 60, 90, 180, 365]
-                                .map((v) => DropdownMenuItem(value: v, child: Text('$v ڕۆژ')))
+                            decoration: const InputDecoration(
+                              labelText: 'ماوەی هەڵگرتنی ڤیدیۆ',
+                            ),
+                            items: retentionOptions
+                                .map(
+                                  (value) => DropdownMenuItem<int>(
+                                    value: value,
+                                    child: Text('$value ڕۆژ'),
+                                  ),
+                                )
                                 .toList(),
-                            onChanged: _working ? null : (v) => setState(() => _retention = v ?? 90),
+                            onChanged: _working
+                                ? null
+                                : (value) => setState(() => _retention = value ?? 90),
                           ),
                           const SizedBox(height: 16),
                           FilledButton.icon(
@@ -277,7 +373,13 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text('Secure Local Gateway', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                          Text(
+                            'Secure Local Gateway',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
                           const SizedBox(height: 8),
                           const Text(
                             'پاسۆردی NVR لە Supabase هەڵناگیرێت. تەنها لە کۆمپیوتەری مارکێت بە Windows DPAPI پارێزراو دەبێت، و NVR هیچ پۆرتێک بۆ ئینتەرنێت ناکاتەوە.',
@@ -286,7 +388,11 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                           FilledButton.tonalIcon(
                             onPressed: _working ? null : _issueToken,
                             icon: const Icon(Icons.key_rounded),
-                            label: Text(gateway?.paired == true ? 'گۆڕینی Gateway Token' : 'دروستکردنی Gateway Token'),
+                            label: Text(
+                              gateway?.paired == true
+                                  ? 'گۆڕینی Gateway Token'
+                                  : 'دروستکردنی Gateway Token',
+                            ),
                           ),
                         ],
                       ),
@@ -294,9 +400,16 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
-                    Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    Text(
+                      _error!,
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
                   ],
-                  if (_working) const Padding(padding: EdgeInsets.only(top: 12), child: LinearProgressIndicator()),
+                  if (_working)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: LinearProgressIndicator(),
+                    ),
                 ],
               ),
             ),
@@ -306,6 +419,7 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
 
 class _Info extends StatelessWidget {
   const _Info(this.label, this.value);
+
   final String label;
   final String value;
 
@@ -314,8 +428,21 @@ class _Info extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           children: [
-            Expanded(child: Text(label, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
-            Flexible(child: Text(value, textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.w700))),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Flexible(
+              child: Text(
+                value,
+                textAlign: TextAlign.end,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
           ],
         ),
       );
@@ -355,11 +482,18 @@ class _StatusCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(online ? Icons.videocam_rounded : Icons.videocam_off_rounded, color: color),
+              Icon(
+                online ? Icons.videocam_rounded : Icons.videocam_off_rounded,
+                color: color,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  online ? 'Gateway Online' : (paired ? 'Gateway پەیوەستە، بەڵام Offline ـە' : 'Gateway هێشتا پەیوەست نییە'),
+                  online
+                      ? 'Gateway Online'
+                      : (paired
+                          ? 'Gateway پەیوەستە، بەڵام Offline ـە'
+                          : 'Gateway هێشتا پەیوەست نییە'),
                   style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
               ),
@@ -386,6 +520,7 @@ class _StatusCard extends StatelessWidget {
 
 class _Chip extends StatelessWidget {
   const _Chip(this.label, this.value);
+
   final String label;
   final int value;
 
@@ -396,6 +531,9 @@ class _Chip extends StatelessWidget {
           color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.8),
           borderRadius: BorderRadius.circular(99),
         ),
-        child: Text('$label: $value', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+        child: Text(
+          '$label: $value',
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+        ),
       );
 }
