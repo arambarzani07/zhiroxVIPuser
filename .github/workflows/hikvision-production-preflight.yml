@@ -41,7 +41,7 @@ jobs:
           set -euo pipefail
           test -f supabase/migrations/20261003093000_add_hikvision_transaction_video_gateway.sql
           test -f supabase/migrations/20261003210000_harden_hikvision_gateway_attempt_fencing.sql
-          test -f supabase/migrations/20261003213000_add_hikvision_retention_lifecycle.sql
+          test -f supabase/migrations/20261003213100_add_hikvision_retention_lifecycle.sql
           test -f supabase/functions/hikvision-gateway/index.ts
           test -f supabase/functions/hikvision-admin/index.ts
           grep -q 'hikvision_gateway_claim_v2_service' supabase/functions/hikvision-gateway/index.ts
@@ -96,7 +96,7 @@ jobs:
             echo '- Required Hikvision migrations:'
             echo '  - `20261003093000_add_hikvision_transaction_video_gateway.sql`'
             echo '  - `20261003210000_harden_hikvision_gateway_attempt_fencing.sql`'
-            echo '  - `20261003213000_add_hikvision_retention_lifecycle.sql`'
+            echo '  - `20261003213100_add_hikvision_retention_lifecycle.sql`'
             echo '- Gateway Edge Function uses custom machine-token auth (`verify_jwt=false`).'
             if [[ '${{ steps.remote.outputs.ready }}' == 'true' ]]; then
               echo '- Remote migration dry-run: **executed**'

@@ -295,7 +295,8 @@ Deno.serve(async (req: Request) => {
         integrity = { checked: !matchError, duplicate_warning: !matchError && (matches ?? []).some((other) => duplicateWindow(evidence, other)) };
       }
       // Internal identifiers and file hashes are not needed by the client.
-      const { id: _id, market_id: _market, content_sha256: _hash, ...publicEvidence } = evidence;
+      const { id: _id, market_id: _market, content_sha256: _hash, ...publicFields } = evidence;
+      const publicEvidence: Record<string, unknown> = { ...publicFields };
       publicEvidence.integrity = integrity;
       const { data: rebuild, error: rebuildError } = await admin.rpc("hikvision_video_rebuild_status_service", {p_market_id:marketId,p_source_type:sourceType,p_source_id:sourceId});
       publicEvidence.can_rebuild = !rebuildError && rebuild?.can_rebuild === true;

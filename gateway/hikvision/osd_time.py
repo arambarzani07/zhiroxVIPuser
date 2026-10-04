@@ -58,7 +58,7 @@ def ocr_image(path: pathlib.Path) -> str:
 
 def dates_in_text(text: str, offset, order: str | None = None) -> list[tuple[str, datetime]]:
     # No substitution of letters for digits: a partial OCR result must not verify.
-    text = ' '.join(text.split())
+    text = ' '.join(text.split()).translate(str.maketrans({c:'-' for c in '‐‑‒–—−'})).replace('：', ':')
     matches = re.findall(r'(\d{2,4})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{2,4}).{0,24}?(\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})', text)
     results = []
     for a,b,c,h,m,s in matches:

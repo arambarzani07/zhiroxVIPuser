@@ -37,6 +37,7 @@ class WindowsOcrSmoke(unittest.TestCase):
             image=pathlib.Path(directory)/'clock.png'
             script="Add-Type -AssemblyName System.Drawing; $b=[System.Drawing.Bitmap]::new(1100,120); $g=[System.Drawing.Graphics]::FromImage($b); $g.Clear([System.Drawing.Color]::Black); $f=[System.Drawing.Font]::new('Arial',36); $g.DrawString('2026-10-04 09:38:00',$f,[System.Drawing.Brushes]::White,10,20); $b.Save('"+str(image).replace("'","''")+"'); $g.Dispose(); $b.Dispose()"
             subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],check=True,capture_output=True,timeout=20)
-            self.assertTrue(dates_in_text(ocr_image(image),ClockTests.offset,'YMD'))
+            text=ocr_image(image)
+            self.assertTrue(dates_in_text(text,ClockTests.offset,'YMD'),f'Native OCR output: {text!r}')
 
 if __name__=='__main__': unittest.main()
