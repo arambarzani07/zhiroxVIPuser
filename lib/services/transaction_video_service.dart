@@ -2,12 +2,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class TransactionVideoService {
   static Future<Map<String, dynamic>?> status(String type, String id) async {
-    return Supabase.instance.client
-        .from('transaction_video_evidence')
-        .select('status,channel_id,clip_start_at,clip_end_at')
-        .eq('source_type', type)
-        .eq('source_id', id)
-        .maybeSingle();
+    final response = await Supabase.instance.client.functions.invoke(
+      'hikvision-admin',
+      body: {'action': 'video_status', 'source_type': type, 'source_id': id},
+    );
+    final raw = response.data;
+    if (raw is! Map || raw['ok'] != true) {
+      throw StateError('video_status_failed');
+    }
+    final evidence = raw['evidence'];
+    return evidence is Map ? Map<String, dynamic>.from(evidence) : null;
   }
 
   // The server checks the authenticated market and creates a short-lived URL.

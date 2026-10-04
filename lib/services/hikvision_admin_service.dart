@@ -174,8 +174,7 @@ class HikvisionMarketConfig {
       hikconnectCameraId: '${map['hikconnect_camera_id'] ?? ''}',
       hikconnectCameraName: '${map['hikconnect_camera_name'] ?? ''}',
       hikconnectDeviceSerial: '${map['hikconnect_device_serial'] ?? ''}',
-      hikconnectServerAddress:
-          '${map['hikconnect_server_address'] ?? ''}',
+      hikconnectServerAddress: '${map['hikconnect_server_address'] ?? ''}',
     );
   }
 }
@@ -186,12 +185,14 @@ class HikvisionAdminState {
     this.config,
     this.gateway,
     this.cloud,
+    this.integrity = const {},
   });
 
   final String marketName;
   final HikvisionMarketConfig? config;
   final HikvisionGatewayStatus? gateway;
   final HikvisionCloudStatus? cloud;
+  final Map<String, dynamic> integrity;
 }
 
 class HikvisionAdminService {
@@ -230,11 +231,16 @@ class HikvisionAdminService {
     final cloudRaw = data['cloud'];
     return HikvisionAdminState(
       marketName: '${data['market_name'] ?? ''}',
+      integrity: data['integrity'] is Map
+          ? Map<String, dynamic>.from(data['integrity'])
+          : const {},
       config: configRaw is Map
           ? HikvisionMarketConfig.fromMap(Map<String, dynamic>.from(configRaw))
           : null,
       gateway: gatewayRaw is Map
-          ? HikvisionGatewayStatus.fromMap(Map<String, dynamic>.from(gatewayRaw))
+          ? HikvisionGatewayStatus.fromMap(
+              Map<String, dynamic>.from(gatewayRaw),
+            )
           : null,
       cloud: cloudRaw is Map
           ? HikvisionCloudStatus.fromMap(Map<String, dynamic>.from(cloudRaw))
@@ -260,9 +266,10 @@ class HikvisionAdminService {
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
-        .map((item) => HikvisionCloudCamera.fromMap(
-              Map<String, dynamic>.from(item),
-            ))
+        .map(
+          (item) =>
+              HikvisionCloudCamera.fromMap(Map<String, dynamic>.from(item)),
+        )
         .where((camera) => camera.id.isNotEmpty)
         .toList(growable: false);
   }

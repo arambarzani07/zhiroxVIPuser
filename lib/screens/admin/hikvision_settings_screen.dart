@@ -976,6 +976,32 @@ class _CaptureStatusCard extends StatelessWidget {
                 ? 'کۆتا تاقیکردنەوەی API: $lastTest'
                 : 'کۆتا پەیامی Gateway: $lastSeen',
           ),
+          if (!cloudMode) ...[
+            Text(
+              'وەشانی ڕاپۆرتکراوی Gateway: ${gateway?.gatewayVersion ?? 'نادیارە'}',
+            ),
+            if (!gatewayOnline)
+              const Text(
+                'ئەمە کۆتا وەشانی ڕاپۆرتکراوە؛ چالاکبوونی ئێستا پشتڕاست نەکراوەتەوە.',
+              ),
+          ],
+          if (state?.integrity['available'] == true) ...[
+            Text(
+              'وەشانی دروستکەری کۆتا کلیپ: ${state?.integrity['latest_clip_build'] ?? 'تۆمار نەکراوە'}',
+            ),
+            Text(
+              'پشکنینی کۆتا ${state?.integrity['sampled_clips'] ?? 0} کلیپی ئامادە',
+            ),
+            if ((state?.integrity['suspicious_clips'] as num? ?? 0) > 0)
+              Text(
+                'ئاگاداری: ${state?.integrity['suspicious_clips']} کلیپ هەمان فایلیان بۆ کاتی جیاواز هەیە. کاتی دیمەنەکان لە Playback بپشکنە.',
+                style: const TextStyle(
+                  color: Colors.deepOrange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+          ] else
+            const Text('پشکنینی دووبارەبوونەوەی کلیپ بەردەست نییە.'),
           const SizedBox(height: 8),
           const Text(
             'پەیوەندی Gateway یان API بە تەنها سەرکەوتنی کلیپ پشتڕاست ناکاتەوە؛ کلیپی مامەڵە دەبێت بکرێتەوە.',

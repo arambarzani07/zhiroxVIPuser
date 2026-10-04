@@ -138,6 +138,21 @@ class _TransactionVideoPanelState extends State<_TransactionVideoPanel> {
               const Center(child: CircularProgressIndicator())
             else if (_error == null) ...[
               Text(TransactionVideoService.statusLabel(status)),
+              if (_evidence?['integrity'] is Map &&
+                  _evidence!['integrity']['duplicate_warning'] == true) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'ئاگاداری: ئەم فایلە ڤیدیۆیە بۆ مامەڵەیەکی تر لە کاتێکی جیاوازیش بەستراوە. دیمەن و کاتی مامەڵەکە لە Playback پشتڕاست بکەرەوە.',
+                  style: TextStyle(
+                    color: Colors.deepOrange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+              if (status == 'ready' &&
+                  _evidence?['integrity'] is Map &&
+                  _evidence!['integrity']['checked'] != true)
+                const Text('پشکنینی دووبارەبوونەوەی کلیپ بەردەست نییە.'),
               if (_evidence?['channel_id'] != null) ...[
                 const SizedBox(height: 8),
                 Text('کەناڵی کامێرا: ${_evidence!['channel_id']}'),

@@ -1,5 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 
+import { duplicateWindow, summarizeClips } from "./clip_integrity.mjs";
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -198,7 +200,11 @@ Deno.serve(async (req: Request) => {
       if (cloudError) throw cloudError;
       const gateway = Array.isArray(statusRows) && statusRows.length > 0 ? statusRows[0] : null;
       const cloud = Array.isArray(cloudRows) && cloudRows.length > 0 ? cloudRows[0] : { configured: false };
-      return json({ ok: true, market_name: profile.market_name, config, gateway, cloud });
+      const { data: clips, error: integrityError } = await admin.from("transaction_video_evidence")
+        .select("id,market_id,status,content_sha256,channel_id,clip_start_at,clip_end_at,captured_at,playback_metadata")
+        .eq("market_id", marketId).eq("status", "ready").order("captured_at", { ascending: false }).limit(200);
+      const integrity = integrityError ? { available: false } : { available: true, ...summarizeClips(clips ?? []) };
+      return json({ ok: true, market_name: profile.market_name, config, gateway, cloud, integrity });
     }
 
     if (action === "save_cloud_credentials") {
@@ -267,17 +273,30 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, config: data });
     }
 
-    if (action === "video_url") {
+    if (action === "video_url" || action === "video_status") {
       const sourceType = String(body.source_type ?? "").trim();
       const sourceId = String(body.source_id ?? "").trim();
       if (!["debt", "payment", "general_payment"].includes(sourceType) || !/^[0-9a-f-]{36}$/i.test(sourceId)) return json({ error: "invalid_transaction" }, 400);
-      const { data: evidence, error } = await admin.from("transaction_video_evidence").select("status,object_path,channel_id,transaction_at,clip_start_at,clip_end_at,captured_at,playback_metadata").eq("market_id", marketId).eq("source_type", sourceType).eq("source_id", sourceId).maybeSingle();
+      const { data: evidence, error } = await admin.from("transaction_video_evidence").select("id,market_id,status,content_sha256,object_path,channel_id,transaction_at,clip_start_at,clip_end_at,captured_at,playback_metadata").eq("market_id", marketId).eq("source_type", sourceType).eq("source_id", sourceId).maybeSingle();
       if (error) throw error;
-      if (!evidence) return json({ error: "video_not_found" }, 404);
-      if (evidence.status !== "ready" || !evidence.object_path) return json({ ok: true, ready: false, evidence });
+      if (!evidence) return action === "video_status" ? json({ ok: true, evidence: null }) : json({ error: "video_not_found" }, 404);
+      let integrity: Record<string, unknown> = { checked: false, duplicate_warning: false };
+      if (evidence.status === "ready" && evidence.content_sha256 && evidence.clip_start_at && evidence.clip_end_at) {
+        const { data: matches, error: matchError } = await admin.from("transaction_video_evidence")
+          .select("id,market_id,status,content_sha256,channel_id,clip_start_at,clip_end_at")
+          .eq("market_id", marketId).eq("channel_id", evidence.channel_id).eq("status", "ready")
+          .eq("content_sha256", evidence.content_sha256).neq("id", evidence.id)
+          .or(`clip_end_at.lte.${evidence.clip_start_at},clip_start_at.gte.${evidence.clip_end_at}`).limit(1);
+        integrity = { checked: !matchError, duplicate_warning: !matchError && (matches ?? []).some((other) => duplicateWindow(evidence, other)) };
+      }
+      // Internal identifiers and file hashes are not needed by the client.
+      const { id: _id, market_id: _market, content_sha256: _hash, ...publicEvidence } = evidence;
+      publicEvidence.integrity = integrity;
+      if (action === "video_status") return json({ ok: true, evidence: publicEvidence });
+      if (evidence.status !== "ready" || !evidence.object_path) return json({ ok: true, ready: false, evidence: publicEvidence });
       const { data: signed, error: signedError } = await admin.storage.from("transaction-camera-clips").createSignedUrl(evidence.object_path, 600);
       if (signedError || !signed?.signedUrl) throw signedError ?? new Error("signed_read_failed");
-      return json({ ok: true, ready: true, signed_url: signed.signedUrl, expires_in: 600, evidence });
+      return json({ ok: true, ready: true, signed_url: signed.signedUrl, expires_in: 600, evidence: publicEvidence });
     }
 
     return json({ error: "unsupported_action" }, 400);
