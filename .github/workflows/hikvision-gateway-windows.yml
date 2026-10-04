@@ -28,17 +28,20 @@ jobs:
         run: pip install -r gateway/hikvision/requirements.txt
 
       - uses: msys2/setup-msys2@v2
+        id: msys2
         with:
           msystem: UCRT64
           update: true
           install: mingw-w64-ucrt-x86_64-tesseract-ocr mingw-w64-ucrt-x86_64-tesseract-data-eng
 
       - name: Stage standalone OCR resources
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
         shell: pwsh
         working-directory: gateway/hikvision
         run: |
-          python bundle_ocr.py C:/msys64/ucrt64
-          C:/msys64/usr/bin/bash.exe -lc "pacman -Q" | Out-File OCR-PACKAGES.txt -Encoding utf8
+          python bundle_ocr.py "$env:MSYS2_LOCATION/ucrt64"
+          & "$env:MSYS2_LOCATION/usr/bin/bash.exe" -lc "pacman -Q" | Out-File OCR-PACKAGES.txt -Encoding utf8
 
       - name: Build setup wizard
         shell: pwsh
