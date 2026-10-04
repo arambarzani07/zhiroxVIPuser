@@ -5,6 +5,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
+from osd_time import verify_clip_time
 import common as gateway_common
 from common import (
     CONFIG_PATH,
@@ -21,7 +22,7 @@ from common import (
 
 # Protocol 1.1 enables DB-backed per-attempt fencing while the shared setup
 # helpers remain compatible with already-installed 1.0 gateway packages.
-gateway_common.GATEWAY_VERSION = "1.1.0"
+gateway_common.GATEWAY_VERSION = "1.2.0+osd-1"
 
 POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 30
@@ -126,7 +127,7 @@ def process_job(
 
             playback_uri = bounded_playback_uri(str(search["playback_uri"]),
                                                 clip_start, clip_end, channel_id * 100 + 1)
-            log(f"job={job_id} build=time-window-3 download_mode=time "
+            log(f"job={job_id} build=osd-1 download_mode=time "
                 f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}")
             hik.download_recording(playback_uri, raw_path)
             if not raw_path.exists() or raw_path.stat().st_size <= 0:
@@ -140,6 +141,8 @@ def process_job(
                 clip_start.replace(microsecond=0).isoformat(),
                 requested_duration,
             )
+            clock_check = verify_clip_time(hik, channel_id, exact_path, clip_start, media["duration_seconds"])
+            log(f"job={job_id} clock_status={clock_check['status']}")
             upload_path = exact_path
 
             prepared = cloud.call("prepare_upload", job_id=job_id, **attempt_args)
@@ -161,10 +164,11 @@ def process_job(
                 duration_seconds=media["duration_seconds"],
                 playback_metadata={
                     "provider": "hikvision_isapi",
-                    "gateway_build": "time-window-3",
+                    "gateway_build": "osd-1",
                     "download_mode": "time",
                     "download_start": clip_start.replace(microsecond=0).isoformat(),
-                    "media_time_verified": False,
+                    "media_time_verified": clock_check["status"] == "matched",
+                    "clock_check": clock_check,
                     "track_id": search.get("track_id"),
                     "segment_start": search.get("segment_start"),
                     "segment_end": search.get("segment_end"),

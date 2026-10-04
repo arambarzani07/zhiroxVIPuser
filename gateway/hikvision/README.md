@@ -101,3 +101,23 @@ Previously the gateway used stream copy, which retained recorder HEVC/hev1 video
 The previous downloader sent an XML body in a GET request, whereas Hikvision documents POST-with-XML or GET-with-playbackURI-query. New downloads use POST-with-XML (GET-query fallback only for unsupported POST). Transaction jobs rebuild the playback URI with the requested UTC start/end and remove file-name/size selectors so download-by-file cannot select an earlier file start. Search results must cover the requested window; nearest results are rejected. Conversion starts at the explicit download start, not the search segment start. Logs and playback metadata include the time-window request and build marker, but never recorder credentials or signed cloud URLs.
 
 This fixes request construction defects. It does not establish that a particular recorder honors UTC or the requested media boundaries. Compare a known transaction with NVR Playback after installing before treating a clip as correctly timed evidence. No fixed four-hour adjustment is applied. Existing uploaded clips are not rewritten. Keep config, FFmpeg, recorder clock and PC clock unchanged.
+
+
+## Gateway 1.2.0+osd-1: displayed-clock warnings
+
+Uses built-in Windows OCR locally. A live snapshot and `/ISAPI/System/time`
+resolve the recorder offset and date order; three rendered clip samples are
+compared with the requested start. At least two distinct readings must progress
+with playback and agree within two seconds. A five-second tolerance allows
+whole-second OSD and frame sampling. Results are `matched`, `mismatch`, or
+`unknown`; none adjusts the recorder clock or automatically shifts requests.
+Missing English OCR, unavailable snapshot, hidden OSD, ambiguous date order,
+OCR errors and unsupported formats report unknown and do not stop uploading.
+Only extracted timestamps and result metadata leave the PC; temporary snapshots
+and crops are removed. Old clips have no OCR result until explicitly rebuilt.
+
+Install by stopping the old gateway, replacing `zhirox-hikvision-gateway.exe`
+at the existing installed path, then starting it once. Keep config.json and
+FFmpeg. No new token or setup is required. The app permits manual rebuilds only
+while a recent 1.2-or-newer gateway is active. Rebuilds preserve old storage files
+and a private evidence snapshot, fence old callbacks, and do not modify debts.
