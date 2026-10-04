@@ -224,6 +224,17 @@ class HikvisionAdminService {
     }
   }
 
+  static Future<GatewayHealth> gatewayHealth() async {
+    final data = await _invoke('gateway_health');
+    return GatewayHealth.fromMap(
+      Map<String, dynamic>.from(data['health'] as Map),
+    );
+  }
+
+  static Future<void> setGatewayAlerts(bool enabled) async {
+    await _invoke('gateway_alerts_setting', {'enabled': enabled});
+  }
+
   static Future<HikvisionAdminState> status() async {
     final data = await _invoke('status');
     final configRaw = data['config'];
@@ -332,4 +343,36 @@ class HikvisionAdminService {
     }
     return 'پەیوەندی Hikvision سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.';
   }
+}
+
+class GatewayHealth {
+  const GatewayHealth({
+    required this.status,
+    required this.alertsEnabled,
+    this.lastSeenAt,
+    this.events = const [],
+  });
+  final String status;
+  final bool alertsEnabled;
+  final DateTime? lastSeenAt;
+  final List<Map<String, dynamic>> events;
+  factory GatewayHealth.fromMap(Map<String, dynamic> data) => GatewayHealth(
+    status: '${data['status'] ?? 'unknown'}',
+    alertsEnabled: data['alerts_enabled'] == true,
+    lastSeenAt: DateTime.tryParse('${data['last_seen_at'] ?? ''}')?.toLocal(),
+    events: data['events'] is List
+        ? (data['events'] as List)
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+        : const [],
+  );
+  String get label => switch (status) {
+    'online' => 'Gateway چالاکە',
+    'offline' => 'پەیوەندی Gateway پچڕاوە',
+    'starting' => 'چاوەڕوانی یەکەم پەیامی Gateway',
+    'unpaired' => 'Gateway هێشتا بەستراو نییە',
+    'disabled' => 'Local Gateway بەکارناهێنرێت',
+    _ => 'دۆخی Gateway پشتڕاست نەکراوەتەوە',
+  };
 }

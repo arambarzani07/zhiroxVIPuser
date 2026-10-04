@@ -8,17 +8,19 @@ const code = (await readFile(new URL('../index.ts',import.meta.url),'utf8'))
  .replace(/import \{ createClient \} from "[^"]+";/,'const createClient = globalThis.testCreateClient;');
 let handler;
 let mode='authenticated';
+let role='admin';
+let rpcCalls=[];
 const row={id:'clip-a',market_id:'market-a',status:'ready',object_path:'private.mp4',content_sha256:'same',channel_id:10,clip_start_at:'2026-10-04T09:00:00Z',clip_end_at:'2026-10-04T09:00:30Z'};
 const other={...row,id:'clip-b',clip_start_at:'2026-10-04T08:00:00Z',clip_end_at:'2026-10-04T08:00:30Z'};
 let queries=[];
 globalThis.Deno={env:{get:()=> 'test-value'},serve:fn=>handler=fn};
 globalThis.testCreateClient=()=>({
- rpc:async (name,args)=>{assert.equal(args.p_market_id,'market-a'); return {data:{ok:true,can_rebuild:true},error:null};},
+ rpc:async (name,args)=>{assert.equal(args.p_market_id,'market-a'); rpcCalls.push({name,args}); return {data:{ok:true,can_rebuild:true},error:null};},
  auth:{getUser:async()=>({data:{user:mode==='authenticated'?{id:'market-a'}:null},error:null})},
  from(table){
   const filters=[];let single=false;
   const result=()=>{
-   if(table==='profiles')return {data:{role:'admin',active:true,approved:true,market_name:'test'},error:null};
+   if(table==='profiles')return {data:{role,active:true,approved:true,market_name:'test'},error:null};
    if(table==='transaction_video_evidence') {
     assert.ok(filters.some(([key,value])=>key==='market_id'&&value==='market-a'));
     queries.push(filters);
@@ -45,6 +47,17 @@ test('status and signed playback warn without exposing hashes; client cannot cho
 });
 test('rebuild ignores a client-supplied market and uses verified identity',async()=>{
  const response=await handler(request('rebuild_video'));assert.equal(response.status,200);assert.equal((await response.json()).ok,true);
+});
+test('gateway health and alert setting are scoped to the verified admin',async()=>{
+ const response=await handler(request('gateway_health')); assert.equal(response.status,200);
+ const setting=new Request('https://example.com',{method:'POST',headers:{authorization:'Bearer test','content-type':'application/json'},body:JSON.stringify({action:'gateway_alerts_setting',enabled:true,market_id:'attacker-tenant'})});
+ assert.equal((await handler(setting)).status,200);
+ assert.equal(rpcCalls.at(-1).args.p_enabled,true);
+ const invalid=new Request('https://example.com',{method:'POST',headers:{authorization:'Bearer test','content-type':'application/json'},body:JSON.stringify({action:'gateway_alerts_setting',enabled:'true'})});
+ assert.equal((await handler(invalid)).status,400);
+ role='customer'; const count=rpcCalls.length;
+ assert.equal((await handler(request('gateway_health'))).status,403);
+ assert.equal(rpcCalls.length,count); role='admin';
 });
 test('unauthenticated requests fail before accessing clips',async()=>{
  mode='unauthenticated';const count=queries.length;

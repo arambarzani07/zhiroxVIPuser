@@ -36,6 +36,8 @@ jobs:
         run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: Run Hikvision v2 fencing regression
         run: supabase test db supabase/tests/hikvision_gateway_v2.test.sql
+      - name: Run gateway health regression
+        run: supabase test db supabase/tests/hikvision_gateway_health.test.sql
       - name: Run clip rebuild regression
         run: supabase test db supabase/tests/hikvision_clip_rebuild.test.sql
       - name: Run Hik-Connect cloud provider regression

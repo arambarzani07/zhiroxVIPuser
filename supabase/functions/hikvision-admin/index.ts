@@ -189,6 +189,17 @@ Deno.serve(async (req: Request) => {
   const action = String(body.action ?? "status").trim();
 
   try {
+    if (action === "gateway_health") {
+      const { data, error } = await admin.rpc("hikvision_gateway_health_service", { p_market_id: marketId });
+      if (error) throw error;
+      return json({ ok: true, health: data ?? { status: "disabled", alerts_enabled: false, events: [] } });
+    }
+    if (action === "gateway_alerts_setting") {
+      if (typeof body.enabled !== "boolean") return json({ error: "invalid_enabled" }, 400);
+      const { data, error } = await admin.rpc("hikvision_gateway_alerts_setting_service", { p_market_id: marketId, p_enabled: body.enabled });
+      if (error) throw error;
+      return json(data);
+    }
     if (action === "status") {
       const [{ data: config, error: configError }, { data: statusRows, error: statusError }, { data: cloudRows, error: cloudError }] = await Promise.all([
         admin.from("hikvision_market_config").select("enabled,auto_capture,nvr_label,nvr_host,nvr_model,nvr_firmware,cashier_channel_id,pre_seconds,post_seconds,timezone,retention_days,capture_provider,hikconnect_camera_id,hikconnect_camera_name,hikconnect_device_serial,hikconnect_server_address,updated_at").eq("market_id", marketId).maybeSingle(),

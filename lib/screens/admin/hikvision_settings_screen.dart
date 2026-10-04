@@ -1,3 +1,4 @@
+import 'package:zhirox/widgets/gateway_health_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zhirox/services/hikvision_admin_service.dart';
@@ -526,6 +527,8 @@ class _HikvisionSettingsScreenState extends State<HikvisionSettingsScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 children: [
+                  const GatewayHealthCard(showHistory: true),
+                  const SizedBox(height: 14),
                   _CaptureStatusCard(
                     state: _state,
                     lastSeen: _date(gateway?.lastSeenAt),

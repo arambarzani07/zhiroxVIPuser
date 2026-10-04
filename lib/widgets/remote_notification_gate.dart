@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/screens/shared/user_profile_screen.dart';
+import 'package:zhirox/screens/admin/hikvision_settings_screen.dart';
 import 'package:zhirox/services/notification_service.dart';
 
 /// Converts trusted OneSignal notification payloads into in-app navigation.
@@ -28,12 +29,12 @@ class _RemoteNotificationGateState extends State<RemoteNotificationGate> {
   @override
   void initState() {
     super.initState();
-    _subscription = NotificationService.remoteNotificationClicks.listen(
-      (payload) {
-        _pending = Map<String, dynamic>.from(payload);
-        _scheduleOpen();
-      },
-    );
+    _subscription = NotificationService.remoteNotificationClicks.listen((
+      payload,
+    ) {
+      _pending = Map<String, dynamic>.from(payload);
+      _scheduleOpen();
+    });
   }
 
   @override
@@ -76,6 +77,25 @@ class _RemoteNotificationGateState extends State<RemoteNotificationGate> {
       return;
     }
 
+    final gatewayType = (payload['type'] ?? payload['event_type'] ?? '')
+        .toString();
+    if (gatewayType == 'hikvision_gateway_offline' ||
+        gatewayType == 'hikvision_gateway_online') {
+      _pending = null;
+      if (auth.userRole != 'admin') return;
+      _opening = true;
+      try {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const HikvisionSettingsScreen(),
+          ),
+        );
+      } finally {
+        _opening = false;
+        if (_pending != null) _scheduleOpen();
+      }
+      return;
+    }
     final customerId = (payload['customer_id'] ?? '').toString().trim();
     if (customerId.isEmpty) {
       // Non-customer events such as sync_error intentionally open the app but
@@ -85,7 +105,8 @@ class _RemoteNotificationGateState extends State<RemoteNotificationGate> {
     }
 
     final type = (payload['type'] ?? '').toString().trim();
-    final openFinancialChat = _asBool(payload['open_financial_chat']) ||
+    final openFinancialChat =
+        _asBool(payload['open_financial_chat']) ||
         type == 'payment_received' ||
         type == 'new_debt' ||
         type == 'debt_limit_warning';
