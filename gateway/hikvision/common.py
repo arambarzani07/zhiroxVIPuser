@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 import requests
 from requests.auth import HTTPDigestAuth
@@ -292,27 +292,27 @@ class HikvisionClient:
     def download_recording(self, playback_uri: str, output_path: pathlib.Path) -> None:
         # XML is required in the GET request body on older ISAPI firmware too.
         safe_uri = html.escape(html.unescape(playback_uri), quote=False)
-        body = (
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<downloadRequest version="1.0" xmlns="http://www.isapi.org/ver20/XMLSchema">'
-            f'<playbackURI>{safe_uri}</playbackURI>'
-            '</downloadRequest>'
-        ).encode("utf-8")
         endpoint = f"{self.host}/ISAPI/ContentMgmt/download"
-        kwargs = dict(data=body, headers={"Content-Type": "application/xml"},
-                      timeout=(20, 180), stream=True)
-        response = self.session.post(endpoint, **kwargs)
-        # Some recorders report badXmlContent (400), rather than 405, for POST.
-        # Preserve exactly the same channel and time bounds on every attempt.
-        if response.status_code in {400, 405, 422, 501}:
-            response.close()
-            response = self.session.get(endpoint, **kwargs)
-            if response.status_code in {405, 501}:
+        response = None
+        # Firmware families accept different XML namespaces. Keep the time URI
+        # unchanged; never restore name/size selectors from a search result.
+        for xmlns in ("http://www.isapi.org/ver20/XMLSchema",
+                      "http://www.hikvision.com/ver20/XMLSchema", None):
+            ns = f' version="1.0" xmlns="{xmlns}"' if xmlns else ""
+            body = ('<?xml version="1.0" encoding="UTF-8"?>'
+                    f'<downloadRequest{ns}><playbackURI>{safe_uri}</playbackURI>'
+                    '</downloadRequest>').encode("utf-8")
+            kwargs = dict(data=body, headers={"Content-Type": "application/xml"},
+                          timeout=(20, 180), stream=True)
+            response = self.session.post(endpoint, **kwargs)
+            if response.status_code in {400, 405, 422, 501}:
                 response.close()
-                response = self.session.get(
-                    endpoint, params={"playbackURI": html.unescape(playback_uri)},
-                    timeout=(20, 180), stream=True,
-                )
+                response = self.session.get(endpoint, **kwargs)
+            if response.status_code not in {400, 405, 422, 501}:
+                break
+            if xmlns is not None:
+                response.close()
+        assert response is not None
         with response as r:
             content_type = (r.headers.get("content-type") or "").lower()
             if r.status_code >= 400 or "xml" in content_type:
@@ -337,6 +337,35 @@ class HikvisionClient:
                 for chunk in r.iter_content(chunk_size=1024 * 1024):
                     if chunk:
                         fh.write(chunk)
+
+    def download_playback_stream(self, playback_uri: str, output_path: pathlib.Path,
+                                 duration: int) -> None:
+        """Bounded historical RTSP playback when the HTTP export is rejected."""
+        parts = urlsplit(playback_uri)
+        query = parse_qs(parts.query)
+        if (parts.scheme != "rtsp" or parts.username or parts.password or
+                set(query) != {"starttime", "endtime"} or duration <= 0 or duration > 120):
+            raise RuntimeError("invalid_rtsp_playback_window")
+        host = urlsplit(self.host).hostname
+        if parts.hostname != host:
+            raise RuntimeError("playback_host_mismatch")
+        credentials = f"{quote(self.auth.username, safe='')}:{quote(self.auth.password, safe='')}"
+        uri = urlunsplit((parts.scheme, f"{credentials}@{parts.netloc}",
+                          parts.path, parts.query, ""))
+        try:
+            result = subprocess.run(
+                [find_ffmpeg(), "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                 "-rtsp_transport", "tcp", "-timeout", "20000000", "-i", uri,
+                 "-t", str(duration), "-map", "0:v:0", "-map", "0:a:0?",
+                 "-c", "copy", "-f", "matroska", str(output_path)],
+                capture_output=True, timeout=duration + 90,
+            )
+            if result.returncode or not output_path.exists() or output_path.stat().st_size == 0:
+                raise RuntimeError("rtsp_playback_failed")
+        except Exception:
+            output_path.unlink(missing_ok=True)
+            # FFmpeg stderr / TimeoutExpired can include credentials: never forward.
+            raise RuntimeError("rtsp_playback_failed") from None
 
 
 def sha256_file(path: pathlib.Path) -> str:

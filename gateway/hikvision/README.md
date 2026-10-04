@@ -125,3 +125,8 @@ and a private evidence snapshot, fence old callbacks, and do not modify debts.
 ## Gateway 1.2.1+download-compat-1
 
 Retries download rejection HTTP 400/405/422/501 using GET with the same XML request body, as specified by the ISAPI General Application Developer Guide section 15.2.2. Channel and transaction time bounds stay unchanged; file-name selectors are never restored. Device rejection status fields are recorded without including credentials or playback URLs. This is a compatibility fix; correct footage still requires a recorder test and timestamp comparison.
+
+
+### Gateway 1.2.2 playback fallback
+
+If bounded HTTP export rejects XML, try the ISAPI, Hikvision and namespace-free request variants with identical channel/time bounds. If these reject the request, capture historical RTSP playback over TCP using the same start/end window. No file-name or live-stream fallback is used. RTSP clips must have a matching on-screen clock before upload; unknown or mismatched clocks fail with a diagnostic instead of attaching an unrelated scene. All clips must decode and have the requested duration. Existing DPAPI configuration and ffmpeg.exe are reused. Recorder compatibility still requires a live transaction test.
