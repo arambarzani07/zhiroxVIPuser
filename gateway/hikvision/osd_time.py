@@ -82,7 +82,7 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path) -> str:
     for position in ['0', 'ih-oh']:
         target = workspace / ('osd-top.png' if position=='0' else 'osd-bottom.png')
         r = subprocess.run([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-i',str(image),
-            '-vf',f'crop=iw:ih*0.22:0:{position},scale=2400:-1','-frames:v','1',str(target)],capture_output=True,timeout=20)
+            '-vf',f'crop=iw:ih*0.22:0:{position},scale=2400:-1,negate','-frames:v','1',str(target)],capture_output=True,timeout=20)
         if r.returncode == 0:
             parts.append(ocr_image(target))
     return ' '.join(parts)

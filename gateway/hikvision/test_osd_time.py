@@ -35,7 +35,7 @@ class WindowsOcrSmoke(unittest.TestCase):
     def test_native_ocr_recognizes_rendered_clock(self):
         with tempfile.TemporaryDirectory() as directory:
             image=pathlib.Path(directory)/'clock.png'
-            script="Add-Type -AssemblyName System.Drawing; $b=[System.Drawing.Bitmap]::new(700,100); $g=[System.Drawing.Graphics]::FromImage($b); $g.Clear([System.Drawing.Color]::Black); $f=[System.Drawing.Font]::new('Consolas',48,[System.Drawing.FontStyle]::Regular,[System.Drawing.GraphicsUnit]::Pixel); $g.DrawString('2026-10-04 Sun 09:38:00',$f,[System.Drawing.Brushes]::White,10,20); $b.Save('"+str(image).replace("'","''")+"'); $g.Dispose(); $b.Dispose()"
+            script="Add-Type -AssemblyName System.Drawing; $b=[System.Drawing.Bitmap]::new(700,100); $g=[System.Drawing.Graphics]::FromImage($b); $g.Clear([System.Drawing.Color]::White); $f=[System.Drawing.Font]::new('Consolas',48,[System.Drawing.FontStyle]::Regular,[System.Drawing.GraphicsUnit]::Pixel); $g.DrawString('2026-10-04 Sun 09:38:00',$f,[System.Drawing.Brushes]::Black,10,20); $b.Save('"+str(image).replace("'","''")+"'); $g.Dispose(); $b.Dispose()"
             subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],check=True,capture_output=True,timeout=20)
             import shutil
             shutil.copyfile(image,pathlib.Path.cwd()/"native-ocr-fixture.png")
