@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:zhirox/widgets/startup_recovery_screen.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -179,6 +180,13 @@ class _AuthWrapperState extends State<AuthWrapper> {
         if (auth.isInitializing) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (auth.initializationError != null) {
+          return StartupRecoveryScreen(
+            message: auth.initializationError!,
+            onRetry: () => unawaited(auth.retryInitialization()),
           );
         }
 

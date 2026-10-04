@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:zhirox/services/startup_deadline.dart';
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +11,17 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isInitializing = true;
   bool _disposed = false;
+  String? _initializationError;
+
+  String? get initializationError => _initializationError;
+
+  Future<void> retryInitialization() async {
+    if (_isInitializing || _disposed) return;
+    _isInitializing = true;
+    _initializationError = null;
+    notifyListeners();
+    await _loadSavedUser();
+  }
   Timer? _deviceAuthorizationTimer;
 
   RecordModel? get user => _user;
@@ -234,30 +246,29 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _loadSavedUser() async {
+    final deadline = StartupDeadline(const Duration(seconds: 20));
     try {
-      await PBService.ensureInitialized();
+      await deadline.run(PBService.ensureInitialized());
       final authUser = PBService.client.auth.currentUser;
       final session = PBService.client.auth.currentSession;
-
       if (authUser == null || session == null) {
-        await _clearLocalUser();
+        _user = null;
         return;
       }
 
-      // ZHIROX is online-only: a persisted Supabase session is accepted only
-      // after the current server profile and subscription are verified online.
-      try {
-        _user = await PBService.getUser(authUser.id);
-        await _validateSubscription();
-        await _enforceAdminDeviceAuthorization();
-      } catch (_) {
-        await PBService.logout();
-        await _clearLocalUser();
-        return;
-      }
-
+      // Remain behind the startup gate until all online checks succeed.
+      // A timeout must not destroy the saved session or expose an unchecked user.
+      _user = await deadline.run(PBService.getUser(authUser.id));
+      await deadline.run(_validateSubscription());
+      await deadline.run(_enforceAdminDeviceAuthorization());
+      if (_disposed) return;
       _subscribeToUserChanges();
       _startDeviceAuthorizationHeartbeat();
+    } catch (error) {
+      _user = null;
+      _initializationError = error is String
+          ? error
+          : 'نەتوانرا هەژمارەکەت بار بکرێت. پەیوەندی بپشکنە و دووبارە هەوڵ بدە.';
     } finally {
       _isInitializing = false;
       if (!_disposed) notifyListeners();
