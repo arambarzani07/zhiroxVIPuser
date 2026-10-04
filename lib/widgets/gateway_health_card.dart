@@ -82,7 +82,7 @@ class _GatewayHealthCardState extends State<GatewayHealthCard>
       await HikvisionAdminService.setGatewayAlerts(enabled);
       await _load();
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -90,6 +90,7 @@ class _GatewayHealthCardState extends State<GatewayHealthCard>
             ),
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -115,8 +116,9 @@ class _GatewayHealthCardState extends State<GatewayHealthCard>
     if (!widget.showHistory &&
         (health == null ||
             health.status == 'disabled' ||
-            health.status == 'unpaired'))
+            health.status == 'unpaired')) {
       return const SizedBox.shrink();
+    }
     final color = _error
         ? Colors.grey
         : health?.status == 'online'
