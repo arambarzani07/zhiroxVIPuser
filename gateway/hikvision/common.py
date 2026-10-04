@@ -290,31 +290,49 @@ class HikvisionClient:
         raise RuntimeError(last_error or "search_failed")
 
     def download_recording(self, playback_uri: str, output_path: pathlib.Path) -> None:
-        safe_uri = playback_uri.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        # XML is required in the GET request body on older ISAPI firmware too.
+        safe_uri = html.escape(html.unescape(playback_uri), quote=False)
         body = (
             '<?xml version="1.0" encoding="UTF-8"?>'
             '<downloadRequest version="1.0" xmlns="http://www.isapi.org/ver20/XMLSchema">'
             f'<playbackURI>{safe_uri}</playbackURI>'
             '</downloadRequest>'
-        )
-        response = self.session.post(
-            f"{self.host}/ISAPI/ContentMgmt/download",
-            data=body.encode("utf-8"),
-            headers={"Content-Type": "application/xml"},
-            timeout=(20, 180), stream=True,
-        )
-        if response.status_code in {405, 501}:
+        ).encode("utf-8")
+        endpoint = f"{self.host}/ISAPI/ContentMgmt/download"
+        kwargs = dict(data=body, headers={"Content-Type": "application/xml"},
+                      timeout=(20, 180), stream=True)
+        response = self.session.post(endpoint, **kwargs)
+        # Some recorders report badXmlContent (400), rather than 405, for POST.
+        # Preserve exactly the same channel and time bounds on every attempt.
+        if response.status_code in {400, 405, 422, 501}:
             response.close()
-            response = self.session.get(
-                f"{self.host}/ISAPI/ContentMgmt/download",
-                params={"playbackURI": playback_uri},
-                timeout=(20, 180), stream=True,
-            )
+            response = self.session.get(endpoint, **kwargs)
+            if response.status_code in {405, 501}:
+                response.close()
+                response = self.session.get(
+                    endpoint, params={"playbackURI": html.unescape(playback_uri)},
+                    timeout=(20, 180), stream=True,
+                )
         with response as r:
-            r.raise_for_status()
             content_type = (r.headers.get("content-type") or "").lower()
-            if "xml" in content_type:
-                raise RuntimeError("download_returned_xml")
+            if r.status_code >= 400 or "xml" in content_type:
+                # Log only device status fields, never the URI or credentials.
+                details = []
+                payload = bytearray()
+                for chunk in r.iter_content(chunk_size=4096):
+                    payload.extend(chunk[:4096 - len(payload)])
+                    if len(payload) >= 4096:
+                        break
+                try:
+                    root = ET.fromstring(bytes(payload))
+                    for node in root.iter():
+                        if local_name(node.tag) in {"statusCode", "statusString", "subStatusCode", "errorCode"}:
+                            value = (node.text or "").strip()
+                            if value and len(value) <= 120 and all(c.isalnum() or c in " _-." for c in value):
+                                details.append(f"{local_name(node.tag)}={value}")
+                except ET.ParseError:
+                    pass
+                raise RuntimeError(f"download_rejected:http={r.status_code};" + ";".join(details))
             with output_path.open("wb") as fh:
                 for chunk in r.iter_content(chunk_size=1024 * 1024):
                     if chunk:

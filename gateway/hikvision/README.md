@@ -121,3 +121,7 @@ at the existing installed path, then starting it once. Keep config.json and
 FFmpeg. No new token or setup is required. The app permits manual rebuilds only
 while a recent 1.2-or-newer gateway is active. Rebuilds preserve old storage files
 and a private evidence snapshot, fence old callbacks, and do not modify debts.
+
+## Gateway 1.2.1+download-compat-1
+
+Retries download rejection HTTP 400/405/422/501 using GET with the same XML request body, as specified by the ISAPI General Application Developer Guide section 15.2.2. Channel and transaction time bounds stay unchanged; file-name selectors are never restored. Device rejection status fields are recorded without including credentials or playback URLs. This is a compatibility fix; correct footage still requires a recorder test and timestamp comparison.
