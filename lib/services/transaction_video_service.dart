@@ -16,12 +16,49 @@ class TransactionVideoService {
 
   // The server checks the authenticated market and creates a short-lived URL.
   // Never persist the URL or expose a storage path as a public video link.
-  static Future<Uri> playback(String type, String id) async {
+  static Future<Map<String, dynamic>> playbackDetails(
+    String type,
+    String id,
+  ) async {
     final response = await Supabase.instance.client.functions.invoke(
       'hikvision-admin',
       body: {'action': 'video_url', 'source_type': type, 'source_id': id},
     );
-    return playbackUri(response.data);
+    playbackUri(response.data);
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  static Future<Uri> playback(String type, String id) async =>
+      playbackUri(await playbackDetails(type, id));
+
+  static Future<void> rebuild(String type, String id) async {
+    final response = await Supabase.instance.client.functions.invoke(
+      'hikvision-admin',
+      body: {'action': 'rebuild_video', 'source_type': type, 'source_id': id},
+    );
+    if (response.data is! Map || response.data['ok'] != true)
+      throw StateError('rebuild_failed');
+  }
+
+  static bool clockMismatch(Map<String, dynamic>? evidence) {
+    final metadata = evidence?['playback_metadata'];
+    return metadata is Map &&
+        metadata['clock_check'] is Map &&
+        metadata['clock_check']['status'] == 'mismatch';
+  }
+
+  static String clockLabel(Map<String, dynamic>? evidence) {
+    final metadata = evidence?['playback_metadata'];
+    final check = metadata is Map ? metadata['clock_check'] : null;
+    if (check is! Map || check['status'] == 'unknown')
+      return 'کاتی ناو دیمەن هێشتا پشتڕاست نەکراوەتەوە.';
+    if (check['status'] == 'matched')
+      return 'کاتی خوێندراوەی دیمەن لەگەڵ ماوەی داواکراوی مامەڵە دەگونجێت.';
+    if (check['status'] == 'mismatch') {
+      final seconds = (check['offset_seconds'] as num?)?.round();
+      return 'ئاگاداری: کاتی دیمەن لەگەڵ کاتی داواکراو ناگونجێت.${seconds == null ? '' : ' جیاوازی: $seconds چرکە.'}';
+    }
+    return 'کاتی ناو دیمەن هێشتا پشتڕاست نەکراوەتەوە.';
   }
 
   static Uri playbackUri(dynamic data) {

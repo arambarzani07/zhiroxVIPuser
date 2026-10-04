@@ -29,4 +29,29 @@ void main() {
       );
     },
   );
+  test(
+    'unknown clocks never claim a match; mismatch shows the clock offset',
+    () {
+      expect(TransactionVideoService.clockMismatch(null), false);
+      expect(
+        TransactionVideoService.clockLabel(null),
+        contains('پشتڕاست نەکراوەتەوە'),
+      );
+      final evidence = <String, dynamic>{
+        'playback_metadata': {
+          'clock_check': {'status': 'mismatch', 'offset_seconds': -14400},
+        },
+      };
+      expect(TransactionVideoService.clockMismatch(evidence), true);
+      expect(TransactionVideoService.clockLabel(evidence), contains('-14400'));
+      expect(
+        TransactionVideoService.clockLabel({
+          'playback_metadata': {
+            'clock_check': {'status': 'matched'},
+          },
+        }),
+        contains('دەگونجێت'),
+      );
+    },
+  );
 }

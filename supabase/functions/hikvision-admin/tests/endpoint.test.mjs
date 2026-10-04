@@ -13,6 +13,7 @@ const other={...row,id:'clip-b',clip_start_at:'2026-10-04T08:00:00Z',clip_end_at
 let queries=[];
 globalThis.Deno={env:{get:()=> 'test-value'},serve:fn=>handler=fn};
 globalThis.testCreateClient=()=>({
+ rpc:async (name,args)=>{assert.equal(args.p_market_id,'market-a'); return {data:{ok:true,can_rebuild:true},error:null};},
  auth:{getUser:async()=>({data:{user:mode==='authenticated'?{id:'market-a'}:null},error:null})},
  from(table){
   const filters=[];let single=false;
@@ -41,6 +42,9 @@ test('status and signed playback warn without exposing hashes; client cannot cho
   if(action==='video_url')assert.equal(data.ready,true);
  }
  assert.equal(queries.length,4);
+});
+test('rebuild ignores a client-supplied market and uses verified identity',async()=>{
+ const response=await handler(request('rebuild_video'));assert.equal(response.status,200);assert.equal((await response.json()).ok,true);
 });
 test('unauthenticated requests fail before accessing clips',async()=>{
  mode='unauthenticated';const count=queries.length;

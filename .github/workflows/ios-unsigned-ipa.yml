@@ -108,6 +108,11 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: video-upgrade-dependency-lock
+          path: pubspec.lock
+
       - name: Verify online-only policy
         run: python3 scripts/verify_online_only.py
 

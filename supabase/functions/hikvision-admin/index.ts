@@ -273,10 +273,15 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, config: data });
     }
 
-    if (action === "video_url" || action === "video_status") {
+    if (action === "video_url" || action === "video_status" || action === "rebuild_video") {
       const sourceType = String(body.source_type ?? "").trim();
       const sourceId = String(body.source_id ?? "").trim();
       if (!["debt", "payment", "general_payment"].includes(sourceType) || !/^[0-9a-f-]{36}$/i.test(sourceId)) return json({ error: "invalid_transaction" }, 400);
+      if (action === "rebuild_video") {
+        const { data, error } = await admin.rpc("hikvision_video_rebuild_service", {p_market_id:marketId,p_source_type:sourceType,p_source_id:sourceId});
+        if (error) throw error;
+        return json(data?.ok ? data : {error:data?.reason ?? "rebuild_failed"},data?.ok ? 200 : 409);
+      }
       const { data: evidence, error } = await admin.from("transaction_video_evidence").select("id,market_id,status,content_sha256,object_path,channel_id,transaction_at,clip_start_at,clip_end_at,captured_at,playback_metadata").eq("market_id", marketId).eq("source_type", sourceType).eq("source_id", sourceId).maybeSingle();
       if (error) throw error;
       if (!evidence) return action === "video_status" ? json({ ok: true, evidence: null }) : json({ error: "video_not_found" }, 404);
@@ -292,6 +297,9 @@ Deno.serve(async (req: Request) => {
       // Internal identifiers and file hashes are not needed by the client.
       const { id: _id, market_id: _market, content_sha256: _hash, ...publicEvidence } = evidence;
       publicEvidence.integrity = integrity;
+      const { data: rebuild, error: rebuildError } = await admin.rpc("hikvision_video_rebuild_status_service", {p_market_id:marketId,p_source_type:sourceType,p_source_id:sourceId});
+      publicEvidence.can_rebuild = !rebuildError && rebuild?.can_rebuild === true;
+      publicEvidence.rebuild = rebuildError ? null : rebuild;
       if (action === "video_status") return json({ ok: true, evidence: publicEvidence });
       if (evidence.status !== "ready" || !evidence.object_path) return json({ ok: true, ready: false, evidence: publicEvidence });
       const { data: signed, error: signedError } = await admin.storage.from("transaction-camera-clips").createSignedUrl(evidence.object_path, 600);

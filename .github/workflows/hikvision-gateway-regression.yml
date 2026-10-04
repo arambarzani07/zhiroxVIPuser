@@ -36,6 +36,8 @@ jobs:
         run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: Run Hikvision v2 fencing regression
         run: supabase test db supabase/tests/hikvision_gateway_v2.test.sql
+      - name: Run clip rebuild regression
+        run: supabase test db supabase/tests/hikvision_clip_rebuild.test.sql
       - name: Run Hik-Connect cloud provider regression
         run: supabase test db supabase/tests/hikvision_cloud_provider.test.sql
       - name: Run Hikvision retention regression
@@ -61,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'GATEWAY_VERSION = "1.1.0"' gateway/hikvision/agent.py
+          grep -q 'GATEWAY_VERSION = "1.2.0+osd-1"' gateway/hikvision/agent.py
           grep -q 'heartbeat_job' gateway/hikvision/agent.py
           grep -q 'hikvision_gateway_claim_v2_service' supabase/functions/hikvision-gateway/index.ts
           grep -q 'stale_or_invalid_attempt' supabase/functions/hikvision-gateway/index.ts

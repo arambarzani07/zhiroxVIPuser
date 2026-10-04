@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:zhirox/widgets/transaction_video_player.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/transaction_video_service.dart';
 
@@ -51,6 +51,7 @@ class _TransactionVideoPanelState extends State<_TransactionVideoPanel> {
   Map<String, dynamic>? _evidence;
   bool _loading = true;
   bool _opening = false;
+  bool _rebuilding = false;
   String? _error;
 
   @override
@@ -94,16 +95,14 @@ class _TransactionVideoPanelState extends State<_TransactionVideoPanel> {
       _error = null;
     });
     try {
-      final uri = await TransactionVideoService.playback(
-        widget.sourceType,
-        widget.sourceId,
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => TransactionVideoPlayer(
+            sourceType: widget.sourceType,
+            sourceId: widget.sourceId,
+          ),
+        ),
       );
-      if (!mounted) {
-        return;
-      }
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        throw StateError('video_open_failed');
-      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -116,6 +115,41 @@ class _TransactionVideoPanelState extends State<_TransactionVideoPanel> {
       if (mounted) {
         setState(() => _opening = false);
       }
+    }
+  }
+
+  Future<void> _rebuild() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('دروستکردنەوەی کلیپ'),
+        content: const Text(
+          'Gateway دووبارە کلیپی ئەم مامەڵەیە وەردەگرێت. ئەگەر تۆمار لە NVR ماوە و کاتەکە دروست بێت، کلیپی نوێ جێگای ئەمە دەگرێتەوە.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('پاشگەزبوونەوە'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('داواکردن'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _rebuilding = true);
+    try {
+      await TransactionVideoService.rebuild(widget.sourceType, widget.sourceId);
+      await _load();
+    } catch (_) {
+      if (mounted)
+        setState(
+          () => _error = 'داواکاری سەرکەوتوو نەبوو؛ دۆخ نوێ بکەرەوە و دڵنیابە Gatewayی نوێ چالاکە.',
+        );
+    } finally {
+      if (mounted) setState(() => _rebuilding = false);
     }
   }
 
@@ -138,6 +172,8 @@ class _TransactionVideoPanelState extends State<_TransactionVideoPanel> {
               const Center(child: CircularProgressIndicator())
             else if (_error == null) ...[
               Text(TransactionVideoService.statusLabel(status)),
+              if (status == 'ready')
+                Text(TransactionVideoService.clockLabel(_evidence)),
               if (_evidence?['integrity'] is Map &&
                   _evidence!['integrity']['duplicate_warning'] == true) ...[
                 const SizedBox(height: 12),
@@ -166,6 +202,21 @@ class _TransactionVideoPanelState extends State<_TransactionVideoPanel> {
                 ),
               ],
             ],
+            if (!_loading && _evidence != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed:
+                    _opening || _rebuilding || _evidence?['can_rebuild'] != true
+                    ? null
+                    : _rebuild,
+                icon: const Icon(Icons.restart_alt),
+                label: Text(_rebuilding ? 'داواکاری…' : 'دروستکردنەوەی کلیپ'),
+              ),
+              if (_evidence?['can_rebuild'] != true)
+                const Text(
+                  'دروستکردنەوە پێویستی بە Gatewayی نوێی چالاک هەیە؛ لە کاتی کارکردنی کلیپیش چاوەڕوان بە.',
+                ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(
@@ -175,7 +226,7 @@ class _TransactionVideoPanelState extends State<_TransactionVideoPanel> {
             ],
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: _loading || _opening ? null : _load,
+              onPressed: _loading || _opening || _rebuilding ? null : _load,
               icon: const Icon(Icons.refresh),
               label: const Text('نوێکردنەوەی دۆخی کلیپ'),
             ),

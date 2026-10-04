@@ -10,6 +10,8 @@ import json
 import os
 import pathlib
 import subprocess
+import shutil
+import sys
 import tempfile
 import time
 import uuid
@@ -17,6 +19,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
 from requests.auth import HTTPDigestAuth
@@ -88,6 +91,25 @@ def parse_iso(value: str) -> datetime:
 
 def hik_time(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def bounded_playback_uri(uri: str, start: datetime, end: datetime, track_id: int) -> str:
+    """Explicit download-by-time URI, never the search result's file selector."""
+    if start.tzinfo is None or end.tzinfo is None or end <= start:
+        raise ValueError("invalid_download_window")
+    parts = urlsplit(html.unescape(uri))
+    if parts.scheme not in {"rtsp", "rtsps"} or not parts.hostname:
+        raise ValueError("invalid_playback_uri")
+    if parts.username or parts.password:
+        raise ValueError("credentials_in_playback_uri")
+    if parts.path.rstrip("/").rsplit("/", 1)[-1] != str(track_id):
+        raise ValueError("playback_track_mismatch")
+    # name/size mean download-by-file; retaining them may return its beginning.
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+             if k.lower() not in {"starttime", "endtime", "name", "size"}]
+    query += [("starttime", start.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")),
+              ("endtime", end.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ""))
 
 
 def local_name(tag: str) -> str:
@@ -244,7 +266,17 @@ class HikvisionClient:
                     except Exception:
                         return 10**12
 
-                best = min(matches, key=score)
+                eligible = []
+                for match in matches:
+                    try:
+                        if (parse_iso(match["startTime"]) <= start and
+                                parse_iso(match["endTime"]) >= end.replace(microsecond=0)):
+                            eligible.append(match)
+                    except (KeyError, ValueError):
+                        continue
+                if not eligible:
+                    raise RuntimeError("recording_window_not_covered")
+                best = min(eligible, key=score)
                 return {
                     "found": True,
                     "track_id": track_id,
@@ -265,13 +297,20 @@ class HikvisionClient:
             f'<playbackURI>{safe_uri}</playbackURI>'
             '</downloadRequest>'
         )
-        with self.session.get(
+        response = self.session.post(
             f"{self.host}/ISAPI/ContentMgmt/download",
             data=body.encode("utf-8"),
             headers={"Content-Type": "application/xml"},
-            timeout=(20, 180),
-            stream=True,
-        ) as r:
+            timeout=(20, 180), stream=True,
+        )
+        if response.status_code in {405, 501}:
+            response.close()
+            response = self.session.get(
+                f"{self.host}/ISAPI/ContentMgmt/download",
+                params={"playbackURI": playback_uri},
+                timeout=(20, 180), stream=True,
+            )
+        with response as r:
             r.raise_for_status()
             content_type = (r.headers.get("content-type") or "").lower()
             if "xml" in content_type:
@@ -290,26 +329,64 @@ def sha256_file(path: pathlib.Path) -> str:
     return h.hexdigest()
 
 
-def maybe_trim_with_ffmpeg(source: pathlib.Path, target: pathlib.Path, clip_start: datetime, segment_start: Optional[str], duration: int) -> bool:
-    ffmpeg = None
-    for candidate in ("ffmpeg.exe", str(APP_DIR / "ffmpeg.exe")):
+def find_ffmpeg() -> str:
+    candidates = [str(APP_DIR / "ffmpeg.exe"),
+                  str(pathlib.Path(sys.executable).parent / "ffmpeg.exe"),
+                  shutil.which("ffmpeg.exe"), shutil.which("ffmpeg")]
+    for candidate in dict.fromkeys(c for c in candidates if c):
         try:
             result = subprocess.run([candidate, "-version"], capture_output=True, timeout=5)
             if result.returncode == 0:
-                ffmpeg = candidate
-                break
-        except Exception:
+                return candidate
+        except (OSError, subprocess.TimeoutExpired):
             pass
-    if not ffmpeg or not segment_start:
-        return False
+    raise RuntimeError("ffmpeg_required_for_playback")
+
+
+def prepare_browser_clip(source: pathlib.Path, target: pathlib.Path,
+                         clip_start: datetime, segment_start: Optional[str],
+                         duration: int) -> dict[str, Any]:
+    """Encode and decode-check the private clip; never fall back to raw HEVC."""
+    if not segment_start:
+        raise RuntimeError("recording_start_required")
+    offset = (clip_start.astimezone(timezone.utc) -
+              parse_iso(segment_start).astimezone(timezone.utc)).total_seconds()
+    if offset < -0.05 or duration <= 0:
+        raise RuntimeError("invalid_clip_window")
+    ffmpeg = find_ffmpeg()
     try:
-        segment_dt = parse_iso(segment_start)
-        offset = max(0.0, (clip_start.astimezone(timezone.utc) - segment_dt.astimezone(timezone.utc)).total_seconds())
         result = subprocess.run(
-            [ffmpeg, "-y", "-ss", f"{offset:.3f}", "-i", str(source), "-t", str(max(1, duration)), "-c", "copy", "-movflags", "+faststart", str(target)],
-            capture_output=True,
-            timeout=120,
+            [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+             "-ss", f"{max(0.0, offset):.3f}", "-i", str(source),
+             "-t", str(duration), "-map", "0:v:0", "-map", "0:a:0?",
+             "-vf", "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,fps=25",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+             "-profile:v", "main", "-level:v", "4.1", "-pix_fmt", "yuv420p",
+             "-tag:v", "avc1", "-threads", "2",
+             "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000",
+             "-movflags", "+faststart", str(target)],
+            capture_output=True, timeout=600,
         )
-        return result.returncode == 0 and target.exists() and target.stat().st_size > 0
+        if result.returncode != 0 or not target.exists() or target.stat().st_size == 0:
+            raise RuntimeError("clip_conversion_failed")
+        # Decode every video frame. Count frames to reject header-only MP4s and
+        # report actual duration instead of claiming the requested duration.
+        check = subprocess.run(
+            [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-xerror",
+             "-i", str(target), "-map", "0:v:0", "-an", "-progress", "pipe:1",
+             "-f", "null", "-"], capture_output=True, timeout=180,
+        )
+        frames = [int(line.split("=", 1)[1].strip())
+                  for line in check.stdout.decode("utf-8", errors="replace").splitlines()
+                  if line.startswith("frame=")]
+        if check.returncode != 0 or not frames or frames[-1] <= 0:
+            raise RuntimeError("clip_decode_validation_failed")
+        actual_duration = frames[-1] / 25.0
+        return {"duration_seconds": actual_duration,
+                "exact_trim": abs(actual_duration - duration) <= 0.1,
+                "video_codec": "h264", "video_tag": "avc1",
+                "pixel_format": "yuv420p", "decode_verified": True,
+                "preparation_version": 2}
     except Exception:
-        return False
+        target.unlink(missing_ok=True)
+        raise
