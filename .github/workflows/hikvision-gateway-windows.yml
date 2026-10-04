@@ -35,7 +35,7 @@ jobs:
       - name: Test recorder diagnostics
         shell: pwsh
         working-directory: gateway/hikvision
-        run: python -m unittest test_diagnose.py
+        run: python -m unittest test_diagnose.py test_secret_input.py
 
       - name: Build recorder diagnostics
         shell: pwsh

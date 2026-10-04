@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import getpass
 import json
 import pathlib
 import xml.etree.ElementTree as ET
@@ -11,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from common import GatewayConfig, HikvisionClient, local_name, parse_iso, sha256_file
+from setup import ask_secret
 
 
 def diagnose(hik: HikvisionClient, channel: int, at: datetime,
@@ -96,7 +96,7 @@ def main() -> int:
     at = datetime.fromisoformat(args.at.replace('Z', '+00:00')) if args.at else datetime.now(timezone.utc) - timedelta(minutes=2)
     if at.tzinfo is None:
         parser.error('--at must include timezone (+03:00 for Baghdad)')
-    password = getpass.getpass('NVR password (local only): ')
+    password = ask_secret('NVR password (typing shows *, local only): ')
     if not password:
         parser.error('NVR password is required')
     hik = HikvisionClient(GatewayConfig(args.host, args.username, password, ''))
@@ -115,4 +115,9 @@ def main() -> int:
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    try:
+        result = main()
+        input('Press Enter to close...')
+        raise SystemExit(result)
+    except KeyboardInterrupt:
+        raise SystemExit(130)
