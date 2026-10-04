@@ -105,13 +105,13 @@ This fixes request construction defects. It does not establish that a particular
 
 ## Gateway 1.2.0+osd-1: displayed-clock warnings
 
-Uses built-in Windows OCR locally. A live snapshot and `/ISAPI/System/time`
+Uses bundled Tesseract OCR locally; no Windows language-pack installation is needed. A live snapshot and `/ISAPI/System/time`
 resolve the recorder offset and date order; three rendered clip samples are
 compared with the requested start. At least two distinct readings must progress
 with playback and agree within two seconds. A five-second tolerance allows
 whole-second OSD and frame sampling. Results are `matched`, `mismatch`, or
 `unknown`; none adjusts the recorder clock or automatically shifts requests.
-Missing English OCR, unavailable snapshot, hidden OSD, ambiguous date order,
+Unavailable OCR, unavailable snapshot, hidden OSD, ambiguous date order,
 OCR errors and unsupported formats report unknown and do not stop uploading.
 Only extracted timestamps and result metadata leave the PC; temporary snapshots
 and crops are removed. Old clips have no OCR result until explicitly rebuilt.

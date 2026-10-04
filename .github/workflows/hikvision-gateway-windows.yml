@@ -27,6 +27,19 @@ jobs:
         shell: pwsh
         run: pip install -r gateway/hikvision/requirements.txt
 
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-tesseract-ocr mingw-w64-ucrt-x86_64-tesseract-data-eng
+
+      - name: Stage standalone OCR resources
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: |
+          python bundle_ocr.py C:/msys64/ucrt64
+          C:/msys64/usr/bin/bash.exe -lc "pacman -Q" | Out-File OCR-PACKAGES.txt -Encoding utf8
+
       - name: Build setup wizard
         shell: pwsh
         working-directory: gateway/hikvision
@@ -51,7 +64,7 @@ jobs:
       - name: Build background gateway
         shell: pwsh
         working-directory: gateway/hikvision
-        run: pyinstaller --clean --onefile --noconsole --name zhirox-hikvision-gateway agent.py
+        run: pyinstaller --clean --onefile --noconsole --add-data "ocr;ocr" --name zhirox-hikvision-gateway agent.py
 
       - name: Check Windows executables and DPAPI
         shell: pwsh
@@ -61,6 +74,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "diagnostic executable smoke test failed" }
           python -c "from common import protect_secret, unprotect_secret; assert unprotect_secret(protect_secret('windows-build-test')) == 'windows-build-test'; print('DPAPI round-trip passed')"
           if ($LASTEXITCODE -ne 0) { throw "DPAPI smoke test failed" }
+          $image = (Resolve-Path native-ocr-fixture.png).Path
+          $test = Start-Process -FilePath .\dist\zhirox-hikvision-gateway.exe -ArgumentList @('--verify-ocr-fixture', $image) -Wait -PassThru
+          if ($test.ExitCode -ne 0) { throw "Frozen gateway OCR smoke test failed" }
 
       - name: Stage artifact
         shell: pwsh
@@ -72,6 +88,9 @@ jobs:
           Copy-Item gateway/hikvision/README.md artifacts/hikvision-gateway/ -ErrorAction SilentlyContinue
           Copy-Item gateway/hikvision/01-check-nvr.cmd artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/02-setup.cmd artifacts/hikvision-gateway/
+          Copy-Item gateway/hikvision/OCR-PACKAGES.txt artifacts/hikvision-gateway/
+          Copy-Item gateway/hikvision/ocr/SOURCES.txt artifacts/hikvision-gateway/
+          Copy-Item gateway/hikvision/ocr/licenses artifacts/hikvision-gateway/ -Recurse
           Get-FileHash artifacts/hikvision-gateway/*.exe -Algorithm SHA256 | Format-Table -AutoSize | Out-File artifacts/hikvision-gateway/SHA256.txt
 
       - uses: actions/upload-artifact@v4
