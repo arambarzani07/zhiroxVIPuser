@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
 from requests.auth import HTTPDigestAuth
@@ -90,6 +91,25 @@ def parse_iso(value: str) -> datetime:
 
 def hik_time(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def bounded_playback_uri(uri: str, start: datetime, end: datetime, track_id: int) -> str:
+    """Explicit download-by-time URI, never the search result's file selector."""
+    if start.tzinfo is None or end.tzinfo is None or end <= start:
+        raise ValueError("invalid_download_window")
+    parts = urlsplit(html.unescape(uri))
+    if parts.scheme not in {"rtsp", "rtsps"} or not parts.hostname:
+        raise ValueError("invalid_playback_uri")
+    if parts.username or parts.password:
+        raise ValueError("credentials_in_playback_uri")
+    if parts.path.rstrip("/").rsplit("/", 1)[-1] != str(track_id):
+        raise ValueError("playback_track_mismatch")
+    # name/size mean download-by-file; retaining them may return its beginning.
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+             if k.lower() not in {"starttime", "endtime", "name", "size"}]
+    query += [("starttime", start.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")),
+              ("endtime", end.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ""))
 
 
 def local_name(tag: str) -> str:
@@ -246,7 +266,17 @@ class HikvisionClient:
                     except Exception:
                         return 10**12
 
-                best = min(matches, key=score)
+                eligible = []
+                for match in matches:
+                    try:
+                        if (parse_iso(match["startTime"]) <= start and
+                                parse_iso(match["endTime"]) >= end.replace(microsecond=0)):
+                            eligible.append(match)
+                    except (KeyError, ValueError):
+                        continue
+                if not eligible:
+                    raise RuntimeError("recording_window_not_covered")
+                best = min(eligible, key=score)
                 return {
                     "found": True,
                     "track_id": track_id,
@@ -267,13 +297,20 @@ class HikvisionClient:
             f'<playbackURI>{safe_uri}</playbackURI>'
             '</downloadRequest>'
         )
-        with self.session.get(
+        response = self.session.post(
             f"{self.host}/ISAPI/ContentMgmt/download",
             data=body.encode("utf-8"),
             headers={"Content-Type": "application/xml"},
-            timeout=(20, 180),
-            stream=True,
-        ) as r:
+            timeout=(20, 180), stream=True,
+        )
+        if response.status_code in {405, 501}:
+            response.close()
+            response = self.session.get(
+                f"{self.host}/ISAPI/ContentMgmt/download",
+                params={"playbackURI": playback_uri},
+                timeout=(20, 180), stream=True,
+            )
+        with response as r:
             r.raise_for_status()
             content_type = (r.headers.get("content-type") or "").lower()
             if "xml" in content_type:

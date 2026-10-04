@@ -20,7 +20,7 @@ class PlaybackFailureTest(unittest.TestCase):
     def test_failed_preparation_never_uploads_raw_or_completes(self):
         now = datetime.now(timezone.utc) - timedelta(minutes=5)
         cloud, hik = Mock(), Mock()
-        hik.search_recording.return_value = {'found': True, 'playback_uri': 'private', 'segment_start': now.isoformat()}
+        hik.search_recording.return_value = {'found': True, 'playback_uri': 'rtsp://192.168.1.3/Streaming/tracks/1001?name=old&size=123', 'segment_start': now.isoformat()}
         hik.download_recording.side_effect = lambda uri, path: path.write_bytes(b'raw-hevc')
         job = {'job_id': 'test', 'transaction_at': now.isoformat(), 'clip_start_at': now.isoformat(),
                'clip_end_at': (now + timedelta(seconds=30)).isoformat(), 'channel_id': 10}

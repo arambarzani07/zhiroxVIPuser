@@ -95,3 +95,9 @@ network access, and the PC awake. This is not an unattended Windows service.
 ## Playback compatibility update — 2026-10-04
 
 Previously the gateway used stream copy, which retained recorder HEVC/hev1 video even in an MP4 file. This update transcodes and validates new clips. It does not change existing uploaded clips or recorder settings, and does not verify the camera OSD timestamp against transaction time. Keep the existing encrypted config and FFmpeg; replace only the gateway executable and restart it once under the same Windows user. FFmpeg can be on PATH, beside the executable, or in the encrypted-config directory.
+
+## Time-window download update — 2026-10-04
+
+The previous downloader sent an XML body in a GET request, whereas Hikvision documents POST-with-XML or GET-with-playbackURI-query. New downloads use POST-with-XML (GET-query fallback only for unsupported POST). Transaction jobs rebuild the playback URI with the requested UTC start/end and remove file-name/size selectors so download-by-file cannot select an earlier file start. Search results must cover the requested window; nearest results are rejected. Conversion starts at the explicit download start, not the search segment start. Logs and playback metadata include the time-window request and build marker, but never recorder credentials or signed cloud URLs.
+
+This fixes request construction defects. It does not establish that a particular recorder honors UTC or the requested media boundaries. Compare a known transaction with NVR Playback after installing before treating a clip as correctly timed evidence. No fixed four-hour adjustment is applied. Existing uploaded clips are not rewritten. Keep config, FFmpeg, recorder clock and PC clock unchanged.

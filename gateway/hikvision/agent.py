@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import common as gateway_common
 from common import (
     CONFIG_PATH,
+    bounded_playback_uri,
     TEMP_DIR,
     CloudClient,
     GatewayConfig,
@@ -123,7 +124,10 @@ def process_job(
                 )
                 return
 
-            playback_uri = str(search["playback_uri"])
+            playback_uri = bounded_playback_uri(str(search["playback_uri"]),
+                                                clip_start, clip_end, channel_id * 100 + 1)
+            log(f"job={job_id} build=time-window-3 download_mode=time "
+                f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}")
             hik.download_recording(playback_uri, raw_path)
             if not raw_path.exists() or raw_path.stat().st_size <= 0:
                 raise RuntimeError("empty_download")
@@ -133,7 +137,7 @@ def process_job(
                 raw_path,
                 exact_path,
                 clip_start,
-                search.get("segment_start"),
+                clip_start.replace(microsecond=0).isoformat(),
                 requested_duration,
             )
             upload_path = exact_path
@@ -157,6 +161,10 @@ def process_job(
                 duration_seconds=media["duration_seconds"],
                 playback_metadata={
                     "provider": "hikvision_isapi",
+                    "gateway_build": "time-window-3",
+                    "download_mode": "time",
+                    "download_start": clip_start.replace(microsecond=0).isoformat(),
+                    "media_time_verified": False,
                     "track_id": search.get("track_id"),
                     "segment_start": search.get("segment_start"),
                     "segment_end": search.get("segment_end"),

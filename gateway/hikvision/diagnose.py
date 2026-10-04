@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+from urllib.parse import parse_qsl, urlsplit
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
@@ -31,6 +32,8 @@ def diagnose(hik: HikvisionClient, channel: int, at: datetime,
         response.raise_for_status()
         clock = ET.fromstring(response.content)
         values = {local_name(n.tag): (n.text or '').strip() for n in clock.iter()}
+        report['nvr_local_time'] = values.get('localTime')
+        report['nvr_time_zone'] = values.get('timeZone')
         stamp = values.get('localTime') or values.get('time')
         device_time = datetime.fromisoformat((stamp or '').replace('Z', '+00:00'))
         if device_time.tzinfo is None:
@@ -54,6 +57,10 @@ def diagnose(hik: HikvisionClient, channel: int, at: datetime,
     except (KeyError, TypeError, ValueError):
         covers = False
     report['recording_status'] = 'found_at_requested_time' if covers else 'time_not_verified'
+    uri_fields = dict(parse_qsl(urlsplit(match.get('playback_uri', '')).query))
+    report['uri_start_time'] = uri_fields.get('starttime')
+    report['uri_end_time'] = uri_fields.get('endtime')
+    report['uri_selects_file'] = 'name' in uri_fields or 'size' in uri_fields
     report['segment_start'] = match.get('segment_start')
     report['segment_end'] = match.get('segment_end')
     report['requested_window_covered'] = covers and (
