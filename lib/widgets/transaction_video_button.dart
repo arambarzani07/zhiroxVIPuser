@@ -144,10 +144,11 @@ class _TransactionVideoPanelState extends State<_TransactionVideoPanel> {
       await TransactionVideoService.rebuild(widget.sourceType, widget.sourceId);
       await _load();
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error = 'داواکاری سەرکەوتوو نەبوو؛ دۆخ نوێ بکەرەوە و دڵنیابە Gatewayی نوێ چالاکە.',
         );
+      }
     } finally {
       if (mounted) setState(() => _rebuilding = false);
     }

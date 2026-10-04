@@ -64,8 +64,9 @@ class _TransactionVideoPlayerState extends State<TransactionVideoPlayer> {
     } catch (_) {
       _controller = null;
       await candidate?.dispose();
-      if (mounted)
+      if (mounted) {
         setState(() => _error = 'ڤیدیۆکە نەکرایەوە. دووبارە هەوڵ بدە.');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -94,8 +95,9 @@ class _TransactionVideoPlayerState extends State<TransactionVideoPlayer> {
           .send(http.Request('GET', uri))
           .timeout(const Duration(seconds: 30));
       const limit = 100 * 1024 * 1024;
-      if (response.statusCode != 200 || (response.contentLength ?? 0) > limit)
+      if (response.statusCode != 200 || (response.contentLength ?? 0) > limit) {
         throw StateError('download_failed');
+      }
       final directory = await getTemporaryDirectory();
       final id = widget.sourceId.replaceAll(RegExp('[^a-zA-Z0-9-]'), '');
       file = File(
@@ -120,10 +122,11 @@ class _TransactionVideoPlayerState extends State<TransactionVideoPlayer> {
         sharePositionOrigin: origin,
       );
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error = 'داگرتنی ڤیدیۆ سەرکەوتوو نەبوو. دووبارە هەوڵ بدە.',
         );
+      }
     } finally {
       await sink?.close();
       client.close();

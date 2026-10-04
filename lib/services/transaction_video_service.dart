@@ -36,8 +36,9 @@ class TransactionVideoService {
       'hikvision-admin',
       body: {'action': 'rebuild_video', 'source_type': type, 'source_id': id},
     );
-    if (response.data is! Map || response.data['ok'] != true)
+    if (response.data is! Map || response.data['ok'] != true) {
       throw StateError('rebuild_failed');
+    }
   }
 
   static bool clockMismatch(Map<String, dynamic>? evidence) {
@@ -50,10 +51,12 @@ class TransactionVideoService {
   static String clockLabel(Map<String, dynamic>? evidence) {
     final metadata = evidence?['playback_metadata'];
     final check = metadata is Map ? metadata['clock_check'] : null;
-    if (check is! Map || check['status'] == 'unknown')
+    if (check is! Map || check['status'] == 'unknown') {
       return 'کاتی ناو دیمەن هێشتا پشتڕاست نەکراوەتەوە.';
-    if (check['status'] == 'matched')
+    }
+    if (check['status'] == 'matched') {
       return 'کاتی خوێندراوەی دیمەن لەگەڵ ماوەی داواکراوی مامەڵە دەگونجێت.';
+    }
     if (check['status'] == 'mismatch') {
       final seconds = (check['offset_seconds'] as num?)?.round();
       return 'ئاگاداری: کاتی دیمەن لەگەڵ کاتی داواکراو ناگونجێت.${seconds == null ? '' : ' جیاوازی: $seconds چرکە.'}';
