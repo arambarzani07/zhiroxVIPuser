@@ -24,7 +24,7 @@ class ClockTests(unittest.TestCase):
         for reads in [[],[(0,'10-04-2026 09:38:00')],[(0,'10-04-2026 09:38:00'),(7,'10-04-2026 09:38:00')],[(0,'10-04-2026 09:38:00'),(3,'10-04-2026 09:38:30')],[(0,'10-04-2026 09:38:OO'),(3,'10-04-2026 09:38:O3')]]:
             self.assertEqual(compare_readings(reads,self.start,self.offset,'MDY')['status'],'unknown')
     def test_date_format_is_explicit_and_year_first_supported(self):
-        self.assertEqual(dates_in_text('2026-10-04 09:38:00',self.offset,'YMD')[0][1],self.start)
+        self.assertEqual(dates_in_text('2026-10-04 Sun 09:38:00',self.offset,'YMD')[0][1],self.start)
         self.assertEqual(dates_in_text('04/10/2026 09:38:00',self.offset,'DMY')[0][1],self.start)
     def test_unavailable_ocr_does_not_stop_upload(self):
         with patch('osd_time.clock_context',side_effect=RuntimeError('no OCR')):
@@ -35,7 +35,7 @@ class WindowsOcrSmoke(unittest.TestCase):
     def test_native_ocr_recognizes_rendered_clock(self):
         with tempfile.TemporaryDirectory() as directory:
             image=pathlib.Path(directory)/'clock.png'
-            script="Add-Type -AssemblyName System.Drawing; $b=[System.Drawing.Bitmap]::new(1100,120); $g=[System.Drawing.Graphics]::FromImage($b); $g.Clear([System.Drawing.Color]::Black); $f=[System.Drawing.Font]::new('Arial',36); $g.DrawString('2026-10-04 09:38:00',$f,[System.Drawing.Brushes]::White,10,20); $b.Save('"+str(image).replace("'","''")+"'); $g.Dispose(); $b.Dispose()"
+            script="Add-Type -AssemblyName System.Drawing; $b=[System.Drawing.Bitmap]::new(1800,240); $g=[System.Drawing.Graphics]::FromImage($b); $g.Clear([System.Drawing.Color]::Black); $f=[System.Drawing.Font]::new('Consolas',48,[System.Drawing.FontStyle]::Regular,[System.Drawing.GraphicsUnit]::Pixel); $g.DrawString('2026-10-04 Sun 09:38:00',$f,[System.Drawing.Brushes]::White,10,20); $b.Save('"+str(image).replace("'","''")+"'); $g.Dispose(); $b.Dispose()"
             subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],check=True,capture_output=True,timeout=20)
             text=ocr_image(image)
             self.assertTrue(dates_in_text(text,ClockTests.offset,'YMD'),f'Native OCR output: {text!r}')
