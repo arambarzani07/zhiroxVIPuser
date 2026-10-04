@@ -253,4 +253,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) == 3 and sys.argv[1] == '--verify-ocr-fixture':
+        # CI checks the resources inside the frozen executable without config/network.
+        from osd_time import ocr_image, dates_in_text
+        result = dates_in_text(ocr_image(pathlib.Path(sys.argv[2])), timezone.utc, 'YMD')
+        sys.exit(0 if result else 1)
     main()

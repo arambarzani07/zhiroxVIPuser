@@ -1,11 +1,9 @@
 """Read the recorder's displayed clock without changing recorder settings.
 
-Windows uses built-in WinRT OCR. Missing OCR, hidden OSD, ambiguous dates or
+Windows bundles Tesseract OCR. Missing OCR, hidden OSD, ambiguous dates or
 inconsistent readings produce unknown, never a fabricated time correction.
 """
 from __future__ import annotations
-import base64
-import json
 import pathlib
 import re
 import subprocess
@@ -13,44 +11,14 @@ import sys
 from datetime import datetime, timezone
 from common import find_ffmpeg
 
-_PS = r'''
-$ErrorActionPreference = 'Stop'
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-[Windows.Storage.StorageFile,Windows.Storage,ContentType=WindowsRuntime] | Out-Null
-[Windows.Graphics.Imaging.BitmapDecoder,Windows.Graphics.Imaging,ContentType=WindowsRuntime] | Out-Null
-[Windows.Media.Ocr.OcrEngine,Windows.Foundation,ContentType=WindowsRuntime] | Out-Null
-[Windows.Storage.Streams.IRandomAccessStream,Windows.Storage.Streams,ContentType=WindowsRuntime] | Out-Null
-[Windows.Graphics.Imaging.SoftwareBitmap,Windows.Graphics.Imaging,ContentType=WindowsRuntime] | Out-Null
-[Windows.Media.Ocr.OcrResult,Windows.Foundation,ContentType=WindowsRuntime] | Out-Null
-$method = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetGenericArguments().Count -eq 1 -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
-function Await($operation, $type) {
-  $task = $method.MakeGenericMethod($type).Invoke($null, @($operation))
-  $task.GetAwaiter().GetResult()
-}
-$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync('__PATH__')) ([Windows.Storage.StorageFile])
-$stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
-try {
-  $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
-  $bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
-  $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
-  if ($null -eq $engine) { throw 'ocr_language_unavailable' }
-  $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-  @{text=$result.Text} | ConvertTo-Json -Compress
-} finally { $stream.Dispose() }
-'''
-
-
 def ocr_image(path: pathlib.Path) -> str:
-    if sys.platform == 'win32':
-        script = _PS.replace('__PATH__', str(path.resolve()).replace("'", "''"))
-        command = ['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand',
-                   base64.b64encode(script.encode('utf-16-le')).decode('ascii')]
-        result = subprocess.run(command, capture_output=True, timeout=25, creationflags=0x08000000)
-        if result.returncode:
-            raise RuntimeError('windows_ocr_unavailable')
-        return str(json.loads(result.stdout.decode('utf-8-sig'))['text'])
-    result = subprocess.run(['tesseract', str(path), 'stdout', '--psm', '6'], capture_output=True, timeout=25)
+    root = pathlib.Path(getattr(sys, '_MEIPASS', pathlib.Path(__file__).resolve().parent))
+    bundled = root / 'ocr' / 'tesseract.exe'
+    command = [str(bundled) if bundled.exists() else 'tesseract', str(path), 'stdout', '--psm', '6', '-l', 'eng']
+    if bundled.exists():
+        command += ['--tessdata-dir', str(root / 'ocr' / 'tessdata')]
+    result = subprocess.run(command, capture_output=True, timeout=25,
+                            creationflags=0x08000000 if sys.platform == 'win32' else 0)
     if result.returncode:
         raise RuntimeError('ocr_unavailable')
     return result.stdout.decode('utf-8', errors='replace')
