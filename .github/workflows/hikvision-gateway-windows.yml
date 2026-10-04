@@ -35,7 +35,7 @@ jobs:
       - name: Test recorder diagnostics
         shell: pwsh
         working-directory: gateway/hikvision
-        run: python -m unittest test_diagnose.py test_secret_input.py
+        run: python -m unittest test_diagnose.py test_secret_input.py test_playback.py
 
       - name: Build recorder diagnostics
         shell: pwsh
@@ -74,3 +74,19 @@ jobs:
           path: artifacts/hikvision-gateway
           if-no-files-found: error
           retention-days: 30
+
+  playback-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install playback test dependencies
+        run: |
+          pip install requests
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Test HEVC conversion and failure handling
+        working-directory: gateway/hikvision
+        run: python -m unittest test_playback.py

@@ -37,7 +37,7 @@ This gateway links ZHIROX financial transactions to recorded Hikvision video wit
 3. The local gateway claims the job over HTTPS.
 4. It searches recordings with `POST /ISAPI/ContentMgmt/search` using HTTP Digest authentication.
 5. It downloads the matching recording through `/ISAPI/ContentMgmt/download`.
-6. If `ffmpeg.exe` is available on PATH (or beside the gateway config), the segment is losslessly trimmed to the requested window; otherwise the matching Hikvision recording segment is retained and the requested timestamps are saved as metadata.
+6. FFmpeg is required. The gateway seeks to the requested window and encodes an H.264 Main / yuv420p MP4 (up to 1920×1080, 25 fps), with AAC audio when present and faststart metadata. It fully decodes the output before upload. Missing FFmpeg, empty video or conversion failure reports a failed job; an unverified raw recording is never uploaded as Ready. Actual video duration and encoding are saved in playback metadata.
 7. The clip is uploaded with a short-lived signed upload URL and SHA-256 is stored with the evidence record.
 8. Temporary local video is deleted.
 
@@ -91,3 +91,7 @@ and that Hik-Connect still works before leaving automatic capture enabled.
 Auto-start is **at this Windows user's logon**, not before anyone signs in after
 power restoration. Keep the same Windows user (DPAPI keys belong to that user),
 network access, and the PC awake. This is not an unattended Windows service.
+
+## Playback compatibility update — 2026-10-04
+
+Previously the gateway used stream copy, which retained recorder HEVC/hev1 video even in an MP4 file. This update transcodes and validates new clips. It does not change existing uploaded clips or recorder settings, and does not verify the camera OSD timestamp against transaction time. Keep the existing encrypted config and FFmpeg; replace only the gateway executable and restart it once under the same Windows user. FFmpeg can be on PATH, beside the executable, or in the encrypted-config directory.

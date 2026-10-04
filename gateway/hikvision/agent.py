@@ -13,7 +13,7 @@ from common import (
     GatewayConfig,
     HikvisionClient,
     log,
-    maybe_trim_with_ffmpeg,
+    prepare_browser_clip,
     parse_iso,
     sha256_file,
 )
@@ -129,14 +129,14 @@ def process_job(
                 raise RuntimeError("empty_download")
 
             requested_duration = max(1, int((clip_end - clip_start).total_seconds()))
-            trimmed = maybe_trim_with_ffmpeg(
+            media = prepare_browser_clip(
                 raw_path,
                 exact_path,
                 clip_start,
                 search.get("segment_start"),
                 requested_duration,
             )
-            upload_path = exact_path if trimmed else raw_path
+            upload_path = exact_path
 
             prepared = cloud.call("prepare_upload", job_id=job_id, **attempt_args)
             signed_url = str(prepared.get("signed_upload_url") or "")
@@ -154,14 +154,14 @@ def process_job(
                 object_path=object_path,
                 content_sha256=digest,
                 byte_size=size,
-                duration_seconds=requested_duration if trimmed else None,
+                duration_seconds=media["duration_seconds"],
                 playback_metadata={
                     "provider": "hikvision_isapi",
                     "track_id": search.get("track_id"),
                     "segment_start": search.get("segment_start"),
                     "segment_end": search.get("segment_end"),
                     "matches": search.get("matches", 0),
-                    "exact_trim": trimmed,
+                    **media,
                     "attempt_generation": attempt_generation,
                     "attempt_fenced": bool(attempt_token),
                     "requested_start": clip_start.astimezone(timezone.utc).isoformat(),
@@ -171,7 +171,7 @@ def process_job(
             )
             log(
                 f"job={job_id} attempt={attempt_generation} ready "
-                f"channel={channel_id} bytes={size} exact_trim={trimmed}"
+                f"channel={channel_id} bytes={size} codec=h264 decode_verified=True"
             )
         except Exception as exc:
             message = f"{type(exc).__name__}:{exc}"[:900]
