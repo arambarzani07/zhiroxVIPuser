@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:zhirox/services/a11_camera_coordinator.dart';
 import 'package:zhirox/services/a11_camera_service.dart';
 
@@ -68,7 +69,8 @@ class _A11CameraSetupScreenState extends State<A11CameraSetupScreen> {
     });
 
     try {
-      await A11CameraService.instance.saveConfig(
+      final camera = A11CameraService.instance;
+      await camera.saveConfig(
         enabled: true,
         host: _host.text.trim(),
         port: int.parse(_port.text.trim()),
@@ -77,7 +79,11 @@ class _A11CameraSetupScreenState extends State<A11CameraSetupScreen> {
         path: _path.text.trim(),
       );
 
-      final ok = await A11CameraService.instance.testConnection();
+      // The mini camera may allow only one stable RTSP session. saveConfig
+      // starts the rolling recorder, so pause it while the one-second probe is
+      // running. The coordinator restarts it immediately after activation.
+      await camera.stopBuffer();
+      final ok = await camera.testConnection();
       if (!ok) {
         if (mounted) {
           setState(() {
@@ -86,6 +92,15 @@ class _A11CameraSetupScreenState extends State<A11CameraSetupScreen> {
           });
         }
         return;
+      }
+
+      final admin = Supabase.instance.client.auth.currentUser;
+      if (admin == null) {
+        throw StateError('admin_session_missing');
+      }
+      await camera.activateProvider(admin.id);
+      if (!await camera.isProviderActive(admin.id)) {
+        throw StateError('a11_provider_activation_failed');
       }
 
       await A11CameraCoordinator.instance.onCameraConfigChanged();
