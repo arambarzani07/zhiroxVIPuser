@@ -1,0 +1,34 @@
+name: A11 Direct Camera Build Check
+
+on:
+  push:
+    branches:
+      - a11-direct-camera
+  workflow_dispatch:
+
+jobs:
+  analyze-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter --version
+      - run: flutter pub get
+      - run: flutter analyze lib/main_a11.dart lib/services/a11_camera_service.dart lib/services/a11_camera_coordinator.dart lib/screens/admin/a11_camera_setup_screen.dart
+      - run: flutter build apk --debug -t lib/main_a11.dart
+
+  ios-no-codesign:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter --version
+      - run: flutter pub get
+      - run: cd ios && pod install
+      - run: flutter build ios --debug --no-codesign -t lib/main_a11.dart
