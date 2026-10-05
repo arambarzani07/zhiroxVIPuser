@@ -182,7 +182,7 @@ abstract final class AppDesign {
   }
 
   static ThemeData get ownerLightTheme {
-    const primary = Color(0xFF294CC8);
+    const primary = Color(0xFF3157E0);
     const background = Color(0xFFF4F6FB);
     const soft = Color(0xFFE8EDFF);
     const outline = Color(0xFFDCE2EF);
@@ -275,7 +275,7 @@ abstract final class AppDesign {
   }
 
   static ThemeData get ownerDarkTheme {
-    const primary = Color(0xFF9AAEFF);
+    const primary = Color(0xFF8CA4FF);
     const background = Color(0xFF09101F);
     const surface = Color(0xFF111A2D);
     const card = Color(0xFF151F35);
