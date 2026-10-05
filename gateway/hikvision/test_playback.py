@@ -11,6 +11,65 @@ import common
 import agent
 
 
+class DiagnosticRegressionTest(unittest.TestCase):
+    def test_timeout_preserves_hevc_reason_and_removes_partial_file(self):
+        hik = common.HikvisionClient(common.GatewayConfig('192.168.1.2', 'admin', 'secret', ''))
+        uri = 'rtsp://192.168.1.2/Streaming/tracks/1001?starttime=20261005T160939Z&endtime=20261005T161009Z'
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp)/'raw.mp4'
+            path.write_bytes(b'partial')
+            error = subprocess.TimeoutExpired(['ffmpeg', 'secret'], 120,
+                stderr=b'rtsp://admin:secret@192.168.1.2 Unsupported (HEVC) NAL type (62)')
+            with patch.object(common, 'find_ffmpeg', return_value='ffmpeg'), patch.object(common, 'run_background', side_effect=error):
+                with self.assertRaisesRegex(RuntimeError, '^rtsp_playback_failed:unsupported_hevc_payload$'):
+                    hik.download_playback_stream(uri, path, 30)
+            self.assertFalse(path.exists())
+
+    def test_timeout_without_stderr_has_specific_deadline_reason(self):
+        hik = common.HikvisionClient(common.GatewayConfig('192.168.1.2', 'admin', 'secret', ''))
+        uri = 'rtsp://192.168.1.2/Streaming/tracks/1001?starttime=20261005T160939Z&endtime=20261005T161009Z'
+        with tempfile.TemporaryDirectory() as tmp, patch.object(common, 'find_ffmpeg', return_value='ffmpeg'), patch.object(common, 'run_background', side_effect=subprocess.TimeoutExpired('secret', 120)):
+            with self.assertRaisesRegex(RuntimeError, '^rtsp_playback_failed:deadline_exceeded$'):
+                hik.download_playback_stream(uri, pathlib.Path(tmp)/'raw.mp4', 30)
+
+    def test_session_limit_requires_an_rtsp_status(self):
+        for text in ['method PLAY failed: 453 Not Enough Bandwidth', 'RTSP/1.0 453']:
+            self.assertEqual(common.playback_failure_reason(text), 'recorder_session_limit')
+        self.assertEqual(common.playback_failure_reason('frame=453 bitrate=1453'), 'unknown')
+
+    def test_upload_errors_never_expose_signed_url(self):
+        client = common.CloudClient(common.GatewayConfig('192.168.1.2', 'admin', 'secret', ''))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp)/'clip.mp4'
+            path.write_bytes(b'video')
+            for exception, reason in [(common.requests.Timeout('url?token=secret'), 'upload_timeout'),
+                                      (common.requests.ConnectionError('url?token=secret'), 'upload_network_error')]:
+                with patch.object(common.requests, 'put', side_effect=exception):
+                    with self.assertRaisesRegex(RuntimeError, '^' + reason + '$'):
+                        client.upload('https://storage.example/upload?token=secret', path)
+
+    def test_upload_closes_response_and_rejects_redirect(self):
+        client = common.CloudClient(common.GatewayConfig('192.168.1.2', 'admin', 'secret', ''))
+        response = Mock(status_code=302)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp)/'clip.mp4'
+            path.write_bytes(b'video')
+            with patch.object(common.requests, 'put', return_value=response) as put:
+                with self.assertRaisesRegex(RuntimeError, '^upload_http_302$'):
+                    client.upload('https://storage.example/upload?token=secret', path)
+                self.assertFalse(put.call_args.kwargs['allow_redirects'])
+        response.close.assert_called_once()
+
+    def test_uncovered_window_keeps_semantic_error_without_namespace_retry(self):
+        hik = common.HikvisionClient(common.GatewayConfig('192.168.1.2', 'admin', 'secret', ''))
+        response = Mock(status_code=200, content=b'<CMSearchResult><searchMatchItem><startTime>2026-10-05T16:00:00Z</startTime><endTime>2026-10-05T16:01:00Z</endTime><playbackURI>rtsp://192.168.1.2/Streaming/tracks/1001</playbackURI></searchMatchItem></CMSearchResult>')
+        start = common.parse_iso('2026-10-05T16:09:39Z')
+        with patch.object(hik.session, 'post', return_value=response) as post:
+            with self.assertRaisesRegex(RuntimeError, '^recording_window_not_covered$'):
+                hik.search_recording(10, start, start + timedelta(seconds=30), start + timedelta(seconds=15))
+        post.assert_called_once()
+
+
 class PlaybackFailureTest(unittest.TestCase):
     def test_missing_ffmpeg_is_failure(self):
         with patch.object(common.subprocess, 'run', side_effect=OSError), patch.object(common.shutil, 'which', return_value=None):

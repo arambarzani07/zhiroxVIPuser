@@ -9,6 +9,7 @@ import html
 import json
 import os
 import pathlib
+import re
 import subprocess
 import shutil
 import sys
@@ -124,6 +125,27 @@ def local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
+def playback_failure_reason(stderr: bytes | str | None, default: str = "unknown") -> str:
+    """Return fixed categories only; FFmpeg diagnostics can contain passwords."""
+    text = stderr.decode("utf-8", errors="replace") if isinstance(stderr, bytes) else (stderr or "")
+    if "Unsupported (HEVC) NAL type" in text:
+        return "unsupported_hevc_payload"
+    # A bare '453' can be a timestamp, bitrate or frame count, not an RTSP status.
+    if re.search(r"(?:RTSP/\d\.\d\s+453\b|failed:\s*453\b|453\s+Not Enough Bandwidth)", text, re.I):
+        return "recorder_session_limit"
+    for marker, reason in (("401 Unauthorized", "authentication"),
+                           ("403 Forbidden", "playback_permission"),
+                           ("404 Not Found", "playback_not_found"),
+                           ("Connection refused", "connection_refused"),
+                           ("timed out", "timeout"),
+                           ("dimensions not set", "missing_video_parameters"),
+                           ("Unknown encoder", "encoder_unavailable"),
+                           ("Unrecognized option", "ffmpeg_option_unsupported")):
+        if marker.lower() in text.lower():
+            return reason
+    return default
+
+
 @dataclass
 class GatewayConfig:
     nvr_host: str
@@ -187,15 +209,25 @@ class CloudClient:
         size = file_path.stat().st_size
         if size > 100 * 1024 * 1024:
             raise RuntimeError("clip_exceeds_100mb")
-        with file_path.open("rb") as fh:
-            response = requests.put(
-                signed_url,
-                data=fh,
-                headers={"Content-Type": "video/mp4", "x-upsert": "false"},
-                timeout=180,
-            )
-        if response.status_code >= 300:
-            raise RuntimeError(f"upload_http_{response.status_code}")
+        try:
+            with file_path.open("rb") as fh:
+                response = requests.put(
+                    signed_url,
+                    data=fh,
+                    headers={"Content-Type": "video/mp4", "x-upsert": "false"},
+                    timeout=(20, 180),
+                    allow_redirects=False,
+                )
+            try:
+                if response.status_code >= 300:
+                    raise RuntimeError(f"upload_http_{response.status_code}")
+            finally:
+                response.close()
+        except requests.Timeout:
+            # Exception text includes the signed URL. Never send it to logs/DB.
+            raise RuntimeError("upload_timeout") from None
+        except requests.RequestException:
+            raise RuntimeError("upload_network_error") from None
 
 
 class HikvisionClient:
@@ -293,6 +325,9 @@ class HikvisionClient:
                     "segment_end": best.get("endTime"),
                     "matches": len(matches),
                 }
+            except RuntimeError:
+                # A valid search with no covering segment is not a namespace error.
+                raise
             except Exception as exc:
                 last_error = f"search_error:{type(exc).__name__}"
         raise RuntimeError(last_error or "search_failed")
@@ -407,22 +442,20 @@ class HikvisionClient:
             )
             if result.returncode or not output_path.exists() or output_path.stat().st_size == 0:
                 stderr = (result.stderr or b"").decode("utf-8", errors="replace")
-                # Emit only fixed categories. Never forward FFmpeg text/URLs.
-                reason = "unknown"
-                for marker, category in (("Unsupported (HEVC) NAL type", "unsupported_hevc_payload"),
-                                         ("453", "recorder_session_limit"),
-                                         ("401 Unauthorized", "authentication"),
-                                         ("Connection refused", "connection_refused"),
-                                         ("timed out", "timeout"),
-                                         ("dimensions not set", "missing_video_parameters")):
-                    if marker in stderr:
-                        reason = category
-                        break
+                reason = playback_failure_reason(stderr)
                 raise RuntimeError("rtsp_playback_failed:" + reason)
+        except subprocess.TimeoutExpired as exc:
+            output_path.unlink(missing_ok=True)
+            # TimeoutExpired carries stderr accumulated before the deadline. A
+            # HEVC depacketization failure followed by a hang must keep its cause.
+            reason = playback_failure_reason(exc.stderr, "deadline_exceeded")
+            raise RuntimeError("rtsp_playback_failed:" + reason) from None
         except RuntimeError as exc:
             output_path.unlink(missing_ok=True)
             if str(exc).startswith("rtsp_playback_failed:"):
                 raise RuntimeError(str(exc)) from None
+            if str(exc) == "ffmpeg_required_for_playback":
+                raise RuntimeError("rtsp_playback_failed:ffmpeg_unavailable") from None
             raise RuntimeError("rtsp_playback_failed") from None
         except Exception:
             output_path.unlink(missing_ok=True)

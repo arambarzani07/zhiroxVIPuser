@@ -1,5 +1,29 @@
 # ZHIROX Hikvision Transaction Video Gateway
 
+## 1.3.1+failure-diagnostics-1 (recorder verification required)
+
+This release fixes loss of FFmpeg diagnostics on subprocess timeout: HEVC RTP
+errors are preserved as fixed, credential-free categories. A deadline with no
+diagnostic is reported as `rtsp_playback_failed:deadline_exceeded`. RTSP 453
+classification requires a status line rather than any occurrence of the digits.
+Uncovered recording windows retain their original error instead of being hidden
+by XML namespace retries. Upload network exceptions no longer expose signed URLs;
+responses are closed and redirects are rejected. HTTP export rejection status
+fields are kept in the local log before switching to bounded RTSP playback.
+
+This does **not** claim to repair nonstandard HEVC RTP packets or verify the
+DS-7616NI-K2/16P hardware. H.264 output transcoding occurs after depacketization;
+it cannot fix a packet that the RTSP demuxer could not read. Changing the camera's
+recording codec does not re-encode recordings already on the disk.
+
+Keep the existing encrypted configuration and FFmpeg. Stop the old gateway and
+start only one copy of the new executable under the same Windows user. Collect
+the relevant job lines from `%LOCALAPPDATA%\ZHIROX\HikvisionGateway\gateway.log`
+after one capture attempt. Do not send config.json or recorder credentials.
+Keep the duration, decode and OSD quality gates enabled. Production acceptance
+still requires both the historical transaction and a genuine new transaction to
+reach Ready, with object existence, complete decode, camera and timestamps checked.
+
 This gateway links ZHIROX financial transactions to recorded Hikvision video without exposing the NVR to the Internet.
 
 ## Security model
