@@ -1,0 +1,2 @@
+git+https://github.com/oleandor/okam-ha-native.git@eeb3e67d11a83a02ba1f408fde8df1ca73218037
+imageio-ffmpeg==0.6.0
