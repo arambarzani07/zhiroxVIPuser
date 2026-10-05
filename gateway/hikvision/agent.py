@@ -22,7 +22,7 @@ from common import (
 
 # Protocol 1.1 enables DB-backed per-attempt fencing while the shared setup
 # helpers remain compatible with already-installed 1.0 gateway packages.
-gateway_common.GATEWAY_VERSION = "1.2.4+http-query-1"
+gateway_common.GATEWAY_VERSION = "1.2.3+http-query-fix-1"
 
 POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 30
