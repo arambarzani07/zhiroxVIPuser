@@ -167,7 +167,7 @@ class HikvisionMarketConfig {
       nvrFirmware: '${map['nvr_firmware'] ?? ''}',
       cashierChannelId: integer('cashier_channel_id', 1),
       preSeconds: integer('pre_seconds', 15),
-      postSeconds: integer('post_seconds', 30),
+      postSeconds: integer('post_seconds', 15),
       timezone: '${map['timezone'] ?? 'Asia/Baghdad'}',
       retentionDays: integer('retention_days', 90),
       captureProvider: '${map['capture_provider'] ?? 'local_gateway'}',
