@@ -53,5 +53,14 @@
 	<string>This app needs permission to save generated receipts and selected images.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app may request microphone access if the camera flow records media.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>ZHIROX connects to the market camera on the local Wi-Fi network to capture transaction evidence.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
