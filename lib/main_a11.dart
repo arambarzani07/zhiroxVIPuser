@@ -22,10 +22,7 @@ Future<void> main() async {
   try {
     await NotificationService.init();
     await NotificationService.requestPermission();
-    await Workmanager().initialize(
-      legacy.callbackDispatcher,
-      isInDebugMode: false,
-    );
+    await Workmanager().initialize(legacy.callbackDispatcher);
     await Workmanager().registerPeriodicTask(
       'overdueDebtsCheck',
       'checkOverdueDebts',
