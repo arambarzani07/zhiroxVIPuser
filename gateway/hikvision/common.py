@@ -396,9 +396,13 @@ class HikvisionClient:
         try:
             result = run_background(
                 [find_ffmpeg(), "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-                 "-rtsp_transport", "tcp", "-timeout", "20000000", "-i", uri,
-                 "-t", str(duration), "-map", "0:v:0", "-map", "0:a:0?",
-                 "-c", "copy", "-f", "matroska", str(output_path)],
+                 "-rtsp_transport", "tcp", "-timeout", "20000000",
+                 "-err_detect", "ignore_err", "-fflags", "+discardcorrupt+genpts",
+                 "-i", uri, "-t", str(duration), "-map", "0:v:0", "-map", "0:a:0?",
+                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                 "-pix_fmt", "yuv420p", "-tag:v", "avc1",
+                 "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
+                 "-f", "mp4", str(output_path)],
                 capture_output=True, timeout=duration + 90,
             )
             if result.returncode or not output_path.exists() or output_path.stat().st_size == 0:
