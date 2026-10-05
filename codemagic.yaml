@@ -1,6 +1,6 @@
 workflows:
   android-apk:
-    name: ZHIROX Android APK
+    name: ZHIROX Android APK + A11 Direct Camera
     max_build_duration: 60
     environment:
       flutter: stable
@@ -8,13 +8,13 @@ workflows:
       - flutter --version
       - flutter clean
       - flutter pub get
-      - flutter build apk --release
+      - flutter build apk --release -t lib/main_a11.dart
     artifacts:
       - build/app/outputs/flutter-apk/app-release.apk
       - build/app/outputs/logs/*.log
 
   ios-build-check-no-codesign:
-    name: ZHIROX iOS Build Check without signing
+    name: ZHIROX iOS A11 Build Check without signing
     max_build_duration: 60
     environment:
       flutter: stable
@@ -25,13 +25,13 @@ workflows:
       - flutter clean
       - flutter pub get
       - cd ios && pod install && cd ..
-      - flutter build ios --release --no-codesign
+      - flutter build ios --release --no-codesign -t lib/main_a11.dart
     artifacts:
       - build/ios/iphoneos/Runner.app
       - /tmp/xcodebuild_logs/*.log
 
   ios-signed-ipa:
-    name: ZHIROX Signed IPA
+    name: ZHIROX Signed IPA + A11 Direct Camera
     max_build_duration: 60
     environment:
       flutter: stable
@@ -45,7 +45,7 @@ workflows:
       - flutter pub get
       - cd ios && pod install && cd ..
       # Configure Apple Developer / App Store Connect signing in Codemagic before running this workflow.
-      - flutter build ipa --release
+      - flutter build ipa --release -t lib/main_a11.dart
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
