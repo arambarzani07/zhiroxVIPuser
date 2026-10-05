@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:zhirox/features/expiry/expiry_monitor_screen.dart';
 import 'package:pocketbase/pocketbase.dart';
@@ -16,6 +17,8 @@ import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/services/connectivity_service.dart';
 import 'package:zhirox/widgets/app_async_state.dart';
 import 'package:zhirox/widgets/zhirox_shell.dart';
+import 'package:zhirox/widgets/app_design.dart';
+import 'package:zhirox/widgets/dashboard_design.dart';
 import 'package:zhirox/widgets/gateway_health_card.dart';
 import 'package:zhirox/screens/admin/hikvision_settings_screen.dart';
 
@@ -35,6 +38,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Map<String, dynamic> _stats = {};
   bool _isLoading = true;
   String? _statsError;
+  DateTime? _statsRefreshedAt;
   Future<void>? _statsLoad;
   StreamSubscription<bool>? _connectivitySub;
   RealtimeChannel? _dashboardRealtimeChannel;
@@ -61,7 +65,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_subscribeDashboardRealtime());
     });
-    _connectivitySub = ConnectivityService.instance.statusStream.listen((online) {
+    _connectivitySub = ConnectivityService.instance.statusStream.listen((
+      online,
+    ) {
       if (online && mounted) {
         unawaited(_loadStats());
         unawaited(_loadMarketRates());
@@ -186,8 +192,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
       try {
         final alerts = await PBService.client.rpc('get_my_daftar_sync_alerts');
         if (alerts is List && mounted) {
-          _syncAlerts = alerts.whereType<Map>()
-              .map((row) => Map<String, dynamic>.from(row)).toList();
+          _syncAlerts = alerts
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList();
         }
       } catch (_) {
         // The dashboard remains usable while the alert migration is being deployed.
@@ -195,7 +203,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     } catch (error) {
       loadError = AppHelpers.backendErrorMessage(
         error,
-        fallback: 'نەتوانرا زانیارییەکانی داشبۆرد نوێ بکرێنەوە. دووبارە هەوڵ بدە.',
+        fallback:
+            'نەتوانرا زانیارییەکانی داشبۆرد نوێ بکرێنەوە. دووبارە هەوڵ بدە.',
       );
     }
 
@@ -203,6 +212,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     setState(() {
       if (freshStats != null) {
         _stats = freshStats;
+        _statsRefreshedAt = DateTime.now();
         _statsError = null;
       } else {
         _statsError = loadError;
@@ -270,7 +280,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     for (final row in rates) {
       if (row is! Map) continue;
       final raw =
-          row['retrieved_at'] ?? row['updated_at'] ?? row['source_published_at'];
+          row['retrieved_at'] ??
+          row['updated_at'] ??
+          row['source_published_at'];
       final parsed = DateTime.tryParse(raw?.toString() ?? '');
       if (parsed == null) continue;
       if (latest == null || parsed.isAfter(latest)) latest = parsed;
@@ -309,15 +321,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final age = _marketRateAgeLabel();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      padding: EdgeInsets.zero,
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.16),
-          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
         ),
         child: Column(
           children: [
@@ -351,10 +361,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                       const SizedBox(height: 1),
                       Text(
-                        [
-                          'بورصة العراق',
-                          if (age.isNotEmpty) age,
-                        ].join(' • '),
+                        ['بورصة العراق', if (age.isNotEmpty) age].join(' • '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -450,20 +457,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               )
             else
-              Row(
+              DashboardGrid(
+                minTileWidth: 140,
+                spacing: 8,
                 children: [
-                  Expanded(
-                    child: _buildMarketRateHeaderPill(
-                      label: 'هەولێر پێنجی',
-                      value: pengi?['rate_iqd_per_100_usd'],
-                    ),
+                  _buildMarketRateHeaderPill(
+                    label: 'هەولێر پێنجی',
+                    value: pengi?['rate_iqd_per_100_usd'],
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildMarketRateHeaderPill(
-                      label: 'هەولێر سوور',
-                      value: red?['rate_iqd_per_100_usd'],
-                    ),
+                  _buildMarketRateHeaderPill(
+                    label: 'هەولێر سوور',
+                    value: red?['rate_iqd_per_100_usd'],
                   ),
                 ],
               ),
@@ -482,9 +486,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.09),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.10),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -635,111 +637,84 @@ class _AdminDashboardState extends State<AdminDashboard> {
       onRefresh: () async {
         await Future.wait<void>([_loadStats(), _loadMarketRates()]);
       },
-      child: CustomScrollView(
-        key: const PageStorageKey('admin-dashboard-scroll'),
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverList(
-            delegate: SliverChildListDelegate([
-        if (_syncAlerts.any((item) => item['acknowledged_at'] == null))
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Card(
-              color: Colors.orange.shade50,
-              child: ListTile(
-                leading: const Icon(Icons.sync_problem_rounded, color: Colors.deepOrange),
-                title: const Text('پەیوەندی Daftar پێویستی بە پشکنینە'),
-                subtitle: Text('${_syncAlerts.where((item) => item['acknowledged_at'] == null).length} ئاگادارکردنەوەی چالاک'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => const DaftarSyncDashboardScreen(),
-                )),
-              ),
-            ),
-          ),
-        // ───── Gradient Header with Stats (fixed) ─────
-        Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary,
-                    AppColors.primary.withValues(alpha: 0.8),
-                    AppColors.primary.withValues(alpha: 0.6),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
-              ),
-              child: SafeArea(
-                bottom: false,
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _currentIndex = 3;
-                          _visitedTabs.add(3);
-                        });
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-                        child: Align(
-                          alignment: AlignmentDirectional.centerStart,
-                          child: Text(
-                            auth.user?.getStringValue('market_name') ??
-                                'ناوی مارکێت نەدراوە',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
+      child: DashboardContent(
+        child: SafeArea(
+          bottom: false,
+          child: CustomScrollView(
+            key: const PageStorageKey('admin-dashboard-scroll'),
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverList(
+                delegate: SliverChildListDelegate([
+                  if (_syncAlerts.any(
+                    (item) => item['acknowledged_at'] == null,
+                  ))
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Card(
+                        color: Colors.orange.shade50,
+                        child: ListTile(
+                          leading: const Icon(
+                            Icons.sync_problem_rounded,
+                            color: Colors.deepOrange,
+                          ),
+                          title: const Text(
+                            'پەیوەندی Daftar پێویستی بە پشکنینە',
+                          ),
+                          subtitle: Text(
+                            '${_syncAlerts.where((item) => item['acknowledged_at'] == null).length} ئاگادارکردنەوەی چالاک',
+                          ),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const DaftarSyncDashboardScreen(),
                             ),
                           ),
                         ),
                       ),
                     ),
-
-                    // Stats Grid inside header
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: DashboardHero(
+                      title:
+                          auth.user?.getStringValue('market_name') ??
+                          'ناوی مارکێت نەدراوە',
+                      subtitle: _statsRefreshedAt == null
+                          ? null
+                          : 'کۆتا نوێکردنەوە: ${AppHelpers.formatDateTime(_statsRefreshedAt!.toIso8601String())}',
+                      onTitleTap: () {
+                        setState(() {
+                          _currentIndex = 3;
+                          _visitedTabs.add(3);
+                        });
+                      },
                       child: Column(
                         children: [
-                          Row(
+                          DashboardGrid(
+                            maxColumns: 4,
                             children: [
                               _buildHeaderStat(
-                                Icons.people,
+                                Icons.people_outline_rounded,
                                 'کڕیارەکان',
                                 totalCustomers,
                                 false,
                               ),
-                              const SizedBox(width: 10),
                               _buildHeaderStat(
-                                Icons.receipt_long,
+                                Icons.receipt_long_outlined,
                                 'کۆی قەرز',
                                 totalDebt,
                                 true,
                                 usdValue: totalDebtUsd,
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
                               _buildHeaderStat(
-                                Icons.money_off,
+                                Icons.money_off_rounded,
                                 'ماوە',
                                 totalRemaining,
                                 true,
                                 usdValue: totalRemainingUsd,
                               ),
-                              const SizedBox(width: 10),
                               _buildHeaderStat(
-                                Icons.payments,
+                                Icons.payments_outlined,
                                 'وەرگیراو',
                                 totalPayments,
                                 true,
@@ -747,236 +722,172 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 16),
+                          _buildMarketRateHeaderStrip(),
                         ],
                       ),
                     ),
-
+                  ),
+                  if (_statsError != null)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: GatewayHealthCard(
-                        onOpen: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const HikvisionSettingsScreen(),
-                          ),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: AppSurface(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _statsError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: _loadStats,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('دووبارە هەوڵ بدە'),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    _buildMarketRateHeaderStrip(),
-
-                    // ───── Subscription Warning (inside gradient) ─────
-                    if (auth.subscriptionDaysLeft <= 10)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 9,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.16),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.10),
-                                  borderRadius: BorderRadius.circular(9),
-                                ),
-                                child: const Icon(
-                                  Icons.warning_amber_rounded,
-                                  color: Colors.amberAccent,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      auth.subscriptionDaysLeft <= 0
-                                          ? 'ماوەی بەشداریت تەواو بووە!'
-                                          : '${auth.subscriptionDaysLeft} ڕۆژ ماوە بۆ کۆتایی بەشداریت',
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'تکایە پەیوەندی بکە بۆ نوێکردنەوە',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.white.withValues(alpha: 0.8),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: GatewayHealthCard(
+                      onOpen: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const HikvisionSettingsScreen(),
                         ),
                       ),
-                  ],
-                ),
-              ),
-            ),
-
-        // ───── Recent Activity Header (fixed) ─────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
-          child: Row(
-            children: [
-              Icon(
-                Icons.history,
-                size: 18,
-                color: isDark
-                    ? AppDarkColors.textSecondary
-                    : Colors.black54,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'چالاکییە تازەکان',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: isDark
-                      ? AppDarkColors.textPrimary
-                      : Colors.black87,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 2,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? AppDarkColors.cardBorder
-                      : Colors.grey[200],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${filteredRecentActivity.length}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: isDark
-                        ? AppDarkColors.textSecondary
-                        : Colors.grey[600],
+                    ),
                   ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '٢٤ کاتژمێر',
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                  color: isDark
-                      ? AppDarkColors.textSecondary
-                      : const Color(0xFF98A2B3),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildRecentActivityFilterButton(
-                  value: 'debt',
-                  label: 'قەرزەکان',
-                  icon: Icons.receipt_long_outlined,
-                  count: debtActivity.length,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildRecentActivityFilterButton(
-                  value: 'payment',
-                  label: 'پارەدانەوەکان',
-                  icon: Icons.payments_outlined,
-                  count: paymentActivity.length,
-                ),
-              ),
-            ],
-          ),
-        ),
+                  if (auth.subscriptionDaysLeft <= 10)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: AppSurface(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    auth.subscriptionDaysLeft <= 0
+                                        ? 'ماوەی بەشداریت تەواو بووە!'
+                                        : '${auth.subscriptionDaysLeft} ڕۆژ ماوە بۆ کۆتایی بەشداریت',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const Text(
+                                    'تکایە پەیوەندی بکە بۆ نوێکردنەوە',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildRecentActivityTotalCard(
-                  label: 'کۆی قەرزە تازەکان',
-                  icon: Icons.receipt_long_rounded,
-                  totals: debtActivityTotals,
-                  accent: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildRecentActivityTotalCard(
-                  label: 'کۆی پارەدانەوە تازەکان',
-                  icon: Icons.payments_rounded,
-                  totals: paymentActivityTotals,
-                  accent: Colors.green,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // One vertical scroll keeps the full dashboard reachable on every phone.
-        if (filteredRecentActivity.isEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.history_rounded,
-                  size: 32,
-                  color: Colors.grey[300],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  _recentActivityFilter == 'payment'
-                      ? 'لە ٢٤ کاتژمێری ڕابردوودا هیچ پارەدانەوەیەک نییە'
-                      : 'لە ٢٤ کاتژمێری ڕابردوودا هیچ قەرزێکی تازە نییە',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 14,
-                    height: 1.5,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: AppSectionHeader(
+                      title:
+                          'چالاکییە تازەکان (${filteredRecentActivity.length})',
+                      subtitle: '٢٤ کاتژمێر',
+                    ),
                   ),
-                ),
-              ],
-            ),
-          )
-        else
-          ...List<Widget>.generate(
-            filteredRecentActivity.length,
-            (index) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _buildActivityCard(filteredRecentActivity[index], index),
-            ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    child: DashboardGrid(
+                      children: [
+                        _buildRecentActivityFilterButton(
+                          value: 'debt',
+                          label: 'قەرزەکان',
+                          icon: Icons.receipt_long_outlined,
+                          count: debtActivity.length,
+                        ),
+                        _buildRecentActivityFilterButton(
+                          value: 'payment',
+                          label: 'پارەدانەوەکان',
+                          icon: Icons.payments_outlined,
+                          count: paymentActivity.length,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: DashboardGrid(
+                      children: [
+                        _buildRecentActivityTotalCard(
+                          label: 'کۆی قەرزە تازەکان',
+                          icon: Icons.receipt_long_rounded,
+                          totals: debtActivityTotals,
+                          accent: Theme.of(context).colorScheme.primary,
+                        ),
+                        _buildRecentActivityTotalCard(
+                          label: 'کۆی پارەدانەوە تازەکان',
+                          icon: Icons.payments_rounded,
+                          totals: paymentActivityTotals,
+                          accent: isDark
+                              ? const Color(0xFF81C784)
+                              : const Color(0xFF2E7D32),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // One vertical scroll keeps the full dashboard reachable on every phone.
+                  if (filteredRecentActivity.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.history_rounded,
+                            size: 32,
+                            color: Colors.grey[300],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            _recentActivityFilter == 'payment'
+                                ? 'لە ٢٤ کاتژمێری ڕابردوودا هیچ پارەدانەوەیەک نییە'
+                                : 'لە ٢٤ کاتژمێری ڕابردوودا هیچ قەرزێکی تازە نییە',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ...List<Widget>.generate(
+                      filteredRecentActivity.length,
+                      (index) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _buildActivityCard(
+                          filteredRecentActivity[index],
+                          index,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+                ]),
+              ),
+            ],
           ),
-        const SizedBox(height: 14),
-            ]),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1018,7 +929,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
-                leading: Icon(Icons.select_all_rounded, color: AppColors.primary),
+                leading: Icon(
+                  Icons.select_all_rounded,
+                  color: AppColors.primary,
+                ),
                 title: const Text(
                   'هەموو ماوەکان',
                   style: TextStyle(fontWeight: FontWeight.w700),
@@ -1032,7 +946,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
-                leading: const Icon(Icons.date_range_rounded, color: Colors.orange),
+                leading: const Icon(
+                  Icons.date_range_rounded,
+                  color: Colors.orange,
+                ),
                 title: const Text(
                   'دیاریکردنی بەروار',
                   style: TextStyle(fontWeight: FontWeight.w700),
@@ -1064,11 +981,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       if (picked == null || !mounted) return;
       fromDate = picked.start;
       reportToDate = picked.end;
-      toDate = DateTime(
-        picked.end.year,
-        picked.end.month,
-        picked.end.day + 1,
-      );
+      toDate = DateTime(picked.end.year, picked.end.month, picked.end.day + 1);
     }
 
     try {
@@ -1129,7 +1042,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             scrollable: true,
             constraints: _compactDialogConstraints,
             backgroundColor: isDark ? AppDarkColors.card : Colors.white,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 32,
+              vertical: 24,
+            ),
             titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
             contentPadding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
             actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -1226,7 +1142,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               );
                           if (!ctx.mounted || !mounted) return;
                           if (existing.items.isNotEmpty) {
-                            if (ctx.mounted) setDialogState(() => isSaving = false);
+                            if (ctx.mounted) {
+                              setDialogState(() => isSaving = false);
+                            }
                             if (mounted) {
                               AppHelpers.showSnackBar(
                                 context,
@@ -1250,7 +1168,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             );
                           }
                         } catch (e) {
-                          if (ctx.mounted) setDialogState(() => isSaving = false);
+                          if (ctx.mounted) {
+                            setDialogState(() => isSaving = false);
+                          }
                           if (mounted) {
                             AppHelpers.showSnackBar(
                               context,
@@ -1305,7 +1225,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             scrollable: true,
             constraints: _compactDialogConstraints,
             backgroundColor: isDark ? AppDarkColors.card : Colors.white,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 32,
+              vertical: 24,
+            ),
             titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
             contentPadding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
             actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -1355,11 +1278,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       prefixIcon: const Icon(Icons.lock_open, size: 20),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          obscureOldPass ? Icons.visibility_off : Icons.visibility,
+                          obscureOldPass
+                              ? Icons.visibility_off
+                              : Icons.visibility,
                           size: 20,
                         ),
-                        onPressed: () =>
-                            setDialogState(() => obscureOldPass = !obscureOldPass),
+                        onPressed: () => setDialogState(
+                          () => obscureOldPass = !obscureOldPass,
+                        ),
                       ),
                       filled: true,
                       fillColor: isDark
@@ -1371,7 +1297,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                     ),
                     validator: (v) {
-                      if (v == null || v.isEmpty) return 'وشەی نهێنیی ئێستا بنووسە';
+                      if (v == null || v.isEmpty) {
+                        return 'وشەی نهێنیی ئێستا بنووسە';
+                      }
                       return null;
                     },
                   ),
@@ -1490,7 +1418,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             );
                           }
                         } catch (e) {
-                          if (ctx.mounted) setDialogState(() => isSaving = false);
+                          if (ctx.mounted) {
+                            setDialogState(() => isSaving = false);
+                          }
                           if (mounted) {
                             AppHelpers.showSnackBar(
                               context,
@@ -1532,73 +1462,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
     bool isCurrency, {
     double usdValue = 0,
   }) {
-    return Expanded(
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 82),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, color: Colors.white, size: 18),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.72),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    isCurrency
-                        ? AppHelpers.formatCurrency(value)
-                        : value.toInt().toString(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
-                  ),
-                  if (isCurrency && usdValue != 0) ...[
-                    const SizedBox(height: 1),
-                    Text(
-                      AppHelpers.formatCurrencyWithType(
-                        usdValue,
-                        'USD',
-                        showConversion: false,
-                      ),
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.82),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10.5,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return DashboardMetric(
+      icon: icon,
+      label: label,
+      value: isCurrency
+          ? AppHelpers.formatCurrency(value)
+          : value.toInt().toString(),
+      secondaryValue: isCurrency && usdValue != 0
+          ? AppHelpers.formatCurrencyWithType(
+              usdValue,
+              'USD',
+              showConversion: false,
+            )
+          : null,
+      onHero: true,
     );
   }
 
@@ -1607,9 +1484,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
   ) {
     final totals = <String, double>{'IQD': 0, 'USD': 0};
     for (final activity in activities) {
-      final rawCurrency = activity.getStringValue('currency').trim().toUpperCase();
+      final rawCurrency = activity
+          .getStringValue('currency')
+          .trim()
+          .toUpperCase();
       final currency = rawCurrency == 'USD' ? 'USD' : 'IQD';
-      totals[currency] = (totals[currency] ?? 0) + activity.getDoubleValue('amount');
+      totals[currency] =
+          (totals[currency] ?? 0) + activity.getDoubleValue('amount');
     }
     return totals;
   }
@@ -1620,84 +1501,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
     required Map<String, double> totals,
     required Color accent,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final iqd = totals['IQD'] ?? 0;
-    final usd = totals['USD'] ?? 0;
-
-    return Container(
-      constraints: const BoxConstraints(minHeight: 92),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? AppDarkColors.card : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark
-              ? AppDarkColors.cardBorder
-              : const Color(0xFFE9EDF3),
-        ),
+    return DashboardMetric(
+      label: label,
+      icon: icon,
+      accent: accent,
+      value: AppHelpers.formatCurrencyWithType(
+        totals['IQD'] ?? 0,
+        'IQD',
+        showConversion: false,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.09),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(icon, size: 16, color: accent),
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    height: 1.25,
-                    fontWeight: FontWeight.w800,
-                    color: isDark
-                        ? AppDarkColors.textPrimary
-                        : const Color(0xFF344054),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Text(
-            AppHelpers.formatCurrencyWithType(
-              iqd,
-              'IQD',
-              showConversion: false,
-            ),
-            textDirection: TextDirection.ltr,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-              color: accent,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            AppHelpers.formatCurrencyWithType(
-              usd,
-              'USD',
-              showConversion: false,
-            ),
-            textDirection: TextDirection.ltr,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: isDark
-                  ? AppDarkColors.textSecondary
-                  : const Color(0xFF667085),
-            ),
-          ),
-        ],
+      secondaryValue: AppHelpers.formatCurrencyWithType(
+        totals['USD'] ?? 0,
+        'USD',
+        showConversion: false,
       ),
     );
   }
@@ -1738,8 +1554,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
               color: isSelected
                   ? AppColors.primary
                   : (isDark
-                      ? AppDarkColors.cardBorder
-                      : const Color(0xFFE4E7EC)),
+                        ? AppDarkColors.cardBorder
+                        : const Color(0xFFE4E7EC)),
             ),
             boxShadow: isSelected
                 ? [
@@ -1797,9 +1613,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final debtId = activity.id.trim();
     if (debtId.isEmpty || !mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => DebtDetailScreen(debtId: debtId),
-      ),
+      MaterialPageRoute<void>(builder: (_) => DebtDetailScreen(debtId: debtId)),
     );
     if (mounted) await _loadStats();
   }
@@ -1842,118 +1656,117 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ),
           child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.09),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              isPayment
-                  ? Icons.payments_outlined
-                  : Icons.receipt_long_outlined,
-              color: accent,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.09),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isPayment
+                      ? Icons.payments_outlined
+                      : Icons.receipt_long_outlined,
+                  color: accent,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Flexible(
-                      child: Text(
-                        customerName,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isDark
-                              ? AppDarkColors.textPrimary
-                              : const Color(0xFF344054),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            customerName,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? AppDarkColors.textPrimary
+                                  : const Color(0xFF344054),
+                            ),
+                          ),
                         ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.09),
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: Text(
+                            activityLabel,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: accent,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        if (isByEmployee && creatorName.isNotEmpty) creatorName,
+                        AppHelpers.formatDateTime(date),
+                      ].join('  •  '),
+                      softWrap: true,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        height: 1.4,
+                        color: isDark
+                            ? AppDarkColors.textSecondary
+                            : const Color(0xFF98A2B3),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.09),
-                        borderRadius: BorderRadius.circular(7),
-                      ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
                       child: Text(
-                        activityLabel,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: accent,
+                        AppHelpers.formatCurrencyWithType(
+                          amount,
+                          currency,
+                          showConversion: false,
                         ),
+                        softWrap: true,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: isPayment
+                              ? accent
+                              : (isDark
+                                    ? AppDarkColors.textPrimary
+                                    : const Color(0xFF101828)),
+                        ),
+                        textDirection: TextDirection.ltr,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  [
-                    if (isByEmployee && creatorName.isNotEmpty) creatorName,
-                    AppHelpers.formatDateTime(date),
-                  ].join('  •  '),
-                  softWrap: true,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    height: 1.4,
-                    color: isDark
-                        ? AppDarkColors.textSecondary
-                        : const Color(0xFF98A2B3),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(
-                    AppHelpers.formatCurrencyWithType(
-                      amount,
-                      currency,
-                      showConversion: false,
-                    ),
-                    softWrap: true,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: isPayment
-                          ? accent
-                          : (isDark
-                                ? AppDarkColors.textPrimary
-                                : const Color(0xFF101828)),
-                    ),
-                    textDirection: TextDirection.ltr,
-                  ),
+              ),
+              if (!isPayment) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_left_rounded,
+                  size: 19,
+                  color: isDark
+                      ? AppDarkColors.textSecondary
+                      : const Color(0xFF98A2B3),
                 ),
               ],
-            ),
+            ],
           ),
-          if (!isPayment) ...[
-            const SizedBox(width: 4),
-            Icon(
-              Icons.chevron_left_rounded,
-              size: 19,
-              color: isDark
-                  ? AppDarkColors.textSecondary
-                  : const Color(0xFF98A2B3),
-            ),
-          ],
-        ],
-      ),
         ),
       ),
     );
   }
-
 }

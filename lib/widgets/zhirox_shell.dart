@@ -62,12 +62,7 @@ class ZhiroxAppShell extends StatelessWidget {
         child: SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.sm,
-              AppSpacing.xs,
-              AppSpacing.sm,
-              AppSpacing.xs,
-            ),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: Row(
               children: List.generate(destinations.length, (itemIndex) {
                 return Expanded(
@@ -112,7 +107,7 @@ class _ZhiroxNavButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppDesign.radiusSmall),
           child: AnimatedContainer(
-            duration: AppMotion.fast,
+            duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
@@ -132,9 +127,7 @@ class _ZhiroxNavButton extends StatelessWidget {
                   clipBehavior: Clip.none,
                   children: [
                     Icon(
-                      selected
-                          ? destination.selectedIcon
-                          : destination.icon,
+                      selected ? destination.selectedIcon : destination.icon,
                       size: 22,
                       color: selected ? primary : inactive,
                     ),
@@ -179,8 +172,7 @@ class _ZhiroxNavButton extends StatelessWidget {
                   style: TextStyle(
                     color: selected ? primary : inactive,
                     fontSize: 10.5,
-                    fontWeight:
-                        selected ? FontWeight.w800 : FontWeight.w600,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                   ),
                 ),
               ],
