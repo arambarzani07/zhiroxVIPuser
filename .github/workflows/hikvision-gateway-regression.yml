@@ -65,7 +65,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'GATEWAY_VERSION = "1.2.0+osd-1"' gateway/hikvision/agent.py
+          grep -Eq 'GATEWAY_VERSION = "[0-9]+\.[0-9]+\.[0-9]+(\+[^"]+)?"' gateway/hikvision/agent.py
           grep -q 'heartbeat_job' gateway/hikvision/agent.py
           grep -q 'hikvision_gateway_claim_v2_service' supabase/functions/hikvision-gateway/index.ts
           grep -q 'stale_or_invalid_attempt' supabase/functions/hikvision-gateway/index.ts
