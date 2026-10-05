@@ -78,6 +78,7 @@ class TransactionVideoService {
   static String statusLabel(String? status) => switch (status) {
     'queued' => 'کلیپ لە چاوەڕوانیدایە',
     'processing' => 'کلیپ ئامادە دەکرێت',
+    'retrying' => 'گرتنی کلیپ دووبارە هەوڵ دەدرێتەوە',
     'uploading' => 'کلیپ بار دەکرێت',
     'ready' => 'کلیپ ئامادەیە',
     'missing' => 'تۆماری کامێرا بۆ ئەم کاتە نەدۆزرایەوە',
