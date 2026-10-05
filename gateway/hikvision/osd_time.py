@@ -9,7 +9,7 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone
-from common import find_ffmpeg
+from common import find_ffmpeg, run_background
 
 def ocr_image(path: pathlib.Path) -> str:
     root = pathlib.Path(getattr(sys, '_MEIPASS', pathlib.Path(__file__).resolve().parent))
@@ -17,7 +17,7 @@ def ocr_image(path: pathlib.Path) -> str:
     command = [str(bundled) if bundled.exists() else 'tesseract', str(path), 'stdout', '--psm', '6', '-l', 'eng']
     if bundled.exists():
         command += ['--tessdata-dir', str(root / 'ocr' / 'tessdata')]
-    result = subprocess.run(command, capture_output=True, timeout=25,
+    result = run_background(command, capture_output=True, timeout=25,
                             creationflags=0x08000000 if sys.platform == 'win32' else 0)
     if result.returncode:
         raise RuntimeError('ocr_unavailable')
@@ -47,7 +47,7 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path) -> str:
     parts = []
     for position in ['0', 'ih-oh']:
         target = workspace / ('osd-top.png' if position=='0' else 'osd-bottom.png')
-        r = subprocess.run([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-i',str(image),
+        r = run_background([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-i',str(image),
             '-vf',f'crop=iw:ih*0.22:0:{position},scale=2400:-1','-frames:v','1',str(target)],capture_output=True,timeout=20)
         if r.returncode == 0:
             parts.append(ocr_image(target))
@@ -105,7 +105,7 @@ def verify_clip_time(hik, channel: int, path: pathlib.Path, start: datetime, dur
             readings=[]
             for second in [0.0, min(3.0,duration/3), min(7.0,duration*2/3)]:
                 image=workspace/'sample.png'
-                r=subprocess.run([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-ss',str(second),'-i',str(path),'-frames:v','1',str(image)],capture_output=True,timeout=20)
+                r=run_background([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-ss',str(second),'-i',str(path),'-frames:v','1',str(image)],capture_output=True,timeout=20)
                 if r.returncode==0:
                     readings.append((second,read_image_clock(image,workspace)))
             return compare_readings(readings,start,offset,order)

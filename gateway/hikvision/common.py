@@ -76,6 +76,14 @@ def unprotect_secret(value: str) -> str:
         del in_buf
 
 
+def run_background(command, **kwargs):
+    """Keep media/OCR child processes off the Windows desktop."""
+    kwargs.setdefault("stdin", subprocess.DEVNULL)
+    if os.name == "nt":
+        kwargs["creationflags"] = kwargs.get("creationflags", 0) | subprocess.CREATE_NO_WINDOW
+    return subprocess.run(command, **kwargs)
+
+
 def log(message: str) -> None:
     APP_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -353,7 +361,7 @@ class HikvisionClient:
         uri = urlunsplit((parts.scheme, f"{credentials}@{parts.netloc}",
                           parts.path, parts.query, ""))
         try:
-            result = subprocess.run(
+            result = run_background(
                 [find_ffmpeg(), "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
                  "-rtsp_transport", "tcp", "-timeout", "20000000", "-i", uri,
                  "-t", str(duration), "-map", "0:v:0", "-map", "0:a:0?",
@@ -382,7 +390,7 @@ def find_ffmpeg() -> str:
                   shutil.which("ffmpeg.exe"), shutil.which("ffmpeg")]
     for candidate in dict.fromkeys(c for c in candidates if c):
         try:
-            result = subprocess.run([candidate, "-version"], capture_output=True, timeout=5)
+            result = run_background([candidate, "-version"], capture_output=True, timeout=5)
             if result.returncode == 0:
                 return candidate
         except (OSError, subprocess.TimeoutExpired):
@@ -402,7 +410,7 @@ def prepare_browser_clip(source: pathlib.Path, target: pathlib.Path,
         raise RuntimeError("invalid_clip_window")
     ffmpeg = find_ffmpeg()
     try:
-        result = subprocess.run(
+        result = run_background(
             [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
              "-ss", f"{max(0.0, offset):.3f}", "-i", str(source),
              "-t", str(duration), "-map", "0:v:0", "-map", "0:a:0?",
@@ -418,7 +426,7 @@ def prepare_browser_clip(source: pathlib.Path, target: pathlib.Path,
             raise RuntimeError("clip_conversion_failed")
         # Decode every video frame. Count frames to reject header-only MP4s and
         # report actual duration instead of claiming the requested duration.
-        check = subprocess.run(
+        check = run_background(
             [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-xerror",
              "-i", str(target), "-map", "0:v:0", "-an", "-progress", "pipe:1",
              "-f", "null", "-"], capture_output=True, timeout=180,

@@ -51,7 +51,7 @@ jobs:
       - name: Test recorder diagnostics
         shell: pwsh
         working-directory: gateway/hikvision
-        run: python -m unittest test_diagnose.py test_secret_input.py test_playback.py test_time_window.py test_osd_time.py
+        run: python -m unittest test_diagnose.py test_secret_input.py test_playback.py test_time_window.py test_osd_time.py test_background_process.py
 
       - uses: actions/upload-artifact@v4
         if: always()
