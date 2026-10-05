@@ -107,6 +107,20 @@ class TimeWindowTest(unittest.TestCase):
         self.assertNotIn('secret', uri)
         self.assertNotIn('earlier-file', uri)
 
+    def test_rtsp_fallback_transcodes_to_browser_h264(self):
+        hik = common.HikvisionClient(common.GatewayConfig('192.168.1.3', 'admin', 'secret', ''))
+        uri = common.bounded_playback_uri(self.uri, self.start, self.end, 1001)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(common, 'find_ffmpeg', return_value='ffmpeg'), patch.object(common, 'run_background', return_value=Mock(returncode=0, stderr=b'')) as run:
+            path = pathlib.Path(tmp)/'raw.mp4'
+            path.write_bytes(b'video')
+            hik.download_playback_stream(uri, path, 30)
+            args = run.call_args.args[0]
+            self.assertIn('libx264', args)
+            self.assertIn('aac', args)
+            self.assertIn('ignore_err', args)
+            self.assertIn('+discardcorrupt+genpts', args)
+            self.assertEqual(args[args.index('-t')+1], '30')
+
     def test_rtsp_reason_is_allowlisted_without_credentials(self):
         hik = common.HikvisionClient(common.GatewayConfig('192.168.1.3', 'admin', 'secret', ''))
         uri = common.bounded_playback_uri(self.uri, self.start, self.end, 1001)
