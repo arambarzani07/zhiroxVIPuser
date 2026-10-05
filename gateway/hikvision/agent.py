@@ -22,7 +22,7 @@ from common import (
 
 # Protocol 1.1 enables DB-backed per-attempt fencing while the shared setup
 # helpers remain compatible with already-installed 1.0 gateway packages.
-gateway_common.GATEWAY_VERSION = "1.2.5+hevc-resilience-1"
+gateway_common.GATEWAY_VERSION = "1.3.1+failure-diagnostics-1"
 
 POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 30
@@ -127,7 +127,7 @@ def process_job(
 
             playback_uri = bounded_playback_uri(str(search["playback_uri"]),
                                                 clip_start, clip_end, channel_id * 100 + 1)
-            log(f"job={job_id} build=http-query-1 download_mode=time "
+            log(f"job={job_id} build={gateway_common.GATEWAY_VERSION} download_mode=time "
                 f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}")
             download_mode = "time"
             requested_duration = max(1, int((clip_end - clip_start).total_seconds()))
@@ -136,7 +136,7 @@ def process_job(
             except RuntimeError as exc:
                 if not str(exc).startswith("download_rejected:"):
                     raise
-                log(f"job={job_id} HTTP export rejected; trying bounded RTSP playback")
+                log(f"job={job_id} HTTP export rejected ({exc}); trying bounded RTSP playback")
                 download_mode = "rtsp_time"
                 hik.download_playback_stream(playback_uri, raw_path, requested_duration)
             if not raw_path.exists() or raw_path.stat().st_size <= 0:
@@ -179,7 +179,7 @@ def process_job(
                 duration_seconds=media["duration_seconds"],
                 playback_metadata={
                     "provider": "hikvision_isapi",
-                    "gateway_build": "http-query-1",
+                    "gateway_build": gateway_common.GATEWAY_VERSION,
                     "download_mode": download_mode,
                     "download_start": clip_start.replace(microsecond=0).isoformat(),
                     "media_time_verified": clock_check["status"] == "matched",

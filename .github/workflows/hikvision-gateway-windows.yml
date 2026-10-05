@@ -3,7 +3,7 @@ name: Hikvision Gateway Windows
 on:
   workflow_dispatch:
   push:
-    branches: [user-source, gateway-build-20261003]
+    branches: [user-source, gateway-build-20261003, fix/hikvision-diagnostics-20261005]
     paths:
       - 'gateway/hikvision/**'
       - '.github/workflows/hikvision-gateway-windows.yml'
