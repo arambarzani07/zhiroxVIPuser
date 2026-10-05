@@ -275,7 +275,7 @@ Deno.serve(async (req: Request) => {
     if (action === "update_config") {
       const channel = Math.trunc(Number(body.cashier_channel_id ?? 1));
       const pre = Math.trunc(Number(body.pre_seconds ?? 15));
-      const post = Math.trunc(Number(body.post_seconds ?? 30));
+      const post = Math.trunc(Number(body.post_seconds ?? 15));
       const retention = Math.trunc(Number(body.retention_days ?? 90));
       if (channel < 1 || channel > 256 || pre < 0 || pre > 300 || post < 1 || post > 600 || retention < 1 || retention > 3650) return json({ error: "invalid_config" }, 400);
       const update = { enabled: body.enabled !== false, auto_capture: body.auto_capture !== false, cashier_channel_id: channel, pre_seconds: pre, post_seconds: post, retention_days: retention, updated_at: new Date().toISOString() };
