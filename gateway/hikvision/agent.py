@@ -22,7 +22,7 @@ from common import (
 
 # Protocol 1.1 enables DB-backed per-attempt fencing while the shared setup
 # helpers remain compatible with already-installed 1.0 gateway packages.
-gateway_common.GATEWAY_VERSION = "1.2.3+background-media-1"
+gateway_common.GATEWAY_VERSION = "1.2.4+http-query-1"
 
 POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 30
@@ -127,12 +127,12 @@ def process_job(
 
             playback_uri = bounded_playback_uri(str(search["playback_uri"]),
                                                 clip_start, clip_end, channel_id * 100 + 1)
-            log(f"job={job_id} build=playback-fallback-1 download_mode=time "
+            log(f"job={job_id} build=http-query-1 download_mode=time "
                 f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}")
             download_mode = "time"
             requested_duration = max(1, int((clip_end - clip_start).total_seconds()))
             try:
-                hik.download_recording(playback_uri, raw_path)
+                download_mode = hik.download_recording(playback_uri, raw_path) or "time"
             except RuntimeError as exc:
                 if not str(exc).startswith("download_rejected:"):
                     raise
@@ -156,8 +156,8 @@ def process_job(
                 raise RuntimeError("clip_duration_mismatch")
             if clock_check["status"] == "mismatch":
                 raise RuntimeError("clip_clock_mismatch")
-            if download_mode == "rtsp_time" and clock_check["status"] != "matched":
-                raise RuntimeError("rtsp_clip_clock_unverified")
+            if download_mode in {"rtsp_time", "http_query_time"} and clock_check["status"] != "matched":
+                raise RuntimeError("playback_clip_clock_unverified")
             upload_path = exact_path
 
             prepared = cloud.call("prepare_upload", job_id=job_id, **attempt_args)
@@ -179,7 +179,7 @@ def process_job(
                 duration_seconds=media["duration_seconds"],
                 playback_metadata={
                     "provider": "hikvision_isapi",
-                    "gateway_build": "playback-fallback-1",
+                    "gateway_build": "http-query-1",
                     "download_mode": download_mode,
                     "download_start": clip_start.replace(microsecond=0).isoformat(),
                     "media_time_verified": clock_check["status"] == "matched",
@@ -275,3 +275,4 @@ if __name__ == "__main__":
         result = dates_in_text(ocr_image(pathlib.Path(sys.argv[2])), timezone.utc, 'YMD')
         sys.exit(0 if result else 1)
     main()
+

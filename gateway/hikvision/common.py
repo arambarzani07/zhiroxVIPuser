@@ -297,11 +297,16 @@ class HikvisionClient:
                 last_error = f"search_error:{type(exc).__name__}"
         raise RuntimeError(last_error or "search_failed")
 
-    def download_recording(self, playback_uri: str, output_path: pathlib.Path) -> None:
+    def download_recording(self, playback_uri: str, output_path: pathlib.Path) -> str:
         # XML is required in the GET request body on older ISAPI firmware too.
         safe_uri = html.escape(html.unescape(playback_uri), quote=False)
         endpoint = f"{self.host}/ISAPI/ContentMgmt/download"
         response = None
+        download_mode = "time"
+        retry_codes = {400, 405, 422, 501}
+        def rejected(r):
+            return r.status_code in retry_codes or (r.status_code == 200 and
+                "xml" in (r.headers.get("content-type") or "").lower())
         # Firmware families accept different XML namespaces. Keep the time URI
         # unchanged; never restore name/size selectors from a search result.
         for xmlns in ("http://www.isapi.org/ver20/XMLSchema",
@@ -313,14 +318,41 @@ class HikvisionClient:
             kwargs = dict(data=body, headers={"Content-Type": "application/xml"},
                           timeout=(20, 180), stream=True)
             response = self.session.post(endpoint, **kwargs)
-            if response.status_code in {400, 405, 422, 501}:
+            if rejected(response):
                 response.close()
                 response = self.session.get(endpoint, **kwargs)
-            if response.status_code not in {400, 405, 422, 501}:
+            if not rejected(response):
                 break
             if xmlns is not None:
                 response.close()
         assert response is not None
+        # Some firmware expects playbackURI in the GET query, not an XML body.
+        # Keep the exact historical window and never restore file name/size.
+        if rejected(response):
+            parts = urlsplit(html.unescape(playback_uri))
+            query = parse_qs(parts.query)
+            if (parts.scheme != "rtsp" or parts.username or parts.password or
+                    parts.hostname != urlsplit(self.host).hostname or
+                    set(query) != {"starttime", "endtime"}):
+                response.close()
+                raise RuntimeError("invalid_http_playback_window")
+            variants = [html.unescape(playback_uri)]
+            try:
+                timestamps = {k: datetime.strptime(query[k][0], "%Y%m%dT%H%M%SZ")
+                              for k in ("starttime", "endtime")}
+                iso_query = urlencode({k: v.strftime("%Y-%m-%d %H:%M:%SZ")
+                                       for k, v in timestamps.items()})
+                variants.append(urlunsplit((parts.scheme, parts.netloc, parts.path, iso_query, "")))
+            except (ValueError, IndexError):
+                response.close()
+                raise RuntimeError("invalid_http_playback_window") from None
+            for uri in variants:
+                response.close()
+                response = self.session.get(endpoint, params={"playbackURI": uri},
+                                            timeout=(20, 180), stream=True)
+                download_mode = "http_query_time"
+                if not rejected(response):
+                    break
         with response as r:
             content_type = (r.headers.get("content-type") or "").lower()
             if r.status_code >= 400 or "xml" in content_type:
@@ -345,6 +377,7 @@ class HikvisionClient:
                 for chunk in r.iter_content(chunk_size=1024 * 1024):
                     if chunk:
                         fh.write(chunk)
+        return download_mode
 
     def download_playback_stream(self, playback_uri: str, output_path: pathlib.Path,
                                  duration: int) -> None:
@@ -369,7 +402,24 @@ class HikvisionClient:
                 capture_output=True, timeout=duration + 90,
             )
             if result.returncode or not output_path.exists() or output_path.stat().st_size == 0:
-                raise RuntimeError("rtsp_playback_failed")
+                stderr = (result.stderr or b"").decode("utf-8", errors="replace")
+                # Emit only fixed categories. Never forward FFmpeg text/URLs.
+                reason = "unknown"
+                for marker, category in (("Unsupported (HEVC) NAL type", "unsupported_hevc_payload"),
+                                         ("453", "recorder_session_limit"),
+                                         ("401 Unauthorized", "authentication"),
+                                         ("Connection refused", "connection_refused"),
+                                         ("timed out", "timeout"),
+                                         ("dimensions not set", "missing_video_parameters")):
+                    if marker in stderr:
+                        reason = category
+                        break
+                raise RuntimeError("rtsp_playback_failed:" + reason)
+        except RuntimeError as exc:
+            output_path.unlink(missing_ok=True)
+            if str(exc).startswith("rtsp_playback_failed:"):
+                raise RuntimeError(str(exc)) from None
+            raise RuntimeError("rtsp_playback_failed") from None
         except Exception:
             output_path.unlink(missing_ok=True)
             # FFmpeg stderr / TimeoutExpired can include credentials: never forward.
@@ -445,3 +495,4 @@ def prepare_browser_clip(source: pathlib.Path, target: pathlib.Path,
     except Exception:
         target.unlink(missing_ok=True)
         raise
+
