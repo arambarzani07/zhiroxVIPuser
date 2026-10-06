@@ -13,13 +13,17 @@ import common
 import maintenance
 import runtime_hardening
 from common import CONFIG_PATH, APP_DIR, CloudClient, GatewayConfig, HikvisionClient, log
-from self_update import CHECK_INTERVAL_SECONDS, UPDATE_PROTOCOL
+from self_update import CHECK_INTERVAL_SECONDS as DEFAULT_UPDATE_CHECK_INTERVAL_SECONDS, UPDATE_PROTOCOL
 from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.3+evergreen-1"
+GATEWAY_VERSION = "1.4.4+evergreen-1"
 common.GATEWAY_VERSION = GATEWAY_VERSION
+
+# Poll GitHub often enough that routine Gateway fixes arrive quickly, while the
+# update handoff still occurs only between jobs and never interrupts a capture.
+CHECK_INTERVAL_SECONDS = 5 * 60
 
 HEALTH_PATH = APP_DIR / "gateway-health.json"
 HEALTH_INTERVAL_SECONDS = 10
@@ -236,6 +240,7 @@ def main() -> int:
     log(
         f"gateway_bootstrap version={GATEWAY_VERSION} "
         f"update_protocol={UPDATE_PROTOCOL} auto_update=evergreen "
+        f"update_check_seconds={CHECK_INTERVAL_SECONDS} "
         f"worker_watchdog_seconds={WORKER_STALL_SECONDS} "
         f"clock_monitor_seconds={CLOCK_CHECK_INTERVAL_SECONDS}"
     )
