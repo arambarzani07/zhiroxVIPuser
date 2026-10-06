@@ -182,11 +182,15 @@ def maybe_auto_update(
 
     # The staged binary must authenticate to both the recorder and cloud before
     # it is allowed to replace the currently working executable. It never claims
-    # a job in this mode.
+    # a job in this mode. Report the currently installed version during preflight
+    # so cloud health never claims a version that is not installed yet.
+    preflight_env = os.environ.copy()
+    preflight_env["ZHIROX_PREFLIGHT_REPORT_VERSION"] = current_version
     preflight = subprocess.run(
         [str(staged_gateway), "--preflight-update"],
         capture_output=True,
         timeout=45,
+        env=preflight_env,
         creationflags=_hidden_flags(),
     )
     if preflight.returncode != 0:
