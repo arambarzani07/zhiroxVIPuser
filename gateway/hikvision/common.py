@@ -393,21 +393,31 @@ class HikvisionClient:
         credentials = f"{quote(self.auth.username, safe='')}:{quote(self.auth.password, safe='')}"
         uri = urlunsplit((parts.scheme, f"{credentials}@{parts.netloc}",
                           parts.path, parts.query, ""))
-        try:
-            result = run_background(
-                [find_ffmpeg(), "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-                 "-rtsp_transport", "tcp", "-timeout", "20000000",
-                 "-err_detect", "ignore_err", "-fflags", "+discardcorrupt+genpts",
-                 "-i", uri, "-t", str(duration), "-map", "0:v:0", "-map", "0:a:0?",
-                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-                 "-pix_fmt", "yuv420p", "-tag:v", "avc1",
-                 "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
-                 "-f", "mp4", str(output_path)],
-                capture_output=True, timeout=duration + 90,
-            )
-            if result.returncode or not output_path.exists() or output_path.stat().st_size == 0:
+        # Some recorders fail to packetize historical playback correctly over
+        # interleaved TCP. Retry the SAME bounded window over UDP, never live view.
+        # The caller still verifies duration, full decoding and the clip clock.
+        ffmpeg = find_ffmpeg()
+        reason = "unknown"
+        for transport in ("tcp", "udp"):
+            output_path.unlink(missing_ok=True)
+            try:
+                result = run_background(
+                    [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                     "-rtsp_transport", transport, "-rtsp_flags", "filter_src",
+                     "-timeout", "20000000",
+                     "-err_detect", "ignore_err", "-fflags", "+discardcorrupt+genpts",
+                     "-i", uri, "-t", str(duration), "-map", "0:v:0", "-map", "0:a:0?",
+                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                     "-pix_fmt", "yuv420p", "-tag:v", "avc1",
+                     "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
+                     "-f", "mp4", str(output_path)],
+                    capture_output=True, timeout=duration + 90,
+                )
+                if (result.returncode == 0 and output_path.exists()
+                        and output_path.stat().st_size > 0):
+                    log(f"rtsp_playback_transport={transport}")
+                    return
                 stderr = (result.stderr or b"").decode("utf-8", errors="replace")
-                # Emit only fixed categories. Never forward FFmpeg text/URLs.
                 reason = "unknown"
                 for marker, category in (("Unsupported (HEVC) NAL type", "unsupported_hevc_payload"),
                                          ("453", "recorder_session_limit"),
@@ -418,16 +428,20 @@ class HikvisionClient:
                     if marker in stderr:
                         reason = category
                         break
-                raise RuntimeError("rtsp_playback_failed:" + reason)
-        except RuntimeError as exc:
+            except subprocess.TimeoutExpired:
+                reason = "timeout"
+            except Exception:
+                # Exception strings and FFmpeg stderr can contain passwords.
+                reason = "unknown"
             output_path.unlink(missing_ok=True)
-            if str(exc).startswith("rtsp_playback_failed:"):
-                raise RuntimeError(str(exc)) from None
-            raise RuntimeError("rtsp_playback_failed") from None
-        except Exception:
-            output_path.unlink(missing_ok=True)
-            # FFmpeg stderr / TimeoutExpired can include credentials: never forward.
-            raise RuntimeError("rtsp_playback_failed") from None
+            # Authentication/session-limit failures cannot be fixed by transport.
+            if transport == "tcp" and reason in {
+                "unsupported_hevc_payload", "missing_video_parameters", "timeout"
+            }:
+                log(f"rtsp_playback_retry_transport=udp reason={reason}")
+                continue
+            break
+        raise RuntimeError("rtsp_playback_failed:" + reason) from None
 
 
 def sha256_file(path: pathlib.Path) -> str:
