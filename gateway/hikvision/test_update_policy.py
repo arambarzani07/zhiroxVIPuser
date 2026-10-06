@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 import self_update
 import update_policy
@@ -96,6 +97,15 @@ class UpdatePolicyTest(unittest.TestCase):
         self.assertIsNone(
             update_policy.find_next_release('1.4.0+evergreen-1', session)
         )
+
+    def test_rejects_unreasonably_large_update_payload(self):
+        with self.assertRaisesRegex(RuntimeError, 'payload_size_rejected'):
+            update_policy._bounded_disk_space_check(
+                '.', update_policy.MAX_TOTAL_UPDATE_BYTES + 1
+            )
+        with mock.patch.object(update_policy, '_original_disk_space_check') as check:
+            update_policy._bounded_disk_space_check('.', 10_000_000)
+            check.assert_called_once_with('.', 10_000_000)
 
 
 if __name__ == '__main__':
