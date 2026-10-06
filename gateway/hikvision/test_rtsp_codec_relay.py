@@ -49,6 +49,20 @@ class RelayTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             relay._request(b'DESCRIBE rtsp://other/Streaming/tracks/1001 RTSP/1.0\r\n\r\n')
 
+    def test_default_port_and_case_variants_preserve_track_scope(self):
+        relay = SdpCodecRelay('rtsp://192.168.1.3/Streaming/tracks/1001?starttime=a&endtime=b','admin','secret')
+        relay.local_authority = '127.0.0.1:12345'
+        reply = relay._response(b'RTSP/1.0 200 OK\r\nContent-Base: rtsp://192.168.1.3:554/Streaming/Tracks/1001/\r\n\r\n')
+        self.assertIn(b'rtsp://127.0.0.1:12345/Streaming/Tracks/1001/',reply)
+        self.assertNotIn(b':12345:554',reply)
+        setup = relay._request(b'SETUP rtsp://127.0.0.1:12345/Streaming/Tracks/1001/trackID=1 RTSP/1.0\r\n\r\n')
+        self.assertIn(b'rtsp://192.168.1.3/Streaming/Tracks/1001/trackID=1',setup)
+        for track in ('1002','10010'):
+            with self.assertRaises(ValueError):
+                relay._request(f'SETUP rtsp://127.0.0.1:12345/Streaming/tracks/{track}/trackID=1 RTSP/1.0\r\n\r\n'.encode())
+        with self.assertRaises(ValueError):
+            relay._request(b'DESCRIBE rtsp://127.0.0.1:12345/Streaming/tracks/1001?starttime=other RTSP/1.0\r\n\r\n')
+
     @unittest.skipUnless(shutil.which('ffmpeg'), 'native FFmpeg RTP fixture')
     def test_native_h264_payload_with_wrong_hevc_sdp_decodes_through_relay(self):
         with tempfile.TemporaryDirectory() as tmp:

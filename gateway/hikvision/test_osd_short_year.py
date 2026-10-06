@@ -50,6 +50,19 @@ class ShortYearClockTests(unittest.TestCase):
             self.assertNotIn('SECRET', str(result))
             self.assertNotIn('rtsp://', str(result))
 
+    def test_old_clock_candidates_are_reported_but_never_aligned(self):
+        from osd_time import infer_media_start_from_osd
+        import types
+        with tempfile.TemporaryDirectory() as tmp:
+            source = pathlib.Path(tmp) / 'source.bin'
+            source.write_bytes(b'1234')
+            with patch('osd_time._video_clock_readings', return_value=self.readings(date='10-03-26')), patch('osd_time.find_ffmpeg', return_value='ffmpeg'), patch('osd_time.run_background', return_value=types.SimpleNamespace(returncode=0, stderr=b'Video: h264')):
+                result = infer_media_start_from_osd(source,self.start)
+            self.assertEqual(result['status'],'unknown')
+            self.assertEqual(result['samples_read'],0)
+            self.assertTrue(result['clock_candidates'])
+            self.assertTrue(all(x.startswith('2026-10-03') for x in result['clock_candidates']))
+
     @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('tesseract'), 'native FFmpeg/Tesseract fixture')
     def test_native_small_clock_on_busy_video_background(self):
         with tempfile.TemporaryDirectory() as tmp:

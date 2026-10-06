@@ -363,7 +363,14 @@ def process_job(
                 try:
                     diagnostics = hik.playback_diagnostics(channel_id)
                     diagnostics["query_clock_offset_seconds"] = query_shift
+                    for key in ("stream_http", "device_http", "clock_http"):
+                        if diagnostics.get(key) == 200:
+                            diagnostics.pop(key)
+                    if clock_check:
+                        diagnostics["final_clock_status"] = clock_check.get("status")
+                        diagnostics["final_clock_reason"] = clock_check.get("reason")
                     if source_clock_alignment:
+                        diagnostics["clock_candidates"] = source_clock_alignment.get("clock_candidates", [])
                         diagnostics["source_bytes"] = source_clock_alignment.get("source_bytes")
                         diagnostics["source_codecs"] = source_clock_alignment.get("source_codecs", [])
                         diagnostics["frames_extracted"] = source_clock_alignment.get("frames_extracted")
@@ -373,7 +380,7 @@ def process_job(
                         diagnostics["file_clock_samples"] = source_clock_alignment.get("samples_read", 0)
                         diagnostics["file_first_clock"] = source_clock_alignment.get("first_displayed_at")
                         diagnostics["file_first_offset"] = source_clock_alignment.get("first_sample_offset_seconds")
-                    message = message[:450] + ":diag=" + json.dumps(diagnostics, separators=(",", ":"))
+                    message = message[:180] + ":diag=" + json.dumps(diagnostics, separators=(",", ":"))
                 except Exception:
                     pass
             try:

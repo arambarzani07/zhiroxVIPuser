@@ -100,14 +100,25 @@ class SdpCodecRelay:
         client_uri = uri
         if uri != '*':
             parsed = urlsplit(uri)
-            if parsed.hostname not in {'127.0.0.1', self.parts.hostname} or not parsed.path.startswith(self.parts.path):
+            root = self.parts.path.rstrip('/').lower()
+            path = parsed.path.rstrip('/').lower()
+            if parsed.hostname not in {'127.0.0.1', self.parts.hostname} or (path != root and not path.startswith(root + '/')):
                 raise ValueError('relay_uri_scope')
+            if method == 'DESCRIBE' and parsed.query != self.parts.query:
+                raise ValueError('relay_time_scope')
             uri = urlunsplit(('rtsp', self.parts.netloc, parsed.path, parsed.query, ''))
         lines[0] = f'{method} {uri} {protocol}'
         for i,line in enumerate(lines[1:], 1):
             if line.lower().startswith('authorization:'):
                 lines[i] = 'Authorization: ' + _digest(line.split(':', 1)[1].strip(), method, uri, self.username, self.password, client_uri)
         return ('\r\n'.join(lines) + '\r\n\r\n').encode('latin1') + body
+
+    def _localize(self, value):
+        # A recorder may add its default RTSP port in Content-Base even
+        # when the search URI omits it. Replacing only the host would
+        # otherwise produce two ports on the loopback URI.
+        origin = r'rtsp://' + re.escape(self.parts.hostname) + r'(?::' + str(self.parts.port or 554) + r')?(?=/)'
+        return re.sub(origin, 'rtsp://' + self.local_authority, value, flags=re.IGNORECASE)
 
     def _response(self, message):
         if message.startswith(b'$'):
@@ -124,13 +135,12 @@ class SdpCodecRelay:
                 sdp += f'a=fmtp:{pt} packetization-mode=1\r\n'
                 body = sdp.encode('ascii')
                 self.corrected = True
-            origin = 'rtsp://' + self.parts.netloc
-            body = body.replace(origin.encode(), ('rtsp://' + self.local_authority).encode())
+            body = self._localize(body.decode('ascii')).encode('ascii')
         for i,line in enumerate(lines):
             if line.lower().startswith('content-length:'):
                 lines[i] = f'Content-Length: {len(body)}'
             elif line.lower().startswith(('content-base:', 'content-location:')):
-                lines[i] = line.replace('rtsp://' + self.parts.netloc, 'rtsp://' + self.local_authority)
+                lines[i] = self._localize(line)
         return ('\r\n'.join(lines) + '\r\n\r\n').encode('latin1') + body
 
     def _pump(self, source, target, transform):

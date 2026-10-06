@@ -168,6 +168,15 @@ def infer_media_start_from_osd(path: pathlib.Path, expected_start: datetime, dur
             workspace=pathlib.Path(folder)
             readings=_video_clock_readings(path,workspace,max(8.0,float(duration_hint)))
             result = align_readings(readings, expected_start, BAGHDAD_OFFSET)
+            # Parsed dates are diagnostic clues only. They never bypass the
+            # age, ambiguity, advancing-clock or transaction alignment guards.
+            observed = []
+            for _,text in readings:
+                candidates = dates_in_text(text, BAGHDAD_OFFSET)
+                if candidates:
+                    closest = min((stamp for _,stamp in candidates), key=lambda stamp: abs((stamp - expected_start.astimezone(BAGHDAD_OFFSET)).total_seconds()))
+                    observed.append(closest.isoformat())
+            result['clock_candidates'] = list(dict.fromkeys(observed))[:3]
             result['frames_extracted'] = sum(1 for _ in workspace.glob('sample-*.png'))
             result['source_bytes'] = path.stat().st_size
             try:
