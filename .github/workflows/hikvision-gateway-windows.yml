@@ -11,9 +11,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: hikvision-gateway-windows-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -62,7 +67,7 @@ jobs:
       - name: Test recorder and evergreen updater diagnostics
         shell: pwsh
         working-directory: gateway/hikvision
-        run: python -m unittest test_diagnose.py test_secret_input.py test_playback.py test_time_window.py test_osd_time.py test_background_process.py test_self_update.py
+        run: python -m unittest discover -p "test_*.py"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -155,7 +160,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish evergreen Gateway release
+      - name: Publish immutable evergreen Gateway release
         if: github.event_name == 'push' && github.ref == 'refs/heads/user-source'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -168,9 +173,8 @@ jobs:
           $tag = "hikvision-gateway-v$version"
           $encodedTag = [System.Uri]::EscapeDataString($tag)
           $title = "ZHIROX Hikvision Gateway $version"
-          $notes = "Evergreen Windows Gateway release. Clients verify GitHub SHA-256 digests, stage all required companion files, run NVR/cloud preflight, atomically replace files, verify post-restart health, and rollback automatically on failure."
+          $notes = "Evergreen Windows Gateway release. Clients verify GitHub SHA-256 digests and successful production CI provenance, stage required companion files, run NVR/cloud preflight, atomically replace files, recover after power loss, verify post-restart health, quarantine bad releases, and rollback automatically on failure."
 
-          $existing = $null
           gh api "repos/$repo/releases/tags/$encodedTag" 2>$null | Set-Content $env:RUNNER_TEMP\gateway-release.json -Encoding utf8
           if ($LASTEXITCODE -eq 0) {
             $existing = Get-Content $env:RUNNER_TEMP\gateway-release.json -Raw | ConvertFrom-Json
@@ -182,9 +186,21 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Gateway release create failed" }
           }
 
-          function Upload-WithRetry([string]$Path) {
+          function Ensure-ImmutableAsset([string]$Path) {
+            $name = Split-Path $Path -Leaf
+            $localDigest = "sha256:" + (Get-FileHash $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+            $release = gh api "repos/$repo/releases/tags/$encodedTag" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "Gateway release lookup failed: $name" }
+            $existingAsset = $release.assets | Where-Object { $_.name -eq $name } | Select-Object -First 1
+            if ($existingAsset) {
+              if ($existingAsset.digest -ne $localDigest) {
+                throw "Immutable Gateway asset differs for $name. Bump GATEWAY_VERSION; never replace bytes under an existing version."
+              }
+              Write-Host "Immutable asset already matches: $name"
+              return
+            }
             for ($attempt = 1; $attempt -le 4; $attempt++) {
-              gh release upload $tag $Path --clobber --repo $repo
+              gh release upload $tag $Path --repo $repo
               if ($LASTEXITCODE -eq 0) { return }
               if ($attempt -lt 4) { Start-Sleep -Seconds ([Math]::Pow(2, $attempt)) }
             }
@@ -200,7 +216,7 @@ jobs:
             ".\dist\zhirox-hikvision-time-sync.exe",
             ".\dist\zhirox-hikvision-gateway.exe"
           )
-          foreach ($asset in $releaseAssets) { Upload-WithRetry $asset }
+          foreach ($asset in $releaseAssets) { Ensure-ImmutableAsset $asset }
 
           $release = gh api "repos/$repo/releases/tags/$encodedTag" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw "Gateway release verification failed" }
@@ -211,10 +227,11 @@ jobs:
             if ($asset.state -ne "uploaded") { throw "Published Gateway asset incomplete: $name" }
             if ($asset.digest -notmatch '^sha256:[0-9a-fA-F]{64}$') { throw "Published Gateway digest missing: $name" }
           }
-          Write-Host "Evergreen Gateway release verified: $tag"
+          Write-Host "Immutable Evergreen Gateway release verified: $tag"
 
   playback-integration:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
