@@ -9,6 +9,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+import time
 from datetime import datetime, timezone
 
 TASK_NAME_DEFAULT = "ZHIROX Hikvision Gateway"
@@ -55,8 +56,11 @@ def wait_for_parent(pid: int, timeout_seconds: int = 90) -> None:
     WAIT_OBJECT_0 = 0x00000000
     handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
     if not handle:
-        # The parent may already have exited between handoff and OpenProcess.
-        return
+        error = ctypes.get_last_error()
+        # ERROR_INVALID_PARAMETER means the PID no longer exists.
+        if error == 87:
+            return
+        raise OSError(error, "OpenProcess failed while waiting for Gateway exit")
     try:
         result = kernel32.WaitForSingleObject(handle, timeout_seconds * 1000)
         if result != WAIT_OBJECT_0:
@@ -77,10 +81,17 @@ def run_schtasks(*args: str) -> subprocess.CompletedProcess:
 
 
 def start_gateway_task(task_name: str) -> None:
-    result = run_schtasks("/Run", "/TN", task_name)
-    if result.returncode != 0:
-        text = (result.stderr or result.stdout or "").strip()
-        raise RuntimeError(f"scheduled_task_start_failed:{text[:240]}")
+    last_text = ""
+    for _ in range(15):
+        result = run_schtasks("/Run", "/TN", task_name)
+        if result.returncode == 0:
+            return
+        last_text = (result.stderr or result.stdout or "").strip()
+        # Task Scheduler can briefly keep the old instance registered as running
+        # after the process exits. Retry rather than treating that transition as
+        # an update failure.
+        time.sleep(2)
+    raise RuntimeError(f"scheduled_task_start_failed:{last_text[:240]}")
 
 
 def write_state(payload: dict) -> None:
