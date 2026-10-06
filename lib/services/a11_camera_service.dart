@@ -407,9 +407,9 @@ class A11CameraService {
     required int attemptGeneration,
   }) async {
     await PBService.ensureInitialized();
-    if (!await isProviderActive(marketId)) {
-      throw StateError('a11_provider_not_active');
-    }
+    // Jobs are fenced by their own provider/attempt token. Do not require
+    // A11 to still be the active provider here: after an admin switches back
+    // to Hikvision, an already-created A11 job must still be allowed to finish.
 
     final clip = await captureAroundTransaction(transactionAt);
     final bytes = await clip.file.readAsBytes();

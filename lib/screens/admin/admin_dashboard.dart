@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/providers/theme_provider.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
+import 'package:zhirox/screens/admin/a11_camera_setup_screen.dart';
+import 'package:zhirox/screens/admin/camera_source_settings_screen.dart';
 import 'package:zhirox/screens/shared/debt_list_screen.dart';
 import 'package:zhirox/screens/shared/user_list_screen.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -503,6 +505,35 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               } finally {
                                 if (mounted) setState(() => _isLoading = false);
                               }
+                            },
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              Icons.video_settings_rounded,
+                              color: Colors.white.withOpacity(0.7),
+                              size: 22,
+                            ),
+                            tooltip: 'سەرچاوەی ڤیدیۆ',
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => CameraSourceSettingsScreen(
+                                    onClose: () => Navigator.of(context).pop(),
+                                    onConfigureA11: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => A11CameraSetupScreen(
+                                            onCompleted: () =>
+                                                Navigator.of(context).pop(),
+                                            onLater: () =>
+                                                Navigator.of(context).pop(),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              );
                             },
                           ),
                           // Dark Mode Toggle
