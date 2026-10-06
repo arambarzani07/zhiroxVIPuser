@@ -6,8 +6,9 @@ import os
 import pathlib
 import shutil
 from contextlib import contextmanager
+from datetime import datetime, timezone
 
-from common import APP_DIR, CONFIG_PATH, GatewayConfig
+from common import APP_DIR, CONFIG_PATH, CLOUD_URL, GatewayConfig, protect_secret
 
 CONFIG_BACKUP_PATH = APP_DIR / "config.json.bak"
 _MUTEX_NAME = "Local\\ZHIROX-Hikvision-Gateway"
@@ -31,6 +32,35 @@ def acquire_single_instance() -> bool:
         return False
     _mutex_handle = handle
     return True
+
+
+def save_config_atomic(cfg: GatewayConfig) -> None:
+    """Persist DPAPI configuration using write+fsync+atomic replace.
+
+    A power loss while Setup is saving must leave either the previous complete
+    config or the new complete config, never a partially-written JSON file.
+    """
+    APP_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "nvr_host": cfg.nvr_host,
+        "nvr_username": cfg.nvr_username,
+        "nvr_password_dpapi": protect_secret(cfg.nvr_password),
+        "gateway_token_dpapi": protect_secret(cfg.gateway_token),
+        "cloud_url": cfg.cloud_url or CLOUD_URL,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
+    }
+    temp = CONFIG_PATH.with_suffix(".json.new")
+    try:
+        with temp.open("w", encoding="utf-8", newline="\n") as fh:
+            json.dump(payload, fh, indent=2)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        # Validate JSON before replacing a working config.
+        json.loads(temp.read_text(encoding="utf-8"))
+        os.replace(temp, CONFIG_PATH)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def _config_is_usable(path: pathlib.Path) -> bool:
