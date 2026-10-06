@@ -432,7 +432,8 @@ class HikvisionClient:
                 reason = "timeout"
             except Exception:
                 # Exception strings and FFmpeg stderr can contain passwords.
-                reason = "unknown"
+                output_path.unlink(missing_ok=True)
+                raise RuntimeError("rtsp_playback_failed") from None
             output_path.unlink(missing_ok=True)
             # Authentication/session-limit failures cannot be fixed by transport.
             if transport == "tcp" and reason in {

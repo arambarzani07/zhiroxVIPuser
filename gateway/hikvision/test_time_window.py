@@ -110,9 +110,12 @@ class TimeWindowTest(unittest.TestCase):
     def test_rtsp_fallback_transcodes_to_browser_h264(self):
         hik = common.HikvisionClient(common.GatewayConfig('192.168.1.3', 'admin', 'secret', ''))
         uri = common.bounded_playback_uri(self.uri, self.start, self.end, 1001)
-        with tempfile.TemporaryDirectory() as tmp, patch.object(common, 'find_ffmpeg', return_value='ffmpeg'), patch.object(common, 'run_background', return_value=Mock(returncode=0, stderr=b'')) as run:
+        with tempfile.TemporaryDirectory() as tmp, patch.object(common, 'find_ffmpeg', return_value='ffmpeg'), patch.object(common, 'run_background') as run:
             path = pathlib.Path(tmp)/'raw.mp4'
-            path.write_bytes(b'video')
+            def successful_run(*args, **kwargs):
+                path.write_bytes(b'video')
+                return Mock(returncode=0, stderr=b'')
+            run.side_effect = successful_run
             hik.download_playback_stream(uri, path, 30)
             args = run.call_args.args[0]
             self.assertIn('libx264', args)
