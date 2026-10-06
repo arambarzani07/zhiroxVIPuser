@@ -5,7 +5,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
-from osd_time import verify_clip_time
+from osd_time import infer_media_start_from_osd, verify_clip_time
 import common as gateway_common
 from common import (
     CONFIG_PATH,
@@ -22,7 +22,7 @@ from common import (
 
 # Protocol 1.1 enables DB-backed per-attempt fencing while the shared setup
 # helpers remain compatible with already-installed 1.0 gateway packages.
-gateway_common.GATEWAY_VERSION = "1.3.1+http-file-fallback-1"
+gateway_common.GATEWAY_VERSION = "1.3.2+osd-align-1"
 
 POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 30
@@ -39,7 +39,6 @@ class JobLease:
     def __enter__(self) -> "JobLease":
         if not self.attempt_token:
             return self
-        # Refresh immediately, then continuously while NVR download/trim/upload runs.
         self._heartbeat()
         self._thread = threading.Thread(
             target=self._run,
@@ -62,8 +61,6 @@ class JobLease:
                 attempt_token=self.attempt_token,
             )
         except Exception as exc:
-            # A temporary cloud failure must not kill local capture. If the lease
-            # actually became stale/reclaimed, the fenced completion will be rejected.
             log(
                 f"job={self.job_id} heartbeat_error="
                 f"{type(exc).__name__}:{str(exc)[:240]}"
@@ -99,8 +96,6 @@ def process_job(
 
     with JobLease(heartbeat_cloud, job_id, attempt_token):
         try:
-            # v2 claims only after clip_end+3s, but keep this guard for clock skew and
-            # legacy jobs. The heartbeat remains active for the entire wait.
             wait_seconds = (
                 clip_end.astimezone(timezone.utc) - datetime.now(timezone.utc)
             ).total_seconds() + 3
@@ -133,12 +128,13 @@ def process_job(
                 channel_id * 100 + 1,
             )
             log(
-                f"job={job_id} build=http-file-fallback-1 download_mode=time "
+                f"job={job_id} build=osd-align-1 download_mode=time "
                 f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}"
             )
             download_mode = "time"
             requested_duration = max(1, int((clip_end - clip_start).total_seconds()))
             download_segment_start = clip_start
+            source_clock_alignment: dict = {}
 
             try:
                 download_mode = hik.download_recording(playback_uri, raw_path) or "time"
@@ -146,10 +142,6 @@ def process_job(
                 if not str(exc).startswith("download_rejected:"):
                     raise
 
-                # Older Hikvision firmware often requires the original playbackURI
-                # returned by ContentMgmt/search, including its name/size file selectors.
-                # Prefer that documented binary export before falling back to RTSP,
-                # because legacy HEVC RTP packetization can be incompatible with FFmpeg.
                 log(
                     f"job={job_id} bounded HTTP export rejected; "
                     "trying original ISAPI file export"
@@ -183,6 +175,26 @@ def process_job(
             if not raw_path.exists() or raw_path.stat().st_size <= 0:
                 raise RuntimeError("empty_download")
 
+            # Old DS-7616 firmware can return a valid historical file while its
+            # ContentMgmt segment_start metadata points hours later than the file's
+            # real first frame. Align file exports from the OSD embedded in the media
+            # itself before trimming. This fixes repeated/duplicate 30-second clips.
+            if download_mode.startswith("http_file"):
+                source_clock_alignment = infer_media_start_from_osd(
+                    raw_path,
+                    clip_start,
+                    requested_duration,
+                )
+                if source_clock_alignment.get("status") != "aligned":
+                    raise RuntimeError("source_clock_alignment_unavailable")
+                download_segment_start = parse_iso(
+                    str(source_clock_alignment["media_start_at"])
+                )
+                log(
+                    f"job={job_id} osd_source_offset_seconds="
+                    f"{source_clock_alignment.get('offset_seconds')}"
+                )
+
             media = prepare_browser_clip(
                 raw_path,
                 exact_path,
@@ -202,7 +214,10 @@ def process_job(
                 raise RuntimeError("clip_duration_mismatch")
             if clock_check["status"] == "mismatch":
                 raise RuntimeError("clip_clock_mismatch")
-            if download_mode in {"rtsp_time", "http_query_time"} and clock_check["status"] != "matched":
+            if (
+                download_mode in {"rtsp_time", "http_query_time"}
+                or download_mode.startswith("http_file")
+            ) and clock_check["status"] != "matched":
                 raise RuntimeError("playback_clip_clock_unverified")
             upload_path = exact_path
 
@@ -225,9 +240,10 @@ def process_job(
                 duration_seconds=media["duration_seconds"],
                 playback_metadata={
                     "provider": "hikvision_isapi",
-                    "gateway_build": "http-file-fallback-1",
+                    "gateway_build": "osd-align-1",
                     "download_mode": download_mode,
                     "download_start": download_segment_start.replace(microsecond=0).isoformat(),
+                    "source_clock_alignment": source_clock_alignment,
                     "media_time_verified": clock_check["status"] == "matched",
                     "clock_check": clock_check,
                     "track_id": search.get("track_id"),
@@ -279,11 +295,9 @@ def run() -> None:
 
     cfg = GatewayConfig.load()
     cloud = CloudClient(cfg)
-    # Keep job-heartbeat traffic isolated from the foreground request session.
     heartbeat_cloud = CloudClient(cfg)
     hik = HikvisionClient(cfg)
 
-    # Fail fast on a bad local password/IP while never logging credentials.
     hik.device_info()
     ping = cloud.call("ping")
     log(
@@ -316,7 +330,6 @@ def main() -> None:
 if __name__ == "__main__":
     import sys
     if len(sys.argv) == 3 and sys.argv[1] == '--verify-ocr-fixture':
-        # CI checks the resources inside the frozen executable without config/network.
         from osd_time import ocr_image, dates_in_text
         result = dates_in_text(ocr_image(pathlib.Path(sys.argv[2])), timezone.utc, 'YMD')
         sys.exit(0 if result else 1)
