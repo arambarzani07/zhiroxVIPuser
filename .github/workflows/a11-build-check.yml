@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 
-# Verifies Hikvision + A11 coexistence and publishes an unsigned IPA artifact.
+# Verifies Hikvision + A11 coexistence and publishes the ZHIROX User unsigned IPA.
 jobs:
   analyze-android:
     runs-on: ubuntu-latest
@@ -35,23 +35,32 @@ jobs:
           cache: true
       - run: flutter --version
       - run: flutter pub get
+      - name: Set ZHIROX User identity
+        run: |
+          sed -i '' 's/com.karoxghafoor.zhirox/com.karoxghafoor.zhirox.user/g' ios/Runner.xcodeproj/project.pbxproj
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName ZHIROX User' ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleName zhirox_user' ios/Runner/Info.plist
       - run: cd ios && pod install
       - name: Build iOS release without signing
         run: flutter build ios --release --no-codesign -t lib/main_a11.dart
+      - name: Verify ZHIROX User identity
+        run: |
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx 'com.karoxghafoor.zhirox.user'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist | grep -Fx 'ZHIROX User'
       - name: Package unsigned IPA
         run: |
-          rm -rf Payload ZHIROX-A11-Dual-Camera.ipa
+          rm -rf Payload ZHIROX-User.ipa
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
-          ditto -c -k --sequesterRsrc --keepParent Payload ZHIROX-A11-Dual-Camera.ipa
-          test -s ZHIROX-A11-Dual-Camera.ipa
-          shasum -a 256 ZHIROX-A11-Dual-Camera.ipa > ZHIROX-A11-Dual-Camera.ipa.sha256
+          ditto -c -k --sequesterRsrc --keepParent Payload ZHIROX-User.ipa
+          test -s ZHIROX-User.ipa
+          shasum -a 256 ZHIROX-User.ipa > ZHIROX-User.ipa.sha256
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ZHIROX-A11-Dual-Camera-unsigned-ipa
+          name: zhirox-user-a11-dual-camera-unsigned-ipa
           path: |
-            ZHIROX-A11-Dual-Camera.ipa
-            ZHIROX-A11-Dual-Camera.ipa.sha256
+            ZHIROX-User.ipa
+            ZHIROX-User.ipa.sha256
           if-no-files-found: error
           retention-days: 7
