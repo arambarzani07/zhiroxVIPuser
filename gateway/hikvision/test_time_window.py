@@ -149,7 +149,8 @@ class TimeWindowTest(unittest.TestCase):
             cloud.upload.assert_called_once()
             complete = next(c for c in cloud.call.call_args_list if c.args[0] == 'complete')
             self.assertFalse(complete.kwargs['playback_metadata']['media_time_verified'])
-            self.assertEqual(complete.kwargs['playback_metadata']['gateway_build'], 'osd-align-1')
+            self.assertTrue(complete.kwargs['playback_metadata']['bounded_window_verified'])
+            self.assertEqual(complete.kwargs['playback_metadata']['gateway_build'], 'bounded-fallback-1')
 
     def test_namespace_retry_preserves_bounded_uri(self):
         hik = common.HikvisionClient(common.GatewayConfig('192.168.1.3', 'admin', 'secret', ''))
@@ -196,14 +197,36 @@ class TimeWindowTest(unittest.TestCase):
             return {'duration_seconds': 30, 'exact_trim': True}
         job = {'job_id': 'clock', 'transaction_at': now.isoformat(), 'clip_start_at': now.isoformat(),
                'clip_end_at': (now+timedelta(seconds=30)).isoformat(), 'channel_id': 10}
-        for status in ['mismatch', 'unknown']:
-            cloud.reset_mock()
-            with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'prepare_browser_clip', side_effect=prepare), patch.object(agent, 'verify_clip_time', return_value={'status': status}):
-                agent.process_job(cloud, Mock(), hik, job)
-                cloud.upload.assert_not_called()
-                self.assertFalse(any(c.args[0] == 'complete' for c in cloud.call.call_args_list))
+        with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'prepare_browser_clip', side_effect=prepare), patch.object(agent, 'verify_clip_time', return_value={'status': 'mismatch'}):
+            agent.process_job(cloud, Mock(), hik, job)
+        cloud.upload.assert_not_called()
+        self.assertFalse(any(c.args[0] == 'complete' for c in cloud.call.call_args_list))
+        failure = next(c for c in cloud.call.call_args_list if c.args[0] == 'fail')
+        self.assertIn('clip_clock_mismatch', failure.kwargs['error'])
 
-    def test_query_export_with_unknown_clock_never_uploads(self):
+    def test_rtsp_unknown_clock_uploads_only_bounded_window(self):
+        now = datetime.now(timezone.utc) - timedelta(minutes=10)
+        hik, cloud = Mock(), Mock()
+        hik.search_recording.return_value = {'found': True, 'playback_uri': self.uri}
+        hik.download_recording.side_effect = RuntimeError('download_rejected:http=400')
+        hik.download_playback_stream.side_effect = lambda uri, path, duration: path.write_bytes(b'raw')
+        cloud.call.return_value = {'signed_upload_url': 'private', 'object_path': 'clip'}
+        def prepare(source, target, start, download_start, duration):
+            self.assertEqual(common.parse_iso(download_start), start.replace(microsecond=0))
+            target.write_bytes(b'h264')
+            return {'duration_seconds': 30, 'exact_trim': True}
+        job = {'job_id': 'clock-unknown', 'transaction_at': now.isoformat(), 'clip_start_at': now.isoformat(),
+               'clip_end_at': (now+timedelta(seconds=30)).isoformat(), 'channel_id': 10}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'prepare_browser_clip', side_effect=prepare), patch.object(agent, 'verify_clip_time', return_value={'status': 'unknown'}):
+            agent.process_job(cloud, Mock(), hik, job)
+        cloud.upload.assert_called_once()
+        complete = next(c for c in cloud.call.call_args_list if c.args[0] == 'complete')
+        metadata = complete.kwargs['playback_metadata']
+        self.assertEqual(metadata['download_mode'], 'rtsp_time')
+        self.assertTrue(metadata['bounded_window_verified'])
+        self.assertFalse(metadata['media_time_verified'])
+
+    def test_query_export_with_unknown_clock_uploads_bounded_window(self):
         now = datetime.now(timezone.utc) - timedelta(minutes=10)
         hik, cloud = Mock(), Mock()
         hik.search_recording.return_value = {'found': True, 'playback_uri': self.uri}
@@ -211,16 +234,57 @@ class TimeWindowTest(unittest.TestCase):
             path.write_bytes(b'raw')
             return 'http_query_time'
         hik.download_recording.side_effect = download
-        def prepare(source, target, *args):
+        cloud.call.return_value = {'signed_upload_url': 'private', 'object_path': 'clip'}
+        def prepare(source, target, start, download_start, duration):
+            self.assertEqual(common.parse_iso(download_start), start.replace(microsecond=0))
             target.write_bytes(b'h264')
             return {'duration_seconds': 30, 'exact_trim': True}
         job = {'job_id': 'query-clock', 'transaction_at': now.isoformat(), 'clip_start_at': now.isoformat(),
                'clip_end_at': (now+timedelta(seconds=30)).isoformat(), 'channel_id': 10}
         with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'prepare_browser_clip', side_effect=prepare), patch.object(agent, 'verify_clip_time', return_value={'status': 'unknown'}):
             agent.process_job(cloud, Mock(), hik, job)
-        cloud.upload.assert_not_called()
-        failure = next(c for c in cloud.call.call_args_list if c.args[0] == 'fail')
-        self.assertIn('playback_clip_clock_unverified', failure.kwargs['error'])
+        cloud.upload.assert_called_once()
+        complete = next(c for c in cloud.call.call_args_list if c.args[0] == 'complete')
+        metadata = complete.kwargs['playback_metadata']
+        self.assertEqual(metadata['download_mode'], 'http_query_time')
+        self.assertTrue(metadata['bounded_window_verified'])
+        self.assertFalse(metadata['media_time_verified'])
+
+    def test_unreadable_file_osd_retries_bounded_rtsp_before_upload(self):
+        now = datetime.now(timezone.utc) - timedelta(minutes=10)
+        hik, cloud = Mock(), Mock()
+        hik.search_recording.return_value = {
+            'found': True,
+            'playback_uri': self.uri,
+            'segment_start': (now - timedelta(hours=4)).isoformat(),
+            'segment_end': (now + timedelta(hours=1)).isoformat(),
+        }
+        calls = {'n': 0}
+        def download(uri, path):
+            calls['n'] += 1
+            if calls['n'] == 1:
+                raise RuntimeError('download_rejected:http=400')
+            path.write_bytes(b'file-export')
+            return 'time'
+        hik.download_recording.side_effect = download
+        hik.download_playback_stream.side_effect = lambda uri, path, duration: path.write_bytes(b'bounded-rtsp')
+        cloud.call.return_value = {'signed_upload_url': 'private', 'object_path': 'clip'}
+        def prepare(source, target, start, download_start, duration):
+            self.assertEqual(source.read_bytes(), b'bounded-rtsp')
+            self.assertEqual(common.parse_iso(download_start), start.replace(microsecond=0))
+            target.write_bytes(b'h264')
+            return {'duration_seconds': 30, 'exact_trim': True}
+        job = {'job_id': 'file-osd-fallback', 'transaction_at': now.isoformat(), 'clip_start_at': now.isoformat(),
+               'clip_end_at': (now+timedelta(seconds=30)).isoformat(), 'channel_id': 10}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'infer_media_start_from_osd', return_value={'status': 'unknown', 'reason': 'clock_reading_unavailable'}), patch.object(agent, 'prepare_browser_clip', side_effect=prepare), patch.object(agent, 'verify_clip_time', return_value={'status': 'unknown'}):
+            agent.process_job(cloud, Mock(), hik, job)
+        hik.download_playback_stream.assert_called_once()
+        cloud.upload.assert_called_once()
+        complete = next(c for c in cloud.call.call_args_list if c.args[0] == 'complete')
+        metadata = complete.kwargs['playback_metadata']
+        self.assertEqual(metadata['download_mode'], 'rtsp_time')
+        self.assertTrue(metadata['bounded_window_verified'])
+        self.assertEqual(metadata['source_clock_alignment']['fallback'], 'bounded_rtsp')
 
     def test_nearby_search_result_is_not_accepted(self):
         hik = common.HikvisionClient(common.GatewayConfig('192.168.1.3', 'admin', 'secret', ''))
