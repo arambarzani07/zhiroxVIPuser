@@ -41,11 +41,11 @@ def ask_secret(prompt: str) -> str:
             print("*", end="", flush=True)
 
 
-def install_task(agent_exe: pathlib.Path) -> None:
+def install_task(entrypoint: pathlib.Path) -> None:
     task_name = "ZHIROX Hikvision Gateway"
     command = [
         "schtasks", "/Create", "/F", "/SC", "ONLOGON", "/RL", "HIGHEST",
-        "/TN", task_name, "/TR", f'\"{agent_exe}\"'
+        "/TN", task_name, "/TR", f'\"{entrypoint}\"'
     ]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
@@ -86,15 +86,17 @@ def main() -> int:
 
     base = pathlib.Path(sys.executable).resolve().parent
     agent = base / "zhirox-hikvision-gateway.exe"
-    if agent.exists():
-        answer = ask("Start gateway automatically when this Windows user logs in? (y/n)", "y").lower()
+    updater = base / "zhirox-hikvision-updater.exe"
+    entrypoint = updater if updater.exists() else agent
+    if entrypoint.exists():
+        answer = ask("Start and update gateway automatically when this Windows user logs in? (y/n)", "y").lower()
         if answer.startswith("y"):
-            install_task(agent)
-            print("Auto-start task installed.")
+            install_task(entrypoint)
+            print("Auto-start/update task installed.")
     else:
-        print("Gateway EXE was not found beside the setup EXE; auto-start was skipped.")
+        print("Gateway/updater EXE was not found beside the setup EXE; auto-start was skipped.")
 
-    print("Setup complete. You can now run zhirox-hikvision-gateway.exe.")
+    print("Setup complete. You can now run zhirox-hikvision-updater.exe or zhirox-hikvision-gateway.exe.")
     return 0
 
 
