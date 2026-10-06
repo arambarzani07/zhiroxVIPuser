@@ -26,10 +26,14 @@ HEALTH_INTERVAL_SECONDS = 10
 HEALTH_PROBE_RETRY_SECONDS = 5
 WORKER_STALL_SECONDS = 15 * 60
 WATCHDOG_INTERVAL_SECONDS = 30
+CLOCK_CHECK_INTERVAL_SECONDS = 10 * 60
+CLOCK_DRIFT_WARN_SECONDS = 30
 
 _original_cloud_call = CloudClient.call
 _next_update_check = 0.0
 _last_worker_progress = time.monotonic()
+_last_nvr_clock_drift_seconds: float | None = None
+_last_nvr_clock_check_at: str | None = None
 
 
 def _installed_gateway_path() -> pathlib.Path:
@@ -58,6 +62,8 @@ def _write_health() -> None:
             "update_protocol": UPDATE_PROTOCOL,
             "pid": os.getpid(),
             "worker_progress_age_seconds": _worker_progress_age(),
+            "nvr_clock_drift_seconds": _last_nvr_clock_drift_seconds,
+            "nvr_clock_checked_at": _last_nvr_clock_check_at,
             "healthy_at": datetime.now(timezone.utc).isoformat(),
         },
     )
@@ -98,6 +104,34 @@ def _start_health_monitor() -> None:
     threading.Thread(
         target=_health_monitor_loop,
         name="zhirox-gateway-health-monitor",
+        daemon=True,
+    ).start()
+
+
+def _nvr_clock_monitor_loop() -> None:
+    """Read-only clock monitoring; never changes NVR or camera settings."""
+    global _last_nvr_clock_drift_seconds, _last_nvr_clock_check_at
+    while True:
+        try:
+            if not CONFIG_PATH.exists():
+                raise RuntimeError("configuration_missing")
+            cfg = GatewayConfig.load()
+            drift = runtime_hardening.measure_nvr_clock_drift(HikvisionClient(cfg))
+            _last_nvr_clock_drift_seconds = drift
+            _last_nvr_clock_check_at = datetime.now(timezone.utc).isoformat()
+            if drift > CLOCK_DRIFT_WARN_SECONDS:
+                log(f"nvr_clock_drift_warning seconds={drift}")
+            else:
+                log(f"nvr_clock_drift_ok seconds={drift}")
+        except Exception as exc:
+            log(f"nvr_clock_monitor_error={type(exc).__name__}:{str(exc)[:220]}")
+        time.sleep(CLOCK_CHECK_INTERVAL_SECONDS)
+
+
+def _start_nvr_clock_monitor() -> None:
+    threading.Thread(
+        target=_nvr_clock_monitor_loop,
+        name="zhirox-gateway-nvr-clock-monitor",
         daemon=True,
     ).start()
 
@@ -202,10 +236,12 @@ def main() -> int:
     log(
         f"gateway_bootstrap version={GATEWAY_VERSION} "
         f"update_protocol={UPDATE_PROTOCOL} auto_update=evergreen "
-        f"worker_watchdog_seconds={WORKER_STALL_SECONDS}"
+        f"worker_watchdog_seconds={WORKER_STALL_SECONDS} "
+        f"clock_monitor_seconds={CLOCK_CHECK_INTERVAL_SECONDS}"
     )
     maintenance.start(gateway_path, log)
     _start_health_monitor()
+    _start_nvr_clock_monitor()
     _start_worker_watchdog()
     agent.main()
     return 0
