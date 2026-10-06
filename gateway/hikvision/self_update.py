@@ -9,13 +9,15 @@ import shutil
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Callable
 from urllib.parse import urlsplit
 
 import requests
 
 REPOSITORY = "arambarzani07/zhiroxVIPuser"
-RELEASES_URL = f"https://api.github.com/repos/{REPOSITORY}/releases?per_page=30"
+RELEASES_URL = f"https://api.github.com/repos/{REPOSITORY}/releases"
+ACTIONS_RUNS_URL = f"https://api.github.com/repos/{REPOSITORY}/actions/runs"
 TAG_PREFIX = "hikvision-gateway-v"
 MANIFEST_ASSET = "gateway-update.json"
 GATEWAY_ASSET = "zhirox-hikvision-gateway.exe"
@@ -25,7 +27,12 @@ CHECK_INTERVAL_SECONDS = 30 * 60
 TASK_NAME = "ZHIROX Hikvision Gateway"
 LOCK_STALE_SECONDS = 30 * 60
 MIN_FREE_RESERVE_BYTES = 128 * 1024 * 1024
-MAX_RELEASE_ASSETS = 16
+MAX_RELEASE_ASSETS = 64
+RELEASE_PAGE_SIZE = 100
+MAX_RELEASE_PAGES = 10
+PUBLISHER_LOGIN = "github-actions[bot]"
+PUBLISH_WORKFLOW = ".github/workflows/hikvision-gateway-windows.yml"
+QUARANTINE_SECONDS = 6 * 60 * 60
 
 _HEADERS = {
     "Accept": "application/vnd.github+json",
@@ -33,16 +40,15 @@ _HEADERS = {
     "User-Agent": "ZHIROX-Hikvision-Gateway",
 }
 
+_WINDOWS_RESERVED = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
+
 
 def version_key(value: str) -> tuple[int, int, int, int]:
-    """Compare product versions, including a trailing numeric build revision.
-
-    Examples:
-      1.4.0+evergreen-2 > 1.4.0+evergreen-1
-      1.4.1 > 1.4.0+evergreen-999
-
-    Future releases should either bump x.y.z or the final numeric build revision.
-    """
+    """Compare product versions, including a trailing numeric build revision."""
     match = re.search(r"(?:^|v)(\d+)\.(\d+)\.(\d+)", value)
     if not match:
         raise ValueError("invalid_gateway_version")
@@ -57,7 +63,6 @@ def version_key(value: str) -> tuple[int, int, int, int]:
 
 
 def version_tuple(value: str) -> tuple[int, int, int]:
-    # Kept for compatibility with older tests/helpers.
     return version_key(value)[:3]
 
 
@@ -89,29 +94,93 @@ def _get_with_retry(session, url: str, *, attempts: int = 3, **kwargs):
 
 
 def find_newer_release(current_version: str, session=requests) -> dict | None:
-    response = _get_with_retry(
-        session,
-        RELEASES_URL,
-        headers=_HEADERS,
-        timeout=(8, 20),
-    )
+    """Find the newest stable Gateway release even after a long offline period.
+
+    The repository also publishes unrelated app releases, so scan multiple pages
+    until a Gateway release is encountered instead of trusting the first 30.
+    Once a page contains any Gateway release, older pages cannot contain a newer
+    one because GitHub returns releases newest-first.
+    """
     current = version_key(current_version)
     candidates: list[tuple[tuple[int, int, int, int], dict]] = []
-    for release in response.json():
-        if release.get("draft") or release.get("prerelease"):
-            continue
-        version = _release_version(release)
-        if not version or not _release_has_asset(release, MANIFEST_ASSET):
-            continue
-        parsed = version_key(version)
-        if parsed > current:
-            item = dict(release)
-            item["_gateway_version"] = version
-            candidates.append((parsed, item))
+
+    for page in range(1, MAX_RELEASE_PAGES + 1):
+        url = f"{RELEASES_URL}?per_page={RELEASE_PAGE_SIZE}&page={page}"
+        response = _get_with_retry(
+            session,
+            url,
+            headers=_HEADERS,
+            timeout=(8, 20),
+        )
+        payload = response.json()
+        if not isinstance(payload, list):
+            raise RuntimeError("update_release_list_invalid")
+
+        saw_gateway_release = False
+        for release in payload:
+            if not isinstance(release, dict):
+                continue
+            version = _release_version(release)
+            if not version:
+                continue
+            saw_gateway_release = True
+            if release.get("draft") or release.get("prerelease"):
+                continue
+            if not _release_has_asset(release, MANIFEST_ASSET):
+                continue
+            try:
+                parsed = version_key(version)
+            except ValueError:
+                continue
+            if parsed > current:
+                item = dict(release)
+                item["_gateway_version"] = version
+                candidates.append((parsed, item))
+
+        if saw_gateway_release or len(payload) < RELEASE_PAGE_SIZE:
+            break
+
     if not candidates:
         return None
     candidates.sort(key=lambda item: item[0], reverse=True)
     return candidates[0][1]
+
+
+def verify_release_provenance(release: dict, session=requests) -> str:
+    """Accept only artifacts published by the successful production CI run."""
+    author = str(((release.get("author") or {}).get("login")) or "")
+    if author != PUBLISHER_LOGIN:
+        raise RuntimeError("update_release_publisher_rejected")
+
+    commit = str(release.get("target_commitish") or "").strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
+        raise RuntimeError("update_release_commit_invalid")
+
+    url = f"{ACTIONS_RUNS_URL}?head_sha={commit}&status=success&per_page=20"
+    response = _get_with_retry(
+        session,
+        url,
+        headers=_HEADERS,
+        timeout=(8, 20),
+    )
+    payload = response.json()
+    runs = payload.get("workflow_runs") if isinstance(payload, dict) else None
+    if not isinstance(runs, list):
+        raise RuntimeError("update_release_provenance_invalid")
+
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        if (
+            str(run.get("head_sha") or "").lower() == commit.lower()
+            and run.get("head_branch") == "user-source"
+            and run.get("path") == PUBLISH_WORKFLOW
+            and run.get("event") == "push"
+            and run.get("status") == "completed"
+            and run.get("conclusion") == "success"
+        ):
+            return commit.lower()
+    raise RuntimeError("update_release_ci_provenance_missing")
 
 
 def _asset(release: dict, name: str, *, min_size: int = 1) -> dict:
@@ -154,7 +223,7 @@ def download_verified(asset: dict, destination: pathlib.Path, session=requests) 
             with session.get(
                 str(asset["browser_download_url"]),
                 headers=_HEADERS,
-                timeout=(10, 180),
+                timeout=(10, 300),
                 stream=True,
                 allow_redirects=True,
             ) as response:
@@ -184,13 +253,32 @@ def download_verified(asset: dict, destination: pathlib.Path, session=requests) 
     raise last_error
 
 
-def _safe_target_name(value: str) -> str:
+def _safe_asset_name(value: str) -> str:
     name = value.strip()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", name):
-        raise RuntimeError("update_manifest_target_invalid")
-    if pathlib.Path(name).name != name or name in {".", ".."}:
-        raise RuntimeError("update_manifest_target_invalid")
+        raise RuntimeError("update_manifest_asset_name_invalid")
+    if pathlib.PurePath(name).name != name or name in {".", ".."}:
+        raise RuntimeError("update_manifest_asset_name_invalid")
+    stem = name.split(".", 1)[0].upper()
+    if stem in _WINDOWS_RESERVED:
+        raise RuntimeError("update_manifest_asset_name_invalid")
     return name
+
+
+def _safe_relative_target(value: str) -> str:
+    target = value.strip()
+    if not target or len(target) > 240 or "\\" in target or ":" in target:
+        raise RuntimeError("update_manifest_target_invalid")
+    parts = target.split("/")
+    if any(not part or part in {".", ".."} for part in parts):
+        raise RuntimeError("update_manifest_target_invalid")
+    for part in parts:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", part):
+            raise RuntimeError("update_manifest_target_invalid")
+        stem = part.split(".", 1)[0].upper()
+        if stem in _WINDOWS_RESERVED:
+            raise RuntimeError("update_manifest_target_invalid")
+    return "/".join(parts)
 
 
 def validate_manifest(payload: dict, expected_version: str) -> list[dict]:
@@ -212,17 +300,19 @@ def validate_manifest(payload: dict, expected_version: str) -> list[dict]:
     for item in raw_assets:
         if not isinstance(item, dict):
             raise RuntimeError("update_manifest_asset_invalid")
-        name = _safe_target_name(str(item.get("name") or ""))
-        target = _safe_target_name(str(item.get("target") or ""))
+        name = _safe_asset_name(str(item.get("name") or ""))
+        target = _safe_relative_target(str(item.get("target") or ""))
         role = str(item.get("role") or "companion").strip().lower()
         if role not in {"gateway", "updater", "companion"}:
             raise RuntimeError("update_manifest_role_invalid")
-        if name in names or target in targets:
+        name_key = name.casefold()
+        target_key = target.casefold()
+        if name_key in names or target_key in targets:
             raise RuntimeError("update_manifest_duplicate_asset")
         if role in {"gateway", "updater"} and role in roles:
             raise RuntimeError("update_manifest_duplicate_role")
-        names.add(name)
-        targets.add(target)
+        names.add(name_key)
+        targets.add(target_key)
         roles.add(role)
         assets.append({"name": name, "target": target, "role": role})
 
@@ -288,6 +378,24 @@ def _ensure_disk_space(path: pathlib.Path, total_download_bytes: int) -> None:
         raise RuntimeError("update_insufficient_disk_space")
 
 
+def _is_quarantined(app_dir: pathlib.Path, version: str) -> bool:
+    state_path = app_dir / "last_update.json"
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+        if payload.get("status") != "rolled_back":
+            return False
+        if str(payload.get("to_version") or "") != version:
+            return False
+        raw = str(payload.get("rolled_back_at") or "").replace("Z", "+00:00")
+        when = datetime.fromisoformat(raw)
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - when.astimezone(timezone.utc)).total_seconds()
+        return 0 <= age < QUARANTINE_SECONDS
+    except Exception:
+        return False
+
+
 def maybe_auto_update(
     current_version: str,
     installed_gateway: pathlib.Path,
@@ -304,12 +412,18 @@ def maybe_auto_update(
     if release is None:
         return False
 
+    new_version = str(release["_gateway_version"])
+    if _is_quarantined(app_dir, new_version):
+        log(f"auto_update_quarantined version={new_version}")
+        return False
+
+    release_commit = verify_release_provenance(release, session=session)
+
     lock = _acquire_update_lock(app_dir)
     if lock is None:
         return False
     handed_off = False
     try:
-        new_version = str(release["_gateway_version"])
         safe_version = re.sub(r"[^0-9A-Za-z._+-]", "_", new_version)
         update_root = app_dir / "updates"
         stage = update_root / safe_version
@@ -320,7 +434,7 @@ def maybe_auto_update(
         manifest_path = stage / MANIFEST_ASSET
         download_verified(manifest_asset, manifest_path, session=session)
         try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
         except Exception as exc:
             raise RuntimeError("update_manifest_json_invalid") from exc
         manifest_assets = validate_manifest(manifest, new_version)
@@ -328,7 +442,8 @@ def maybe_auto_update(
         resolved_assets: list[dict] = []
         total_bytes = 0
         for item in manifest_assets:
-            asset = _asset(release, item["name"], min_size=100_000)
+            min_size = 100_000 if item["role"] in {"gateway", "updater"} else 1
+            asset = _asset(release, item["name"], min_size=min_size)
             total_bytes += int(asset["size"])
             resolved_assets.append({**item, "asset": asset})
         _ensure_disk_space(stage, total_bytes)
@@ -355,8 +470,6 @@ def maybe_auto_update(
         if gateway_source is None or updater_source is None:
             raise RuntimeError("update_manifest_core_assets_missing")
 
-        # The staged Gateway must authenticate to recorder + cloud before the
-        # currently working process is allowed to stop.
         preflight_env = os.environ.copy()
         preflight_env["ZHIROX_PREFLIGHT_REPORT_VERSION"] = current_version
         preflight = subprocess.run(
@@ -374,6 +487,7 @@ def maybe_auto_update(
             "protocol": UPDATE_PROTOCOL,
             "from_version": current_version,
             "to_version": new_version,
+            "release_commit": release_commit,
             "task_name": TASK_NAME,
             "health_timeout_seconds": int(manifest.get("health_timeout_seconds") or 90),
             "assets": plan_assets,
@@ -400,7 +514,7 @@ def maybe_auto_update(
         handed_off = True
         log(
             f"auto_update_staged from={current_version} to={new_version} "
-            f"assets={len(plan_assets)}"
+            f"commit={release_commit[:12]} assets={len(plan_assets)}"
         )
         return True
     finally:
