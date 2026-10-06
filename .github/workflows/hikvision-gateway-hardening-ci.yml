@@ -18,7 +18,7 @@ concurrency:
 jobs:
   windows-hardening:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,6 +29,18 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: pip install -r gateway/hikvision/requirements.txt
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-tesseract-ocr mingw-w64-ucrt-x86_64-tesseract-data-eng
+      - name: Stage standalone OCR resources
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: python bundle_ocr.py "$env:MSYS2_LOCATION/ucrt64"
       - name: Compile hardened modules
         shell: pwsh
         working-directory: gateway/hikvision
