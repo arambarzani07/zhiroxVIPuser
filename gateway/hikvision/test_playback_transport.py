@@ -49,6 +49,35 @@ class PlaybackTransportTest(unittest.TestCase):
                     self.hik.download_playback_stream(self.uri, output, 30)
                 self.assertEqual(runner.call_count, 1)
 
+    def test_failure_reports_only_allowlisted_codec_and_nal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stderr = b"Video: hevc Unsupported (HEVC) NAL type (62) rtsp://admin:secret@host"
+            with patch.object(common, "find_ffmpeg", return_value="ffmpeg"), patch.object(common, "log"), patch.object(common, "run_background", return_value=subprocess.CompletedProcess([], 1, b"", stderr)):
+                with self.assertRaises(RuntimeError) as caught:
+                    self.hik.download_playback_stream(self.uri, pathlib.Path(tmp) / "clip.mp4", 30)
+                self.assertIn('"nal":[62]', str(caught.exception))
+                self.assertIn('"input_codec":["hevc"]', str(caught.exception))
+                self.assertNotIn("secret", str(caught.exception))
+
+    def test_read_only_diagnostics_do_not_export_xml_secrets(self):
+        from types import SimpleNamespace
+        responses = [SimpleNamespace(status_code=200, text='<StreamingChannel><Video><videoCodecType>H.264</videoCodecType><password>secret</password></Video></StreamingChannel>'),
+                     SimpleNamespace(status_code=200, text='<DeviceInfo><firmwareVersion>V4.30.085</firmwareVersion><serialNumber>private</serialNumber></DeviceInfo>')]
+        with patch.object(self.hik.session, "get", side_effect=responses) as get:
+            facts = self.hik.playback_diagnostics(10)
+        self.assertEqual(facts["host"], "192.168.1.3")
+        self.assertEqual(facts["configured_codecs"], ["H.264"])
+        self.assertEqual(facts["firmware"], "V4.30.085")
+        self.assertTrue(get.call_args_list[0].args[0].endswith("/1001"))
+        self.assertNotIn("secret", str(facts))
+        self.assertNotIn("private", str(facts))
+
+    def test_diagnostics_http_failure_is_nonfatal_and_redacted(self):
+        with patch.object(self.hik.session, "get", side_effect=RuntimeError("secret")):
+            facts = self.hik.playback_diagnostics(10)
+        self.assertEqual(facts["stream_read"], "unavailable")
+        self.assertNotIn("secret", str(facts))
+
     def test_unbounded_or_foreign_host_never_runs_ffmpeg(self):
         with patch.object(common, "run_background") as runner:
             for uri in ["rtsp://192.168.1.3/live", self.uri.replace("192.168.1.3", "192.168.1.4")]:

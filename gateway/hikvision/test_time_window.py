@@ -128,8 +128,9 @@ class TimeWindowTest(unittest.TestCase):
         hik = common.HikvisionClient(common.GatewayConfig('192.168.1.3', 'admin', 'secret', ''))
         uri = common.bounded_playback_uri(self.uri, self.start, self.end, 1001)
         with tempfile.TemporaryDirectory() as tmp, patch.object(common, 'find_ffmpeg', return_value='ffmpeg'), patch.object(common, 'run_background', return_value=Mock(returncode=1, stderr=b'rtsp://admin:secret@host Unsupported (HEVC) NAL type (62)')):
-            with self.assertRaisesRegex(RuntimeError, '^rtsp_playback_failed:unsupported_hevc_payload$'):
+            with self.assertRaisesRegex(RuntimeError, '^rtsp_playback_failed:unsupported_hevc_payload:.*"nal":\\[62\\]') as caught:
                 hik.download_playback_stream(uri, pathlib.Path(tmp)/'raw.mp4', 30)
+            self.assertNotIn('secret', str(caught.exception))
 
     def test_agent_uses_bounded_start_even_if_file_started_four_hours_earlier(self):
         now = datetime.now(timezone.utc) - timedelta(minutes=10)

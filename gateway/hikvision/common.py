@@ -9,6 +9,8 @@ import html
 import json
 import os
 import pathlib
+import ipaddress
+import re
 import subprocess
 import shutil
 import sys
@@ -212,6 +214,37 @@ class HikvisionClient:
         r.raise_for_status()
         return r.text
 
+    def playback_diagnostics(self, channel_id: int) -> dict[str, Any]:
+        """Read-only, allowlisted facts; never send credentials or raw XML/logs."""
+        facts: dict[str, Any] = {"channel": int(channel_id)}
+        try:
+            facts["host"] = str(ipaddress.ip_address(urlsplit(self.host).hostname or ""))
+        except ValueError:
+            facts["host"] = "hostname"
+        for label, path in (("stream", f"/ISAPI/Streaming/channels/{int(channel_id) * 100 + 1}"),
+                            ("device", "/ISAPI/System/deviceInfo")):
+            try:
+                response = self.session.get(self.host + path, timeout=8)
+                facts[label + "_http"] = int(response.status_code)
+                if response.status_code != 200:
+                    continue
+                root = ET.fromstring(response.text)
+                if label == "stream":
+                    facts["configured_codecs"] = sorted({
+                        node.text.strip().upper() for node in root.iter()
+                        if node.tag.split("}")[-1] == "videoCodecType" and node.text
+                        and node.text.strip().upper() in {"H.264", "H.265", "H264", "H265", "MJPEG"}
+                    })
+                else:
+                    for node in root.iter():
+                        if node.tag.split("}")[-1] == "firmwareVersion" and node.text:
+                            match = re.fullmatch(r"[Vv]?\d+\.\d+(?:\.\d+)?", node.text.strip())
+                            if match:
+                                facts["firmware"] = match.group(0)
+            except Exception:
+                facts[label + "_read"] = "unavailable"
+        return facts
+
     def _search_request(self, track_id: int, start: datetime, end: datetime, xmlns: Optional[str]) -> str:
         ns = f' version="1.0" xmlns="{xmlns}"' if xmlns else ""
         sid = "{" + str(uuid.uuid4()).upper() + "}"
@@ -402,7 +435,7 @@ class HikvisionClient:
             output_path.unlink(missing_ok=True)
             try:
                 result = run_background(
-                    [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                    [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "info", "-y",
                      "-rtsp_transport", transport, "-rtsp_flags", "filter_src",
                      "-timeout", "20000000",
                      "-err_detect", "ignore_err", "-fflags", "+discardcorrupt+genpts",
@@ -442,7 +475,15 @@ class HikvisionClient:
                 log(f"rtsp_playback_retry_transport=udp reason={reason}")
                 continue
             break
-        raise RuntimeError("rtsp_playback_failed:" + reason) from None
+        details: dict[str, Any] = {}
+        if reason == "unsupported_hevc_payload":
+            # Numeric NAL types distinguish malformed HEVC from mismatched SDP.
+            # Only these fixed enums/numbers survive; raw stderr stays local.
+            details["nal"] = sorted({int(x) for x in re.findall(
+                r"Unsupported \(HEVC\) NAL type \((\d{1,2})\)", stderr) if 0 <= int(x) <= 63})
+            details["input_codec"] = sorted(set(re.findall(r"Video: (hevc|h264)\b", stderr)))
+        suffix = ":" + json.dumps(details, separators=(",", ":")) if any(details.values()) else ""
+        raise RuntimeError("rtsp_playback_failed:" + reason + suffix) from None
 
 
 def sha256_file(path: pathlib.Path) -> str:
@@ -514,4 +555,3 @@ def prepare_browser_clip(source: pathlib.Path, target: pathlib.Path,
     except Exception:
         target.unlink(missing_ok=True)
         raise
-

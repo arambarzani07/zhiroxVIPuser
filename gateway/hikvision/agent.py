@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import json
 import threading
 import time
 from datetime import datetime, timezone
@@ -301,6 +302,12 @@ def process_job(
             )
         except Exception as exc:
             message = f"{type(exc).__name__}:{exc}"[:900]
+            if "rtsp_playback_failed:unsupported_hevc_payload" in message:
+                try:
+                    message = message[:450] + ":diag=" + json.dumps(
+                        hik.playback_diagnostics(channel_id), separators=(",", ":"))
+                except Exception:
+                    pass
             try:
                 cloud.call(
                     "fail",
