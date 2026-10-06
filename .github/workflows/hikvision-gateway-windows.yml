@@ -9,7 +9,7 @@ on:
       - '.github/workflows/hikvision-gateway-windows.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -59,10 +59,10 @@ jobs:
         working-directory: gateway/hikvision
         run: pyinstaller --clean --onefile --name zhirox-hikvision-autostart autostart.py
 
-      - name: Test recorder diagnostics
+      - name: Test recorder and self-update diagnostics
         shell: pwsh
         working-directory: gateway/hikvision
-        run: python -m unittest test_diagnose.py test_secret_input.py test_playback.py test_time_window.py test_osd_time.py test_background_process.py
+        run: python -m unittest test_diagnose.py test_secret_input.py test_playback.py test_time_window.py test_osd_time.py test_background_process.py test_self_update.py
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -80,10 +80,15 @@ jobs:
         working-directory: gateway/hikvision
         run: pyinstaller --clean --onefile --add-data "ocr;ocr" --name zhirox-hikvision-time-sync time_sync.py
 
+      - name: Build self-update helper
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: pyinstaller --clean --onefile --noconsole --name zhirox-hikvision-updater updater.py
+
       - name: Build background gateway
         shell: pwsh
         working-directory: gateway/hikvision
-        run: pyinstaller --clean --onefile --noconsole --add-data "ocr;ocr" --name zhirox-hikvision-gateway agent.py
+        run: pyinstaller --clean --onefile --noconsole --add-data "ocr;ocr" --name zhirox-hikvision-gateway bootstrap.py
 
       - name: Check Windows executables and DPAPI
         shell: pwsh
@@ -93,6 +98,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "diagnostic executable smoke test failed" }
           .\dist\zhirox-hikvision-time-sync.exe --help
           if ($LASTEXITCODE -ne 0) { throw "time sync executable smoke test failed" }
+          .\dist\zhirox-hikvision-updater.exe --help
+          if ($LASTEXITCODE -ne 0) { throw "updater executable smoke test failed" }
           python -c "from common import protect_secret, unprotect_secret; assert unprotect_secret(protect_secret('windows-build-test')) == 'windows-build-test'; print('DPAPI round-trip passed')"
           if ($LASTEXITCODE -ne 0) { throw "DPAPI smoke test failed" }
           $image = (Resolve-Path native-ocr-fixture.png).Path
@@ -107,6 +114,7 @@ jobs:
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-autostart.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-diagnose.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-time-sync.exe artifacts/hikvision-gateway/
+          Copy-Item gateway/hikvision/dist/zhirox-hikvision-updater.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-gateway.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/README.md artifacts/hikvision-gateway/ -ErrorAction SilentlyContinue
           Copy-Item gateway/hikvision/01-check-nvr.cmd artifacts/hikvision-gateway/
@@ -122,6 +130,28 @@ jobs:
           path: artifacts/hikvision-gateway
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish Gateway self-update release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/user-source'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: |
+          $repo = "arambarzani07/zhiroxVIPuser"
+          $version = (python -c "import bootstrap; print(bootstrap.GATEWAY_VERSION)").Trim()
+          if (-not $version) { throw "Gateway version missing" }
+          $tag = "hikvision-gateway-v$version"
+          $title = "ZHIROX Hikvision Gateway $version"
+          $notes = "Automatic Windows Gateway release. Clients verify the GitHub-provided SHA-256 asset digest and run NVR/cloud preflight before atomic replacement."
+
+          gh release view $tag --repo $repo *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag .\dist\zhirox-hikvision-gateway.exe .\dist\zhirox-hikvision-updater.exe --clobber --repo $repo
+          } else {
+            gh release create $tag .\dist\zhirox-hikvision-gateway.exe .\dist\zhirox-hikvision-updater.exe --repo $repo --target $env:GITHUB_SHA --title $title --notes $notes
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Gateway release publish failed" }
 
   playback-integration:
     runs-on: ubuntu-latest
