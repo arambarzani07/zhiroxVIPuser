@@ -7,6 +7,7 @@ import sys
 
 from autostart import install_resilient_task, start_task
 from common import CONFIG_PATH, CloudClient, GatewayConfig, HikvisionClient
+from runtime_hardening import save_config_atomic
 
 
 def ask(prompt: str, default: str = "") -> str:
@@ -70,8 +71,8 @@ def main() -> int:
         raise RuntimeError("cloud_gateway_ping_failed")
     print("Cloud gateway: OK")
 
-    cfg.save()
-    print(f"Encrypted config saved to: {CONFIG_PATH}")
+    save_config_atomic(cfg)
+    print(f"Encrypted config saved atomically to: {CONFIG_PATH}")
 
     base = pathlib.Path(sys.executable).resolve().parent
     agent = base / "zhirox-hikvision-gateway.exe"
