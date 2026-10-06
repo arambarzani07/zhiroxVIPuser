@@ -5,6 +5,7 @@ import pathlib
 import tempfile
 import time
 import unittest
+from datetime import datetime
 from unittest import mock
 
 import bootstrap
@@ -64,6 +65,33 @@ class RuntimeResilienceTest(unittest.TestCase):
             self.assertGreaterEqual(bootstrap._worker_progress_age(), 4)
         finally:
             bootstrap._last_worker_progress = old_progress
+
+    def test_nvr_clock_drift_measurement_is_read_only(self):
+        class Response:
+            status_code = 200
+            def raise_for_status(self):
+                return None
+
+        class Session:
+            def __init__(self):
+                self.calls = []
+            def get(self, url, timeout):
+                self.calls.append((url, timeout))
+                now = datetime.now(runtime_hardening.BAGHDAD_TZ).replace(microsecond=0)
+                Response.content = (
+                    "<?xml version='1.0' encoding='UTF-8'?>"
+                    "<Time><localTime>" + now.isoformat() + "</localTime></Time>"
+                ).encode("utf-8")
+                return Response()
+
+        class Hik:
+            host = "http://192.168.1.2"
+            session = Session()
+
+        drift = runtime_hardening.measure_nvr_clock_drift(Hik())
+        self.assertLessEqual(drift, 2.0)
+        self.assertEqual(len(Hik.session.calls), 1)
+        self.assertIn("/ISAPI/System/time", Hik.session.calls[0][0])
 
 
 if __name__ == "__main__":
