@@ -309,6 +309,8 @@ def process_job(
                         diagnostics["file_clock_status"] = source_clock_alignment.get("status")
                         diagnostics["file_clock_reason"] = source_clock_alignment.get("reason")
                         diagnostics["file_clock_samples"] = source_clock_alignment.get("samples_read", 0)
+                        diagnostics["file_first_clock"] = source_clock_alignment.get("first_displayed_at")
+                        diagnostics["file_first_offset"] = source_clock_alignment.get("first_sample_offset_seconds")
                     message = message[:450] + ":diag=" + json.dumps(diagnostics, separators=(",", ":"))
                 except Exception:
                     pass

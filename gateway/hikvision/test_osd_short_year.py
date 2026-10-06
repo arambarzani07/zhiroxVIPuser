@@ -1,6 +1,11 @@
 import unittest
+import pathlib
+import shutil
+import subprocess
+import tempfile
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
-from osd_time import dates_in_text, align_readings, compare_readings
+from osd_time import dates_in_text, align_readings, compare_readings, read_image_clock, ocr_image
 
 class ShortYearClockTests(unittest.TestCase):
     tz = timezone(timedelta(hours=3))
@@ -29,6 +34,31 @@ class ShortYearClockTests(unittest.TestCase):
         self.assertEqual(dates_in_text('10-06-2O 23:14:30', self.tz), [])
         frozen = [(0,'10-06-26 23:14:30'), (3,'10-06-26 23:14:30')]
         self.assertEqual(align_readings(frozen, self.start, self.tz)['status'], 'unknown')
+
+    @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('tesseract'), 'native FFmpeg/Tesseract fixture')
+    def test_native_small_clock_on_busy_video_background(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp)
+            readings = []
+            for second in (0, 3, 7):
+                clock = workspace / 'clock.txt'
+                clock.write_text(f'10-06-26 Tue 23:14:{30+second:02d}', encoding='utf-8')
+                image = workspace / f'frame-{second}.png'
+                # textfile avoids shell/filter interpolation of clock punctuation.
+                filter_path = str(clock).replace('\\', '/').replace(':', '\\:')
+                filters = f"drawtext=textfile='{filter_path}':fontsize=18:fontcolor=white:borderw=1:bordercolor=black:x=28:y=22"
+                subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'error', '-y',
+                    '-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=1',
+                    '-vf', filters, '-frames:v', '1', str(image)], check=True, capture_output=True, timeout=20)
+                # Simulate unreadable full-width OCR, then exercise the actual
+                # native corner crop and sparse-text OCR recovery end to end.
+                def sparse_only(path, psm=6):
+                    return '' if psm == 6 else ocr_image(path, psm)
+                with patch('osd_time.ocr_image', side_effect=sparse_only):
+                    readings.append((second, read_image_clock(image, workspace)))
+            result = align_readings(readings, self.start, self.tz)
+            self.assertEqual(result['status'], 'aligned', str(readings))
+            self.assertEqual(result['offset_seconds'], 0)
 
 if __name__ == '__main__':
     unittest.main()

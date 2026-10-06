@@ -14,10 +14,10 @@ from common import find_ffmpeg, run_background
 BAGHDAD_OFFSET = timezone(timedelta(hours=3))
 
 
-def ocr_image(path: pathlib.Path) -> str:
+def ocr_image(path: pathlib.Path, psm: int = 6) -> str:
     root = pathlib.Path(getattr(sys, '_MEIPASS', pathlib.Path(__file__).resolve().parent))
     bundled = root / 'ocr' / 'tesseract.exe'
-    command = [str(bundled) if bundled.exists() else 'tesseract', str(path), 'stdout', '--psm', '6', '-l', 'eng']
+    command = [str(bundled) if bundled.exists() else 'tesseract', str(path), 'stdout', '--psm', str(psm), '-l', 'eng']
     if bundled.exists():
         command += ['--tessdata-dir', str(root / 'ocr' / 'tessdata')]
     result = run_background(command, capture_output=True, timeout=25,
@@ -60,6 +60,27 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path) -> str:
             '-vf',f'crop=iw:ih*0.22:0:{position},scale=2400:-1','-frames:v','1',str(target)],capture_output=True,timeout=20)
         if r.returncode == 0:
             parts.append(ocr_image(target))
+    if dates_in_text(' '.join(parts), BAGHDAD_OFFSET):
+        return ' '.join(parts)
+    # A full-width crop can shrink small OSD letters and includes shelf labels.
+    # Retry the clock corner at higher resolution using sparse-text segmentation.
+    # Inversion helps white overlay text; both variants retain the original pixels.
+    for inverted in (False, True):
+        target = workspace / ('osd-corner-inverted.png' if inverted else 'osd-corner.png')
+        filters = 'crop=iw*0.60:ih*0.18:0:0,scale=3200:-1,format=gray'
+        if inverted:
+            filters += ',negate'
+        r = run_background([find_ffmpeg(), '-nostdin', '-loglevel', 'error', '-y',
+            '-i', str(image), '-vf', filters, '-frames:v', '1', str(target)],
+            capture_output=True, timeout=20)
+        if r.returncode == 0:
+            try:
+                text = ocr_image(target, psm=11)
+                parts.append(text)
+                if dates_in_text(text, BAGHDAD_OFFSET):
+                    break
+            except Exception:
+                pass
     return ' '.join(parts)
 
 
@@ -98,6 +119,9 @@ def align_readings(readings: list[tuple[float,str]], start: datetime, offset=BAG
         if picked is not None:
             parsed.append((float(seconds), picked[0], picked[1]))
     base = {'status':'unknown','method':'osd_ocr_alignment','samples_read':len(parsed),'tolerance_seconds':5}
+    if parsed:
+        base['first_displayed_at'] = parsed[0][2].isoformat()
+        base['first_sample_offset_seconds'] = round((parsed[0][2] - start.astimezone(offset)).total_seconds() - parsed[0][0], 1)
     if len(parsed) < 2:
         return {**base,'reason':'insufficient_clock_readings'}
     orders = {fmt for _,fmt,_ in parsed}

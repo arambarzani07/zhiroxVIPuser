@@ -293,7 +293,7 @@ jobs:
         run: |
           pip install requests
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg tesseract-ocr
       - name: Test HEVC conversion and failure handling
         working-directory: gateway/hikvision
-        run: python -m unittest test_playback.py
+        run: python -m unittest test_playback.py test_osd_short_year.py
