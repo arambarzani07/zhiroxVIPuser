@@ -9,8 +9,6 @@ import os
 import pathlib
 import shutil
 import subprocess
-import sys
-import time
 from datetime import datetime, timezone
 
 TASK_NAME_DEFAULT = "ZHIROX Hikvision Gateway"
@@ -44,17 +42,27 @@ def verify_file(path: pathlib.Path, expected_sha256: str) -> None:
 def wait_for_parent(pid: int, timeout_seconds: int = 90) -> None:
     if os.name != "nt" or pid <= 0:
         return
-    PROCESS_SYNCHRONIZE = 0x00100000
-    handle = ctypes.windll.kernel32.OpenProcess(PROCESS_SYNCHRONIZE, False, pid)
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    SYNCHRONIZE = 0x00100000
+    WAIT_OBJECT_0 = 0x00000000
+    handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
     if not handle:
+        # The parent may already have exited between handoff and OpenProcess.
         return
     try:
-        WAIT_OBJECT_0 = 0x00000000
-        result = ctypes.windll.kernel32.WaitForSingleObject(handle, timeout_seconds * 1000)
+        result = kernel32.WaitForSingleObject(handle, timeout_seconds * 1000)
         if result != WAIT_OBJECT_0:
             raise RuntimeError("gateway_exit_timeout")
     finally:
-        ctypes.windll.kernel32.CloseHandle(handle)
+        kernel32.CloseHandle(handle)
 
 
 def run_schtasks(*args: str) -> subprocess.CompletedProcess:
