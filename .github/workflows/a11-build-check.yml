@@ -17,7 +17,7 @@ jobs:
           cache: true
       - run: flutter --version
       - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos lib/main_a11.dart lib/services/a11_camera_service.dart lib/services/a11_camera_coordinator.dart lib/screens/admin/a11_camera_setup_screen.dart
+      - run: flutter analyze --no-fatal-infos lib/main_a11.dart lib/services/a11_camera_service.dart lib/services/a11_camera_coordinator.dart lib/services/camera_source_service.dart lib/screens/admin/a11_camera_setup_screen.dart lib/screens/admin/camera_source_settings_screen.dart
       - run: flutter build apk --debug -t lib/main_a11.dart
 
   ios-no-codesign:
