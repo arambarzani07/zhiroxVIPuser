@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import pathlib
 import sys
 import time
@@ -49,6 +50,12 @@ def _patched_cloud_call(self, action: str, *args, **kwargs):
 def preflight_update() -> int:
     if not CONFIG_PATH.exists():
         return 2
+    # A staged binary proves that it can authenticate to the same recorder and
+    # cloud, but it must not report the new version as installed until the atomic
+    # replacement actually succeeds.
+    report_version = os.environ.get("ZHIROX_PREFLIGHT_REPORT_VERSION", "").strip()
+    if report_version:
+        common.GATEWAY_VERSION = report_version
     cfg = GatewayConfig.load()
     HikvisionClient(cfg).device_info()
     ping = CloudClient(cfg).call("ping")
