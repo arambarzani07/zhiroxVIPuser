@@ -146,7 +146,7 @@ class TimeWindowTest(unittest.TestCase):
             cloud.upload.assert_called_once()
             complete = next(c for c in cloud.call.call_args_list if c.args[0] == 'complete')
             self.assertFalse(complete.kwargs['playback_metadata']['media_time_verified'])
-            self.assertEqual(complete.kwargs['playback_metadata']['gateway_build'], 'http-query-1')
+            self.assertEqual(complete.kwargs['playback_metadata']['gateway_build'], 'http-file-fallback-1')
 
     def test_namespace_retry_preserves_bounded_uri(self):
         hik = common.HikvisionClient(common.GatewayConfig('192.168.1.3', 'admin', 'secret', ''))
