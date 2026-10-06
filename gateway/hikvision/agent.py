@@ -22,7 +22,7 @@ from common import (
 
 # Protocol 1.1 enables DB-backed per-attempt fencing while the shared setup
 # helpers remain compatible with already-installed 1.0 gateway packages.
-gateway_common.GATEWAY_VERSION = "1.3.2+osd-align-1"
+gateway_common.GATEWAY_VERSION = "1.3.3+bounded-fallback-1"
 
 POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 30
@@ -128,7 +128,7 @@ def process_job(
                 channel_id * 100 + 1,
             )
             log(
-                f"job={job_id} build=osd-align-1 download_mode=time "
+                f"job={job_id} build=bounded-fallback-1 download_mode=time "
                 f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}"
             )
             download_mode = "time"
@@ -176,24 +176,49 @@ def process_job(
                 raise RuntimeError("empty_download")
 
             # Old DS-7616 firmware can return a valid historical file while its
-            # ContentMgmt segment_start metadata points hours later than the file's
-            # real first frame. Align file exports from the OSD embedded in the media
-            # itself before trimming. This fixes repeated/duplicate 30-second clips.
+            # ContentMgmt segment_start metadata points to the wrong place. Prefer
+            # OSD alignment for file exports. If the OSD is unreadable, do not trust
+            # the file metadata: retry the same exact historical window over bounded
+            # RTSP instead. This preserves the duplicate-content guard and avoids
+            # accepting a stale 30-second clip merely because OCR was unavailable.
             if download_mode.startswith("http_file"):
                 source_clock_alignment = infer_media_start_from_osd(
                     raw_path,
                     clip_start,
                     requested_duration,
                 )
-                if source_clock_alignment.get("status") != "aligned":
-                    raise RuntimeError("source_clock_alignment_unavailable")
-                download_segment_start = parse_iso(
-                    str(source_clock_alignment["media_start_at"])
-                )
-                log(
-                    f"job={job_id} osd_source_offset_seconds="
-                    f"{source_clock_alignment.get('offset_seconds')}"
-                )
+                if source_clock_alignment.get("status") == "aligned":
+                    download_segment_start = parse_iso(
+                        str(source_clock_alignment["media_start_at"])
+                    )
+                    log(
+                        f"job={job_id} osd_source_offset_seconds="
+                        f"{source_clock_alignment.get('offset_seconds')}"
+                    )
+                else:
+                    reason = str(
+                        source_clock_alignment.get("reason")
+                        or "clock_reading_unavailable"
+                    )[:120]
+                    log(
+                        f"job={job_id} file_osd_alignment={reason}; "
+                        "retrying bounded RTSP playback"
+                    )
+                    raw_path.unlink(missing_ok=True)
+                    download_mode = "rtsp_time"
+                    download_segment_start = clip_start
+                    hik.download_playback_stream(
+                        playback_uri,
+                        raw_path,
+                        requested_duration,
+                    )
+                    if not raw_path.exists() or raw_path.stat().st_size <= 0:
+                        raise RuntimeError("empty_download")
+                    source_clock_alignment = {
+                        **source_clock_alignment,
+                        "fallback": "bounded_rtsp",
+                        "bounded_window_verified": True,
+                    }
 
             media = prepare_browser_clip(
                 raw_path,
@@ -214,11 +239,22 @@ def process_job(
                 raise RuntimeError("clip_duration_mismatch")
             if clock_check["status"] == "mismatch":
                 raise RuntimeError("clip_clock_mismatch")
+
+            bounded_window_verified = (
+                download_mode in {"time", "http_query_time", "rtsp_time"}
+                and abs(
+                    (
+                        download_segment_start.astimezone(timezone.utc)
+                        - clip_start.astimezone(timezone.utc)
+                    ).total_seconds()
+                ) <= 0.05
+            )
             if (
-                download_mode in {"rtsp_time", "http_query_time"}
-                or download_mode.startswith("http_file")
-            ) and clock_check["status"] != "matched":
+                clock_check["status"] != "matched"
+                and not bounded_window_verified
+            ):
                 raise RuntimeError("playback_clip_clock_unverified")
+
             upload_path = exact_path
 
             prepared = cloud.call("prepare_upload", job_id=job_id, **attempt_args)
@@ -240,11 +276,12 @@ def process_job(
                 duration_seconds=media["duration_seconds"],
                 playback_metadata={
                     "provider": "hikvision_isapi",
-                    "gateway_build": "osd-align-1",
+                    "gateway_build": "bounded-fallback-1",
                     "download_mode": download_mode,
                     "download_start": download_segment_start.replace(microsecond=0).isoformat(),
                     "source_clock_alignment": source_clock_alignment,
                     "media_time_verified": clock_check["status"] == "matched",
+                    "bounded_window_verified": bounded_window_verified,
                     "clock_check": clock_check,
                     "track_id": search.get("track_id"),
                     "segment_start": search.get("segment_start"),
