@@ -133,7 +133,10 @@ class TimeWindowTest(unittest.TestCase):
         hik, cloud = Mock(), Mock()
         hik.search_recording.return_value = {'found': True, 'playback_uri': self.uri,
             'segment_start': (now-timedelta(hours=4)).isoformat(), 'segment_end': (now+timedelta(hours=1)).isoformat()}
-        hik.download_recording.side_effect = lambda uri, path: path.write_bytes(b'raw')
+        def bounded_download(uri, path):
+            path.write_bytes(b'raw')
+            return 'time'
+        hik.download_recording.side_effect = bounded_download
         cloud.call.return_value = {'signed_upload_url': 'private', 'object_path': 'clip'}
         def prepare(source, target, start, download_start, duration):
             self.assertEqual(common.parse_iso(download_start), start.replace(microsecond=0))
@@ -141,12 +144,12 @@ class TimeWindowTest(unittest.TestCase):
             return {'duration_seconds': duration, 'exact_trim': True}
         job = {'job_id': 'bounded', 'transaction_at': now.isoformat(), 'clip_start_at': now.isoformat(),
                'clip_end_at': (now+timedelta(seconds=30)).isoformat(), 'channel_id': 10}
-        with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'prepare_browser_clip', side_effect=prepare):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'prepare_browser_clip', side_effect=prepare), patch.object(agent, 'verify_clip_time', return_value={'status': 'unknown'}):
             agent.process_job(cloud, Mock(), hik, job)
             cloud.upload.assert_called_once()
             complete = next(c for c in cloud.call.call_args_list if c.args[0] == 'complete')
             self.assertFalse(complete.kwargs['playback_metadata']['media_time_verified'])
-            self.assertEqual(complete.kwargs['playback_metadata']['gateway_build'], 'http-file-fallback-1')
+            self.assertEqual(complete.kwargs['playback_metadata']['gateway_build'], 'osd-align-1')
 
     def test_namespace_retry_preserves_bounded_uri(self):
         hik = common.HikvisionClient(common.GatewayConfig('192.168.1.3', 'admin', 'secret', ''))
@@ -229,4 +232,3 @@ class TimeWindowTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
