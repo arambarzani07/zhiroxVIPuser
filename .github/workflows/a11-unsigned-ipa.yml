@@ -1,0 +1,66 @@
+name: A11 Dual Camera Unsigned IPA
+
+on:
+  push:
+    branches: [a11-direct-camera]
+    paths:
+      - '.github/workflows/a11-unsigned-ipa.yml'
+      - 'lib/**'
+      - 'ios/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a11-dual-camera-unsigned-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
+      - name: Build A11 dual-camera iOS release without signing
+        run: flutter build ios --release --no-codesign -t lib/main_a11.dart
+
+      - name: Package unsigned IPA
+        run: |
+          rm -rf Payload ZHIROX-A11-Dual-Camera.ipa
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload ZHIROX-A11-Dual-Camera.ipa
+          test -s ZHIROX-A11-Dual-Camera.ipa
+          shasum -a 256 ZHIROX-A11-Dual-Camera.ipa > ZHIROX-A11-Dual-Camera.ipa.sha256
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZHIROX-A11-Dual-Camera-unsigned-ipa
+          path: |
+            ZHIROX-A11-Dual-Camera.ipa
+            ZHIROX-A11-Dual-Camera.ipa.sha256
+          if-no-files-found: error
+          retention-days: 7
