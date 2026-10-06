@@ -57,8 +57,7 @@ def wait_for_parent(pid: int, timeout_seconds: int = 90) -> None:
     handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
     if not handle:
         error = ctypes.get_last_error()
-        # ERROR_INVALID_PARAMETER means the PID no longer exists.
-        if error == 87:
+        if error == 87:  # ERROR_INVALID_PARAMETER: PID already gone.
             return
         raise OSError(error, "OpenProcess failed while waiting for Gateway exit")
     try:
@@ -87,9 +86,6 @@ def start_gateway_task(task_name: str) -> None:
         if result.returncode == 0:
             return
         last_text = (result.stderr or result.stdout or "").strip()
-        # Task Scheduler can briefly keep the old instance registered as running
-        # after the process exits. Retry rather than treating that transition as
-        # an update failure.
         time.sleep(2)
     raise RuntimeError(f"scheduled_task_start_failed:{last_text[:240]}")
 
@@ -124,10 +120,13 @@ def apply_update(args: argparse.Namespace) -> int:
         raise RuntimeError("installed_gateway_missing")
 
     previous_sha = sha256_file(current)
-    backup.unlink(missing_ok=True)
-    os.replace(current, backup)
     replaced = False
+    moved_old = False
     try:
+        backup.unlink(missing_ok=True)
+        os.replace(current, backup)
+        moved_old = True
+
         replace_file(new_gateway, current)
         verify_file(current, args.sha256)
         replaced = True
@@ -156,9 +155,13 @@ def apply_update(args: argparse.Namespace) -> int:
                 failed = current.with_suffix(current.suffix + ".failed")
                 failed.unlink(missing_ok=True)
                 os.replace(current, failed)
-            if backup.exists():
+            if moved_old and backup.exists():
                 os.replace(backup, current)
-            start_gateway_task(args.task_name)
+            # If moving the old EXE failed, it is still in place. If replacing
+            # the new EXE failed, the backup was restored above. In both cases
+            # restart the known-good scheduled task.
+            if current.exists():
+                start_gateway_task(args.task_name)
             write_state({
                 "status": "rolled_back",
                 "from_version": args.from_version,
