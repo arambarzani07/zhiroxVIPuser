@@ -5,14 +5,23 @@ import json
 import os
 import pathlib
 import shutil
+import xml.etree.ElementTree as ET
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from common import APP_DIR, CONFIG_PATH, CLOUD_URL, GatewayConfig, protect_secret
+from common import (
+    APP_DIR,
+    CONFIG_PATH,
+    CLOUD_URL,
+    GatewayConfig,
+    local_name,
+    protect_secret,
+)
 
 CONFIG_BACKUP_PATH = APP_DIR / "config.json.bak"
 _MUTEX_NAME = "Local\\ZHIROX-Hikvision-Gateway"
 _mutex_handle = None
+BAGHDAD_TZ = timezone(timedelta(hours=3))
 
 
 def acquire_single_instance() -> bool:
@@ -109,6 +118,35 @@ def recover_or_backup_config(log) -> None:
         shutil.copy2(CONFIG_BACKUP_PATH, temp)
         os.replace(temp, CONFIG_PATH)
         log("config_recovered_from_known_good_backup=true")
+
+
+def measure_nvr_clock_drift(hik) -> float:
+    """Read the NVR clock without changing it and return wall-clock drift seconds.
+
+    Older Hikvision firmware can expose a misleading numeric offset while the
+    displayed local wall clock is correct, so compare wall-clock fields exactly
+    as the existing time-sync verifier does. This function never performs PUT.
+    """
+    endpoint = f"{hik.host}/ISAPI/System/time"
+    response = hik.session.get(endpoint, timeout=15)
+    response.raise_for_status()
+    root = ET.fromstring(response.content)
+    local_text = ""
+    for node in root.iter():
+        if local_name(node.tag) == "localTime":
+            local_text = (node.text or "").strip()
+            break
+    if not local_text:
+        raise RuntimeError("nvr_time_missing")
+    actual = datetime.fromisoformat(local_text.replace("Z", "+00:00"))
+    expected = datetime.now(BAGHDAD_TZ)
+    drift = abs(
+        (
+            actual.replace(tzinfo=None, microsecond=0)
+            - expected.replace(tzinfo=None, microsecond=0)
+        ).total_seconds()
+    )
+    return round(float(drift), 1)
 
 
 @contextmanager
