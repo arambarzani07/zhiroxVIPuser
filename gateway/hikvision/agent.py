@@ -4,7 +4,7 @@ import pathlib
 import json
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from osd_time import infer_media_start_from_osd, verify_clip_time
 import common as gateway_common
@@ -76,6 +76,27 @@ def _attempt_args(attempt_token: str) -> dict[str, str]:
     return {"attempt_token": attempt_token} if attempt_token else {}
 
 
+def _retry_recorder_local_clock(exc: Exception, alignment: dict, query_shift: int = 0) -> bool:
+    """Try the recorder wall-clock convention only with observed clock evidence.
+
+    Some older NVRs treat timestamps ending in Z as local clock fields. The
+    alternate request remains the same channel and duration. Its output MUST
+    match the original transaction's OSD clock; unknown clocks cannot upload.
+    """
+    reason = str(exc)
+    failures = {"clip_conversion_failed", "clip_decode_validation_failed",
+                "clip_duration_mismatch", "clip_clock_mismatch",
+                "playback_clip_clock_unverified", "invalid_clip_window"}
+    if reason not in failures and not reason.startswith("rtsp_playback_failed:unsupported_hevc_payload"):
+        return False
+    observed = alignment.get("first_sample_offset_seconds", alignment.get("offset_seconds"))
+    if not isinstance(observed, (int, float)) or isinstance(observed, bool):
+        return False
+    # UTC+3 plus an ordinary file lead-in; this is a retry heuristic, never proof.
+    shifted = (-4 * 3600 <= observed <= -2 * 3600) if query_shift == 0 else (2 * 3600 <= observed <= 4 * 3600)
+    return shifted and int(alignment.get("samples_read") or 0) >= 1
+
+
 def process_job(
     cloud: CloudClient,
     heartbeat_cloud: CloudClient,
@@ -103,158 +124,182 @@ def process_job(
             if wait_seconds > 0:
                 time.sleep(wait_seconds)
 
-            search = hik.search_recording(channel_id, clip_start, clip_end, transaction_at)
-            if not search.get("found"):
-                age = (
-                    datetime.now(timezone.utc) - transaction_at.astimezone(timezone.utc)
-                ).total_seconds()
-                cloud.call(
-                    "fail",
-                    job_id=job_id,
-                    error="recording_not_found",
-                    missing=age > 300,
-                    **attempt_args,
-                )
-                log(
-                    f"job={job_id} attempt={attempt_generation} "
-                    f"recording not found age={int(age)}s"
-                )
-                return
-
-            original_playback_uri = str(search["playback_uri"])
-            playback_uri = bounded_playback_uri(
-                original_playback_uri,
-                clip_start,
-                clip_end,
-                channel_id * 100 + 1,
-            )
-            log(
-                f"job={job_id} build=bounded-fallback-1 download_mode=time "
-                f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}"
-            )
-            download_mode = "time"
-            requested_duration = max(1, int((clip_end - clip_start).total_seconds()))
-            download_segment_start = clip_start
             source_clock_alignment: dict = {}
-
-            try:
-                download_mode = hik.download_recording(playback_uri, raw_path) or "time"
-            except RuntimeError as exc:
-                if not str(exc).startswith("download_rejected:"):
-                    raise
-
-                log(
-                    f"job={job_id} bounded HTTP export rejected; "
-                    "trying original ISAPI file export"
-                )
-                raw_path.unlink(missing_ok=True)
+            query_shift = 0
+            preferred_shift = 3 * 3600 if getattr(hik, "_verified_playback_clock_offset", 0) == 3 * 3600 else 0
+            for candidate_index, query_shift in enumerate((preferred_shift, 3 * 3600 - preferred_shift)):
+                source_clock_alignment = {}
+                clock_check = {}
                 try:
-                    file_mode = hik.download_recording(original_playback_uri, raw_path) or "time"
-                    download_mode = "http_file"
-                    if file_mode not in {"time", "http_query_time"}:
-                        download_mode = f"http_file_{file_mode}"
-                    segment_start = str(search.get("segment_start") or "").strip()
-                    if not segment_start:
-                        raise RuntimeError("recording_start_required")
-                    download_segment_start = parse_iso(segment_start)
-                except RuntimeError as file_exc:
-                    raw_path.unlink(missing_ok=True)
-                    file_error = str(file_exc)
-                    if not (
-                        file_error.startswith("download_rejected:")
-                        or file_error.startswith("invalid_http_playback_window")
-                    ):
-                        raise
-                    log(
-                        f"job={job_id} original ISAPI file export rejected; "
-                        "trying bounded RTSP playback"
-                    )
-                    download_mode = "rtsp_time"
-                    download_segment_start = clip_start
-                    hik.download_playback_stream(playback_uri, raw_path, requested_duration)
+                    query_start = clip_start + timedelta(seconds=query_shift)
+                    query_end = clip_end + timedelta(seconds=query_shift)
+                    query_transaction = transaction_at + timedelta(seconds=query_shift)
+                    search = hik.search_recording(channel_id, query_start, query_end, query_transaction)
+                    if not search.get("found"):
+                        age = (
+                            datetime.now(timezone.utc) - transaction_at.astimezone(timezone.utc)
+                        ).total_seconds()
+                        cloud.call(
+                            "fail",
+                            job_id=job_id,
+                            error="recording_not_found",
+                            missing=age > 300,
+                            **attempt_args,
+                        )
+                        log(
+                            f"job={job_id} attempt={attempt_generation} "
+                            f"recording not found age={int(age)}s"
+                        )
+                        return
 
-            if not raw_path.exists() or raw_path.stat().st_size <= 0:
-                raise RuntimeError("empty_download")
-
-            # Old DS-7616 firmware can return a valid historical file while its
-            # ContentMgmt segment_start metadata points to the wrong place. Prefer
-            # OSD alignment for file exports. If the OSD is unreadable, do not trust
-            # the file metadata: retry the same exact historical window over bounded
-            # RTSP instead. This preserves the duplicate-content guard and avoids
-            # accepting a stale 30-second clip merely because OCR was unavailable.
-            if download_mode.startswith("http_file"):
-                source_clock_alignment = infer_media_start_from_osd(
-                    raw_path,
-                    clip_start,
-                    requested_duration,
-                )
-                if source_clock_alignment.get("status") == "aligned":
-                    download_segment_start = parse_iso(
-                        str(source_clock_alignment["media_start_at"])
+                    original_playback_uri = str(search["playback_uri"])
+                    playback_uri = bounded_playback_uri(
+                        original_playback_uri,
+                        query_start,
+                        query_end,
+                        channel_id * 100 + 1,
                     )
                     log(
-                        f"job={job_id} osd_source_offset_seconds="
-                        f"{source_clock_alignment.get('offset_seconds')}"
+                        f"job={job_id} build=bounded-fallback-1 download_mode=time "
+                        f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}"
                     )
-                else:
-                    reason = str(
-                        source_clock_alignment.get("reason")
-                        or "clock_reading_unavailable"
-                    )[:120]
-                    log(
-                        f"job={job_id} file_osd_alignment={reason}; "
-                        "retrying bounded RTSP playback"
-                    )
-                    raw_path.unlink(missing_ok=True)
-                    download_mode = "rtsp_time"
+                    download_mode = "time"
+                    requested_duration = max(1, int((clip_end - clip_start).total_seconds()))
                     download_segment_start = clip_start
-                    hik.download_playback_stream(
-                        playback_uri,
-                        raw_path,
-                        requested_duration,
-                    )
+                    source_clock_alignment: dict = {}
+
+                    try:
+                        download_mode = hik.download_recording(playback_uri, raw_path) or "time"
+                    except RuntimeError as exc:
+                        if not str(exc).startswith("download_rejected:"):
+                            raise
+
+                        log(
+                            f"job={job_id} bounded HTTP export rejected; "
+                            "trying original ISAPI file export"
+                        )
+                        raw_path.unlink(missing_ok=True)
+                        try:
+                            file_mode = hik.download_recording(original_playback_uri, raw_path) or "time"
+                            download_mode = "http_file"
+                            if file_mode not in {"time", "http_query_time"}:
+                                download_mode = f"http_file_{file_mode}"
+                            segment_start = str(search.get("segment_start") or "").strip()
+                            if not segment_start:
+                                raise RuntimeError("recording_start_required")
+                            download_segment_start = parse_iso(segment_start)
+                        except RuntimeError as file_exc:
+                            raw_path.unlink(missing_ok=True)
+                            file_error = str(file_exc)
+                            if not (
+                                file_error.startswith("download_rejected:")
+                                or file_error.startswith("invalid_http_playback_window")
+                            ):
+                                raise
+                            log(
+                                f"job={job_id} original ISAPI file export rejected; "
+                                "trying bounded RTSP playback"
+                            )
+                            download_mode = "rtsp_time"
+                            download_segment_start = clip_start
+                            hik.download_playback_stream(playback_uri, raw_path, requested_duration)
+
                     if not raw_path.exists() or raw_path.stat().st_size <= 0:
                         raise RuntimeError("empty_download")
-                    source_clock_alignment = {
-                        **source_clock_alignment,
-                        "fallback": "bounded_rtsp",
-                        "bounded_window_verified": True,
-                    }
 
-            media = prepare_browser_clip(
-                raw_path,
-                exact_path,
-                clip_start,
-                download_segment_start.replace(microsecond=0).isoformat(),
-                requested_duration,
-            )
-            clock_check = verify_clip_time(
-                hik,
-                channel_id,
-                exact_path,
-                clip_start,
-                media["duration_seconds"],
-            )
-            log(f"job={job_id} clock_status={clock_check['status']}")
-            if not media["exact_trim"]:
-                raise RuntimeError("clip_duration_mismatch")
-            if clock_check["status"] == "mismatch":
-                raise RuntimeError("clip_clock_mismatch")
+                    # Old DS-7616 firmware can return a valid historical file while its
+                    # ContentMgmt segment_start metadata points to the wrong place. Prefer
+                    # OSD alignment for file exports. If the OSD is unreadable, do not trust
+                    # the file metadata: retry the same exact historical window over bounded
+                    # RTSP instead. This preserves the duplicate-content guard and avoids
+                    # accepting a stale 30-second clip merely because OCR was unavailable.
+                    if download_mode.startswith("http_file"):
+                        source_clock_alignment = infer_media_start_from_osd(
+                            raw_path,
+                            clip_start,
+                            requested_duration,
+                        )
+                        if source_clock_alignment.get("status") == "aligned":
+                            download_segment_start = parse_iso(
+                                str(source_clock_alignment["media_start_at"])
+                            )
+                            log(
+                                f"job={job_id} osd_source_offset_seconds="
+                                f"{source_clock_alignment.get('offset_seconds')}"
+                            )
+                        else:
+                            reason = str(
+                                source_clock_alignment.get("reason")
+                                or "clock_reading_unavailable"
+                            )[:120]
+                            log(
+                                f"job={job_id} file_osd_alignment={reason}; "
+                                "retrying bounded RTSP playback"
+                            )
+                            raw_path.unlink(missing_ok=True)
+                            download_mode = "rtsp_time"
+                            download_segment_start = clip_start
+                            hik.download_playback_stream(
+                                playback_uri,
+                                raw_path,
+                                requested_duration,
+                            )
+                            if not raw_path.exists() or raw_path.stat().st_size <= 0:
+                                raise RuntimeError("empty_download")
+                            source_clock_alignment = {
+                                **source_clock_alignment,
+                                "fallback": "bounded_rtsp",
+                                "bounded_window_verified": True,
+                            }
 
-            bounded_window_verified = (
-                download_mode in {"time", "http_query_time", "rtsp_time"}
-                and abs(
-                    (
-                        download_segment_start.astimezone(timezone.utc)
-                        - clip_start.astimezone(timezone.utc)
-                    ).total_seconds()
-                ) <= 0.05
-            )
-            if (
-                clock_check["status"] != "matched"
-                and not bounded_window_verified
-            ):
-                raise RuntimeError("playback_clip_clock_unverified")
+                    media = prepare_browser_clip(
+                        raw_path,
+                        exact_path,
+                        clip_start,
+                        download_segment_start.replace(microsecond=0).isoformat(),
+                        requested_duration,
+                    )
+                    clock_check = verify_clip_time(
+                        hik,
+                        channel_id,
+                        exact_path,
+                        clip_start,
+                        media["duration_seconds"],
+                    )
+                    log(f"job={job_id} clock_status={clock_check['status']}")
+                    if not media["exact_trim"]:
+                        raise RuntimeError("clip_duration_mismatch")
+                    if clock_check["status"] == "mismatch":
+                        raise RuntimeError("clip_clock_mismatch")
+
+                    bounded_window_verified = (
+                        query_shift == 0
+                        and download_mode in {"time", "http_query_time", "rtsp_time"}
+                        and abs(
+                            (
+                                download_segment_start.astimezone(timezone.utc)
+                                - clip_start.astimezone(timezone.utc)
+                            ).total_seconds()
+                        ) <= 0.05
+                    )
+                    if (
+                        clock_check["status"] != "matched"
+                        and not bounded_window_verified
+                    ):
+                        raise RuntimeError("playback_clip_clock_unverified")
+
+                    if query_shift:
+                        download_mode = "recorder_local_" + download_mode
+                        source_clock_alignment["query_clock_offset_seconds"] = query_shift
+                        source_clock_alignment["bounded_window_verified"] = False
+                    break
+                except Exception as capture_exc:
+                    observed_alignment = source_clock_alignment or clock_check
+                    if candidate_index or not _retry_recorder_local_clock(capture_exc, observed_alignment, query_shift):
+                        raise
+                    raw_path.unlink(missing_ok=True)
+                    exact_path.unlink(missing_ok=True)
+                    log(f"job={job_id} retry_clock_convention=true; original_transaction_clock_required=true")
 
             upload_path = exact_path
 
@@ -277,7 +322,9 @@ def process_job(
                 duration_seconds=media["duration_seconds"],
                 playback_metadata={
                     "provider": "hikvision_isapi",
-                    "gateway_build": "bounded-fallback-1",
+                    "gateway_build": "local-clock-fallback-1" if query_shift else "bounded-fallback-1",
+                    "gateway_version": gateway_common.GATEWAY_VERSION,
+                    "query_clock_offset_seconds": query_shift,
                     "download_mode": download_mode,
                     "download_start": download_segment_start.replace(microsecond=0).isoformat(),
                     "source_clock_alignment": source_clock_alignment,
@@ -296,15 +343,20 @@ def process_job(
                 },
                 **attempt_args,
             )
+            if clock_check["status"] == "matched":
+                hik._verified_playback_clock_offset = query_shift
             log(
                 f"job={job_id} attempt={attempt_generation} ready "
                 f"channel={channel_id} bytes={size} codec=h264 decode_verified=True"
             )
         except Exception as exc:
             message = f"{type(exc).__name__}:{exc}"[:900]
-            if "rtsp_playback_failed:unsupported_hevc_payload" in message:
+            if ("rtsp_playback_failed:unsupported_hevc_payload" in message or str(exc) in {
+                    "clip_conversion_failed", "clip_decode_validation_failed", "clip_duration_mismatch",
+                    "clip_clock_mismatch", "playback_clip_clock_unverified", "invalid_clip_window"}):
                 try:
                     diagnostics = hik.playback_diagnostics(channel_id)
+                    diagnostics["query_clock_offset_seconds"] = query_shift
                     if source_clock_alignment:
                         diagnostics["file_clock_status"] = source_clock_alignment.get("status")
                         diagnostics["file_clock_reason"] = source_clock_alignment.get("reason")
