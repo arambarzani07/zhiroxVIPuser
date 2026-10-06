@@ -24,9 +24,12 @@ common.GATEWAY_VERSION = GATEWAY_VERSION
 HEALTH_PATH = APP_DIR / "gateway-health.json"
 HEALTH_INTERVAL_SECONDS = 10
 HEALTH_PROBE_RETRY_SECONDS = 5
+WORKER_STALL_SECONDS = 15 * 60
+WATCHDOG_INTERVAL_SECONDS = 30
 
 _original_cloud_call = CloudClient.call
 _next_update_check = 0.0
+_last_worker_progress = time.monotonic()
 
 
 def _installed_gateway_path() -> pathlib.Path:
@@ -42,6 +45,10 @@ def _atomic_json_write(path: pathlib.Path, payload: dict) -> None:
     os.replace(temp, path)
 
 
+def _worker_progress_age() -> int:
+    return max(0, int(time.monotonic() - _last_worker_progress))
+
+
 def _write_health() -> None:
     _atomic_json_write(
         HEALTH_PATH,
@@ -50,6 +57,7 @@ def _write_health() -> None:
             "version": GATEWAY_VERSION,
             "update_protocol": UPDATE_PROTOCOL,
             "pid": os.getpid(),
+            "worker_progress_age_seconds": _worker_progress_age(),
             "healthy_at": datetime.now(timezone.utc).isoformat(),
         },
     )
@@ -94,8 +102,40 @@ def _start_health_monitor() -> None:
     ).start()
 
 
+def _worker_watchdog_loop() -> None:
+    """Force a clean Scheduled-Task restart if the real worker becomes stuck.
+
+    Job-lease heartbeat calls are deliberately excluded from progress so a hung
+    FFmpeg/download worker cannot look healthy merely because its lease thread is
+    still sending heartbeats. A normal idle Gateway calls claim every few seconds.
+    """
+    while True:
+        time.sleep(WATCHDOG_INTERVAL_SECONDS)
+        age = _worker_progress_age()
+        if age > WORKER_STALL_SECONDS:
+            try:
+                log(f"worker_watchdog_stall seconds={age}; forcing_task_restart=true")
+            finally:
+                # os._exit is intentional: a stuck worker may not unwind Python
+                # cleanly. The resilient Scheduled Task restarts this executable.
+                os._exit(75)
+
+
+def _start_worker_watchdog() -> None:
+    threading.Thread(
+        target=_worker_watchdog_loop,
+        name="zhirox-gateway-worker-watchdog",
+        daemon=True,
+    ).start()
+
+
 def _patched_cloud_call(self, action: str, *args, **kwargs):
-    global _next_update_check
+    global _next_update_check, _last_worker_progress
+    # The lease heartbeat runs in a side thread and must not hide a stalled main
+    # video worker. All other cloud actions count as real worker progress.
+    if action != "heartbeat_job":
+        _last_worker_progress = time.monotonic()
+
     # Claim is only called between jobs, so an update never interrupts capture,
     # transcoding, upload, or an active job lease heartbeat.
     if action == "claim" and time.monotonic() >= _next_update_check:
@@ -161,10 +201,12 @@ def main() -> int:
     gateway_path = _installed_gateway_path()
     log(
         f"gateway_bootstrap version={GATEWAY_VERSION} "
-        f"update_protocol={UPDATE_PROTOCOL} auto_update=evergreen"
+        f"update_protocol={UPDATE_PROTOCOL} auto_update=evergreen "
+        f"worker_watchdog_seconds={WORKER_STALL_SECONDS}"
     )
     maintenance.start(gateway_path, log)
     _start_health_monitor()
+    _start_worker_watchdog()
     agent.main()
     return 0
 
