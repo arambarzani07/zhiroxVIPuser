@@ -1,3 +1,4 @@
+import pathlib
 import unittest
 from unittest import mock
 
@@ -62,6 +63,26 @@ class UpdatePolicyTest(unittest.TestCase):
         selected = update_policy.find_next_release('1.4.0+evergreen-1', session)
         self.assertIsNotNone(selected)
         self.assertEqual(selected['_gateway_version'], '1.4.1+evergreen-1')
+
+    def test_skips_quarantined_release_and_uses_later_fixed_release(self):
+        session = FakeSession({1: [
+            release('1.4.3+evergreen-1'),
+            release('1.4.2+evergreen-1'),
+            release('1.4.1+evergreen-1'),
+            release('1.4.0+evergreen-1'),
+        ]})
+        with mock.patch.object(
+            self_update,
+            '_is_quarantined',
+            side_effect=lambda _app, version: version == '1.4.1+evergreen-1',
+        ):
+            selected = update_policy.find_next_release(
+                '1.4.0+evergreen-1',
+                session,
+                app_dir=pathlib.Path('C:/ZHIROX'),
+            )
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected['_gateway_version'], '1.4.2+evergreen-1')
 
     def test_scans_across_unrelated_release_pages_until_installed_baseline(self):
         unrelated = [
