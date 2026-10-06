@@ -1,4 +1,4 @@
-"""Read the recorder's displayed clock without changing recorder settings.
+"""Read and align the recorder's displayed clock without changing media content.
 
 Windows bundles Tesseract OCR. Missing OCR, hidden OSD, ambiguous dates or
 inconsistent readings produce unknown, never a fabricated time correction.
@@ -8,8 +8,11 @@ import pathlib
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from common import find_ffmpeg, run_background
+
+BAGHDAD_OFFSET = timezone(timedelta(hours=3))
+
 
 def ocr_image(path: pathlib.Path) -> str:
     root = pathlib.Path(getattr(sys, '_MEIPASS', pathlib.Path(__file__).resolve().parent))
@@ -45,6 +48,8 @@ def dates_in_text(text: str, offset, order: str | None = None) -> list[tuple[str
 
 def read_image_clock(image: pathlib.Path, workspace: pathlib.Path) -> str:
     parts = []
+    # Read both common Hikvision OSD locations. The top crop covers the clock in
+    # Kani Chnar Camera 10 while the bottom crop keeps this generic for other IPCs.
     for position in ['0', 'ih-oh']:
         target = workspace / ('osd-top.png' if position=='0' else 'osd-bottom.png')
         r = run_background([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-i',str(image),
@@ -52,6 +57,88 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path) -> str:
         if r.returncode == 0:
             parts.append(ocr_image(target))
     return ' '.join(parts)
+
+
+def _pick_clock(text: str, expected: datetime, offset, order: str | None = None):
+    """Pick an unambiguous OSD timestamp closest to the expected wall-clock time."""
+    candidates = dates_in_text(text, offset, order)
+    if not candidates:
+        return None
+    expected_local = expected.astimezone(offset)
+    unique: dict[tuple[str, datetime], float] = {}
+    for fmt, stamp in candidates:
+        unique[(fmt, stamp)] = abs((stamp - expected_local).total_seconds())
+    ranked = sorted(unique.items(), key=lambda item: item[1])
+    if not ranked or ranked[0][1] > 36 * 3600:
+        return None
+    # If two interpretations are practically equally close, do not guess.
+    if len(ranked) > 1 and abs(ranked[1][1] - ranked[0][1]) < 120:
+        first = ranked[0][0]
+        second = ranked[1][0]
+        if first[1] != second[1]:
+            return None
+    (fmt, stamp), _ = ranked[0]
+    return fmt, stamp
+
+
+def align_readings(readings: list[tuple[float,str]], start: datetime, offset=BAGHDAD_OFFSET) -> dict:
+    """Infer the real first-frame wall clock from OSD samples.
+
+    This deliberately does not trust ISAPI segment start metadata. Old Hikvision
+    firmware can return a file whose actual first frame is hours earlier than the
+    metadata attached to its playbackURI.
+    """
+    parsed = []
+    for seconds, text in readings:
+        picked = _pick_clock(text, start + timedelta(seconds=seconds), offset)
+        if picked is not None:
+            parsed.append((float(seconds), picked[0], picked[1]))
+    base = {'status':'unknown','method':'osd_ocr_alignment','samples_read':len(parsed),'tolerance_seconds':5}
+    if len(parsed) < 2:
+        return {**base,'reason':'insufficient_clock_readings'}
+    orders = {fmt for _,fmt,_ in parsed}
+    if len(orders) != 1:
+        return {**base,'reason':'ambiguous_date_order'}
+    bases = [stamp - timedelta(seconds=seconds) for seconds,_,stamp in parsed]
+    spread = (max(bases) - min(bases)).total_seconds()
+    if spread > 2.0 or parsed[-1][0] - parsed[0][0] < 1:
+        return {**base,'reason':'inconsistent_clock_readings'}
+    epoch = sum(stamp.timestamp() for stamp in bases) / len(bases)
+    media_start = datetime.fromtimestamp(epoch, tz=offset)
+    expected_local = start.astimezone(offset)
+    delta = round((media_start - expected_local).total_seconds(), 1)
+    return {
+        **base,
+        'status':'aligned',
+        'date_order':next(iter(orders)),
+        'media_start_at':media_start.astimezone(timezone.utc).isoformat(),
+        'first_displayed_at':media_start.isoformat(),
+        'expected_first_at':expected_local.isoformat(),
+        'offset_seconds':delta,
+        'spread_seconds':round(spread,1),
+    }
+
+
+def _video_clock_readings(path: pathlib.Path, workspace: pathlib.Path, duration: float) -> list[tuple[float,str]]:
+    readings=[]
+    positions = [0.0, min(3.0, max(0.0, duration/3)), min(7.0, max(0.0, duration*2/3))]
+    for index, second in enumerate(dict.fromkeys(round(x,3) for x in positions)):
+        image=workspace/f'sample-{index}.png'
+        r=run_background([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-ss',str(second),'-i',str(path),'-frames:v','1',str(image)],capture_output=True,timeout=30)
+        if r.returncode==0 and image.exists():
+            readings.append((float(second),read_image_clock(image,workspace)))
+    return readings
+
+
+def infer_media_start_from_osd(path: pathlib.Path, expected_start: datetime, duration_hint: float = 30.0) -> dict:
+    import tempfile
+    try:
+        with tempfile.TemporaryDirectory(prefix='zhirox-source-osd-',dir=str(path.parent)) as folder:
+            workspace=pathlib.Path(folder)
+            readings=_video_clock_readings(path,workspace,max(8.0,float(duration_hint)))
+            return align_readings(readings, expected_start, BAGHDAD_OFFSET)
+    except Exception:
+        return {'status':'unknown','method':'osd_ocr_alignment','reason':'clock_reading_unavailable'}
 
 
 def clock_context(hik, channel: int, workspace: pathlib.Path):
@@ -86,29 +173,30 @@ def compare_readings(readings: list[tuple[float,str]], start: datetime, offset, 
     base={'status':'unknown','method':'osd_ocr','date_order':order,'samples_read':len(parsed),'tolerance_seconds':5}
     if len(parsed)<2:
         return {**base,'reason':'insufficient_clock_readings'}
-    deltas=[(stamp-start).total_seconds()-seconds for seconds,stamp in parsed]
-    # Both the rendered date and time must advance with video playback.
+    deltas=[(stamp-start.astimezone(offset)).total_seconds()-seconds for seconds,stamp in parsed]
     if max(deltas)-min(deltas)>2 or parsed[-1][0]-parsed[0][0]<1:
         return {**base,'reason':'inconsistent_clock_readings'}
     delta=round(sum(deltas)/len(deltas),1)
     return {**base,'status':'matched' if abs(delta)<=5 else 'mismatch',
             'offset_seconds':delta,'first_displayed_at':parsed[0][1].isoformat(),
-            'expected_first_at':start.isoformat()}
+            'expected_first_at':start.astimezone(offset).isoformat()}
 
 
 def verify_clip_time(hik, channel: int, path: pathlib.Path, start: datetime, duration: float) -> dict:
-    import tempfile
-    try:
-        with tempfile.TemporaryDirectory(prefix='zhirox-osd-',dir=str(path.parent)) as folder:
-            workspace=pathlib.Path(folder)
-            offset,order=clock_context(hik,channel,workspace)
-            readings=[]
-            for second in [0.0, min(3.0,duration/3), min(7.0,duration*2/3)]:
-                image=workspace/'sample.png'
-                r=run_background([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-ss',str(second),'-i',str(path),'-frames:v','1',str(image)],capture_output=True,timeout=20)
-                if r.returncode==0:
-                    readings.append((second,read_image_clock(image,workspace)))
-            return compare_readings(readings,start,offset,order)
-    except Exception:
-        # Clock OCR must never prevent an otherwise valid clip upload.
-        return {'status':'unknown','method':'osd_ocr','reason':'clock_reading_unavailable'}
+    # Verify directly against the requested transaction window. This avoids relying
+    # on the recorder's own segment metadata or live clock context, both of which can
+    # be wrong on older firmware.
+    alignment = infer_media_start_from_osd(path, start, duration)
+    if alignment.get('status') != 'aligned':
+        return {'status':'unknown','method':'osd_ocr','reason':alignment.get('reason','clock_reading_unavailable')}
+    delta = float(alignment.get('offset_seconds') or 0.0)
+    return {
+        'status':'matched' if abs(delta)<=5 else 'mismatch',
+        'method':'osd_ocr',
+        'date_order':alignment.get('date_order'),
+        'samples_read':alignment.get('samples_read',0),
+        'tolerance_seconds':5,
+        'offset_seconds':delta,
+        'first_displayed_at':alignment.get('first_displayed_at'),
+        'expected_first_at':alignment.get('expected_first_at'),
+    }
