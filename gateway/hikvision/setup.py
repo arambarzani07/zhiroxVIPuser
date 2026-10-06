@@ -3,10 +3,10 @@ from __future__ import annotations
 import getpass
 import os
 import pathlib
-import subprocess
 import sys
 
-from common import APP_DIR, CONFIG_PATH, CloudClient, GatewayConfig, HikvisionClient
+from autostart import install_resilient_task, start_task
+from common import CONFIG_PATH, CloudClient, GatewayConfig, HikvisionClient
 
 
 def ask(prompt: str, default: str = "") -> str:
@@ -39,17 +39,6 @@ def ask_secret(prompt: str) -> str:
         elif char.isprintable():
             chars.append(char)
             print("*", end="", flush=True)
-
-
-def install_task(agent_exe: pathlib.Path) -> None:
-    task_name = "ZHIROX Hikvision Gateway"
-    command = [
-        "schtasks", "/Create", "/F", "/SC", "ONLOGON", "/RL", "HIGHEST",
-        "/TN", task_name, "/TR", f'\"{agent_exe}\"'
-    ]
-    result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "scheduled_task_failed")
 
 
 def main() -> int:
@@ -87,14 +76,18 @@ def main() -> int:
     base = pathlib.Path(sys.executable).resolve().parent
     agent = base / "zhirox-hikvision-gateway.exe"
     if agent.exists():
-        answer = ask("Start gateway automatically when this Windows user logs in? (y/n)", "y").lower()
+        answer = ask(
+            "Install resilient auto-start and restart Gateway after crashes? (y/n)",
+            "y",
+        ).lower()
         if answer.startswith("y"):
-            install_task(agent)
-            print("Auto-start task installed.")
+            install_resilient_task(agent)
+            start_task()
+            print("Resilient auto-start installed and Gateway start requested.")
     else:
         print("Gateway EXE was not found beside the setup EXE; auto-start was skipped.")
 
-    print("Setup complete. You can now run zhirox-hikvision-gateway.exe.")
+    print("Setup complete.")
     return 0
 
 
