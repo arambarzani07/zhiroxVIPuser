@@ -130,6 +130,7 @@ def process_job(
             for candidate_index, query_shift in enumerate((preferred_shift, 3 * 3600 - preferred_shift)):
                 source_clock_alignment = {}
                 clock_check = {}
+                hik._playback_codec_relay_used = False
                 try:
                     query_start = clip_start + timedelta(seconds=query_shift)
                     query_end = clip_end + timedelta(seconds=query_shift)
@@ -251,6 +252,11 @@ def process_job(
                                 "fallback": "bounded_rtsp",
                                 "bounded_window_verified": True,
                             }
+
+                    if getattr(hik, "_playback_codec_relay_used", False) is True:
+                        download_mode = "rtsp_h264_sdp"
+                        source_clock_alignment["sdp_codec_corrected"] = "h264"
+                        source_clock_alignment["bounded_window_verified"] = False
 
                     media = prepare_browser_clip(
                         raw_path,

@@ -208,6 +208,33 @@ class TimeWindowTest(unittest.TestCase):
         failure = next(c for c in cloud.call.call_args_list if c.args[0] == 'fail')
         self.assertIn('clip_clock_mismatch', failure.kwargs['error'])
 
+    def test_sdp_correction_requires_independently_matched_clock(self):
+        now = datetime.now(timezone.utc) - timedelta(minutes=10)
+        for status in ('unknown', 'mismatch', 'matched'):
+            with self.subTest(status=status):
+                hik, cloud = Mock(), Mock()
+                hik.search_recording.return_value = {'found': True, 'playback_uri': self.uri}
+                hik.download_recording.side_effect = RuntimeError('download_rejected:http=400')
+                def capture(uri, path, duration):
+                    hik._playback_codec_relay_used = True
+                    path.write_bytes(b'raw')
+                hik.download_playback_stream.side_effect = capture
+                cloud.call.return_value = {'signed_upload_url': 'private', 'object_path': 'clip'}
+                def prepare(source, target, start, download_start, duration):
+                    target.write_bytes(b'h264')
+                    return {'duration_seconds': 30, 'exact_trim': True}
+                job = {'job_id': 'relay-clock', 'transaction_at': now.isoformat(), 'clip_start_at': now.isoformat(), 'clip_end_at': (now+timedelta(seconds=30)).isoformat(), 'channel_id': 10}
+                with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'prepare_browser_clip', side_effect=prepare), patch.object(agent, 'verify_clip_time', return_value={'status': status}):
+                    agent.process_job(cloud, Mock(), hik, job)
+                if status == 'matched':
+                    cloud.upload.assert_called_once()
+                    metadata = next(c for c in cloud.call.call_args_list if c.args[0] == 'complete').kwargs['playback_metadata']
+                    self.assertEqual(metadata['download_mode'], 'rtsp_h264_sdp')
+                    self.assertTrue(metadata['media_time_verified'])
+                    self.assertFalse(metadata['bounded_window_verified'])
+                else:
+                    cloud.upload.assert_not_called()
+
     def test_rtsp_unknown_clock_uploads_only_bounded_window(self):
         now = datetime.now(timezone.utc) - timedelta(minutes=10)
         hik, cloud = Mock(), Mock()

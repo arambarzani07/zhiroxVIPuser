@@ -421,6 +421,7 @@ class HikvisionClient:
     def download_playback_stream(self, playback_uri: str, output_path: pathlib.Path,
                                  duration: int) -> None:
         """Bounded historical RTSP playback when the HTTP export is rejected."""
+        self._playback_codec_relay_used = False
         parts = urlsplit(playback_uri)
         query = parse_qs(parts.query)
         if (parts.scheme != "rtsp" or parts.username or parts.password or
@@ -497,6 +498,35 @@ class HikvisionClient:
                 ("Output file is empty", "empty_output"),
                 ("Error opening output", "output_open_failed"),
                 ("Conversion failed", "conversion_failed")) if marker in stderr]
+        # H.264 FU-A packets (0x7c) appear as unsupported HEVC NAL 62
+        # when this firmware advertises stale H265 SDP. Only attempt the
+        # correction for that signature AND an authenticated H.264 setting.
+        # The agent requires an independently matched OSD clock for this path.
+        if reason == "unsupported_hevc_payload" and 62 in details.get("nal", []):
+            try:
+                configured = self.playback_diagnostics((int(parts.path.rstrip('/').split('/')[-1]) - 1) // 100)
+                if configured.get("configured_codecs") == ["H.264"]:
+                    from rtsp_codec_relay import SdpCodecRelay
+                    output_path.unlink(missing_ok=True)
+                    with SdpCodecRelay(playback_uri, self.auth.username, self.auth.password) as relay:
+                        local = urlsplit(relay.uri)
+                        local_uri = urlunsplit((local.scheme, credentials + "@" + local.netloc, local.path, local.query, ""))
+                        repaired = run_background(
+                            [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                             "-rtsp_transport", "tcp", "-timeout", "20000000",
+                             "-i", local_uri, "-t", str(duration), "-map", "0:v:0",
+                             "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast",
+                             "-crf", "20", "-pix_fmt", "yuv420p", "-tag:v", "avc1",
+                             "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
+                             "-f", "mp4", str(output_path)], capture_output=True, timeout=duration + 90)
+                        if repaired.returncode == 0 and relay.corrected and output_path.exists() and output_path.stat().st_size > 0:
+                            self._playback_codec_relay_used = True
+                            log("rtsp_playback_transport=tcp sdp_codec_corrected=h264 clock_match_required=true")
+                            return
+                    details["codec_relay"] = "failed"
+            except Exception:
+                details["codec_relay"] = "failed"
+            output_path.unlink(missing_ok=True)
         suffix = ":" + json.dumps(details, separators=(",", ":")) if any(details.values()) else ""
         raise RuntimeError("rtsp_playback_failed:" + reason + suffix) from None
 

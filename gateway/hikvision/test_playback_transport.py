@@ -59,6 +59,34 @@ class PlaybackTransportTest(unittest.TestCase):
                 self.assertIn('"input_codec":["hevc"]', str(caught.exception))
                 self.assertNotIn("secret", str(caught.exception))
 
+    def test_codec_relay_requires_authenticated_h264_and_nal_62(self):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+        for codec in ('H.264', 'H.265'):
+            with self.subTest(codec=codec), tempfile.TemporaryDirectory() as tmp:
+                output = pathlib.Path(tmp) / 'clip.mp4'
+                commands = []
+                def run(cmd, **kwargs):
+                    commands.append(cmd)
+                    if len(commands) < 3:
+                        return subprocess.CompletedProcess(cmd, 1, b'', b'Unsupported (HEVC) NAL type (62)')
+                    output.write_bytes(b'valid')
+                    return subprocess.CompletedProcess(cmd, 0, b'', b'')
+                relay = MagicMock()
+                relay.__enter__.return_value = SimpleNamespace(uri='rtsp://127.0.0.1:12345/Streaming/tracks/1001?starttime=20261006T200000Z&endtime=20261006T200030Z', corrected=True)
+                with patch.object(common, 'find_ffmpeg', return_value='ffmpeg'), patch.object(common, 'run_background', side_effect=run), patch.object(common, 'log'), patch.object(self.hik, 'playback_diagnostics', return_value={'configured_codecs':[codec]}), patch('rtsp_codec_relay.SdpCodecRelay', return_value=relay) as factory:
+                    if codec == 'H.264':
+                        self.hik.download_playback_stream(self.uri, output, 30)
+                        self.assertTrue(self.hik._playback_codec_relay_used)
+                        self.assertEqual(len(commands),3)
+                        self.assertEqual(factory.call_args.args[0], self.uri)
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            self.hik.download_playback_stream(self.uri, output, 30)
+                        self.assertFalse(self.hik._playback_codec_relay_used)
+                        self.assertEqual(len(commands),2)
+                        factory.assert_not_called()
+
     def test_read_only_diagnostics_do_not_export_xml_secrets(self):
         from types import SimpleNamespace
         responses = [SimpleNamespace(status_code=200, text='<StreamingChannel><Video><videoCodecType>H.264</videoCodecType><password>secret</password></Video></StreamingChannel>'),
