@@ -43,11 +43,11 @@ class A11VideoJob {
       attemptToken.isNotEmpty;
 }
 
-/// Keeps the A11 buffer warm and consumes only `a11_local_rtsp` video jobs.
+/// Keeps the A11 RTSP ring buffer warm whenever A11 is configured.
 ///
-/// Authentication and tenant authorization are enforced again in the database
-/// RPCs. The timer is only an on-device scheduler; it is not trusted as an
-/// authorization boundary.
+/// Hikvision and A11 may therefore remain installed/available at the same time.
+/// The market's `capture_provider` only decides which provider stamps NEW video
+/// jobs. Provider-specific workers can finish jobs that were already created.
 class A11CameraCoordinator {
   A11CameraCoordinator._();
 
@@ -58,7 +58,6 @@ class A11CameraCoordinator {
   String? _lastUserId;
   String? _marketId;
   String? _role;
-  bool _activationChecked = false;
   DateTime _lastBufferCheck = DateTime.fromMillisecondsSinceEpoch(0);
 
   Future<void> start() async {
@@ -76,12 +75,27 @@ class A11CameraCoordinator {
     _lastUserId = null;
     _marketId = null;
     _role = null;
-    _activationChecked = false;
     await A11CameraService.instance.stopBuffer();
   }
 
+  /// Called only after the A11 setup screen has successfully tested RTSP.
+  /// Activates A11 for NEW jobs while preserving the Hikvision integration.
   Future<void> onCameraConfigChanged() async {
-    _activationChecked = false;
+    await PBService.ensureInitialized();
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user != null) {
+      final profile = await client
+          .from('profiles')
+          .select('id,role')
+          .eq('id', user.id)
+          .single();
+      if (profile['role'] == 'admin') {
+        await A11CameraService.instance.activateProvider(
+          profile['id'].toString(),
+        );
+      }
+    }
     await A11CameraService.instance.restartBuffer();
     await _tick();
   }
@@ -94,6 +108,9 @@ class A11CameraCoordinator {
       final localConfig = await camera.loadConfig();
       if (!localConfig.enabled || localConfig.password.isEmpty) return;
 
+      // Keep the A11 pre-event ring buffer warm even when Hikvision is selected
+      // for NEW jobs. This makes switching back to A11 immediate and preserves
+      // the 15-second pre-transaction window.
       if (DateTime.now().difference(_lastBufferCheck) >
           const Duration(seconds: 10)) {
         _lastBufferCheck = DateTime.now();
@@ -106,7 +123,6 @@ class A11CameraCoordinator {
         _lastUserId = null;
         _marketId = null;
         _role = null;
-        _activationChecked = false;
         return;
       }
 
@@ -121,25 +137,14 @@ class A11CameraCoordinator {
         _marketId = _role == 'admin'
             ? profile['id']?.toString()
             : profile['admin_id']?.toString();
-        _activationChecked = false;
       }
 
       final marketId = _marketId;
       if (marketId == null || marketId.isEmpty) return;
 
-      var providerActive = await camera.isProviderActive(marketId);
-      if (!providerActive && _role == 'admin' && !_activationChecked) {
-        _activationChecked = true;
-        // Never switch production away from the old provider unless this
-        // exact phone proves that it can decode the configured RTSP stream.
-        final reachable = await camera.testConnection();
-        if (reachable) {
-          await camera.activateProvider(marketId);
-          providerActive = await camera.isProviderActive(marketId);
-        }
-      }
-      if (!providerActive) return;
-
+      // Claim only jobs that were stamped for A11. The active provider may
+      // already have been switched back to Hikvision; old A11 jobs still get a
+      // chance to finish instead of being orphaned.
       final raw = await client.rpc('a11_video_claim_service');
       if (raw is! List || raw.isEmpty) return;
       final first = raw.first;
