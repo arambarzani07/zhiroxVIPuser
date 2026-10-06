@@ -45,8 +45,8 @@ jobs:
         shell: pwsh
         working-directory: gateway/hikvision
         run: |
-          python -m py_compile bootstrap.py self_update.py update_policy.py maintenance.py updater.py autostart.py common.py
-          python -c "import bootstrap, self_update, update_policy, maintenance, updater; assert bootstrap.GATEWAY_VERSION == '1.4.1+evergreen-1'; print('hardening imports passed')"
+          python -m py_compile bootstrap.py self_update.py update_policy.py maintenance.py runtime_hardening.py updater.py autostart.py common.py
+          python -c "import bootstrap, self_update, update_policy, maintenance, runtime_hardening, updater; assert bootstrap.GATEWAY_VERSION == '1.4.1+evergreen-1'; print('hardening imports passed')"
       - name: Run full Gateway unit suite
         shell: pwsh
         working-directory: gateway/hikvision
