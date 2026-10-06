@@ -1,0 +1,64 @@
+name: Integrate A11 Camera Source Selector
+
+on:
+  push:
+    branches:
+      - a11-direct-camera
+    paths:
+      - .github/workflows/a11-camera-source-integrate.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: a11-direct-camera
+          fetch-depth: 0
+      - name: Patch camera coexistence and admin launcher
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          service = Path('lib/services/a11_camera_service.dart')
+          text = service.read_text()
+          old = """    if (!await isProviderActive(marketId)) {\n      throw StateError('a11_provider_not_active');\n    }\n\n"""
+          new = """    // Jobs are fenced by their own provider/attempt token. Do not require\n    // A11 to still be the active provider here: after an admin switches back\n    // to Hikvision, an already-created A11 job must still be allowed to finish.\n\n"""
+          if old not in text:
+              raise SystemExit('A11 provider guard not found')
+          service.write_text(text.replace(old, new, 1))
+
+          dashboard = Path('lib/screens/admin/admin_dashboard.dart')
+          text = dashboard.read_text()
+          import_anchor = "import 'package:zhirox/screens/admin/pending_requests_screen.dart';\n"
+          imports = (
+              "import 'package:zhirox/screens/admin/pending_requests_screen.dart';\n"
+              "import 'package:zhirox/screens/admin/a11_camera_setup_screen.dart';\n"
+              "import 'package:zhirox/screens/admin/camera_source_settings_screen.dart';\n"
+          )
+          if "camera_source_settings_screen.dart" not in text:
+              if import_anchor not in text:
+                  raise SystemExit('dashboard import anchor not found')
+              text = text.replace(import_anchor, imports, 1)
+
+          anchor = """                          // Dark Mode Toggle\n"""
+          button = """                          IconButton(\n                            icon: Icon(\n                              Icons.video_settings_rounded,\n                              color: Colors.white.withOpacity(0.7),\n                              size: 22,\n                            ),\n                            tooltip: 'سەرچاوەی ڤیدیۆ',\n                            onPressed: () {\n                              Navigator.of(context).push(\n                                MaterialPageRoute(\n                                  builder: (_) => CameraSourceSettingsScreen(\n                                    onClose: () => Navigator.of(context).pop(),\n                                    onConfigureA11: () {\n                                      Navigator.of(context).push(\n                                        MaterialPageRoute(\n                                          builder: (_) => A11CameraSetupScreen(\n                                            onCompleted: () =>\n                                                Navigator.of(context).pop(),\n                                            onLater: () =>\n                                                Navigator.of(context).pop(),\n                                          ),\n                                        ),\n                                      );\n                                    },\n                                  ),\n                                ),\n                              );\n                            },\n                          ),\n"""
+          if "tooltip: 'سەرچاوەی ڤیدیۆ'" not in text:
+              if anchor not in text:
+                  raise SystemExit('dashboard camera button anchor not found')
+              text = text.replace(anchor, button + anchor, 1)
+          dashboard.write_text(text)
+          PY
+      - name: Commit integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/services/a11_camera_service.dart lib/screens/admin/admin_dashboard.dart
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Integrate selectable Hikvision and A11 camera sources"
+          git push origin HEAD:a11-direct-camera
