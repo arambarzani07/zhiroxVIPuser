@@ -1,0 +1,41 @@
+name: Hikvision Gateway Hardening CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [gateway-preinstall-hardening]
+    paths:
+      - 'gateway/hikvision/**'
+      - '.github/workflows/hikvision-gateway-hardening-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hikvision-gateway-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-hardening:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: gateway/hikvision/requirements.txt
+      - name: Install dependencies
+        shell: pwsh
+        run: pip install -r gateway/hikvision/requirements.txt
+      - name: Compile hardened modules
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: |
+          python -m py_compile bootstrap.py self_update.py update_policy.py maintenance.py updater.py autostart.py common.py
+          python -c "import bootstrap, self_update, update_policy, maintenance, updater; assert bootstrap.GATEWAY_VERSION == '1.4.1+evergreen-1'; print('hardening imports passed')"
+      - name: Run full Gateway unit suite
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: python -m unittest discover -p "test_*.py"
