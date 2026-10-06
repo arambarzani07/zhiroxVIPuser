@@ -6,6 +6,7 @@ on:
       - a11-direct-camera
   workflow_dispatch:
 
+# Verifies the build after Hikvision + A11 coexistence integration.
 jobs:
   analyze-android:
     runs-on: ubuntu-latest
