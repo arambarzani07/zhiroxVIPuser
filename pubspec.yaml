@@ -46,6 +46,7 @@ dependencies:
   timezone: ^0.10.1
   crypto: ^3.0.6
   qr_flutter: ^4.1.0
+  ffmpeg_kit_flutter_new_video: 2.5.4
 
 dev_dependencies:
   flutter_test:
