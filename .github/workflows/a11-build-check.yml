@@ -6,7 +6,10 @@ on:
       - a11-direct-camera
   workflow_dispatch:
 
-# Verifies the build after Hikvision + A11 coexistence integration.
+permissions:
+  contents: read
+
+# Verifies Hikvision + A11 coexistence and publishes an unsigned IPA artifact.
 jobs:
   analyze-android:
     runs-on: ubuntu-latest
@@ -21,8 +24,9 @@ jobs:
       - run: flutter analyze --no-fatal-infos lib/main_a11.dart lib/services/a11_camera_service.dart lib/services/a11_camera_coordinator.dart lib/services/camera_source_service.dart lib/screens/admin/a11_camera_setup_screen.dart lib/screens/admin/camera_source_settings_screen.dart
       - run: flutter build apk --debug -t lib/main_a11.dart
 
-  ios-no-codesign:
+  ios-unsigned-ipa:
     runs-on: macos-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -32,4 +36,22 @@ jobs:
       - run: flutter --version
       - run: flutter pub get
       - run: cd ios && pod install
-      - run: flutter build ios --debug --no-codesign -t lib/main_a11.dart
+      - name: Build iOS release without signing
+        run: flutter build ios --release --no-codesign -t lib/main_a11.dart
+      - name: Package unsigned IPA
+        run: |
+          rm -rf Payload ZHIROX-A11-Dual-Camera.ipa
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload ZHIROX-A11-Dual-Camera.ipa
+          test -s ZHIROX-A11-Dual-Camera.ipa
+          shasum -a 256 ZHIROX-A11-Dual-Camera.ipa > ZHIROX-A11-Dual-Camera.ipa.sha256
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZHIROX-A11-Dual-Camera-unsigned-ipa
+          path: |
+            ZHIROX-A11-Dual-Camera.ipa
+            ZHIROX-A11-Dual-Camera.ipa.sha256
+          if-no-files-found: error
+          retention-days: 7
