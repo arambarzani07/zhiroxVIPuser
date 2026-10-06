@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import self_update
 
+MAX_TOTAL_UPDATE_BYTES = 1024 * 1024 * 1024
+
 
 def find_next_release(current_version: str, session=self_update.requests) -> dict | None:
     """Return the oldest required newer release, not merely the newest one.
@@ -64,11 +66,23 @@ def find_next_release(current_version: str, session=self_update.requests) -> dic
     return candidates[0][1]
 
 
+def _bounded_disk_space_check(path, total_download_bytes: int) -> None:
+    if total_download_bytes <= 0 or total_download_bytes > MAX_TOTAL_UPDATE_BYTES:
+        raise RuntimeError("update_payload_size_rejected")
+    return _original_disk_space_check(path, total_download_bytes)
+
+
+_original_disk_space_check = self_update._ensure_disk_space
+
+
 def maybe_auto_update(*args, **kwargs) -> bool:
-    """Run the hardened updater with sequential release selection."""
-    original = self_update.find_newer_release
+    """Run the hardened updater with sequential selection and payload limits."""
+    original_release_selector = self_update.find_newer_release
+    original_disk_check = self_update._ensure_disk_space
     self_update.find_newer_release = find_next_release
+    self_update._ensure_disk_space = _bounded_disk_space_check
     try:
         return self_update.maybe_auto_update(*args, **kwargs)
     finally:
-        self_update.find_newer_release = original
+        self_update.find_newer_release = original_release_selector
+        self_update._ensure_disk_space = original_disk_check
