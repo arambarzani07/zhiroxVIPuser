@@ -22,7 +22,7 @@ from common import (
 
 # Protocol 1.1 enables DB-backed per-attempt fencing while the shared setup
 # helpers remain compatible with already-installed 1.0 gateway packages.
-gateway_common.GATEWAY_VERSION = "1.2.5+hevc-resilience-1"
+gateway_common.GATEWAY_VERSION = "1.3.1+http-file-fallback-1"
 
 POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 30
@@ -125,32 +125,78 @@ def process_job(
                 )
                 return
 
-            playback_uri = bounded_playback_uri(str(search["playback_uri"]),
-                                                clip_start, clip_end, channel_id * 100 + 1)
-            log(f"job={job_id} build=http-query-1 download_mode=time "
-                f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}")
+            original_playback_uri = str(search["playback_uri"])
+            playback_uri = bounded_playback_uri(
+                original_playback_uri,
+                clip_start,
+                clip_end,
+                channel_id * 100 + 1,
+            )
+            log(
+                f"job={job_id} build=http-file-fallback-1 download_mode=time "
+                f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}"
+            )
             download_mode = "time"
             requested_duration = max(1, int((clip_end - clip_start).total_seconds()))
+            download_segment_start = clip_start
+
             try:
                 download_mode = hik.download_recording(playback_uri, raw_path) or "time"
             except RuntimeError as exc:
                 if not str(exc).startswith("download_rejected:"):
                     raise
-                log(f"job={job_id} HTTP export rejected; trying bounded RTSP playback")
-                download_mode = "rtsp_time"
-                hik.download_playback_stream(playback_uri, raw_path, requested_duration)
+
+                # Older Hikvision firmware often requires the original playbackURI
+                # returned by ContentMgmt/search, including its name/size file selectors.
+                # Prefer that documented binary export before falling back to RTSP,
+                # because legacy HEVC RTP packetization can be incompatible with FFmpeg.
+                log(
+                    f"job={job_id} bounded HTTP export rejected; "
+                    "trying original ISAPI file export"
+                )
+                raw_path.unlink(missing_ok=True)
+                try:
+                    file_mode = hik.download_recording(original_playback_uri, raw_path) or "time"
+                    download_mode = "http_file"
+                    if file_mode not in {"time", "http_query_time"}:
+                        download_mode = f"http_file_{file_mode}"
+                    segment_start = str(search.get("segment_start") or "").strip()
+                    if not segment_start:
+                        raise RuntimeError("recording_start_required")
+                    download_segment_start = parse_iso(segment_start)
+                except RuntimeError as file_exc:
+                    raw_path.unlink(missing_ok=True)
+                    file_error = str(file_exc)
+                    if not (
+                        file_error.startswith("download_rejected:")
+                        or file_error.startswith("invalid_http_playback_window")
+                    ):
+                        raise
+                    log(
+                        f"job={job_id} original ISAPI file export rejected; "
+                        "trying bounded RTSP playback"
+                    )
+                    download_mode = "rtsp_time"
+                    download_segment_start = clip_start
+                    hik.download_playback_stream(playback_uri, raw_path, requested_duration)
+
             if not raw_path.exists() or raw_path.stat().st_size <= 0:
                 raise RuntimeError("empty_download")
 
-            requested_duration = max(1, int((clip_end - clip_start).total_seconds()))
             media = prepare_browser_clip(
                 raw_path,
                 exact_path,
                 clip_start,
-                clip_start.replace(microsecond=0).isoformat(),
+                download_segment_start.replace(microsecond=0).isoformat(),
                 requested_duration,
             )
-            clock_check = verify_clip_time(hik, channel_id, exact_path, clip_start, media["duration_seconds"])
+            clock_check = verify_clip_time(
+                hik,
+                channel_id,
+                exact_path,
+                clip_start,
+                media["duration_seconds"],
+            )
             log(f"job={job_id} clock_status={clock_check['status']}")
             if not media["exact_trim"]:
                 raise RuntimeError("clip_duration_mismatch")
@@ -179,9 +225,9 @@ def process_job(
                 duration_seconds=media["duration_seconds"],
                 playback_metadata={
                     "provider": "hikvision_isapi",
-                    "gateway_build": "http-query-1",
+                    "gateway_build": "http-file-fallback-1",
                     "download_mode": download_mode,
-                    "download_start": clip_start.replace(microsecond=0).isoformat(),
+                    "download_start": download_segment_start.replace(microsecond=0).isoformat(),
                     "media_time_verified": clock_check["status"] == "matched",
                     "clock_check": clock_check,
                     "track_id": search.get("track_id"),
@@ -275,4 +321,3 @@ if __name__ == "__main__":
         result = dates_in_text(ocr_image(pathlib.Path(sys.argv[2])), timezone.utc, 'YMD')
         sys.exit(0 if result else 1)
     main()
-
