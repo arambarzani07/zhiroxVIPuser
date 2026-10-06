@@ -59,7 +59,7 @@ jobs:
         working-directory: gateway/hikvision
         run: pyinstaller --clean --onefile --name zhirox-hikvision-autostart autostart.py
 
-      - name: Test recorder and self-update diagnostics
+      - name: Test recorder and evergreen updater diagnostics
         shell: pwsh
         working-directory: gateway/hikvision
         run: python -m unittest test_diagnose.py test_secret_input.py test_playback.py test_time_window.py test_osd_time.py test_background_process.py test_self_update.py
@@ -80,7 +80,7 @@ jobs:
         working-directory: gateway/hikvision
         run: pyinstaller --clean --onefile --add-data "ocr;ocr" --name zhirox-hikvision-time-sync time_sync.py
 
-      - name: Build self-update helper
+      - name: Build evergreen self-update helper
         shell: pwsh
         working-directory: gateway/hikvision
         run: pyinstaller --clean --onefile --noconsole --name zhirox-hikvision-updater updater.py
@@ -106,6 +106,29 @@ jobs:
           $test = Start-Process -FilePath .\dist\zhirox-hikvision-gateway.exe -ArgumentList @('--verify-ocr-fixture', $image) -Wait -PassThru
           if ($test.ExitCode -ne 0) { throw "Frozen gateway OCR smoke test failed" }
 
+      - name: Generate evergreen update manifest
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: |
+          $version = (python -c "import bootstrap; print(bootstrap.GATEWAY_VERSION)").Trim()
+          if (-not $version) { throw "Gateway version missing" }
+          $manifest = [ordered]@{
+            schema = 1
+            protocol = 1
+            version = $version
+            health_timeout_seconds = 90
+            assets = @(
+              [ordered]@{ name = "zhirox-hikvision-updater.exe"; target = "zhirox-hikvision-updater.exe"; role = "updater" },
+              [ordered]@{ name = "zhirox-hikvision-setup.exe"; target = "zhirox-hikvision-setup.exe"; role = "companion" },
+              [ordered]@{ name = "zhirox-hikvision-autostart.exe"; target = "zhirox-hikvision-autostart.exe"; role = "companion" },
+              [ordered]@{ name = "zhirox-hikvision-diagnose.exe"; target = "zhirox-hikvision-diagnose.exe"; role = "companion" },
+              [ordered]@{ name = "zhirox-hikvision-time-sync.exe"; target = "zhirox-hikvision-time-sync.exe"; role = "companion" },
+              [ordered]@{ name = "zhirox-hikvision-gateway.exe"; target = "zhirox-hikvision-gateway.exe"; role = "gateway" }
+            )
+          }
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content .\dist\gateway-update.json -Encoding utf8
+          python -c "import json, pathlib; p=json.loads(pathlib.Path('dist/gateway-update.json').read_text(encoding='utf-8-sig')); assert p['schema']==1 and p['protocol']==1 and p['version']; assert {a['role'] for a in p['assets']} >= {'gateway','updater'}; print('evergreen manifest validated')"
+
       - name: Stage artifact
         shell: pwsh
         run: |
@@ -116,6 +139,7 @@ jobs:
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-time-sync.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-updater.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-gateway.exe artifacts/hikvision-gateway/
+          Copy-Item gateway/hikvision/dist/gateway-update.json artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/README.md artifacts/hikvision-gateway/ -ErrorAction SilentlyContinue
           Copy-Item gateway/hikvision/01-check-nvr.cmd artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/02-setup.cmd artifacts/hikvision-gateway/
@@ -131,7 +155,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish Gateway self-update release
+      - name: Publish evergreen Gateway release
         if: github.event_name == 'push' && github.ref == 'refs/heads/user-source'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -142,16 +166,52 @@ jobs:
           $version = (python -c "import bootstrap; print(bootstrap.GATEWAY_VERSION)").Trim()
           if (-not $version) { throw "Gateway version missing" }
           $tag = "hikvision-gateway-v$version"
+          $encodedTag = [System.Uri]::EscapeDataString($tag)
           $title = "ZHIROX Hikvision Gateway $version"
-          $notes = "Automatic Windows Gateway release. Clients verify the GitHub-provided SHA-256 asset digest and run NVR/cloud preflight before atomic replacement."
+          $notes = "Evergreen Windows Gateway release. Clients verify GitHub SHA-256 digests, stage all required companion files, run NVR/cloud preflight, atomically replace files, verify post-restart health, and rollback automatically on failure."
 
-          gh release view $tag --repo $repo *> $null
+          $existing = $null
+          gh api "repos/$repo/releases/tags/$encodedTag" 2>$null | Set-Content $env:RUNNER_TEMP\gateway-release.json -Encoding utf8
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag .\dist\zhirox-hikvision-gateway.exe .\dist\zhirox-hikvision-updater.exe --clobber --repo $repo
+            $existing = Get-Content $env:RUNNER_TEMP\gateway-release.json -Raw | ConvertFrom-Json
+            if ($existing.target_commitish -ne $env:GITHUB_SHA) {
+              throw "Gateway version $version is already published from another commit. Bump GATEWAY_VERSION before publishing."
+            }
           } else {
-            gh release create $tag .\dist\zhirox-hikvision-gateway.exe .\dist\zhirox-hikvision-updater.exe --repo $repo --target $env:GITHUB_SHA --title $title --notes $notes
+            gh release create $tag --repo $repo --target $env:GITHUB_SHA --title $title --notes $notes
+            if ($LASTEXITCODE -ne 0) { throw "Gateway release create failed" }
           }
-          if ($LASTEXITCODE -ne 0) { throw "Gateway release publish failed" }
+
+          function Upload-WithRetry([string]$Path) {
+            for ($attempt = 1; $attempt -le 4; $attempt++) {
+              gh release upload $tag $Path --clobber --repo $repo
+              if ($LASTEXITCODE -eq 0) { return }
+              if ($attempt -lt 4) { Start-Sleep -Seconds ([Math]::Pow(2, $attempt)) }
+            }
+            throw "Gateway release upload failed: $Path"
+          }
+
+          $releaseAssets = @(
+            ".\dist\gateway-update.json",
+            ".\dist\zhirox-hikvision-updater.exe",
+            ".\dist\zhirox-hikvision-setup.exe",
+            ".\dist\zhirox-hikvision-autostart.exe",
+            ".\dist\zhirox-hikvision-diagnose.exe",
+            ".\dist\zhirox-hikvision-time-sync.exe",
+            ".\dist\zhirox-hikvision-gateway.exe"
+          )
+          foreach ($asset in $releaseAssets) { Upload-WithRetry $asset }
+
+          $release = gh api "repos/$repo/releases/tags/$encodedTag" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "Gateway release verification failed" }
+          $expectedNames = $releaseAssets | ForEach-Object { Split-Path $_ -Leaf }
+          foreach ($name in $expectedNames) {
+            $asset = $release.assets | Where-Object { $_.name -eq $name } | Select-Object -First 1
+            if (-not $asset) { throw "Published Gateway asset missing: $name" }
+            if ($asset.state -ne "uploaded") { throw "Published Gateway asset incomplete: $name" }
+            if ($asset.digest -notmatch '^sha256:[0-9a-fA-F]{64}$') { throw "Published Gateway digest missing: $name" }
+          }
+          Write-Host "Evergreen Gateway release verified: $tag"
 
   playback-integration:
     runs-on: ubuntu-latest
