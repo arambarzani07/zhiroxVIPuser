@@ -16,8 +16,8 @@ This gateway links ZHIROX financial transactions to recorded Hikvision video wit
 
 - Model: `DS-7616NI-K2/16P`
 - NVR host: `192.168.1.2`
-- Cashier camera channel: `1`
-- Evidence window: 15 seconds before + 30 seconds after the transaction
+- Cashier camera channel: `10`
+- Evidence window: 15 seconds before + 15 seconds after the transaction (30 seconds total)
 - Timezone: `Asia/Baghdad`
 
 ## Install
@@ -53,7 +53,7 @@ and do not contact ZHIROX cloud or claim jobs. Search uses the recorder's search
 it does not change recordings.
 
 ```powershell
-.\zhirox-hikvision-diagnose.exe --host 192.168.1.2 --channel 1
+.\zhirox-hikvision-diagnose.exe --host 192.168.1.2 --channel 10
 ```
 
 The default checks a moment two minutes ago to allow recordings to become available.
@@ -62,16 +62,16 @@ The IP and cashier channel are examples; confirm them at the market.
 `clock_status: ok` indicates the recorder clock is within 60 seconds of the PC clock.
 `found_at_requested_time` verifies that the returned segment contains the selected
 instant. `requested_window_covered` separately checks the full 15-second-before /
-30-second-after window. A neighboring segment is not accepted as evidence.
+15-second-after window. A neighboring segment is not accepted as evidence.
 
 To test the download at a known recorded local time (Baghdad offset `+03:00`):
 
 ```powershell
-.\zhirox-hikvision-diagnose.exe --host 192.168.1.2 --channel 1 --at "2026-10-03T17:00:00+03:00" --download "$env:USERPROFILE\Desktop\zhirox-nvr-test.mp4"
+.\zhirox-hikvision-diagnose.exe --host 192.168.1.2 --channel 10 --at "2026-10-03T17:00:00+03:00" --download "$env:USERPROFILE\Desktop\zhirox-nvr-test.mp4"
 ```
 
 Replace the sample timestamp with one you can verify in Playback.
-The download is a matching **NVR segment**, not yet an exactly trimmed 45-second clip.
+The download is a matching **NVR segment**, not yet an exactly trimmed 30-second clip.
 Open it in a video player and compare the camera and displayed time. A nonempty
 file/hash alone does not prove the video is playable or the NVR clock is correct.
 Existing files are never overwritten; failed partial downloads are removed.
