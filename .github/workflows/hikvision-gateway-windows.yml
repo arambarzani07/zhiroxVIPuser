@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 concurrency:
   group: hikvision-gateway-windows-${{ github.ref }}
@@ -134,6 +136,12 @@ jobs:
           $manifest | ConvertTo-Json -Depth 6 | Set-Content .\dist\gateway-update.json -Encoding utf8
           python -c "import json, pathlib; p=json.loads(pathlib.Path('dist/gateway-update.json').read_text(encoding='utf-8-sig')); assert p['schema']==1 and p['protocol']==1 and p['version']; assert {a['role'] for a in p['assets']} >= {'gateway','updater'}; print('evergreen manifest validated')"
 
+      - name: Attest production Gateway payload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/user-source'
+        uses: actions/attest@v4
+        with:
+          subject-path: 'gateway/hikvision/dist/*'
+
       - name: Stage artifact
         shell: pwsh
         run: |
@@ -160,7 +168,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish immutable evergreen Gateway release
+      - name: Publish draft-then-lock Evergreen Gateway release
         if: github.event_name == 'push' && github.ref == 'refs/heads/user-source'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -171,33 +179,48 @@ jobs:
           $version = (python -c "import bootstrap; print(bootstrap.GATEWAY_VERSION)").Trim()
           if (-not $version) { throw "Gateway version missing" }
           $tag = "hikvision-gateway-v$version"
-          $encodedTag = [System.Uri]::EscapeDataString($tag)
           $title = "ZHIROX Hikvision Gateway $version"
-          $notes = "Evergreen Windows Gateway release. Clients verify GitHub SHA-256 digests and successful production CI provenance, stage required companion files, run NVR/cloud preflight, atomically replace files, recover after power loss, verify post-restart health, quarantine bad releases, and rollback automatically on failure."
+          $notes = "Evergreen Windows Gateway release. Clients verify SHA-256 digests and successful production CI provenance. The build is attested with GitHub Artifact Attestations, stages required companion files, runs NVR/cloud preflight, atomically replaces files, recovers after power loss, verifies post-restart health, quarantines bad releases, and rolls back automatically on failure."
 
-          gh api "repos/$repo/releases/tags/$encodedTag" 2>$null | Set-Content $env:RUNNER_TEMP\gateway-release.json -Encoding utf8
-          if ($LASTEXITCODE -eq 0) {
-            $existing = Get-Content $env:RUNNER_TEMP\gateway-release.json -Raw | ConvertFrom-Json
+          function Get-ReleaseByTag {
+            $releases = gh api "repos/$repo/releases?per_page=100" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "Gateway release list failed" }
+            return $releases | Where-Object { $_.tag_name -eq $tag } | Select-Object -First 1
+          }
+
+          $existing = Get-ReleaseByTag
+          if ($existing) {
             if ($existing.target_commitish -ne $env:GITHUB_SHA) {
-              throw "Gateway version $version is already published from another commit. Bump GATEWAY_VERSION before publishing."
+              throw "Gateway version $version already belongs to another commit. Bump GATEWAY_VERSION."
             }
           } else {
-            gh release create $tag --repo $repo --target $env:GITHUB_SHA --title $title --notes $notes
-            if ($LASTEXITCODE -ne 0) { throw "Gateway release create failed" }
+            gh release create $tag --draft --repo $repo --target $env:GITHUB_SHA --title $title --notes $notes
+            if ($LASTEXITCODE -ne 0) { throw "Gateway draft release create failed" }
+            $existing = Get-ReleaseByTag
+            if (-not $existing) { throw "Gateway draft release lookup failed" }
+          }
+
+          $releaseId = $existing.id
+          function Get-ReleaseById {
+            $value = gh api "repos/$repo/releases/$releaseId" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "Gateway release lookup failed" }
+            return $value
           }
 
           function Ensure-ImmutableAsset([string]$Path) {
             $name = Split-Path $Path -Leaf
             $localDigest = "sha256:" + (Get-FileHash $Path -Algorithm SHA256).Hash.ToLowerInvariant()
-            $release = gh api "repos/$repo/releases/tags/$encodedTag" | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0) { throw "Gateway release lookup failed: $name" }
+            $release = Get-ReleaseById
             $existingAsset = $release.assets | Where-Object { $_.name -eq $name } | Select-Object -First 1
             if ($existingAsset) {
               if ($existingAsset.digest -ne $localDigest) {
-                throw "Immutable Gateway asset differs for $name. Bump GATEWAY_VERSION; never replace bytes under an existing version."
+                throw "Release asset differs for $name. Bump GATEWAY_VERSION; never replace bytes under an existing version."
               }
-              Write-Host "Immutable asset already matches: $name"
+              Write-Host "Release asset already matches: $name"
               return
+            }
+            if (-not $release.draft) {
+              throw "Published Gateway release is missing $name. Never mutate a published version; bump GATEWAY_VERSION."
             }
             for ($attempt = 1; $attempt -le 4; $attempt++) {
               gh release upload $tag $Path --repo $repo
@@ -218,16 +241,24 @@ jobs:
           )
           foreach ($asset in $releaseAssets) { Ensure-ImmutableAsset $asset }
 
-          $release = gh api "repos/$repo/releases/tags/$encodedTag" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw "Gateway release verification failed" }
+          $release = Get-ReleaseById
           $expectedNames = $releaseAssets | ForEach-Object { Split-Path $_ -Leaf }
           foreach ($name in $expectedNames) {
             $asset = $release.assets | Where-Object { $_.name -eq $name } | Select-Object -First 1
-            if (-not $asset) { throw "Published Gateway asset missing: $name" }
-            if ($asset.state -ne "uploaded") { throw "Published Gateway asset incomplete: $name" }
-            if ($asset.digest -notmatch '^sha256:[0-9a-fA-F]{64}$') { throw "Published Gateway digest missing: $name" }
+            if (-not $asset) { throw "Gateway asset missing before publish: $name" }
+            if ($asset.state -ne "uploaded") { throw "Gateway asset incomplete before publish: $name" }
+            if ($asset.digest -notmatch '^sha256:[0-9a-fA-F]{64}$') { throw "Gateway digest missing before publish: $name" }
           }
-          Write-Host "Immutable Evergreen Gateway release verified: $tag"
+
+          if ($release.draft) {
+            gh release edit $tag --repo $repo --draft=false --title $title --notes $notes
+            if ($LASTEXITCODE -ne 0) { throw "Gateway release publish failed" }
+          }
+
+          $published = Get-ReleaseByTag
+          if (-not $published -or $published.draft) { throw "Gateway release did not publish" }
+          if ($published.target_commitish -ne $env:GITHUB_SHA) { throw "Published Gateway commit mismatch" }
+          Write-Host "Evergreen Gateway release published: $tag immutable=$($published.immutable)"
 
   playback-integration:
     runs-on: ubuntu-latest
