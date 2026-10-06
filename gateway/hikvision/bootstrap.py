@@ -10,8 +10,10 @@ from datetime import datetime, timezone
 
 import agent
 import common
+import maintenance
 from common import CONFIG_PATH, APP_DIR, CloudClient, GatewayConfig, HikvisionClient, log
-from self_update import CHECK_INTERVAL_SECONDS, UPDATE_PROTOCOL, maybe_auto_update
+from self_update import CHECK_INTERVAL_SECONDS, UPDATE_PROTOCOL
+from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
@@ -144,7 +146,12 @@ def main() -> int:
         return verify_ocr_fixture(sys.argv[2])
 
     CloudClient.call = _patched_cloud_call
-    log(f"gateway_bootstrap version={GATEWAY_VERSION} auto_update=evergreen")
+    gateway_path = _installed_gateway_path()
+    log(
+        f"gateway_bootstrap version={GATEWAY_VERSION} "
+        f"update_protocol={UPDATE_PROTOCOL} auto_update=evergreen"
+    )
+    maintenance.start(gateway_path, log)
     _start_health_monitor()
     agent.main()
     return 0
