@@ -3,7 +3,7 @@ name: Hikvision Gateway Windows
 on:
   workflow_dispatch:
   push:
-    branches: [user-source, gateway-build-20261003]
+    branches: [user-source, gateway-build-20261003, hikvision-gateway-resilience]
     paths:
       - 'gateway/hikvision/**'
       - '.github/workflows/hikvision-gateway-windows.yml'
@@ -43,10 +43,21 @@ jobs:
           python bundle_ocr.py "$env:MSYS2_LOCATION/ucrt64"
           & "$env:MSYS2_LOCATION/usr/bin/bash.exe" -lc "pacman -Q" | Out-File OCR-PACKAGES.txt -Encoding utf8
 
+      - name: Verify resilient task definition
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: |
+          python -c "import pathlib, xml.etree.ElementTree as ET; from autostart import task_xml; x=task_xml(pathlib.Path(r'C:\ZHIROX\zhirox-hikvision-gateway.exe'), r'TEST\gateway'); ET.fromstring(x); assert '<RestartOnFailure>' in x and '<Count>999</Count>' in x and '<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>' in x; print('resilient task XML passed')"
+
       - name: Build setup wizard
         shell: pwsh
         working-directory: gateway/hikvision
         run: pyinstaller --clean --onefile --name zhirox-hikvision-setup setup.py
+
+      - name: Build auto-start repair helper
+        shell: pwsh
+        working-directory: gateway/hikvision
+        run: pyinstaller --clean --onefile --name zhirox-hikvision-autostart autostart.py
 
       - name: Test recorder diagnostics
         shell: pwsh
@@ -86,6 +97,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/hikvision-gateway | Out-Null
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-setup.exe artifacts/hikvision-gateway/
+          Copy-Item gateway/hikvision/dist/zhirox-hikvision-autostart.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-diagnose.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/dist/zhirox-hikvision-gateway.exe artifacts/hikvision-gateway/
           Copy-Item gateway/hikvision/README.md artifacts/hikvision-gateway/ -ErrorAction SilentlyContinue
