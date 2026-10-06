@@ -167,7 +167,17 @@ def infer_media_start_from_osd(path: pathlib.Path, expected_start: datetime, dur
         with tempfile.TemporaryDirectory(prefix='zhirox-source-osd-',dir=str(path.parent)) as folder:
             workspace=pathlib.Path(folder)
             readings=_video_clock_readings(path,workspace,max(8.0,float(duration_hint)))
-            return align_readings(readings, expected_start, BAGHDAD_OFFSET)
+            result = align_readings(readings, expected_start, BAGHDAD_OFFSET)
+            result['frames_extracted'] = sum(1 for _ in workspace.glob('sample-*.png'))
+            result['source_bytes'] = path.stat().st_size
+            try:
+                probe = run_background([find_ffmpeg(), '-nostdin', '-hide_banner', '-loglevel', 'info', '-i', str(path), '-frames:v', '1', '-an', '-f', 'null', '-'], capture_output=True, timeout=15)
+                text = (probe.stderr or b'').decode('utf-8', errors='replace')
+                result['source_codecs'] = sorted(set(re.findall(r'Video: (h264|hevc|mpeg4)\b', text)))
+                result['source_probe_ok'] = probe.returncode == 0
+            except Exception:
+                result['source_probe_ok'] = False
+            return result
     except Exception:
         return {'status':'unknown','method':'osd_ocr_alignment','reason':'clock_reading_unavailable'}
 

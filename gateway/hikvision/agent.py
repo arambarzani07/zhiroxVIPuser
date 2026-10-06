@@ -358,6 +358,10 @@ def process_job(
                     diagnostics = hik.playback_diagnostics(channel_id)
                     diagnostics["query_clock_offset_seconds"] = query_shift
                     if source_clock_alignment:
+                        diagnostics["source_bytes"] = source_clock_alignment.get("source_bytes")
+                        diagnostics["source_codecs"] = source_clock_alignment.get("source_codecs", [])
+                        diagnostics["frames_extracted"] = source_clock_alignment.get("frames_extracted")
+                        diagnostics["source_probe_ok"] = source_clock_alignment.get("source_probe_ok")
                         diagnostics["file_clock_status"] = source_clock_alignment.get("status")
                         diagnostics["file_clock_reason"] = source_clock_alignment.get("reason")
                         diagnostics["file_clock_samples"] = source_clock_alignment.get("samples_read", 0)

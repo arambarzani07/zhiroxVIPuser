@@ -35,6 +35,21 @@ class ShortYearClockTests(unittest.TestCase):
         frozen = [(0,'10-06-26 23:14:30'), (3,'10-06-26 23:14:30')]
         self.assertEqual(align_readings(frozen, self.start, self.tz)['status'], 'unknown')
 
+    def test_source_diagnostics_allow_only_codec_and_numeric_facts(self):
+        from osd_time import infer_media_start_from_osd
+        import types
+        with tempfile.TemporaryDirectory() as tmp:
+            source = pathlib.Path(tmp) / 'source.bin'
+            source.write_bytes(b'1234')
+            stderr = b'Input rtsp://admin:SECRET@192.168.1.3/private: Video: h264, unknown fields'
+            with patch('osd_time._video_clock_readings', return_value=self.readings()), patch('osd_time.find_ffmpeg', return_value='ffmpeg'), patch('osd_time.run_background', return_value=types.SimpleNamespace(returncode=0, stderr=stderr)):
+                result = infer_media_start_from_osd(source, self.start)
+            self.assertEqual(result['source_codecs'], ['h264'])
+            self.assertEqual(result['source_bytes'], 4)
+            self.assertTrue(result['source_probe_ok'])
+            self.assertNotIn('SECRET', str(result))
+            self.assertNotIn('rtsp://', str(result))
+
     @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('tesseract'), 'native FFmpeg/Tesseract fixture')
     def test_native_small_clock_on_busy_video_background(self):
         with tempfile.TemporaryDirectory() as tmp:
