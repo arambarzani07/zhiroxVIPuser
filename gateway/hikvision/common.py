@@ -535,38 +535,49 @@ def prepare_browser_clip(source: pathlib.Path, target: pathlib.Path,
         raise RuntimeError("invalid_clip_window")
     ffmpeg = find_ffmpeg()
     try:
-        result = run_background(
-            [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-             "-ss", f"{max(0.0, offset):.3f}", "-i", str(source),
+        prefix = [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y"]
+        seek = ["-ss", f"{max(0.0, offset):.3f}"]
+        input_args = ["-i", str(source)]
+        output_args = [
              "-t", str(duration), "-map", "0:v:0", "-map", "0:a:0?",
              "-vf", "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,fps=25",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
              "-profile:v", "main", "-level:v", "4.1", "-pix_fmt", "yuv420p",
              "-tag:v", "avc1", "-threads", "2",
              "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000",
-             "-movflags", "+faststart", str(target)],
-            capture_output=True, timeout=600,
-        )
-        if result.returncode != 0 or not target.exists() or target.stat().st_size == 0:
-            raise RuntimeError("clip_conversion_failed")
-        # Decode every video frame. Count frames to reject header-only MP4s and
-        # report actual duration instead of claiming the requested duration.
-        check = run_background(
-            [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-xerror",
-             "-i", str(target), "-map", "0:v:0", "-an", "-progress", "pipe:1",
-             "-f", "null", "-"], capture_output=True, timeout=180,
-        )
-        frames = [int(line.split("=", 1)[1].strip())
-                  for line in check.stdout.decode("utf-8", errors="replace").splitlines()
-                  if line.startswith("frame=")]
-        if check.returncode != 0 or not frames or frames[-1] <= 0:
-            raise RuntimeError("clip_decode_validation_failed")
-        actual_duration = frames[-1] / 25.0
-        return {"duration_seconds": actual_duration,
-                "exact_trim": abs(actual_duration - duration) <= 0.1,
-                "video_codec": "h264", "video_tag": "avc1",
-                "pixel_format": "yuv420p", "decode_verified": True,
-                "preparation_version": 2}
+             "-movflags", "+faststart", str(target)]
+        failure = "clip_conversion_failed"
+        for index, command in enumerate((prefix + seek + input_args + output_args,
+                                          prefix + input_args + seek + output_args)):
+            target.unlink(missing_ok=True)
+            if index:
+                log("clip_retry_decoder_seek=true")
+            result = run_background(command, capture_output=True, timeout=600)
+            if result.returncode != 0 or not target.exists() or target.stat().st_size == 0:
+                failure = "clip_conversion_failed"
+                continue
+            # Input seeking can produce a header-only MP4 with exit status 0.
+            # Validate every frame before deciding whether decoder seeking is needed.
+            check = run_background(
+                [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-xerror",
+                 "-i", str(target), "-map", "0:v:0", "-an", "-progress", "pipe:1",
+                 "-f", "null", "-"], capture_output=True, timeout=180,
+            )
+            frames = [int(line.split("=", 1)[1].strip())
+                      for line in check.stdout.decode("utf-8", errors="replace").splitlines()
+                      if line.startswith("frame=")]
+            if check.returncode != 0 or not frames or frames[-1] <= 0:
+                failure = "clip_decode_validation_failed"
+                continue
+            actual_duration = frames[-1] / 25.0
+            if index == 0 and abs(actual_duration - duration) > 0.1:
+                continue
+            return {"duration_seconds": actual_duration,
+                    "exact_trim": abs(actual_duration - duration) <= 0.1,
+                    "video_codec": "h264", "video_tag": "avc1",
+                    "pixel_format": "yuv420p", "decode_verified": True,
+                    "preparation_version": 2}
+        raise RuntimeError(failure)
     except Exception:
         target.unlink(missing_ok=True)
         raise

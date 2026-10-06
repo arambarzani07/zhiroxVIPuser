@@ -33,6 +33,25 @@ class PlaybackFailureTest(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg integration tools required')
 class PlaybackIntegrationTest(unittest.TestCase):
+    def test_indexless_recording_can_be_sampled_and_trimmed(self):
+        from osd_time import _video_clock_readings
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = pathlib.Path(tmp)
+            source, output = folder/'record.h264', folder/'web.mp4'
+            subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'error', '-f', 'lavfi',
+                '-i', 'testsrc2=size=640x360:rate=5', '-t', '9', '-c:v', 'libx264',
+                '-preset', 'ultrafast', '-g', '45', '-f', 'h264', str(source)],
+                check=True, capture_output=True, timeout=30)
+            with patch('osd_time.read_image_clock', return_value='clock'):
+                readings = _video_clock_readings(source, folder, 9)
+            self.assertEqual([position for position, _ in readings], [0, 3, 6])
+            now = datetime.now(timezone.utc)
+            with patch.object(common, 'log'):
+                media = common.prepare_browser_clip(source, output, now+timedelta(seconds=1), now.isoformat(), 7)
+            self.assertTrue(media['decode_verified'])
+            self.assertTrue(media['exact_trim'])
+            self.assertEqual(media['duration_seconds'], 7)
+
     def test_hevc_converts_with_seek_audio_and_faststart(self):
         with tempfile.TemporaryDirectory() as tmp:
             source, output = pathlib.Path(tmp)/'hevc.mp4', pathlib.Path(tmp)/'web.mp4'

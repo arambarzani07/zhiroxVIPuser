@@ -152,7 +152,10 @@ def _video_clock_readings(path: pathlib.Path, workspace: pathlib.Path, duration:
     positions = [0.0, min(3.0, max(0.0, duration/3)), min(7.0, max(0.0, duration*2/3))]
     for index, second in enumerate(dict.fromkeys(round(x,3) for x in positions)):
         image=workspace/f'sample-{index}.png'
-        r=run_background([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-ss',str(second),'-i',str(path),'-frames:v','1',str(image)],capture_output=True,timeout=30)
+        # Decode from the beginning before discarding up to the sample time.
+        # Input seeking on indexless recorder exports can return success with
+        # no image, even for -ss 0, or lose the first decoder parameter sets.
+        r=run_background([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-i',str(path),'-ss',str(second),'-frames:v','1',str(image)],capture_output=True,timeout=30)
         if r.returncode==0 and image.exists():
             readings.append((float(second),read_image_clock(image,workspace)))
     return readings
