@@ -11,21 +11,29 @@ from datetime import datetime, timezone
 import agent
 import common
 import maintenance
+import runtime_hardening
 from common import CONFIG_PATH, APP_DIR, CloudClient, GatewayConfig, HikvisionClient, log
 from self_update import CHECK_INTERVAL_SECONDS, UPDATE_PROTOCOL
 from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.2+evergreen-1"
+GATEWAY_VERSION = "1.4.3+evergreen-1"
 common.GATEWAY_VERSION = GATEWAY_VERSION
 
 HEALTH_PATH = APP_DIR / "gateway-health.json"
 HEALTH_INTERVAL_SECONDS = 10
 HEALTH_PROBE_RETRY_SECONDS = 5
+WORKER_STALL_SECONDS = 15 * 60
+WATCHDOG_INTERVAL_SECONDS = 30
+CLOCK_CHECK_INTERVAL_SECONDS = 10 * 60
+CLOCK_DRIFT_WARN_SECONDS = 30
 
 _original_cloud_call = CloudClient.call
 _next_update_check = 0.0
+_last_worker_progress = time.monotonic()
+_last_nvr_clock_drift_seconds: float | None = None
+_last_nvr_clock_check_at: str | None = None
 
 
 def _installed_gateway_path() -> pathlib.Path:
@@ -41,6 +49,10 @@ def _atomic_json_write(path: pathlib.Path, payload: dict) -> None:
     os.replace(temp, path)
 
 
+def _worker_progress_age() -> int:
+    return max(0, int(time.monotonic() - _last_worker_progress))
+
+
 def _write_health() -> None:
     _atomic_json_write(
         HEALTH_PATH,
@@ -49,6 +61,9 @@ def _write_health() -> None:
             "version": GATEWAY_VERSION,
             "update_protocol": UPDATE_PROTOCOL,
             "pid": os.getpid(),
+            "worker_progress_age_seconds": _worker_progress_age(),
+            "nvr_clock_drift_seconds": _last_nvr_clock_drift_seconds,
+            "nvr_clock_checked_at": _last_nvr_clock_check_at,
             "healthy_at": datetime.now(timezone.utc).isoformat(),
         },
     )
@@ -93,8 +108,68 @@ def _start_health_monitor() -> None:
     ).start()
 
 
+def _nvr_clock_monitor_loop() -> None:
+    """Read-only clock monitoring; never changes NVR or camera settings."""
+    global _last_nvr_clock_drift_seconds, _last_nvr_clock_check_at
+    while True:
+        try:
+            if not CONFIG_PATH.exists():
+                raise RuntimeError("configuration_missing")
+            cfg = GatewayConfig.load()
+            drift = runtime_hardening.measure_nvr_clock_drift(HikvisionClient(cfg))
+            _last_nvr_clock_drift_seconds = drift
+            _last_nvr_clock_check_at = datetime.now(timezone.utc).isoformat()
+            if drift > CLOCK_DRIFT_WARN_SECONDS:
+                log(f"nvr_clock_drift_warning seconds={drift}")
+            else:
+                log(f"nvr_clock_drift_ok seconds={drift}")
+        except Exception as exc:
+            log(f"nvr_clock_monitor_error={type(exc).__name__}:{str(exc)[:220]}")
+        time.sleep(CLOCK_CHECK_INTERVAL_SECONDS)
+
+
+def _start_nvr_clock_monitor() -> None:
+    threading.Thread(
+        target=_nvr_clock_monitor_loop,
+        name="zhirox-gateway-nvr-clock-monitor",
+        daemon=True,
+    ).start()
+
+
+def _worker_watchdog_loop() -> None:
+    """Force a clean Scheduled-Task restart if the real worker becomes stuck.
+
+    Job-lease heartbeat calls are deliberately excluded from progress so a hung
+    FFmpeg/download worker cannot look healthy merely because its lease thread is
+    still sending heartbeats. A normal idle Gateway calls claim every few seconds.
+    """
+    while True:
+        time.sleep(WATCHDOG_INTERVAL_SECONDS)
+        age = _worker_progress_age()
+        if age > WORKER_STALL_SECONDS:
+            try:
+                log(f"worker_watchdog_stall seconds={age}; forcing_task_restart=true")
+            finally:
+                # os._exit is intentional: a stuck worker may not unwind Python
+                # cleanly. The resilient Scheduled Task restarts this executable.
+                os._exit(75)
+
+
+def _start_worker_watchdog() -> None:
+    threading.Thread(
+        target=_worker_watchdog_loop,
+        name="zhirox-gateway-worker-watchdog",
+        daemon=True,
+    ).start()
+
+
 def _patched_cloud_call(self, action: str, *args, **kwargs):
-    global _next_update_check
+    global _next_update_check, _last_worker_progress
+    # The lease heartbeat runs in a side thread and must not hide a stalled main
+    # video worker. All other cloud actions count as real worker progress.
+    if action != "heartbeat_job":
+        _last_worker_progress = time.monotonic()
+
     # Claim is only called between jobs, so an update never interrupts capture,
     # transcoding, upload, or an active job lease heartbeat.
     if action == "claim" and time.monotonic() >= _next_update_check:
@@ -145,14 +220,29 @@ def main() -> int:
     if len(sys.argv) == 3 and sys.argv[1] == "--verify-ocr-fixture":
         return verify_ocr_fixture(sys.argv[2])
 
+    # A Scheduled Task retry or accidental double-click must never create two
+    # workers that can compete for jobs or update the same files.
+    if not runtime_hardening.acquire_single_instance():
+        log("duplicate_gateway_instance=ignored")
+        return 0
+
+    # Preserve one known-good DPAPI config and repair an accidentally corrupted
+    # config before any worker/health thread tries to decrypt it.
+    runtime_hardening.recover_or_backup_config(log)
+    runtime_hardening.wrap_process_job(agent, log)
+
     CloudClient.call = _patched_cloud_call
     gateway_path = _installed_gateway_path()
     log(
         f"gateway_bootstrap version={GATEWAY_VERSION} "
-        f"update_protocol={UPDATE_PROTOCOL} auto_update=evergreen"
+        f"update_protocol={UPDATE_PROTOCOL} auto_update=evergreen "
+        f"worker_watchdog_seconds={WORKER_STALL_SECONDS} "
+        f"clock_monitor_seconds={CLOCK_CHECK_INTERVAL_SECONDS}"
     )
     maintenance.start(gateway_path, log)
     _start_health_monitor()
+    _start_nvr_clock_monitor()
+    _start_worker_watchdog()
     agent.main()
     return 0
 
