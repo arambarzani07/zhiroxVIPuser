@@ -6,7 +6,7 @@ from osd_time import ocr_image
 import unittest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
-from osd_time import compare_readings, dates_in_text, verify_clip_time
+from osd_time import align_readings, compare_readings, dates_in_text, verify_clip_time
 
 class ClockTests(unittest.TestCase):
     offset=timezone(timedelta(hours=3))
@@ -26,8 +26,24 @@ class ClockTests(unittest.TestCase):
     def test_date_format_is_explicit_and_year_first_supported(self):
         self.assertEqual(dates_in_text('2026-10-04 Sun 09:38:00',self.offset,'YMD')[0][1],self.start)
         self.assertEqual(dates_in_text('04/10/2026 09:38:00',self.offset,'DMY')[0][1],self.start)
-    def test_unavailable_ocr_does_not_stop_upload(self):
-        with patch('osd_time.clock_context',side_effect=RuntimeError('no OCR')):
+    def test_source_alignment_recovers_real_file_start_when_isapi_metadata_is_hours_late(self):
+        requested=datetime(2026,10,6,9,39,9,tzinfo=self.offset)
+        reads=[
+            (0,'10-06-2026 Tue 06:26:25'),
+            (3,'10-06-2026 Tue 06:26:28'),
+            (7,'10-06-2026 Tue 06:26:32'),
+        ]
+        aligned=align_readings(reads,requested,self.offset)
+        self.assertEqual(aligned['status'],'aligned')
+        self.assertEqual(aligned['date_order'],'MDY')
+        self.assertEqual(aligned['offset_seconds'],-11564.0)
+        self.assertTrue(aligned['media_start_at'].startswith('2026-10-06T03:26:25'))
+    def test_ambiguous_or_frozen_source_clock_does_not_align(self):
+        requested=datetime(2026,10,6,9,39,9,tzinfo=self.offset)
+        frozen=[(0,'10-06-2026 Tue 06:26:25'),(3,'10-06-2026 Tue 06:26:25')]
+        self.assertEqual(align_readings(frozen,requested,self.offset)['status'],'unknown')
+    def test_unavailable_ocr_does_not_stop_generic_verifier(self):
+        with patch('osd_time.infer_media_start_from_osd',return_value={'status':'unknown','reason':'no OCR'}):
             self.assertEqual(verify_clip_time(None,10,pathlib.Path(__file__),self.start,30)['status'],'unknown')
 
 class WindowsOcrSmoke(unittest.TestCase):
