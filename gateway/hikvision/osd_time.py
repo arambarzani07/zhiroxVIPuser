@@ -33,7 +33,11 @@ def dates_in_text(text: str, offset, order: str | None = None) -> list[tuple[str
     matches = re.findall(r'(\d{2,4})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{2,4}).{0,24}?(\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})', text)
     results = []
     for a,b,c,h,m,s in matches:
-        options = [('YMD', int(a),int(b),int(c))] if len(a)==4 else [('MDY',int(c),int(a),int(b)),('DMY',int(c),int(b),int(a))]
+        # Hikvision's MM-DD-YY / DD-MM-YY overlays use a two-digit year.
+        # Our supported footage is 2020-2100, so YY means 20YY; never use a
+        # moving-century pivot or infer missing/illegible digits.
+        last_year = int(c) + (2000 if len(c) == 2 else 0)
+        options = [('YMD', int(a),int(b),int(c))] if len(a)==4 else [('MDY',last_year,int(a),int(b)),('DMY',last_year,int(b),int(a))]
         for fmt,y,month,day in options:
             if order and fmt != order:
                 continue

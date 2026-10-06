@@ -222,7 +222,8 @@ class HikvisionClient:
         except ValueError:
             facts["host"] = "hostname"
         for label, path in (("stream", f"/ISAPI/Streaming/channels/{int(channel_id) * 100 + 1}"),
-                            ("device", "/ISAPI/System/deviceInfo")):
+                            ("device", "/ISAPI/System/deviceInfo"),
+                            ("clock", "/ISAPI/System/time")):
             try:
                 response = self.session.get(self.host + path, timeout=8)
                 facts[label + "_http"] = int(response.status_code)
@@ -235,12 +236,17 @@ class HikvisionClient:
                         if node.tag.split("}")[-1] == "videoCodecType" and node.text
                         and node.text.strip().upper() in {"H.264", "H.265", "H264", "H265", "MJPEG"}
                     })
-                else:
+                elif label == "device":
                     for node in root.iter():
                         if node.tag.split("}")[-1] == "firmwareVersion" and node.text:
                             match = re.fullmatch(r"[Vv]?\d+\.\d+(?:\.\d+)?", node.text.strip())
                             if match:
                                 facts["firmware"] = match.group(0)
+                else:
+                    for node in root.iter():
+                        if node.tag.split("}")[-1] == "localTime" and node.text:
+                            facts["nvr_time"] = datetime.fromisoformat(
+                                node.text.strip().replace("Z", "+00:00")).isoformat()
             except Exception:
                 facts[label + "_read"] = "unavailable"
         return facts
@@ -482,6 +488,15 @@ class HikvisionClient:
             details["nal"] = sorted({int(x) for x in re.findall(
                 r"Unsupported \(HEVC\) NAL type \((\d{1,2})\)", stderr) if 0 <= int(x) <= 63})
             details["input_codec"] = sorted(set(re.findall(r"Video: (hevc|h264)\b", stderr)))
+            details["markers"] = [code for marker, code in (
+                ("Multi-layer HEVC coding", "multi_layer"),
+                ("dimensions not set", "no_dimensions"),
+                ("Could not find codec parameters", "no_codec_parameters"),
+                ("Invalid data found", "invalid_data"),
+                ("Could not write header", "header_failed"),
+                ("Output file is empty", "empty_output"),
+                ("Error opening output", "output_open_failed"),
+                ("Conversion failed", "conversion_failed")) if marker in stderr]
         suffix = ":" + json.dumps(details, separators=(",", ":")) if any(details.values()) else ""
         raise RuntimeError("rtsp_playback_failed:" + reason + suffix) from None
 

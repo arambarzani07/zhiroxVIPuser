@@ -304,8 +304,12 @@ def process_job(
             message = f"{type(exc).__name__}:{exc}"[:900]
             if "rtsp_playback_failed:unsupported_hevc_payload" in message:
                 try:
-                    message = message[:450] + ":diag=" + json.dumps(
-                        hik.playback_diagnostics(channel_id), separators=(",", ":"))
+                    diagnostics = hik.playback_diagnostics(channel_id)
+                    if source_clock_alignment:
+                        diagnostics["file_clock_status"] = source_clock_alignment.get("status")
+                        diagnostics["file_clock_reason"] = source_clock_alignment.get("reason")
+                        diagnostics["file_clock_samples"] = source_clock_alignment.get("samples_read", 0)
+                    message = message[:450] + ":diag=" + json.dumps(diagnostics, separators=(",", ":"))
                 except Exception:
                     pass
             try:
