@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import agent
 import common
 import maintenance
+import runtime_hardening
 from common import CONFIG_PATH, APP_DIR, CloudClient, GatewayConfig, HikvisionClient, log
 from self_update import CHECK_INTERVAL_SECONDS, UPDATE_PROTOCOL
 from update_policy import maybe_auto_update
@@ -144,6 +145,17 @@ def main() -> int:
         return preflight_update()
     if len(sys.argv) == 3 and sys.argv[1] == "--verify-ocr-fixture":
         return verify_ocr_fixture(sys.argv[2])
+
+    # A Scheduled Task retry or accidental double-click must never create two
+    # workers that can compete for jobs or update the same files.
+    if not runtime_hardening.acquire_single_instance():
+        log("duplicate_gateway_instance=ignored")
+        return 0
+
+    # Preserve one known-good DPAPI config and repair an accidentally corrupted
+    # config before any worker/health thread tries to decrypt it.
+    runtime_hardening.recover_or_backup_config(log)
+    runtime_hardening.wrap_process_job(agent, log)
 
     CloudClient.call = _patched_cloud_call
     gateway_path = _installed_gateway_path()
