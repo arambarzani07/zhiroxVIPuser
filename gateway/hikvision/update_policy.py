@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import pathlib
+
 import self_update
 
 MAX_TOTAL_UPDATE_BYTES = 1024 * 1024 * 1024
 
 
-def find_next_release(current_version: str, session=self_update.requests) -> dict | None:
-    """Return the oldest required newer release, not merely the newest one.
+def find_next_release(
+    current_version: str,
+    session=self_update.requests,
+    app_dir: pathlib.Path | None = None,
+) -> dict | None:
+    """Return the oldest compatible newer release that is not quarantined.
 
     Sequential upgrades keep long-offline gateways compatible with future update
-    protocol migrations. A bridge release can teach an old gateway a new update
-    protocol before a later release starts requiring it.
+    protocol migrations. If a release rolled back locally, it is skipped during
+    its quarantine window so a later fixed release can recover the machine
+    without waiting for or repeatedly retrying the known-bad package.
     """
     current = self_update.version_key(current_version)
     candidates: list[tuple[tuple[int, int, int, int], dict]] = []
@@ -49,6 +56,8 @@ def find_next_release(current_version: str, session=self_update.requests) -> dic
                 continue
             if not self_update._release_has_asset(release, self_update.MANIFEST_ASSET):
                 continue
+            if app_dir is not None and self_update._is_quarantined(app_dir, version):
+                continue
 
             item = dict(release)
             item["_gateway_version"] = version
@@ -76,10 +85,22 @@ _original_disk_space_check = self_update._ensure_disk_space
 
 
 def maybe_auto_update(*args, **kwargs) -> bool:
-    """Run the hardened updater with sequential selection and payload limits."""
+    """Run the hardened updater with bridge sequencing and bad-release bypass."""
+    app_dir = kwargs.get("app_dir")
+    if app_dir is None and len(args) >= 3:
+        app_dir = args[2]
+    app_dir = pathlib.Path(app_dir) if app_dir is not None else None
+
+    def release_selector(current_version: str, session=self_update.requests):
+        return find_next_release(
+            current_version,
+            session=session,
+            app_dir=app_dir,
+        )
+
     original_release_selector = self_update.find_newer_release
     original_disk_check = self_update._ensure_disk_space
-    self_update.find_newer_release = find_next_release
+    self_update.find_newer_release = release_selector
     self_update._ensure_disk_space = _bounded_disk_space_check
     try:
         return self_update.maybe_auto_update(*args, **kwargs)
