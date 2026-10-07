@@ -14,13 +14,14 @@ import common
 import maintenance
 import recording_recovery
 import runtime_hardening
+import transport_clock
 from common import CONFIG_PATH, APP_DIR, CloudClient, GatewayConfig, HikvisionClient, log
 from self_update import CHECK_INTERVAL_SECONDS as DEFAULT_UPDATE_CHECK_INTERVAL_SECONDS, UPDATE_PROTOCOL
 from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.16+evergreen-11"
+GATEWAY_VERSION = "1.4.16+evergreen-12"
 common.GATEWAY_VERSION = GATEWAY_VERSION
 
 # Poll GitHub often enough that routine Gateway fixes arrive quickly, while the
@@ -343,6 +344,7 @@ def main() -> int:
     runtime_hardening.recover_or_backup_config(log)
     runtime_hardening.wrap_process_job(agent, log)
     recording_recovery.install(agent, log)
+    transport_clock.install(agent, HikvisionClient, log)
 
     CloudClient.call = _patched_cloud_call
     HikvisionClient.download_recording = _guarded_download_recording
