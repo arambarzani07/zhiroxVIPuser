@@ -125,6 +125,9 @@ class TransportSpotCheckTests(unittest.TestCase):
 class TransportClockPromotionTests(unittest.TestCase):
     def _agent(self, result):
         verifier = Mock(return_value=dict(result))
+        # Mock fabricates truthy child attributes on getattr(). The production
+        # sentinel is a real boolean set only on wrappers installed by this module.
+        verifier._zhirox_transport_clock = False
         return types.SimpleNamespace(verify_clip_time=verifier), verifier
 
     def _client_class(self):
