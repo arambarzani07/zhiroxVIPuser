@@ -41,6 +41,7 @@ class PlaybackFailureTest(unittest.TestCase):
             'channel_id': 10,
         }
         hik = Mock()
+        hik._verified_playback_clock_offset = 0
         hik.playback_diagnostics.return_value = {'nvr_time': '2026-10-07T10:20:00+03:00'}
         hik.search_recording.side_effect = [
             {'found': False},
@@ -63,10 +64,11 @@ class PlaybackFailureTest(unittest.TestCase):
             'channel_id': 10,
         }
         hik = Mock()
+        hik._verified_playback_clock_offset = 0
         hik.playback_diagnostics.return_value = {'nvr_time': '2026-10-07T10:20:00+03:00'}
         hik.search_recording.side_effect = [{'found': False}, {'found': False}]
         recording_recovery._prefer_working_clock_convention(hik, job, Mock())
-        self.assertFalse(hasattr(hik, '_verified_playback_clock_offset'))
+        self.assertEqual(hik._verified_playback_clock_offset, 0)
 
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg integration tools required')
