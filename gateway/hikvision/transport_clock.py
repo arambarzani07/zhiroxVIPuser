@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from rtsp_codec_relay import take_timing_attestation
+from transport_spot_check import verify_transport_spot_check
 
 
 def _strict_timing_fields_match(attestation: dict, duration_seconds: float) -> bool:
@@ -29,14 +30,7 @@ def _strict_timing_fields_match(attestation: dict, duration_seconds: float) -> b
 
 
 def _attestation_matches_duration(attestation: dict, duration_seconds: float) -> bool:
-    """Accept normal proof or a proven-success download with only relay teardown noise.
-
-    A relay can see BrokenPipe/ConnectionReset when FFmpeg intentionally closes the
-    loopback RTSP session after the requested duration. The recorder timing proof is
-    still independent and valid if DESCRIBE/PLAY/absolute Range all matched exactly
-    and the download function itself returned successfully. No other relay failure is
-    promoted, and OCR mismatch remains authoritative in ``install`` below.
-    """
+    """Accept normal proof or a proven-success download with only relay teardown noise."""
     if not _strict_timing_fields_match(attestation, duration_seconds):
         return False
     if attestation.get("verified") is True:
@@ -48,18 +42,40 @@ def _attestation_matches_duration(attestation: dict, duration_seconds: float) ->
     )
 
 
+def _promote_transport(result: dict, attestation: dict, log: Callable[[str], None]) -> dict:
+    tolerated_teardown = bool(
+        attestation.get("verified") is not True
+        and attestation.get("reason") == "relay_failed"
+    )
+    promoted = dict(result)
+    promoted.update(
+        status="matched",
+        method="rtsp_play_absolute_clock",
+        reason=(
+            "upstream_play_clock_range_matched_after_successful_download"
+            if tolerated_teardown
+            else "upstream_play_clock_range_matched"
+        ),
+        transport_attestation=attestation,
+    )
+    log(
+        "clip_clock_verified_by=rtsp_play_absolute_clock "
+        f"relay_teardown_tolerated={tolerated_teardown}"
+    )
+    return promoted
+
+
 def install(agent_module: Any, client_class: type, log: Callable[[str], None]) -> None:
     """Promote only independently attested RTSP absolute clock ranges.
 
-    SDP correction alone is never timing proof. The relay must observe a successful
-    upstream DESCRIBE and PLAY plus an absolute ``Range: clock=...`` response whose
-    start (and end, when present) matches the exact bounded historical URI. A real
-    OCR mismatch always wins and is never overridden.
+    Strict transport proof gets a fail-safe OSD contradiction spot-check instead of
+    the expensive five-frame OCR alignment pass. A confirmed two-frame OSD mismatch
+    always blocks the clip. If transport proof is incomplete, the original full OCR
+    verifier runs unchanged.
     """
     original_download = client_class.download_playback_stream
     if not getattr(original_download, "_zhirox_transport_clock", False):
         def download_with_attestation(self, playback_uri, output_path, duration):
-            # Discard any stale record for this exact bounded URI before starting.
             take_timing_attestation(playback_uri)
             self._playback_timing_attestation = None
             result = original_download(self, playback_uri, output_path, duration)
@@ -69,9 +85,8 @@ def install(agent_module: Any, client_class: type, log: Callable[[str], None]) -
                     "reason": "attestation_missing",
                 }
                 attestation = dict(attestation)
-                # Reaching this line means the guarded relay download returned
-                # normally (FFmpeg returncode 0, corrected SDP, non-empty output).
-                # This flag is intentionally added here, never inside the relay.
+                # Returning normally means FFmpeg succeeded, corrected SDP was used,
+                # and the guarded download produced non-empty media.
                 attestation["download_succeeded"] = True
                 self._playback_timing_attestation = attestation
                 teardown_candidate = bool(
@@ -95,41 +110,39 @@ def install(agent_module: Any, client_class: type, log: Callable[[str], None]) -
         return
 
     def verify_with_transport_clock(hik, channel_id, path, clip_start, duration_seconds):
-        result = original_verify(hik, channel_id, path, clip_start, duration_seconds)
-        if not isinstance(result, dict):
-            return result
-        status = result.get("status")
-        # Never override a positive OCR match or a real mismatch.
-        if status != "unknown":
-            return result
-        if getattr(hik, "_playback_codec_relay_used", False) is not True:
-            return result
-
+        relay_used = getattr(hik, "_playback_codec_relay_used", False) is True
         attestation = getattr(hik, "_playback_timing_attestation", None)
         if not isinstance(attestation, dict):
             attestation = {"verified": False, "reason": "attestation_missing"}
 
-        if _attestation_matches_duration(attestation, duration_seconds):
-            promoted = dict(result)
-            tolerated_teardown = bool(
-                attestation.get("verified") is not True
-                and attestation.get("reason") == "relay_failed"
-            )
-            promoted.update(
-                status="matched",
-                method="rtsp_play_absolute_clock",
-                reason=(
-                    "upstream_play_clock_range_matched_after_successful_download"
-                    if tolerated_teardown
-                    else "upstream_play_clock_range_matched"
-                ),
-                transport_attestation=attestation,
-            )
-            log(
-                "clip_clock_verified_by=rtsp_play_absolute_clock "
-                f"relay_teardown_tolerated={tolerated_teardown}"
-            )
+        # Fast path only when the recorder itself independently attests the exact
+        # historical PLAY clock range and the corrected download completed.
+        if relay_used and _attestation_matches_duration(attestation, duration_seconds):
+            spot = verify_transport_spot_check(path, clip_start, duration_seconds)
+            if isinstance(spot, dict) and spot.get("status") == "mismatch":
+                blocked = dict(spot)
+                blocked["transport_attestation"] = attestation
+                log("clip_clock_rejected_by=osd_transport_spot_check")
+                return blocked
+            base = spot if isinstance(spot, dict) else {
+                "status": "unknown",
+                "method": "osd_transport_spot_check",
+                "reason": "spot_check_unavailable",
+            }
+            promoted = _promote_transport(base, attestation, log)
+            promoted["osd_spot_check"] = spot
+            promoted["transport_fast_path"] = True
             return promoted
+
+        # No complete transport proof: retain the original five-frame verifier.
+        result = original_verify(hik, channel_id, path, clip_start, duration_seconds)
+        if not isinstance(result, dict):
+            return result
+        status = result.get("status")
+        if status != "unknown":
+            return result
+        if not relay_used:
+            return result
 
         reason = str(attestation.get("reason") or "attestation_unverified")
         enriched = dict(result)
