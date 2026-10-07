@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable
 
 import common
+import transaction_video_invariant
 
 
 LEGACY_LOCAL_CLOCK_FIRMWARES = {"V3.4.107"}
@@ -106,7 +107,9 @@ def _prefer_working_clock_convention(hik: Any, job: dict, log: Callable[[str], N
 
 
 def install(agent_module: Any, log: Callable[[str], None]) -> None:
-    """Install the missing-recording recovery preflight exactly once."""
+    """Install clock recovery plus the fail-closed transaction-video invariant."""
+    transaction_video_invariant.install(agent_module, log)
+
     current = agent_module.process_job
     if getattr(current, "_zhirox_recording_recovery", False):
         return
