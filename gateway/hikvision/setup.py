@@ -57,7 +57,7 @@ def main() -> int:
     print("NVR password and gateway token are encrypted locally with Windows DPAPI.")
     print("They are never written to Supabase or GitHub.\n")
 
-    host = ask("NVR address", "192.168.1.2")
+    host = ask("NVR address", "192.168.1.3")
     username = ask("NVR username", "admin")
     password = ask_secret("NVR password (typing shows *): ")
     token = ask_secret("ZHIROX gateway token (typing shows *): ")
