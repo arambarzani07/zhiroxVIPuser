@@ -19,7 +19,7 @@ from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.15+evergreen-3"
+GATEWAY_VERSION = "1.4.16+evergreen-1"
 common.GATEWAY_VERSION = GATEWAY_VERSION
 
 # Poll GitHub often enough that routine Gateway fixes arrive quickly, while the
@@ -54,13 +54,29 @@ def _guarded_download_recording(
     playback_uri: str,
     output_path: pathlib.Path,
 ) -> str:
-    """Reject HTTP 200 false-successes that contain a whole recording segment."""
-    mode = _original_download_recording(self, playback_uri, output_path)
+    """Reject unsafe bounded HTTP exports before they can download huge segments."""
     try:
         query = parse_qs(urlsplit(playback_uri).query)
         bounded = set(query) == {"starttime", "endtime"}
     except Exception:
         bounded = False
+
+    # DS-7616NI-K2 V3.4.107 is known to answer some bounded HTTP exports with
+    # the whole recording segment (around 1 GB in production). Detect that
+    # firmware before opening the HTTP body so the agent immediately falls back
+    # to the same bounded historical RTSP window instead of blocking on the
+    # oversized transfer.
+    if bounded:
+        try:
+            device = self.device_info()
+        except Exception:
+            device = ""
+        if "V3.4.107" in device:
+            output_path.unlink(missing_ok=True)
+            log("bounded_http_export_skipped legacy_firmware=V3.4.107")
+            raise RuntimeError("download_rejected:legacy_bounded_http_disabled")
+
+    mode = _original_download_recording(self, playback_uri, output_path)
     if (
         bounded
         and output_path.exists()
