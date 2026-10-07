@@ -220,6 +220,20 @@ class TransactionVideoInvariantTests(unittest.TestCase):
         self.assertNotIn('complete', actions)
         failure = next(call for call in cloud.call.call_args_list if call.args[0] == 'fail')
         self.assertIn('clock_match_required', str(failure))
+        self.assertIn('insufficient_clock_readings', str(failure))
+
+    def test_clock_diagnostics_exclude_raw_text_and_credentials(self):
+        from agent import clock_failure_details
+        details = clock_failure_details({
+            'status': 'unknown', 'samples_read': 0, 'frames_extracted': 5,
+            'reason': 'rtsp://admin:SECRET@host',
+            'ocr_text': 'SECRET', 'source_codecs': ['h264', 'SECRET'],
+            'transport_attestation': {'reason': 'range_unverified', 'url': 'SECRET'},
+        })
+        self.assertEqual(details['samples_read'], 0)
+        self.assertEqual(details['frames_extracted'], 5)
+        self.assertEqual(details['transport_reason'], 'range_unverified')
+        self.assertNotIn('SECRET', str(details))
 
     def test_production_preflight_accepts_verified_clip_and_keeps_completion_gate(self):
         cloud = self._exercise_production_preflight('matched')
@@ -253,7 +267,7 @@ class TransactionVideoInvariantTests(unittest.TestCase):
         hik.download_recording.side_effect = download
         cloud.call.return_value = {'signed_upload_url': 'private', 'object_path': 'clip'}
         job = dict(self.job, channel_id=10)
-        with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'prepare_browser_clip', side_effect=prepare), patch.object(agent, 'verify_clip_time', return_value={'status': status}):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'prepare_browser_clip', side_effect=prepare), patch.object(agent, 'verify_clip_time', return_value={'status': status, 'reason': 'insufficient_clock_readings', 'samples_read': 0}):
             agent.process_job(cloud, Mock(), hik, job)
         return cloud
 

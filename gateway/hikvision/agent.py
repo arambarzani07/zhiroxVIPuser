@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pathlib
 import json
+import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -80,6 +81,30 @@ def preflight_video_metadata(job: dict, metadata: dict, recorder_facts: dict) ->
     # Bootstrap installs the same strict validator used by the completion gate.
     # Keep this hook explicit so validation runs before any storage request.
     return metadata
+
+
+def clock_failure_details(check: dict) -> dict:
+    """Report numeric/enum diagnostics without raw OCR, URLs or credentials."""
+    details = {}
+    for key in ("status", "method", "reason"):
+        value = check.get(key)
+        if isinstance(value, str) and re.fullmatch(r"[a-z_]+(?:;transport_[a-z_]+)?", value):
+            details[key] = value[:180]
+    for key in ("samples_read", "frames_extracted", "source_bytes",
+                "first_sample_offset_seconds", "offset_seconds"):
+        value = check.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            details[key] = value
+    if isinstance(check.get("source_probe_ok"), bool):
+        details["source_probe_ok"] = check["source_probe_ok"]
+    details["source_codecs"] = [x for x in check.get("source_codecs", [])
+                                if x in ("h264", "hevc", "mpeg4")]
+    transport = check.get("transport_attestation")
+    if isinstance(transport, dict):
+        reason = transport.get("reason")
+        if isinstance(reason, str) and re.fullmatch(r"[a-z_]+", reason):
+            details["transport_reason"] = reason[:100]
+    return details
 
 
 def _retry_recorder_local_clock(
@@ -505,6 +530,10 @@ def process_job(
             )
         except Exception as exc:
             message = f"{type(exc).__name__}:{exc}"[:900]
+            if str(exc) == "transaction_video_invariant:clock_match_required":
+                message += ":clock=" + json.dumps(
+                    clock_failure_details(clock_check), separators=(",", ":")
+                )
             if (
                 "rtsp_playback_failed:unsupported_hevc_payload" in message
                 or str(exc)
