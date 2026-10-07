@@ -52,35 +52,50 @@ def dates_in_text(text: str, offset, order: str | None = None) -> list[tuple[str
 
 def read_image_clock(image: pathlib.Path, workspace: pathlib.Path) -> str:
     parts = []
-    # Read both common Hikvision OSD locations. The top crop covers the clock in
-    # Kani Chnar Camera 10 while the bottom crop keeps this generic for other IPCs.
+    # Read both common Hikvision OSD bands first. This is cheap and preserves the
+    # existing fast path when the clock is already legible.
     for position in ['0', 'ih-oh']:
         target = workspace / ('osd-top.png' if position=='0' else 'osd-bottom.png')
         r = run_background([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-i',str(image),
             '-vf',f'crop=iw:ih*0.22:0:{position},scale=2400:-1','-frames:v','1',str(target)],capture_output=True,timeout=20)
         if r.returncode == 0:
-            parts.append(ocr_image(target))
-    if dates_in_text(' '.join(parts), BAGHDAD_OFFSET):
-        return ' '.join(parts)
-    # A full-width crop can shrink small OSD letters and includes shelf labels.
-    # Retry the clock corner at higher resolution using sparse-text segmentation.
-    # Inversion helps white overlay text; both variants retain the original pixels.
-    for inverted in (False, True):
-        target = workspace / ('osd-corner-inverted.png' if inverted else 'osd-corner.png')
-        filters = 'crop=iw*0.60:ih*0.18:0:0,scale=3200:-1,format=gray'
-        if inverted:
-            filters += ',negate'
-        r = run_background([find_ffmpeg(), '-nostdin', '-loglevel', 'error', '-y',
-            '-i', str(image), '-vf', filters, '-frames:v', '1', str(target)],
-            capture_output=True, timeout=20)
-        if r.returncode == 0:
             try:
-                text = ocr_image(target, psm=11)
+                text = ocr_image(target)
                 parts.append(text)
                 if dates_in_text(text, BAGHDAD_OFFSET):
-                    break
+                    return ' '.join(parts)
             except Exception:
                 pass
+
+    # Old Hikvision playback can make the OSD tiny after SDP repair/transcoding.
+    # Scan each corner at higher resolution. Never guess digits: every candidate
+    # still has to satisfy dates_in_text() and the multi-frame alignment guards.
+    corners = [
+        ('top-left', '0', '0'),
+        ('top-right', 'iw-ow', '0'),
+        ('bottom-left', '0', 'ih-oh'),
+        ('bottom-right', 'iw-ow', 'ih-oh'),
+    ]
+    for label, x, y in corners:
+        for inverted in (False, True):
+            suffix = '-inverted' if inverted else ''
+            target = workspace / f'osd-{label}{suffix}.png'
+            filters = f'crop=iw*0.62:ih*0.22:{x}:{y},scale=3600:-1,format=gray'
+            if inverted:
+                filters += ',negate'
+            r = run_background([find_ffmpeg(), '-nostdin', '-loglevel', 'error', '-y',
+                '-i', str(image), '-vf', filters, '-frames:v', '1', str(target)],
+                capture_output=True, timeout=20)
+            if r.returncode != 0:
+                continue
+            for psm in (11, 7):
+                try:
+                    text = ocr_image(target, psm=psm)
+                    parts.append(text)
+                    if dates_in_text(text, BAGHDAD_OFFSET):
+                        return ' '.join(parts)
+                except Exception:
+                    pass
     return ' '.join(parts)
 
 
@@ -149,7 +164,15 @@ def align_readings(readings: list[tuple[float,str]], start: datetime, offset=BAG
 
 def _video_clock_readings(path: pathlib.Path, workspace: pathlib.Path, duration: float) -> list[tuple[float,str]]:
     readings=[]
-    positions = [0.0, min(3.0, max(0.0, duration/3)), min(7.0, max(0.0, duration*2/3))]
+    # More independent frames materially improve old-NVR OSD verification while
+    # retaining the rule that at least two advancing clock readings are required.
+    positions = [
+        0.0,
+        min(3.0, max(0.0, duration/4)),
+        min(7.0, max(0.0, duration/3)),
+        min(15.0, max(0.0, duration/2)),
+        max(0.0, duration - 3.0),
+    ]
     for index, second in enumerate(dict.fromkeys(round(x,3) for x in positions)):
         image=workspace/f'sample-{index}.png'
         # Decode from the beginning before discarding up to the sample time.
@@ -176,7 +199,7 @@ def infer_media_start_from_osd(path: pathlib.Path, expected_start: datetime, dur
                 if candidates:
                     closest = min((stamp for _,stamp in candidates), key=lambda stamp: abs((stamp - expected_start.astimezone(BAGHDAD_OFFSET)).total_seconds()))
                     observed.append(closest.isoformat())
-            result['clock_candidates'] = list(dict.fromkeys(observed))[:3]
+            result['clock_candidates'] = list(dict.fromkeys(observed))[:5]
             result['frames_extracted'] = sum(1 for _ in workspace.glob('sample-*.png'))
             result['source_bytes'] = path.stat().st_size
             try:
@@ -238,7 +261,19 @@ def verify_clip_time(hik, channel: int, path: pathlib.Path, start: datetime, dur
     # be wrong on older firmware.
     alignment = infer_media_start_from_osd(path, start, duration)
     if alignment.get('status') != 'aligned':
-        return {'status':'unknown','method':'osd_ocr','reason':alignment.get('reason','clock_reading_unavailable')}
+        return {
+            'status':'unknown',
+            'method':'osd_ocr',
+            'reason':alignment.get('reason','clock_reading_unavailable'),
+            'samples_read':alignment.get('samples_read',0),
+            'first_displayed_at':alignment.get('first_displayed_at'),
+            'first_sample_offset_seconds':alignment.get('first_sample_offset_seconds'),
+            'clock_candidates':alignment.get('clock_candidates',[]),
+            'frames_extracted':alignment.get('frames_extracted'),
+            'source_bytes':alignment.get('source_bytes'),
+            'source_codecs':alignment.get('source_codecs',[]),
+            'source_probe_ok':alignment.get('source_probe_ok'),
+        }
     delta = float(alignment.get('offset_seconds') or 0.0)
     return {
         'status':'matched' if abs(delta)<=5 else 'mismatch',
