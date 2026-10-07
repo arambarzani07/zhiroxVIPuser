@@ -117,6 +117,16 @@ class TransportClockPromotionTests(unittest.TestCase):
             'relay_failed': False,
         }
 
+    def _relay_teardown_attestation(self):
+        att = self._verified_attestation()
+        att.update(
+            verified=False,
+            reason='relay_failed',
+            relay_failed=True,
+            download_succeeded=True,
+        )
+        return att
+
     def test_unknown_clock_promotes_only_with_full_transport_proof(self):
         agent = self._agent({'status': 'unknown', 'reason': 'insufficient_clock_readings'})
         Client = self._client_class()
@@ -128,17 +138,56 @@ class TransportClockPromotionTests(unittest.TestCase):
         self.assertEqual(result['status'], 'matched')
         self.assertEqual(result['method'], 'rtsp_play_absolute_clock')
 
-    def test_real_mismatch_is_never_overridden(self):
-        agent = self._agent({'status': 'mismatch', 'reason': 'offset'})
+    def test_successful_download_tolerates_only_post_play_relay_teardown(self):
+        agent = self._agent({'status': 'unknown', 'reason': 'insufficient_clock_readings'})
         Client = self._client_class()
         transport_clock.install(agent, Client, Mock())
         hik = Client()
         hik._playback_codec_relay_used = True
-        hik._playback_timing_attestation = self._verified_attestation()
+        hik._playback_timing_attestation = self._relay_teardown_attestation()
+        result = agent.verify_clip_time(hik, 10, None, None, 30)
+        self.assertEqual(result['status'], 'matched')
+        self.assertEqual(result['method'], 'rtsp_play_absolute_clock')
         self.assertEqual(
-            agent.verify_clip_time(hik, 10, None, None, 30)['status'],
-            'mismatch',
+            result['reason'],
+            'upstream_play_clock_range_matched_after_successful_download',
         )
+
+    def test_relay_teardown_without_full_clock_proof_never_promotes(self):
+        mutations = (
+            {'download_succeeded': False},
+            {'play_accepted': False},
+            {'range_kind': 'npt'},
+            {'start_delta_seconds': 2.0},
+            {'end_delta_seconds': -2.0},
+            {'sdp_corrected': False},
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                agent = self._agent({'status': 'unknown', 'reason': 'insufficient_clock_readings'})
+                Client = self._client_class()
+                transport_clock.install(agent, Client, Mock())
+                hik = Client()
+                hik._playback_codec_relay_used = True
+                att = self._relay_teardown_attestation()
+                att.update(mutation)
+                hik._playback_timing_attestation = att
+                result = agent.verify_clip_time(hik, 10, None, None, 30)
+                self.assertEqual(result['status'], 'unknown')
+
+    def test_real_mismatch_is_never_overridden(self):
+        for attestation in (self._verified_attestation(), self._relay_teardown_attestation()):
+            with self.subTest(reason=attestation['reason']):
+                agent = self._agent({'status': 'mismatch', 'reason': 'offset'})
+                Client = self._client_class()
+                transport_clock.install(agent, Client, Mock())
+                hik = Client()
+                hik._playback_codec_relay_used = True
+                hik._playback_timing_attestation = attestation
+                self.assertEqual(
+                    agent.verify_clip_time(hik, 10, None, None, 30)['status'],
+                    'mismatch',
+                )
 
     def test_duration_or_unverified_transport_cannot_promote(self):
         for mutation in (
