@@ -21,7 +21,7 @@ from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.16+evergreen-14"
+GATEWAY_VERSION = "1.4.16+evergreen-15"
 common.GATEWAY_VERSION = GATEWAY_VERSION
 
 # Poll GitHub often enough that routine Gateway fixes arrive quickly, while the
@@ -110,8 +110,6 @@ def _cleanup_stale_setup_downloads() -> None:
                     candidate.unlink(missing_ok=True)
                     backup_removed += 1
                 except OSError:
-                    # OneDrive or a just-finished process may hold a file briefly.
-                    # Deferred cleanup retries again automatically.
                     continue
 
             if removed or backup_removed:
@@ -122,7 +120,6 @@ def _cleanup_stale_setup_downloads() -> None:
 
 
 def _desktop_cleanup_retry_loop() -> None:
-    """Retry cleanup after self-update releases its rollback lock and OneDrive settles."""
     for delay_seconds in (15, 30, 60, 120, 300):
         time.sleep(delay_seconds)
         try:
@@ -144,7 +141,6 @@ def _guarded_download_recording(
     playback_uri: str,
     output_path: pathlib.Path,
 ) -> str:
-    """Reject HTTP 200 false-successes that contain a whole recording segment."""
     mode = _original_download_recording(self, playback_uri, output_path)
     try:
         query = parse_qs(urlsplit(playback_uri).query)
@@ -194,12 +190,6 @@ def _write_health() -> None:
 
 
 def _health_monitor_loop() -> None:
-    """Retry the live NVR/cloud probe until it succeeds, then heartbeat locally.
-
-    A short network outage exactly at restart must not make a healthy update look
-    broken and trigger a false rollback. No healthy marker is written until both
-    the recorder and cloud have authenticated successfully at least once.
-    """
     while True:
         try:
             if not CONFIG_PATH.exists():
@@ -233,7 +223,6 @@ def _start_health_monitor() -> None:
 
 
 def _nvr_clock_monitor_loop() -> None:
-    """Read-only clock monitoring; never changes NVR or camera settings."""
     global _last_nvr_clock_drift_seconds, _last_nvr_clock_check_at
     while True:
         try:
@@ -261,12 +250,6 @@ def _start_nvr_clock_monitor() -> None:
 
 
 def _worker_watchdog_loop() -> None:
-    """Force a clean Scheduled-Task restart if the real worker becomes stuck.
-
-    Job-lease heartbeat calls are deliberately excluded from progress so a hung
-    FFmpeg/download worker cannot look healthy merely because its lease thread is
-    still sending heartbeats. A normal idle Gateway calls claim every few seconds.
-    """
     while True:
         time.sleep(WATCHDOG_INTERVAL_SECONDS)
         age = _worker_progress_age()
