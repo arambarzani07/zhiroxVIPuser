@@ -148,6 +148,39 @@ class TimeWindowTest(unittest.TestCase):
             self.assertFalse(complete.kwargs['playback_metadata']['media_time_verified'])
             self.assertEqual(complete.kwargs['playback_metadata']['gateway_build'], 'http-query-1')
 
+    def test_oversized_export_uses_verified_segment_start(self):
+        now = datetime.now(timezone.utc) - timedelta(minutes=10)
+        segment_start = now - timedelta(hours=4)
+        hik, cloud = Mock(), Mock()
+        hik.search_recording.return_value = {
+            'found': True, 'playback_uri': self.uri,
+            'segment_start': segment_start.isoformat(),
+            'segment_end': (now + timedelta(hours=1)).isoformat(),
+        }
+        def download(uri, path):
+            with path.open('wb') as fh:
+                fh.truncate(257 * 1024 * 1024)
+            return 'http_query_time'
+        hik.download_recording.side_effect = download
+        cloud.call.return_value = {'signed_upload_url': 'private', 'object_path': 'clip'}
+        def prepare(source, target, start, source_start, duration):
+            self.assertEqual(common.parse_iso(source_start), segment_start)
+            target.write_bytes(b'h264')
+            return {'duration_seconds': duration, 'exact_trim': True}
+        job = {'job_id': 'oversized', 'transaction_at': now.isoformat(),
+               'clip_start_at': now.isoformat(),
+               'clip_end_at': (now + timedelta(seconds=30)).isoformat(),
+               'channel_id': 10}
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), \
+                patch.object(agent, 'log'), \
+                patch.object(agent, 'prepare_browser_clip', side_effect=prepare), \
+                patch.object(agent, 'verify_clip_time', return_value={'status': 'matched'}):
+            agent.process_job(cloud, Mock(), hik, job)
+        cloud.upload.assert_called_once()
+        complete = next(c for c in cloud.call.call_args_list if c.args[0] == 'complete')
+        self.assertTrue(complete.kwargs['playback_metadata']['oversized_segment_recovery'])
+
     def test_namespace_retry_preserves_bounded_uri(self):
         hik = common.HikvisionClient(common.GatewayConfig('192.168.1.3', 'admin', 'secret', ''))
         hik.session = Mock()
