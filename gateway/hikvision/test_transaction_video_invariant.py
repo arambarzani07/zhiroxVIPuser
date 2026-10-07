@@ -57,9 +57,15 @@ class TransactionVideoInvariantTests(unittest.TestCase):
 
     def test_wrong_transaction_window_is_rejected(self):
         metadata = dict(self.metadata)
-        metadata["requested_start"] = "2026-10-07T09:27:43+00:00"
+        metadata["requested_start"] = "2026-10-07T09:27:42+00:00"
         with self.assertRaisesRegex(RuntimeError, "requested_start_mismatch"):
             validate_and_stamp(self.job, metadata, self.facts)
+
+    def test_one_second_alignment_tolerance_is_allowed(self):
+        metadata = dict(self.metadata)
+        metadata["requested_start"] = "2026-10-07T09:27:43+00:00"
+        result = validate_and_stamp(self.job, metadata, self.facts)
+        self.assertTrue(result["transaction_video_invariant_verified"])
 
     def test_transaction_must_be_centered_in_thirty_second_clip(self):
         job = dict(self.job)
