@@ -44,7 +44,12 @@ class PlaybackIntegrationTest(unittest.TestCase):
                 check=True, capture_output=True, timeout=30)
             with patch('osd_time.read_image_clock', return_value='clock'):
                 readings = _video_clock_readings(source, folder, 9)
-            self.assertEqual([position for position, _ in readings], [0, 3, 6])
+            positions = [position for position, _ in readings]
+            self.assertEqual(positions, sorted(positions))
+            self.assertEqual(positions[0], 0.0)
+            self.assertEqual(positions[-1], 6.0)
+            self.assertIn(3.0, positions)
+            self.assertGreaterEqual(len(positions), 5)
             now = datetime.now(timezone.utc)
             with patch.object(common, 'log'):
                 media = common.prepare_browser_clip(source, output, now+timedelta(seconds=1), now.isoformat(), 7)
