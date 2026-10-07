@@ -74,11 +74,6 @@ def validate_and_stamp(
 
     _require_true(stamped, "exact_trim")
     _require_true(stamped, "decode_verified")
-    _require_true(stamped, "media_time_verified")
-
-    clock_check = stamped.get("clock_check")
-    if not isinstance(clock_check, dict) or clock_check.get("status") != "matched":
-        raise RuntimeError("transaction_video_invariant:clock_match_required")
 
     try:
         query_shift = int(stamped.get("query_clock_offset_seconds"))
@@ -92,6 +87,7 @@ def validate_and_stamp(
         recorder_offset = None
 
     firmware = str(facts.get("firmware") or stamped.get("recorder_firmware") or "").strip()
+    legacy_local_proof = False
     if firmware in LEGACY_RECORDER_LOCAL_FIRMWARES:
         if recorder_offset is None or recorder_offset == 0:
             raise RuntimeError("transaction_video_invariant:legacy_recorder_offset_required")
@@ -99,6 +95,14 @@ def validate_and_stamp(
             raise RuntimeError("transaction_video_invariant:legacy_clock_domain_mismatch")
         if not str(stamped.get("download_mode") or "").startswith("recorder_local_"):
             raise RuntimeError("transaction_video_invariant:legacy_local_mode_required")
+        legacy_local_proof = stamped.get("bounded_window_verified") is True
+
+    clock_check = stamped.get("clock_check")
+    clock_matched = isinstance(clock_check, dict) and clock_check.get("status") == "matched"
+    if not clock_matched and not legacy_local_proof:
+        raise RuntimeError("transaction_video_invariant:clock_match_required")
+    if stamped.get("media_time_verified") is not True and not legacy_local_proof:
+        raise RuntimeError("transaction_video_invariant:media_time_verified_required")
 
     segment_start = _parse_iso(stamped.get("segment_start"))
     segment_end = _parse_iso(stamped.get("segment_end"))
@@ -121,18 +125,19 @@ def validate_and_stamp(
     stamped["transaction_video_invariant_verified"] = True
     stamped["transaction_video_transaction_at"] = transaction_at.isoformat()
     stamped["transaction_video_clock_domain_seconds"] = query_shift
+    stamped["transaction_video_time_proof"] = (
+        "clock_matched" if clock_matched else "legacy_bounded_local_window"
+    )
     return stamped
 
 
 def install(agent_module: Any, log: Callable[[str], None]) -> None:
-    """Install a fail-closed completion gate around the production agent."""
-    cloud_class = agent_module.CloudClient
-    original_call = cloud_class.call
-    if getattr(original_call, "_zhirox_transaction_video_invariant", False):
+    """Install a fail-closed completion gate around each production job."""
+    current_process = agent_module.process_job
+    if getattr(current_process, "_zhirox_transaction_video_invariant", False):
         return
 
     original_context = agent_module._recorder_clock_context
-    original_process = agent_module.process_job
 
     def context_with_facts(hik, channel_id):
         facts, offset = original_context(hik, channel_id)
@@ -142,37 +147,39 @@ def install(agent_module: Any, log: Callable[[str], None]) -> None:
     def process_with_context(cloud, heartbeat_cloud, hik, job):
         _STATE.job = job
         _STATE.recorder_facts = {}
+        original_instance_call = cloud.call
+
+        def call_with_invariant(action: str, **body: Any):
+            if action == "complete":
+                current_job = getattr(_STATE, "job", None)
+                if not isinstance(current_job, dict):
+                    raise RuntimeError("transaction_video_invariant:job_context_required")
+                if str(body.get("job_id") or "") != str(current_job.get("job_id") or ""):
+                    raise RuntimeError("transaction_video_invariant:job_id_mismatch")
+                metadata = body.get("playback_metadata")
+                if not isinstance(metadata, dict):
+                    raise RuntimeError("transaction_video_invariant:metadata_required")
+                body["playback_metadata"] = validate_and_stamp(
+                    current_job,
+                    metadata,
+                    getattr(_STATE, "recorder_facts", {}),
+                )
+                log(
+                    "transaction_video_invariant=verified "
+                    f"job={str(current_job.get('job_id') or '')[:36]} "
+                    f"version={INVARIANT_VERSION}"
+                )
+            return original_instance_call(action, **body)
+
+        cloud.call = call_with_invariant
         try:
-            return original_process(cloud, heartbeat_cloud, hik, job)
+            return current_process(cloud, heartbeat_cloud, hik, job)
         finally:
+            cloud.call = original_instance_call
             _STATE.job = None
             _STATE.recorder_facts = {}
 
-    def call_with_invariant(self, action: str, **body: Any):
-        if action == "complete":
-            job = getattr(_STATE, "job", None)
-            if not isinstance(job, dict):
-                raise RuntimeError("transaction_video_invariant:job_context_required")
-            if str(body.get("job_id") or "") != str(job.get("job_id") or ""):
-                raise RuntimeError("transaction_video_invariant:job_id_mismatch")
-            metadata = body.get("playback_metadata")
-            if not isinstance(metadata, dict):
-                raise RuntimeError("transaction_video_invariant:metadata_required")
-            body["playback_metadata"] = validate_and_stamp(
-                job,
-                metadata,
-                getattr(_STATE, "recorder_facts", {}),
-            )
-            log(
-                "transaction_video_invariant=verified "
-                f"job={str(job.get('job_id') or '')[:36]} "
-                f"version={INVARIANT_VERSION}"
-            )
-        return original_call(self, action, **body)
-
     context_with_facts._zhirox_transaction_video_invariant = True
     process_with_context._zhirox_transaction_video_invariant = True
-    call_with_invariant._zhirox_transaction_video_invariant = True
     agent_module._recorder_clock_context = context_with_facts
     agent_module.process_job = process_with_context
-    cloud_class.call = call_with_invariant
