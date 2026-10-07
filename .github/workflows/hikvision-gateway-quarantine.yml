@@ -4,6 +4,7 @@ on:
   push:
     branches: [user-source]
     paths:
+      - 'gateway/hikvision/**'
       - '.github/workflows/hikvision-gateway-quarantine.yml'
   workflow_dispatch:
 
