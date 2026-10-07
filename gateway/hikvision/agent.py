@@ -76,25 +76,63 @@ def _attempt_args(attempt_token: str) -> dict[str, str]:
     return {"attempt_token": attempt_token} if attempt_token else {}
 
 
-def _retry_recorder_local_clock(exc: Exception, alignment: dict, query_shift: int = 0) -> bool:
-    """Try the recorder wall-clock convention only with observed clock evidence.
-
-    Some older NVRs treat timestamps ending in Z as local clock fields. The
-    alternate request remains the same channel and duration. Its output MUST
-    match the original transaction's OSD clock; unknown clocks cannot upload.
-    """
+def _retry_recorder_local_clock(
+    exc: Exception,
+    alignment: dict,
+    query_shift: int = 0,
+    expected_shift: int = 3 * 3600,
+) -> bool:
+    """Retry the recorder wall-clock convention only with observed evidence."""
     reason = str(exc)
-    failures = {"clip_conversion_failed", "clip_decode_validation_failed",
-                "clip_duration_mismatch", "clip_clock_mismatch",
-                "playback_clip_clock_unverified", "invalid_clip_window"}
-    if reason not in failures and not reason.startswith("rtsp_playback_failed:unsupported_hevc_payload"):
+    failures = {
+        "clip_conversion_failed",
+        "clip_decode_validation_failed",
+        "clip_duration_mismatch",
+        "clip_clock_mismatch",
+        "playback_clip_clock_unverified",
+        "invalid_clip_window",
+    }
+    if reason not in failures and not reason.startswith(
+        "rtsp_playback_failed:unsupported_hevc_payload"
+    ):
         return False
-    observed = alignment.get("first_sample_offset_seconds", alignment.get("offset_seconds"))
+    if not expected_shift:
+        return False
+    observed = alignment.get(
+        "first_sample_offset_seconds", alignment.get("offset_seconds")
+    )
     if not isinstance(observed, (int, float)) or isinstance(observed, bool):
         return False
-    # UTC+3 plus an ordinary file lead-in; this is a retry heuristic, never proof.
-    shifted = (-4 * 3600 <= observed <= -2 * 3600) if query_shift == 0 else (2 * 3600 <= observed <= 4 * 3600)
+    # Old Hikvision firmware can interpret a timestamp ending in Z as a local
+    # wall-clock field. We only retry when the observed OSD displacement agrees
+    # with the recorder's own UTC offset within one hour.
+    target = -expected_shift if query_shift == 0 else expected_shift
+    shifted = abs(float(observed) - float(target)) <= 3600
     return shifted and int(alignment.get("samples_read") or 0) >= 1
+
+
+def _recorder_clock_context(
+    hik: HikvisionClient, channel_id: int
+) -> tuple[dict, int | None]:
+    """Return read-only recorder facts and its advertised UTC offset."""
+    try:
+        facts = hik.playback_diagnostics(channel_id)
+    except Exception:
+        return {}, None
+    raw_time = str(facts.get("nvr_time") or "").strip()
+    if not raw_time:
+        return facts, None
+    try:
+        value = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+        offset = value.utcoffset()
+        if offset is None:
+            return facts, None
+        seconds = int(offset.total_seconds())
+        if abs(seconds) > 14 * 3600:
+            return facts, None
+        return facts, seconds
+    except Exception:
+        return facts, None
 
 
 def process_job(
@@ -124,10 +162,29 @@ def process_job(
             if wait_seconds > 0:
                 time.sleep(wait_seconds)
 
+            recorder_facts, recorder_utc_offset = _recorder_clock_context(
+                hik, channel_id
+            )
+            local_shift = (
+                recorder_utc_offset
+                if recorder_utc_offset is not None and recorder_utc_offset != 0
+                else 3 * 3600
+            )
+            legacy_direct_rtsp = recorder_facts.get("firmware") == "V3.4.107"
             source_clock_alignment: dict = {}
             query_shift = 0
-            preferred_shift = 3 * 3600 if getattr(hik, "_verified_playback_clock_offset", 0) == 3 * 3600 else 0
-            for candidate_index, query_shift in enumerate((preferred_shift, 3 * 3600 - preferred_shift)):
+            preferred_shift = (
+                local_shift
+                if getattr(hik, "_verified_playback_clock_offset", 0) == local_shift
+                else 0
+            )
+            candidate_shifts = (
+                (preferred_shift, local_shift - preferred_shift)
+                if local_shift
+                else (0,)
+            )
+
+            for candidate_index, query_shift in enumerate(candidate_shifts):
                 source_clock_alignment = {}
                 clock_check = {}
                 hik._playback_codec_relay_used = False
@@ -135,10 +192,13 @@ def process_job(
                     query_start = clip_start + timedelta(seconds=query_shift)
                     query_end = clip_end + timedelta(seconds=query_shift)
                     query_transaction = transaction_at + timedelta(seconds=query_shift)
-                    search = hik.search_recording(channel_id, query_start, query_end, query_transaction)
+                    search = hik.search_recording(
+                        channel_id, query_start, query_end, query_transaction
+                    )
                     if not search.get("found"):
                         age = (
-                            datetime.now(timezone.utc) - transaction_at.astimezone(timezone.utc)
+                            datetime.now(timezone.utc)
+                            - transaction_at.astimezone(timezone.utc)
                         ).total_seconds()
                         cloud.call(
                             "fail",
@@ -161,59 +221,85 @@ def process_job(
                         channel_id * 100 + 1,
                     )
                     log(
-                        f"job={job_id} build=bounded-fallback-1 download_mode=time "
-                        f"requested_start={clip_start.isoformat()} requested_end={clip_end.isoformat()}"
+                        f"job={job_id} build=bounded-local-clock-2 "
+                        f"requested_start={clip_start.isoformat()} "
+                        f"requested_end={clip_end.isoformat()} "
+                        f"query_shift={query_shift}"
                     )
                     download_mode = "time"
-                    requested_duration = max(1, int((clip_end - clip_start).total_seconds()))
+                    requested_duration = max(
+                        1, int((clip_end - clip_start).total_seconds())
+                    )
                     download_segment_start = clip_start
-                    source_clock_alignment: dict = {}
+                    source_clock_alignment = {}
 
                     try:
-                        download_mode = hik.download_recording(playback_uri, raw_path) or "time"
+                        download_mode = (
+                            hik.download_recording(playback_uri, raw_path) or "time"
+                        )
                     except RuntimeError as exc:
                         if not str(exc).startswith("download_rejected:"):
                             raise
 
-                        log(
-                            f"job={job_id} bounded HTTP export rejected; "
-                            "trying original ISAPI file export"
-                        )
                         raw_path.unlink(missing_ok=True)
-                        try:
-                            file_mode = hik.download_recording(original_playback_uri, raw_path) or "time"
-                            download_mode = "http_file"
-                            if file_mode not in {"time", "http_query_time"}:
-                                download_mode = f"http_file_{file_mode}"
-                            segment_start = str(search.get("segment_start") or "").strip()
-                            if not segment_start:
-                                raise RuntimeError("recording_start_required")
-                            download_segment_start = parse_iso(segment_start)
-                        except RuntimeError as file_exc:
-                            raw_path.unlink(missing_ok=True)
-                            file_error = str(file_exc)
-                            if not (
-                                file_error.startswith("download_rejected:")
-                                or file_error.startswith("invalid_http_playback_window")
-                            ):
-                                raise
+                        if legacy_direct_rtsp:
+                            # DS-7616NI-K2 V3.4.107 can answer a bounded HTTP
+                            # request with an entire ~1 GB recording segment. Do
+                            # not download the original file as a fallback on this
+                            # firmware; use the same bounded historical RTSP URI.
                             log(
-                                f"job={job_id} original ISAPI file export rejected; "
-                                "trying bounded RTSP playback"
+                                f"job={job_id} bounded HTTP export rejected; "
+                                "legacy_firmware_direct_rtsp=true"
                             )
                             download_mode = "rtsp_time"
                             download_segment_start = clip_start
-                            hik.download_playback_stream(playback_uri, raw_path, requested_duration)
+                            hik.download_playback_stream(
+                                playback_uri, raw_path, requested_duration
+                            )
+                        else:
+                            log(
+                                f"job={job_id} bounded HTTP export rejected; "
+                                "trying original ISAPI file export"
+                            )
+                            try:
+                                file_mode = (
+                                    hik.download_recording(
+                                        original_playback_uri, raw_path
+                                    )
+                                    or "time"
+                                )
+                                download_mode = "http_file"
+                                if file_mode not in {"time", "http_query_time"}:
+                                    download_mode = f"http_file_{file_mode}"
+                                segment_start = str(
+                                    search.get("segment_start") or ""
+                                ).strip()
+                                if not segment_start:
+                                    raise RuntimeError("recording_start_required")
+                                download_segment_start = parse_iso(segment_start)
+                            except RuntimeError as file_exc:
+                                raw_path.unlink(missing_ok=True)
+                                file_error = str(file_exc)
+                                if not (
+                                    file_error.startswith("download_rejected:")
+                                    or file_error.startswith(
+                                        "invalid_http_playback_window"
+                                    )
+                                ):
+                                    raise
+                                log(
+                                    f"job={job_id} original ISAPI file export "
+                                    "rejected; trying bounded RTSP playback"
+                                )
+                                download_mode = "rtsp_time"
+                                download_segment_start = clip_start
+                                hik.download_playback_stream(
+                                    playback_uri, raw_path, requested_duration
+                                )
 
                     if not raw_path.exists() or raw_path.stat().st_size <= 0:
                         raise RuntimeError("empty_download")
 
-                    # Old DS-7616 firmware can return a valid historical file while its
-                    # ContentMgmt segment_start metadata points to the wrong place. Prefer
-                    # OSD alignment for file exports. If the OSD is unreadable, do not trust
-                    # the file metadata: retry the same exact historical window over bounded
-                    # RTSP instead. This preserves the duplicate-content guard and avoids
-                    # accepting a stale 30-second clip merely because OCR was unavailable.
                     if download_mode.startswith("http_file"):
                         source_clock_alignment = infer_media_start_from_osd(
                             raw_path,
@@ -245,18 +331,19 @@ def process_job(
                                 raw_path,
                                 requested_duration,
                             )
-                            if not raw_path.exists() or raw_path.stat().st_size <= 0:
+                            if (
+                                not raw_path.exists()
+                                or raw_path.stat().st_size <= 0
+                            ):
                                 raise RuntimeError("empty_download")
                             source_clock_alignment = {
                                 **source_clock_alignment,
                                 "fallback": "bounded_rtsp",
-                                "bounded_window_verified": True,
                             }
 
                     if getattr(hik, "_playback_codec_relay_used", False) is True:
                         download_mode = "rtsp_h264_sdp"
                         source_clock_alignment["sdp_codec_corrected"] = "h264"
-                        source_clock_alignment["bounded_window_verified"] = False
 
                     media = prepare_browser_clip(
                         raw_path,
@@ -278,16 +365,40 @@ def process_job(
                     if clock_check["status"] == "mismatch":
                         raise RuntimeError("clip_clock_mismatch")
 
-                    bounded_window_verified = (
-                        query_shift == 0
-                        and download_mode in {"time", "http_query_time", "rtsp_time"}
-                        and abs(
-                            (
-                                download_segment_start.astimezone(timezone.utc)
-                                - clip_start.astimezone(timezone.utc)
-                            ).total_seconds()
-                        ) <= 0.05
+                    bounded_modes = {
+                        "time",
+                        "http_query_time",
+                        "rtsp_time",
+                        "rtsp_h264_sdp",
+                    }
+                    same_window = abs(
+                        (
+                            download_segment_start.astimezone(timezone.utc)
+                            - clip_start.astimezone(timezone.utc)
+                        ).total_seconds()
+                    ) <= 0.05
+                    recorder_local_window_verified = (
+                        query_shift != 0
+                        and recorder_utc_offset is not None
+                        and query_shift == recorder_utc_offset
+                        and download_mode in bounded_modes
+                        and same_window
                     )
+                    bounded_window_verified = (
+                        download_mode in bounded_modes
+                        and same_window
+                        and (
+                            query_shift == 0
+                            or recorder_local_window_verified
+                        )
+                    )
+                    if recorder_local_window_verified:
+                        source_clock_alignment[
+                            "recorder_utc_offset_seconds"
+                        ] = recorder_utc_offset
+                        source_clock_alignment[
+                            "recorder_local_clock_verified"
+                        ] = True
                     if (
                         clock_check["status"] != "matched"
                         and not bounded_window_verified
@@ -296,20 +407,34 @@ def process_job(
 
                     if query_shift:
                         download_mode = "recorder_local_" + download_mode
-                        source_clock_alignment["query_clock_offset_seconds"] = query_shift
-                        source_clock_alignment["bounded_window_verified"] = False
+                        source_clock_alignment[
+                            "query_clock_offset_seconds"
+                        ] = query_shift
+                    source_clock_alignment[
+                        "bounded_window_verified"
+                    ] = bounded_window_verified
                     break
                 except Exception as capture_exc:
                     observed_alignment = source_clock_alignment or clock_check
-                    if candidate_index or not _retry_recorder_local_clock(capture_exc, observed_alignment, query_shift):
+                    if candidate_index or not _retry_recorder_local_clock(
+                        capture_exc,
+                        observed_alignment,
+                        query_shift,
+                        local_shift,
+                    ):
                         raise
                     raw_path.unlink(missing_ok=True)
                     exact_path.unlink(missing_ok=True)
-                    log(f"job={job_id} retry_clock_convention=true; original_transaction_clock_required=true")
+                    log(
+                        f"job={job_id} retry_clock_convention=true; "
+                        "original_transaction_clock_required=true"
+                    )
 
             upload_path = exact_path
 
-            prepared = cloud.call("prepare_upload", job_id=job_id, **attempt_args)
+            prepared = cloud.call(
+                "prepare_upload", job_id=job_id, **attempt_args
+            )
             signed_url = str(prepared.get("signed_upload_url") or "")
             object_path = str(prepared.get("object_path") or "")
             if not signed_url or not object_path:
@@ -328,11 +453,18 @@ def process_job(
                 duration_seconds=media["duration_seconds"],
                 playback_metadata={
                     "provider": "hikvision_isapi",
-                    "gateway_build": "local-clock-fallback-1" if query_shift else "bounded-fallback-1",
+                    "gateway_build": (
+                        "local-clock-fallback-2"
+                        if query_shift
+                        else "bounded-fallback-2"
+                    ),
                     "gateway_version": gateway_common.GATEWAY_VERSION,
                     "query_clock_offset_seconds": query_shift,
+                    "recorder_utc_offset_seconds": recorder_utc_offset,
                     "download_mode": download_mode,
-                    "download_start": download_segment_start.replace(microsecond=0).isoformat(),
+                    "download_start": download_segment_start.replace(
+                        microsecond=0
+                    ).isoformat(),
                     "source_clock_alignment": source_clock_alignment,
                     "media_time_verified": clock_check["status"] == "matched",
                     "bounded_window_verified": bounded_window_verified,
@@ -344,43 +476,93 @@ def process_job(
                     **media,
                     "attempt_generation": attempt_generation,
                     "attempt_fenced": bool(attempt_token),
-                    "requested_start": clip_start.astimezone(timezone.utc).isoformat(),
-                    "requested_end": clip_end.astimezone(timezone.utc).isoformat(),
+                    "requested_start": clip_start.astimezone(
+                        timezone.utc
+                    ).isoformat(),
+                    "requested_end": clip_end.astimezone(
+                        timezone.utc
+                    ).isoformat(),
                 },
                 **attempt_args,
             )
-            if clock_check["status"] == "matched":
+            if (
+                clock_check["status"] == "matched"
+                or recorder_local_window_verified
+            ):
                 hik._verified_playback_clock_offset = query_shift
             log(
                 f"job={job_id} attempt={attempt_generation} ready "
-                f"channel={channel_id} bytes={size} codec=h264 decode_verified=True"
+                f"channel={channel_id} bytes={size} "
+                "codec=h264 decode_verified=True"
             )
         except Exception as exc:
             message = f"{type(exc).__name__}:{exc}"[:900]
-            if ("rtsp_playback_failed:unsupported_hevc_payload" in message or str(exc) in {
-                    "clip_conversion_failed", "clip_decode_validation_failed", "clip_duration_mismatch",
-                    "clip_clock_mismatch", "playback_clip_clock_unverified", "invalid_clip_window"}):
+            if (
+                "rtsp_playback_failed:unsupported_hevc_payload" in message
+                or str(exc)
+                in {
+                    "clip_conversion_failed",
+                    "clip_decode_validation_failed",
+                    "clip_duration_mismatch",
+                    "clip_clock_mismatch",
+                    "playback_clip_clock_unverified",
+                    "invalid_clip_window",
+                }
+            ):
                 try:
                     diagnostics = hik.playback_diagnostics(channel_id)
                     diagnostics["query_clock_offset_seconds"] = query_shift
+                    diagnostics[
+                        "recorder_utc_offset_seconds"
+                    ] = recorder_utc_offset
                     for key in ("stream_http", "device_http", "clock_http"):
                         if diagnostics.get(key) == 200:
                             diagnostics.pop(key)
                     if clock_check:
-                        diagnostics["final_clock_status"] = clock_check.get("status")
-                        diagnostics["final_clock_reason"] = clock_check.get("reason")
+                        diagnostics["final_clock_status"] = clock_check.get(
+                            "status"
+                        )
+                        diagnostics["final_clock_reason"] = clock_check.get(
+                            "reason"
+                        )
                     if source_clock_alignment:
-                        diagnostics["clock_candidates"] = source_clock_alignment.get("clock_candidates", [])
-                        diagnostics["source_bytes"] = source_clock_alignment.get("source_bytes")
-                        diagnostics["source_codecs"] = source_clock_alignment.get("source_codecs", [])
-                        diagnostics["frames_extracted"] = source_clock_alignment.get("frames_extracted")
-                        diagnostics["source_probe_ok"] = source_clock_alignment.get("source_probe_ok")
-                        diagnostics["file_clock_status"] = source_clock_alignment.get("status")
-                        diagnostics["file_clock_reason"] = source_clock_alignment.get("reason")
-                        diagnostics["file_clock_samples"] = source_clock_alignment.get("samples_read", 0)
-                        diagnostics["file_first_clock"] = source_clock_alignment.get("first_displayed_at")
-                        diagnostics["file_first_offset"] = source_clock_alignment.get("first_sample_offset_seconds")
-                    message = message[:180] + ":diag=" + json.dumps(diagnostics, separators=(",", ":"))
+                        diagnostics["clock_candidates"] = source_clock_alignment.get(
+                            "clock_candidates", []
+                        )
+                        diagnostics["source_bytes"] = source_clock_alignment.get(
+                            "source_bytes"
+                        )
+                        diagnostics["source_codecs"] = source_clock_alignment.get(
+                            "source_codecs", []
+                        )
+                        diagnostics[
+                            "frames_extracted"
+                        ] = source_clock_alignment.get("frames_extracted")
+                        diagnostics[
+                            "source_probe_ok"
+                        ] = source_clock_alignment.get("source_probe_ok")
+                        diagnostics[
+                            "file_clock_status"
+                        ] = source_clock_alignment.get("status")
+                        diagnostics[
+                            "file_clock_reason"
+                        ] = source_clock_alignment.get("reason")
+                        diagnostics[
+                            "file_clock_samples"
+                        ] = source_clock_alignment.get("samples_read", 0)
+                        diagnostics[
+                            "file_first_clock"
+                        ] = source_clock_alignment.get("first_displayed_at")
+                        diagnostics[
+                            "file_first_offset"
+                        ] = source_clock_alignment.get(
+                            "first_sample_offset_seconds"
+                        )
+                    message = (
+                        message[:180]
+                        + ":diag="
+                        + json.dumps(diagnostics, separators=(",", ":"))
+                    )
                 except Exception:
                     pass
             try:
@@ -448,8 +630,12 @@ def main() -> None:
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) == 3 and sys.argv[1] == '--verify-ocr-fixture':
+
+    if len(sys.argv) == 3 and sys.argv[1] == "--verify-ocr-fixture":
         from osd_time import ocr_image, dates_in_text
-        result = dates_in_text(ocr_image(pathlib.Path(sys.argv[2])), timezone.utc, 'YMD')
+
+        result = dates_in_text(
+            ocr_image(pathlib.Path(sys.argv[2])), timezone.utc, "YMD"
+        )
         sys.exit(0 if result else 1)
     main()
