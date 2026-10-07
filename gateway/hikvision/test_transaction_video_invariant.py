@@ -17,7 +17,7 @@ class TransactionVideoInvariantTests(unittest.TestCase):
             "attempt_generation": 8,
         }
         self.metadata = {
-            "gateway_version": "1.4.16+evergreen-16",
+            "gateway_version": "1.4.16+evergreen-17",
             "query_clock_offset_seconds": 10800,
             "recorder_utc_offset_seconds": 10800,
             "download_mode": "recorder_local_rtsp_h264_sdp",
@@ -88,6 +88,29 @@ class TransactionVideoInvariantTests(unittest.TestCase):
                 metadata[key] = False
                 with self.assertRaisesRegex(RuntimeError, f"{key}_required"):
                     validate_and_stamp(self.job, metadata, self.facts)
+
+    def test_legacy_bounded_window_cannot_override_unverified_scene_clock(self):
+        for status in ("unknown", "mismatch", None):
+            with self.subTest(status=status):
+                metadata = dict(self.metadata)
+                metadata["bounded_window_verified"] = True
+                metadata["media_time_verified"] = False
+                metadata["clock_check"] = {"status": status, "offset_seconds": 3600}
+                with self.assertRaisesRegex(RuntimeError, "clock_match_required"):
+                    validate_and_stamp(self.job, metadata, self.facts)
+
+    def test_legacy_bounded_window_cannot_override_missing_media_time_proof(self):
+        metadata = dict(self.metadata)
+        metadata["bounded_window_verified"] = True
+        metadata["media_time_verified"] = False
+        with self.assertRaisesRegex(RuntimeError, "media_time_verified_required"):
+            validate_and_stamp(self.job, metadata, self.facts)
+
+    def test_legacy_bounded_window_with_verified_scene_is_accepted(self):
+        metadata = dict(self.metadata)
+        metadata["bounded_window_verified"] = True
+        result = validate_and_stamp(self.job, metadata, self.facts)
+        self.assertEqual(result["transaction_video_time_proof"], "clock_matched")
 
     def test_recording_segment_must_cover_shifted_transaction_window(self):
         metadata = dict(self.metadata)
@@ -168,6 +191,22 @@ class TransactionVideoInvariantTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "legacy_clock_domain_mismatch"):
             agent.process_job(cloud, cloud, object(), dict(self.job))
         self.assertEqual(calls, [])
+
+    def test_installed_gate_blocks_legacy_clock_mismatch_before_complete(self):
+        metadata = dict(self.metadata)
+        metadata.update(
+            bounded_window_verified=True,
+            media_time_verified=False,
+            clock_check={"status": "mismatch", "offset_seconds": 3600},
+        )
+        agent, CloudClient, calls = self._fake_agent(metadata)
+        transaction_video_invariant.install(agent, lambda _: None)
+        cloud = CloudClient()
+        original_call = cloud.call
+        with self.assertRaisesRegex(RuntimeError, "clock_match_required"):
+            agent.process_job(cloud, cloud, object(), dict(self.job))
+        self.assertEqual(calls, [])
+        self.assertEqual(cloud.call, original_call)
 
 
 if __name__ == "__main__":

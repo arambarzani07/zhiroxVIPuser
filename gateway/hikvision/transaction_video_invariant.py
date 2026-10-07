@@ -87,7 +87,6 @@ def validate_and_stamp(
         recorder_offset = None
 
     firmware = str(facts.get("firmware") or stamped.get("recorder_firmware") or "").strip()
-    legacy_local_proof = False
     if firmware in LEGACY_RECORDER_LOCAL_FIRMWARES:
         if recorder_offset is None or recorder_offset == 0:
             raise RuntimeError("transaction_video_invariant:legacy_recorder_offset_required")
@@ -95,13 +94,14 @@ def validate_and_stamp(
             raise RuntimeError("transaction_video_invariant:legacy_clock_domain_mismatch")
         if not str(stamped.get("download_mode") or "").startswith("recorder_local_"):
             raise RuntimeError("transaction_video_invariant:legacy_local_mode_required")
-        legacy_local_proof = stamped.get("bounded_window_verified") is True
 
     clock_check = stamped.get("clock_check")
     clock_matched = isinstance(clock_check, dict) and clock_check.get("status") == "matched"
-    if not clock_matched and not legacy_local_proof:
+    # Requested download bounds cannot override missing or contradictory
+    # evidence about the time of the actual recorded scene.
+    if not clock_matched:
         raise RuntimeError("transaction_video_invariant:clock_match_required")
-    if stamped.get("media_time_verified") is not True and not legacy_local_proof:
+    if stamped.get("media_time_verified") is not True:
         raise RuntimeError("transaction_video_invariant:media_time_verified_required")
 
     segment_start = _parse_iso(stamped.get("segment_start"))
@@ -125,9 +125,7 @@ def validate_and_stamp(
     stamped["transaction_video_invariant_verified"] = True
     stamped["transaction_video_transaction_at"] = transaction_at.isoformat()
     stamped["transaction_video_clock_domain_seconds"] = query_shift
-    stamped["transaction_video_time_proof"] = (
-        "clock_matched" if clock_matched else "legacy_bounded_local_window"
-    )
+    stamped["transaction_video_time_proof"] = "clock_matched"
     return stamped
 
 
