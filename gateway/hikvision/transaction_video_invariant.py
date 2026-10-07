@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 INVARIANT_VERSION = 1
 LEGACY_RECORDER_LOCAL_FIRMWARES = {"V3.4.107"}
@@ -9,6 +10,7 @@ TIMESTAMP_TOLERANCE_SECONDS = 1.0
 EXPECTED_PRE_ROLL_SECONDS = 15.0
 EXPECTED_POST_ROLL_SECONDS = 15.0
 EXPECTED_DURATION_SECONDS = 30.0
+_STATE = threading.local()
 
 
 def _parse_iso(value: Any) -> datetime:
@@ -100,10 +102,10 @@ def validate_and_stamp(
 
     segment_start = _parse_iso(stamped.get("segment_start"))
     segment_end = _parse_iso(stamped.get("segment_end"))
-    expected_segment_start = canonical_start.fromtimestamp(
+    expected_segment_start = datetime.fromtimestamp(
         canonical_start.timestamp() + query_shift, tz=timezone.utc
     )
-    expected_segment_end = canonical_end.fromtimestamp(
+    expected_segment_end = datetime.fromtimestamp(
         canonical_end.timestamp() + query_shift, tz=timezone.utc
     )
     if segment_start > expected_segment_start or segment_end < expected_segment_end:
@@ -120,3 +122,57 @@ def validate_and_stamp(
     stamped["transaction_video_transaction_at"] = transaction_at.isoformat()
     stamped["transaction_video_clock_domain_seconds"] = query_shift
     return stamped
+
+
+def install(agent_module: Any, log: Callable[[str], None]) -> None:
+    """Install a fail-closed completion gate around the production agent."""
+    cloud_class = agent_module.CloudClient
+    original_call = cloud_class.call
+    if getattr(original_call, "_zhirox_transaction_video_invariant", False):
+        return
+
+    original_context = agent_module._recorder_clock_context
+    original_process = agent_module.process_job
+
+    def context_with_facts(hik, channel_id):
+        facts, offset = original_context(hik, channel_id)
+        _STATE.recorder_facts = facts if isinstance(facts, dict) else {}
+        return facts, offset
+
+    def process_with_context(cloud, heartbeat_cloud, hik, job):
+        _STATE.job = job
+        _STATE.recorder_facts = {}
+        try:
+            return original_process(cloud, heartbeat_cloud, hik, job)
+        finally:
+            _STATE.job = None
+            _STATE.recorder_facts = {}
+
+    def call_with_invariant(self, action: str, **body: Any):
+        if action == "complete":
+            job = getattr(_STATE, "job", None)
+            if not isinstance(job, dict):
+                raise RuntimeError("transaction_video_invariant:job_context_required")
+            if str(body.get("job_id") or "") != str(job.get("job_id") or ""):
+                raise RuntimeError("transaction_video_invariant:job_id_mismatch")
+            metadata = body.get("playback_metadata")
+            if not isinstance(metadata, dict):
+                raise RuntimeError("transaction_video_invariant:metadata_required")
+            body["playback_metadata"] = validate_and_stamp(
+                job,
+                metadata,
+                getattr(_STATE, "recorder_facts", {}),
+            )
+            log(
+                "transaction_video_invariant=verified "
+                f"job={str(job.get('job_id') or '')[:36]} "
+                f"version={INVARIANT_VERSION}"
+            )
+        return original_call(self, action, **body)
+
+    context_with_facts._zhirox_transaction_video_invariant = True
+    process_with_context._zhirox_transaction_video_invariant = True
+    call_with_invariant._zhirox_transaction_video_invariant = True
+    agent_module._recorder_clock_context = context_with_facts
+    agent_module.process_job = process_with_context
+    cloud_class.call = call_with_invariant
