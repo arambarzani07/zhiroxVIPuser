@@ -19,7 +19,7 @@ from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.16+evergreen-6"
+GATEWAY_VERSION = "1.4.16+evergreen-7"
 common.GATEWAY_VERSION = GATEWAY_VERSION
 
 # Poll GitHub often enough that routine Gateway fixes arrive quickly, while the
@@ -71,16 +71,70 @@ def _desktop_dirs() -> list[pathlib.Path]:
 
 
 def _cleanup_stale_setup_downloads() -> None:
-    """Clean ZHIROX duplicate downloads from Desktop and Desktop/camera."""
+    """Clean stale Gateway downloads from Desktop locations after updates settle.
+
+    Browser-numbered copies are handled by maintenance. Windows Explorer may hide
+    the final ``.bak`` extension, making ``gateway.exe.bak`` appear as
+    ``gateway.exe`` with Type ``BAK File``. Those rollback backups are deleted only
+    after the updater lock/journal has cleared so they can never break rollback.
+    """
     if os.name != "nt":
         return
+    if maintenance.update_in_progress():
+        log("desktop_gateway_cleanup_deferred=update_in_progress")
+        return
+
     for desktop in _desktop_dirs():
         for target in (desktop, desktop / "camera"):
             if not target.exists():
                 continue
+
             removed = maintenance.cleanup_gateway_download_duplicates(target)
-            if removed:
-                log(f"desktop_gateway_cleanup dir={target} removed={removed}")
+            backup_removed = 0
+            try:
+                children = list(target.iterdir())
+            except OSError:
+                children = []
+
+            for candidate in children:
+                try:
+                    if not candidate.is_file():
+                        continue
+                    lowered = candidate.name.casefold()
+                    if not lowered.startswith("zhirox-hikvision-"):
+                        continue
+                    if not lowered.endswith(".bak"):
+                        continue
+                    candidate.unlink(missing_ok=True)
+                    backup_removed += 1
+                except OSError:
+                    # OneDrive or a just-finished process may hold a file briefly.
+                    # Deferred cleanup retries again automatically.
+                    continue
+
+            if removed or backup_removed:
+                log(
+                    f"desktop_gateway_cleanup dir={target} "
+                    f"duplicates={removed} backups={backup_removed}"
+                )
+
+
+def _desktop_cleanup_retry_loop() -> None:
+    """Retry cleanup after self-update releases its rollback lock and OneDrive settles."""
+    for delay_seconds in (15, 30, 60, 120, 300):
+        time.sleep(delay_seconds)
+        try:
+            _cleanup_stale_setup_downloads()
+        except Exception as exc:
+            log(f"desktop_gateway_cleanup_retry_error={type(exc).__name__}:{str(exc)[:200]}")
+
+
+def _start_deferred_desktop_cleanup() -> None:
+    threading.Thread(
+        target=_desktop_cleanup_retry_loop,
+        name="zhirox-gateway-desktop-cleanup",
+        daemon=True,
+    ).start()
 
 
 def _guarded_download_recording(
@@ -283,6 +337,7 @@ def main() -> int:
         return 0
 
     _cleanup_stale_setup_downloads()
+    _start_deferred_desktop_cleanup()
 
     runtime_hardening.recover_or_backup_config(log)
     runtime_hardening.wrap_process_job(agent, log)
