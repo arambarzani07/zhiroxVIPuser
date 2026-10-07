@@ -1,6 +1,6 @@
 import types
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from rtsp_codec_relay import SdpCodecRelay
 import transport_clock
@@ -92,9 +92,8 @@ class RelayClockAttestationTests(unittest.TestCase):
 
 class TransportClockPromotionTests(unittest.TestCase):
     def _agent(self, result):
-        return types.SimpleNamespace(
-            verify_clip_time=lambda *args, **kwargs: dict(result)
-        )
+        verifier = Mock(return_value=dict(result))
+        return types.SimpleNamespace(verify_clip_time=verifier), verifier
 
     def _client_class(self):
         class Client:
@@ -117,45 +116,82 @@ class TransportClockPromotionTests(unittest.TestCase):
             'relay_failed': False,
         }
 
-    def test_unknown_clock_promotes_only_with_full_transport_proof(self):
-        agent = self._agent({'status': 'unknown', 'reason': 'insufficient_clock_readings'})
+    def _installed(self, original_result):
+        agent, original = self._agent(original_result)
         Client = self._client_class()
         transport_clock.install(agent, Client, Mock())
         hik = Client()
         hik._playback_codec_relay_used = True
         hik._playback_timing_attestation = self._verified_attestation()
-        result = agent.verify_clip_time(hik, 10, None, None, 30)
+        return agent, original, hik
+
+    def test_full_transport_proof_uses_bounded_guard_not_exhaustive_ocr(self):
+        agent, original, hik = self._installed(
+            {'status': 'mismatch', 'reason': 'exhaustive_should_not_run'}
+        )
+        guard = {
+            'status': 'unknown',
+            'method': 'osd_ocr_fast_guard',
+            'reason': 'insufficient_clock_readings',
+            'samples_read': 0,
+        }
+        with patch.object(transport_clock, 'verify_transport_contradiction', return_value=guard):
+            result = agent.verify_clip_time(hik, 10, None, None, 30)
+        original.assert_not_called()
         self.assertEqual(result['status'], 'matched')
         self.assertEqual(result['method'], 'rtsp_play_absolute_clock')
+        self.assertEqual(result['osd_guard_status'], 'unknown')
 
-    def test_real_mismatch_is_never_overridden(self):
-        agent = self._agent({'status': 'mismatch', 'reason': 'offset'})
-        Client = self._client_class()
-        transport_clock.install(agent, Client, Mock())
-        hik = Client()
-        hik._playback_codec_relay_used = True
-        hik._playback_timing_attestation = self._verified_attestation()
-        self.assertEqual(
-            agent.verify_clip_time(hik, 10, None, None, 30)['status'],
-            'mismatch',
-        )
+    def test_visible_fast_guard_mismatch_is_never_overridden(self):
+        agent, original, hik = self._installed({'status': 'unknown'})
+        guard = {
+            'status': 'mismatch',
+            'method': 'osd_ocr_fast_guard',
+            'reason': 'visible_clock_mismatch',
+            'offset_seconds': 3600,
+        }
+        with patch.object(transport_clock, 'verify_transport_contradiction', return_value=guard):
+            result = agent.verify_clip_time(hik, 10, None, None, 30)
+        original.assert_not_called()
+        self.assertEqual(result['status'], 'mismatch')
+        self.assertEqual(result['reason'], 'visible_clock_mismatch')
+        self.assertTrue(result['transport_attestation']['verified'])
 
-    def test_duration_or_unverified_transport_cannot_promote(self):
+    def test_matching_fast_guard_and_transport_are_accepted(self):
+        agent, original, hik = self._installed({'status': 'unknown'})
+        guard = {
+            'status': 'matched',
+            'method': 'osd_ocr_fast_guard',
+            'reason': 'visible_clock_matches',
+            'offset_seconds': 0,
+        }
+        with patch.object(transport_clock, 'verify_transport_contradiction', return_value=guard):
+            result = agent.verify_clip_time(hik, 10, None, None, 30)
+        original.assert_not_called()
+        self.assertEqual(result['status'], 'matched')
+        self.assertEqual(result['method'], 'rtsp_play_absolute_clock')
+        self.assertEqual(result['osd_guard_status'], 'matched')
+
+    def test_duration_or_unverified_transport_falls_back_to_exhaustive_verifier(self):
         for mutation in (
             {'requested_duration_seconds': 29.0},
             {'verified': False, 'reason': 'range_not_absolute_clock'},
             {'range_kind': 'npt'},
         ):
             with self.subTest(mutation=mutation):
-                agent = self._agent({'status': 'unknown', 'reason': 'insufficient_clock_readings'})
-                Client = self._client_class()
-                transport_clock.install(agent, Client, Mock())
-                hik = Client()
-                hik._playback_codec_relay_used = True
+                agent, original, hik = self._installed(
+                    {'status': 'unknown', 'reason': 'insufficient_clock_readings'}
+                )
                 att = self._verified_attestation()
                 att.update(mutation)
                 hik._playback_timing_attestation = att
-                result = agent.verify_clip_time(hik, 10, None, None, 30)
+                with patch.object(
+                    transport_clock,
+                    'verify_transport_contradiction',
+                    side_effect=AssertionError('fast guard requires full transport proof'),
+                ):
+                    result = agent.verify_clip_time(hik, 10, None, None, 30)
+                original.assert_called_once()
                 self.assertEqual(result['status'], 'unknown')
                 self.assertIn('transport_', result['reason'])
 
