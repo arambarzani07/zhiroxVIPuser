@@ -58,7 +58,8 @@ def verify_transport_spot_check(path: pathlib.Path, start: datetime, duration: f
     never fabricate a time correction.
     """
     try:
-        with tempfile.TemporaryDirectory(prefix='zhirox-transport-spot-', dir=str(path.parent)) as folder:
+        parent_dir = str(path.parent) if isinstance(path, pathlib.Path) else None
+        with tempfile.TemporaryDirectory(prefix='zhirox-transport-spot-', dir=parent_dir) as folder:
             workspace = pathlib.Path(folder)
             first = _sample(path, workspace, start, 0.0, 0)
             if first.get('status') != 'mismatch':
