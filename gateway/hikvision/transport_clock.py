@@ -32,8 +32,13 @@ def install(agent_module: Any, client_class: type, log: Callable[[str], None]) -
     When that independent transport proof is complete, a bounded two-frame OSD
     guard looks for a contradictory visible clock. A detected mismatch always
     vetoes approval. Missing/unreadable OSD does not block an otherwise fully
-    attested RTSP clock range. If transport proof is absent or incomplete, the
-    original exhaustive OCR verifier remains the fallback and nothing is promoted.
+    attested RTSP clock range.
+
+    A relay transport failure is never accepted and is returned immediately as an
+    unknown clock so the DB backoff can retry it, rather than spending several
+    minutes in exhaustive OCR that cannot repair a failed RTSP relay. Other
+    incomplete attestations retain the exhaustive OCR fallback because visible OSD
+    can still independently prove their clip time.
     """
     original_download = client_class.download_playback_stream
     if not getattr(original_download, "_zhirox_transport_clock", False):
@@ -100,6 +105,22 @@ def install(agent_module: Any, client_class: type, log: Callable[[str], None]) -
                 f"osd_guard={promoted['osd_guard_status']}"
             )
             return promoted
+
+        # A relay that actually failed cannot be repaired by OCR. Keep the result
+        # unverified and let the DB's bounded backoff retry a fresh RTSP session.
+        if relay_used and (
+            attestation.get("relay_failed") is True
+            or attestation.get("reason") == "relay_failed"
+        ):
+            log("clip_clock_retry_reason=transport_relay_failed_fast")
+            return {
+                "status": "unknown",
+                "method": "rtsp_play_absolute_clock",
+                "reason": "transport_relay_failed_fast_retry",
+                "transport_attestation": attestation,
+                "osd_guard_status": "skipped",
+                "osd_guard_reason": "relay_failed_before_clock_proof",
+            }
 
         # Without complete transport proof retain the exhaustive legacy verifier.
         result = original_verify(hik, channel_id, path, clip_start, duration_seconds)
