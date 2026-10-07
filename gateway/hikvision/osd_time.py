@@ -50,8 +50,25 @@ def dates_in_text(text: str, offset, order: str | None = None) -> list[tuple[str
     return results
 
 
-def read_image_clock(image: pathlib.Path, workspace: pathlib.Path) -> str:
+def read_image_clock(image: pathlib.Path, workspace: pathlib.Path,
+                     recipe_cache: dict | None = None) -> str:
     parts = []
+    # Cache only the crop/OCR settings, never clock text or verification results.
+    # Each new frame is decoded and read independently. A failed cached read
+    # falls back to the full search; the caller still checks all sampled clocks.
+    if recipe_cache and 'recipe' in recipe_cache:
+        filters, psm = recipe_cache['recipe']
+        target = workspace / 'osd-cached.png'
+        try:
+            r = run_background([find_ffmpeg(), '-nostdin', '-loglevel', 'error', '-y',
+                '-i', str(image), '-vf', filters, '-frames:v', '1', str(target)],
+                capture_output=True, timeout=20)
+            if r.returncode == 0:
+                text = ocr_image(target, psm=psm)
+                if dates_in_text(text, BAGHDAD_OFFSET):
+                    return text
+        except Exception:
+            pass
     # Read both common Hikvision OSD bands first. This is cheap and preserves the
     # existing fast path when the clock is already legible.
     for position in ['0', 'ih-oh']:
@@ -63,6 +80,9 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path) -> str:
                 text = ocr_image(target)
                 parts.append(text)
                 if dates_in_text(text, BAGHDAD_OFFSET):
+                    if recipe_cache is not None:
+                        recipe_cache['recipe'] = (
+                            f'crop=iw:ih*0.22:0:{position},scale=2400:-1', 6)
                     return ' '.join(parts)
             except Exception:
                 pass
@@ -93,6 +113,8 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path) -> str:
                     text = ocr_image(target, psm=psm)
                     parts.append(text)
                     if dates_in_text(text, BAGHDAD_OFFSET):
+                        if recipe_cache is not None:
+                            recipe_cache['recipe'] = (filters, psm)
                         return ' '.join(parts)
                 except Exception:
                     pass
@@ -164,6 +186,7 @@ def align_readings(readings: list[tuple[float,str]], start: datetime, offset=BAG
 
 def _video_clock_readings(path: pathlib.Path, workspace: pathlib.Path, duration: float) -> list[tuple[float,str]]:
     readings=[]
+    recipe_cache = {}
     # More independent frames materially improve old-NVR OSD verification while
     # retaining the rule that at least two advancing clock readings are required.
     positions = [
@@ -180,7 +203,7 @@ def _video_clock_readings(path: pathlib.Path, workspace: pathlib.Path, duration:
         # no image, even for -ss 0, or lose the first decoder parameter sets.
         r=run_background([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-i',str(path),'-ss',str(second),'-frames:v','1',str(image)],capture_output=True,timeout=30)
         if r.returncode==0 and image.exists():
-            readings.append((float(second),read_image_clock(image,workspace)))
+            readings.append((float(second),read_image_clock(image,workspace,recipe_cache)))
     return readings
 
 

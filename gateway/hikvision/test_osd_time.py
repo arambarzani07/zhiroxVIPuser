@@ -6,7 +6,8 @@ from osd_time import ocr_image
 import unittest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
-from osd_time import align_readings, compare_readings, dates_in_text, verify_clip_time
+from osd_time import align_readings, compare_readings, dates_in_text, verify_clip_time, read_image_clock
+from types import SimpleNamespace
 
 class ClockTests(unittest.TestCase):
     offset=timezone(timedelta(hours=3))
@@ -65,6 +66,49 @@ class ClockTests(unittest.TestCase):
         self.assertEqual(result['first_sample_offset_seconds'],0.0)
         self.assertEqual(result['frames_extracted'],5)
         self.assertEqual(result['source_codecs'],['h264'])
+
+class OcrRecipeTests(unittest.TestCase):
+    def test_cached_crop_reads_each_new_frame_and_saves_search_work(self):
+        cache = {}
+        clock = '10-04-2026 09:38:00'
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp)
+            with patch('osd_time.find_ffmpeg', return_value='ffmpeg'), patch(
+                'osd_time.run_background', return_value=SimpleNamespace(returncode=0)
+            ) as run, patch('osd_time.ocr_image') as ocr:
+                # Discover a corner after both normal bands and the first corner.
+                ocr.side_effect = ['', '', '', '', clock]
+                self.assertIn(clock, read_image_clock(workspace/'first.png', workspace, cache))
+                first_calls = run.call_count
+                self.assertGreater(first_calls, 1)
+                run.reset_mock()
+                ocr.side_effect = ['10-04-2026 09:38:03']
+                text = read_image_clock(workspace/'second.png', workspace, cache)
+                self.assertIn('09:38:03', text)
+                self.assertNotIn('09:38:00', text)
+                self.assertEqual(run.call_count, 1)
+                self.assertIn(str(workspace/'second.png'), run.call_args.args[0])
+
+    def test_failed_cached_crop_falls_back_and_refreshes_settings(self):
+        cache = {'recipe': ('old-crop', 11)}
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp)
+            with patch('osd_time.find_ffmpeg', return_value='ffmpeg'), patch(
+                'osd_time.run_background', return_value=SimpleNamespace(returncode=0)
+            ), patch('osd_time.ocr_image', side_effect=['unreadable', '10-04-2026 09:38:07']):
+                text = read_image_clock(workspace/'frame.png', workspace, cache)
+            self.assertIn('09:38:07', text)
+            self.assertNotEqual(cache['recipe'], ('old-crop', 11))
+
+    def test_cached_crop_never_fabricates_a_missing_clock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp)
+            with patch('osd_time.find_ffmpeg', return_value='ffmpeg'), patch(
+                'osd_time.run_background', return_value=SimpleNamespace(returncode=0)
+            ), patch('osd_time.ocr_image', return_value='unreadable'):
+                text = read_image_clock(workspace/'frame.png', workspace, {'recipe': ('crop', 6)})
+            self.assertEqual(dates_in_text(text, ClockTests.offset), [])
+
 
 class WindowsOcrSmoke(unittest.TestCase):
     @unittest.skipUnless(sys.platform=='win32','Windows packaged OCR integration')

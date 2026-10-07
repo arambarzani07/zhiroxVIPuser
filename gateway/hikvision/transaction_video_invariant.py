@@ -136,6 +136,7 @@ def install(agent_module: Any, log: Callable[[str], None]) -> None:
         return
 
     original_context = agent_module._recorder_clock_context
+    agent_module.preflight_video_metadata = validate_and_stamp
 
     def context_with_facts(hik, channel_id):
         facts, offset = original_context(hik, channel_id)

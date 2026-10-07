@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import types
 import unittest
+import importlib.util
+import pathlib
+import tempfile
+from unittest.mock import Mock, patch
 
 import transaction_video_invariant
 from transaction_video_invariant import validate_and_stamp
@@ -207,6 +211,51 @@ class TransactionVideoInvariantTests(unittest.TestCase):
             agent.process_job(cloud, cloud, object(), dict(self.job))
         self.assertEqual(calls, [])
         self.assertEqual(cloud.call, original_call)
+
+    def test_production_preflight_rejects_unknown_clock_before_storage(self):
+        cloud = self._exercise_production_preflight('unknown')
+        cloud.upload.assert_not_called()
+        actions = [call.args[0] for call in cloud.call.call_args_list]
+        self.assertNotIn('prepare_upload', actions)
+        self.assertNotIn('complete', actions)
+        failure = next(call for call in cloud.call.call_args_list if call.args[0] == 'fail')
+        self.assertIn('clock_match_required', str(failure))
+
+    def test_production_preflight_accepts_verified_clip_and_keeps_completion_gate(self):
+        cloud = self._exercise_production_preflight('matched')
+        cloud.upload.assert_called_once()
+        completion = next(call for call in cloud.call.call_args_list if call.args[0] == 'complete')
+        self.assertTrue(completion.kwargs['playback_metadata']['transaction_video_invariant_verified'])
+
+    def _exercise_production_preflight(self, status):
+        # Load a fresh production module so installed wrappers cannot leak to
+        # other tests that exercise the base agent without bootstrap.
+        spec = importlib.util.spec_from_file_location('preflight_test_agent', pathlib.Path(__file__).with_name('agent.py'))
+        agent = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(agent)
+        agent._recorder_clock_context = Mock(return_value=(dict(self.facts), 10800))
+        transaction_video_invariant.install(agent, lambda _: None)
+        hik, cloud = Mock(), Mock()
+        hik._verified_playback_clock_offset = 10800
+        hik._playback_codec_relay_used = False
+        hik.search_recording.return_value = {
+            'found': True,
+            'playback_uri': 'rtsp://192.168.1.3/Streaming/tracks/1001?starttime=20261007T122744Z&endtime=20261007T122814Z',
+            'segment_start': self.metadata['segment_start'],
+            'segment_end': self.metadata['segment_end'],
+        }
+        def download(uri, path):
+            path.write_bytes(b'raw')
+            return 'time'
+        def prepare(source, target, *args):
+            target.write_bytes(b'verified-media')
+            return {'duration_seconds': 30, 'exact_trim': True, 'decode_verified': True}
+        hik.download_recording.side_effect = download
+        cloud.call.return_value = {'signed_upload_url': 'private', 'object_path': 'clip'}
+        job = dict(self.job, channel_id=10)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(agent, 'TEMP_DIR', pathlib.Path(tmp)), patch.object(agent, 'log'), patch.object(agent, 'prepare_browser_clip', side_effect=prepare), patch.object(agent, 'verify_clip_time', return_value={'status': status}):
+            agent.process_job(cloud, Mock(), hik, job)
+        return cloud
 
 
 if __name__ == "__main__":
