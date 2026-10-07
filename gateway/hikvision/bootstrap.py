@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
+from urllib.parse import parse_qs, urlsplit
 
 import agent
 import common
@@ -18,7 +19,7 @@ from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.14+evergreen-2"
+GATEWAY_VERSION = "1.4.15+evergreen-1"
 common.GATEWAY_VERSION = GATEWAY_VERSION
 
 # Poll GitHub often enough that routine Gateway fixes arrive quickly, while the
@@ -32,8 +33,10 @@ WORKER_STALL_SECONDS = 15 * 60
 WATCHDOG_INTERVAL_SECONDS = 30
 CLOCK_CHECK_INTERVAL_SECONDS = 10 * 60
 CLOCK_DRIFT_WARN_SECONDS = 30
+MAX_BOUNDED_EXPORT_BYTES = 256 * 1024 * 1024
 
 _original_cloud_call = CloudClient.call
+_original_download_recording = HikvisionClient.download_recording
 _next_update_check = 0.0
 _last_worker_progress = time.monotonic()
 _last_nvr_clock_drift_seconds: float | None = None
@@ -44,6 +47,33 @@ def _installed_gateway_path() -> pathlib.Path:
     if getattr(sys, "frozen", False):
         return pathlib.Path(sys.executable).resolve()
     return pathlib.Path(__file__).resolve()
+
+
+def _guarded_download_recording(
+    self: HikvisionClient,
+    playback_uri: str,
+    output_path: pathlib.Path,
+) -> str:
+    """Reject HTTP 200 false-successes that contain a whole recording segment."""
+    mode = _original_download_recording(self, playback_uri, output_path)
+    try:
+        query = parse_qs(urlsplit(playback_uri).query)
+        bounded = set(query) == {"starttime", "endtime"}
+    except Exception:
+        bounded = False
+    if (
+        bounded
+        and output_path.exists()
+        and output_path.stat().st_size > MAX_BOUNDED_EXPORT_BYTES
+    ):
+        size = output_path.stat().st_size
+        output_path.unlink(missing_ok=True)
+        log(
+            f"bounded_http_export_oversized bytes={size} "
+            "forcing_bounded_fallback=true"
+        )
+        raise RuntimeError("download_rejected:oversized_bounded_export")
+    return mode
 
 
 def _atomic_json_write(path: pathlib.Path, payload: dict) -> None:
@@ -236,13 +266,15 @@ def main() -> int:
     runtime_hardening.wrap_process_job(agent, log)
 
     CloudClient.call = _patched_cloud_call
+    HikvisionClient.download_recording = _guarded_download_recording
     gateway_path = _installed_gateway_path()
     log(
         f"gateway_bootstrap version={GATEWAY_VERSION} "
         f"update_protocol={UPDATE_PROTOCOL} auto_update=evergreen "
         f"update_check_seconds={CHECK_INTERVAL_SECONDS} "
         f"worker_watchdog_seconds={WORKER_STALL_SECONDS} "
-        f"clock_monitor_seconds={CLOCK_CHECK_INTERVAL_SECONDS}"
+        f"clock_monitor_seconds={CLOCK_CHECK_INTERVAL_SECONDS} "
+        f"bounded_export_max_bytes={MAX_BOUNDED_EXPORT_BYTES}"
     )
     maintenance.start(gateway_path, log)
     _start_health_monitor()
