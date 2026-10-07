@@ -68,7 +68,7 @@ def _guarded_download_recording(
     # oversized transfer.
     if bounded:
         try:
-            device = self.device_info()
+            device = str(self.device_info())
         except Exception:
             device = ""
         if "V3.4.107" in device:
