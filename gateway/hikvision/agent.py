@@ -76,6 +76,12 @@ def _attempt_args(attempt_token: str) -> dict[str, str]:
     return {"attempt_token": attempt_token} if attempt_token else {}
 
 
+def preflight_video_metadata(job: dict, metadata: dict, recorder_facts: dict) -> dict:
+    # Bootstrap installs the same strict validator used by the completion gate.
+    # Keep this hook explicit so validation runs before any storage request.
+    return metadata
+
+
 def _retry_recorder_local_clock(
     exc: Exception,
     alignment: dict,
@@ -429,6 +435,42 @@ def process_job(
 
             upload_path = exact_path
 
+            playback_metadata = {
+                "provider": "hikvision_isapi",
+                "gateway_build": (
+                    "local-clock-fallback-2"
+                    if query_shift
+                    else "bounded-fallback-1"
+                ),
+                "gateway_version": gateway_common.GATEWAY_VERSION,
+                "query_clock_offset_seconds": query_shift,
+                "recorder_utc_offset_seconds": recorder_utc_offset,
+                "download_mode": download_mode,
+                "download_start": download_segment_start.replace(
+                    microsecond=0
+                ).isoformat(),
+                "source_clock_alignment": source_clock_alignment,
+                "media_time_verified": clock_check["status"] == "matched",
+                "bounded_window_verified": bounded_window_verified,
+                "clock_check": clock_check,
+                "track_id": search.get("track_id"),
+                "segment_start": search.get("segment_start"),
+                "segment_end": search.get("segment_end"),
+                "matches": search.get("matches", 0),
+                **media,
+                "attempt_generation": attempt_generation,
+                "attempt_fenced": bool(attempt_token),
+                "requested_start": clip_start.astimezone(
+                    timezone.utc
+                ).isoformat(),
+                "requested_end": clip_end.astimezone(
+                    timezone.utc
+                ).isoformat(),
+            }
+            playback_metadata = preflight_video_metadata(
+                job, playback_metadata, recorder_facts
+            )
+
             prepared = cloud.call(
                 "prepare_upload", job_id=job_id, **attempt_args
             )
@@ -448,38 +490,7 @@ def process_job(
                 content_sha256=digest,
                 byte_size=size,
                 duration_seconds=media["duration_seconds"],
-                playback_metadata={
-                    "provider": "hikvision_isapi",
-                    "gateway_build": (
-                        "local-clock-fallback-2"
-                        if query_shift
-                        else "bounded-fallback-1"
-                    ),
-                    "gateway_version": gateway_common.GATEWAY_VERSION,
-                    "query_clock_offset_seconds": query_shift,
-                    "recorder_utc_offset_seconds": recorder_utc_offset,
-                    "download_mode": download_mode,
-                    "download_start": download_segment_start.replace(
-                        microsecond=0
-                    ).isoformat(),
-                    "source_clock_alignment": source_clock_alignment,
-                    "media_time_verified": clock_check["status"] == "matched",
-                    "bounded_window_verified": bounded_window_verified,
-                    "clock_check": clock_check,
-                    "track_id": search.get("track_id"),
-                    "segment_start": search.get("segment_start"),
-                    "segment_end": search.get("segment_end"),
-                    "matches": search.get("matches", 0),
-                    **media,
-                    "attempt_generation": attempt_generation,
-                    "attempt_fenced": bool(attempt_token),
-                    "requested_start": clip_start.astimezone(
-                        timezone.utc
-                    ).isoformat(),
-                    "requested_end": clip_end.astimezone(
-                        timezone.utc
-                    ).isoformat(),
-                },
+                playback_metadata=playback_metadata,
                 **attempt_args,
             )
             if (
