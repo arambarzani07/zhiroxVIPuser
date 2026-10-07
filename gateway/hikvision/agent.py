@@ -22,7 +22,7 @@ from common import (
 
 # Protocol 1.1 enables DB-backed per-attempt fencing while the shared setup
 # helpers remain compatible with already-installed 1.0 gateway packages.
-gateway_common.GATEWAY_VERSION = "1.2.5+hevc-resilience-1"
+gateway_common.GATEWAY_VERSION = "1.4.14+segment-recovery-1"
 
 POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 30
@@ -143,11 +143,29 @@ def process_job(
                 raise RuntimeError("empty_download")
 
             requested_duration = max(1, int((clip_end - clip_start).total_seconds()))
+            # Some legacy Hikvision firmware accepts a bounded time request but
+            # still returns the complete recording segment. A 30-second camera
+            # clip should never be hundreds of MiB; when that happens, trim from
+            # the search result's verified segment start instead of incorrectly
+            # treating byte zero as clip_start.
+            raw_size = raw_path.stat().st_size
+            source_start = clip_start.replace(microsecond=0).isoformat()
+            oversized_segment_recovery = False
+            if raw_size > 256 * 1024 * 1024 and search.get("segment_start"):
+                segment_start = parse_iso(str(search["segment_start"]))
+                segment_end = parse_iso(str(search.get("segment_end") or clip_end.isoformat()))
+                if segment_start <= clip_start and segment_end >= clip_end.replace(microsecond=0):
+                    source_start = segment_start.isoformat()
+                    oversized_segment_recovery = True
+                    log(
+                        f"job={job_id} oversized_export_bytes={raw_size} "
+                        "using_verified_segment_start=True"
+                    )
             media = prepare_browser_clip(
                 raw_path,
                 exact_path,
                 clip_start,
-                clip_start.replace(microsecond=0).isoformat(),
+                source_start,
                 requested_duration,
             )
             clock_check = verify_clip_time(hik, channel_id, exact_path, clip_start, media["duration_seconds"])
@@ -181,7 +199,8 @@ def process_job(
                     "provider": "hikvision_isapi",
                     "gateway_build": "http-query-1",
                     "download_mode": download_mode,
-                    "download_start": clip_start.replace(microsecond=0).isoformat(),
+                    "download_start": source_start,
+                    "oversized_segment_recovery": oversized_segment_recovery,
                     "media_time_verified": clock_check["status"] == "matched",
                     "clock_check": clock_check,
                     "track_id": search.get("track_id"),
