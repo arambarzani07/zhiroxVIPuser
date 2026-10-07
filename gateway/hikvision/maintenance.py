@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import re
 import shutil
 import threading
 import time
@@ -19,6 +20,18 @@ UPDATER_LOG_MAX_BYTES = 2 * 1024 * 1024
 TEMP_MAX_AGE_SECONDS = 24 * 60 * 60
 ORPHAN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 STAGE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
+
+_CANONICAL_RUNTIME_FILES = {
+    "zhirox-hikvision-gateway.exe",
+    "zhirox-hikvision-updater.exe",
+    "zhirox-hikvision-autostart.exe",
+    "zhirox-hikvision-diagnose.exe",
+    "zhirox-hikvision-time-sync.exe",
+}
+_DUPLICATE_NUMBERED_RE = re.compile(
+    r"^zhirox-hikvision-(?:gateway|updater|autostart|diagnose|time-sync|setup)(?: \d+| \(\d+\))\.exe$",
+    re.IGNORECASE,
+)
 
 
 def update_in_progress() -> bool:
@@ -90,6 +103,53 @@ def cleanup_orphan_install_files(
     return removed
 
 
+def cleanup_gateway_download_duplicates(install_dir: pathlib.Path) -> int:
+    """Remove stale/duplicate ZHIROX downloads without touching active runtime files.
+
+    This specifically handles Windows/browser duplicate names such as
+    ``zhirox-hikvision-gateway 3.exe``, ``... (2).exe``, accidental
+    ``.exe.exe`` copies, incomplete downloads, and old Setup executables.
+    Canonical runtime binaries are always preserved.
+    """
+    if update_in_progress() or not install_dir.exists():
+        return 0
+
+    removed = 0
+    try:
+        children = list(install_dir.iterdir())
+    except OSError:
+        return 0
+
+    for child in children:
+        try:
+            if not child.is_file():
+                continue
+            name = child.name
+            lowered = name.casefold()
+            if not lowered.startswith("zhirox-hikvision-"):
+                continue
+            if lowered in _CANONICAL_RUNTIME_FILES:
+                continue
+
+            stale = False
+            if lowered.startswith("zhirox-hikvision-setup") and lowered.endswith(".exe"):
+                stale = True
+            elif _DUPLICATE_NUMBERED_RE.fullmatch(name):
+                stale = True
+            elif lowered.endswith(".exe.exe"):
+                stale = True
+            elif lowered.endswith((".incomplete", ".crdownload", ".part")):
+                stale = True
+
+            if stale:
+                child.unlink(missing_ok=True)
+                removed += 1
+        except OSError:
+            # A still-running Setup/download can be locked. Retry next cycle.
+            continue
+    return removed
+
+
 def cleanup_old_update_stages(now: float | None = None) -> int:
     if update_in_progress() or not UPDATE_ROOT.exists():
         return 0
@@ -112,11 +172,13 @@ def run_once(installed_gateway: pathlib.Path, log: Callable[[str], None]) -> Non
 
     temp_removed = cleanup_stale_temp()
     orphan_removed = cleanup_orphan_install_files(installed_gateway.parent)
+    download_removed = cleanup_gateway_download_duplicates(installed_gateway.parent)
     stages_removed = cleanup_old_update_stages()
-    if temp_removed or orphan_removed or stages_removed:
+    if temp_removed or orphan_removed or download_removed or stages_removed:
         log(
             "maintenance_cleanup "
-            f"temp={temp_removed} orphan={orphan_removed} stages={stages_removed}"
+            f"temp={temp_removed} orphan={orphan_removed} "
+            f"downloads={download_removed} stages={stages_removed}"
         )
 
 
