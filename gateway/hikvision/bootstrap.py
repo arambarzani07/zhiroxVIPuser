@@ -19,7 +19,7 @@ from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.16+evergreen-5"
+GATEWAY_VERSION = "1.4.16+evergreen-6"
 common.GATEWAY_VERSION = GATEWAY_VERSION
 
 # Poll GitHub often enough that routine Gateway fixes arrive quickly, while the
@@ -71,23 +71,16 @@ def _desktop_dirs() -> list[pathlib.Path]:
 
 
 def _cleanup_stale_setup_downloads() -> None:
-    """Remove only downloaded ZHIROX Setup copies from Desktop locations."""
+    """Clean ZHIROX duplicate downloads from Desktop and Desktop/camera."""
     if os.name != "nt":
         return
     for desktop in _desktop_dirs():
-        if not desktop.exists():
-            continue
-        for candidate in desktop.glob("zhirox-hikvision-setup*.exe"):
-            try:
-                candidate.unlink(missing_ok=True)
-                log(f"desktop_setup_cleanup_removed={candidate.name}")
-            except OSError as exc:
-                # A Setup that is still running may be locked by Windows. The
-                # next Gateway restart/update will retry automatically.
-                log(
-                    f"desktop_setup_cleanup_deferred={candidate.name}:"
-                    f"{type(exc).__name__}"
-                )
+        for target in (desktop, desktop / "camera"):
+            if not target.exists():
+                continue
+            removed = maintenance.cleanup_gateway_download_duplicates(target)
+            if removed:
+                log(f"desktop_gateway_cleanup dir={target} removed={removed}")
 
 
 def _guarded_download_recording(
@@ -225,8 +218,6 @@ def _worker_watchdog_loop() -> None:
             try:
                 log(f"worker_watchdog_stall seconds={age}; forcing_task_restart=true")
             finally:
-                # os._exit is intentional: a stuck worker may not unwind Python
-                # cleanly. The resilient Scheduled Task restarts this executable.
                 os._exit(75)
 
 
@@ -240,13 +231,9 @@ def _start_worker_watchdog() -> None:
 
 def _patched_cloud_call(self, action: str, *args, **kwargs):
     global _next_update_check, _last_worker_progress
-    # The lease heartbeat runs in a side thread and must not hide a stalled main
-    # video worker. All other cloud actions count as real worker progress.
     if action != "heartbeat_job":
         _last_worker_progress = time.monotonic()
 
-    # Claim is only called between jobs, so an update never interrupts capture,
-    # transcoding, upload, or an active job lease heartbeat.
     if action == "claim" and time.monotonic() >= _next_update_check:
         _next_update_check = time.monotonic() + CHECK_INTERVAL_SECONDS
         try:
@@ -261,8 +248,6 @@ def _patched_cloud_call(self, action: str, *args, **kwargs):
         except SystemExit:
             raise
         except Exception as exc:
-            # Update failure never stops the working Gateway. It retries on a
-            # later interval while the known-good binary continues processing.
             log(f"auto_update_error={type(exc).__name__}:{str(exc)[:300]}")
     return _original_cloud_call(self, action, *args, **kwargs)
 
@@ -270,8 +255,6 @@ def _patched_cloud_call(self, action: str, *args, **kwargs):
 def preflight_update() -> int:
     if not CONFIG_PATH.exists():
         return 2
-    # A staged binary proves that it can authenticate to the same recorder and
-    # cloud, but reports the installed version until replacement succeeds.
     report_version = os.environ.get("ZHIROX_PREFLIGHT_REPORT_VERSION", "").strip()
     if report_version:
         common.GATEWAY_VERSION = report_version
@@ -295,18 +278,12 @@ def main() -> int:
     if len(sys.argv) == 3 and sys.argv[1] == "--verify-ocr-fixture":
         return verify_ocr_fixture(sys.argv[2])
 
-    # A Scheduled Task retry or accidental double-click must never create two
-    # workers that can compete for jobs or update the same files.
     if not runtime_hardening.acquire_single_instance():
         log("duplicate_gateway_instance=ignored")
         return 0
 
-    # Remove old downloaded Setup copies from Desktop automatically. This is
-    # deliberately limited to our exact installer filename family.
     _cleanup_stale_setup_downloads()
 
-    # Preserve one known-good DPAPI config and repair an accidentally corrupted
-    # config before any worker/health thread tries to decrypt it.
     runtime_hardening.recover_or_backup_config(log)
     runtime_hardening.wrap_process_job(agent, log)
 
