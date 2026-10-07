@@ -4,10 +4,14 @@ import getpass
 import os
 import pathlib
 import sys
+import traceback
+from datetime import datetime, timezone
 
 from autostart import install_resilient_task, start_task
-from common import CONFIG_PATH, CloudClient, GatewayConfig, HikvisionClient
+from common import APP_DIR, CONFIG_PATH, CloudClient, GatewayConfig, HikvisionClient
 from runtime_hardening import save_config_atomic
+
+SETUP_ERROR_LOG = APP_DIR / "setup-error.log"
 
 
 def ask(prompt: str, default: str = "") -> str:
@@ -56,7 +60,50 @@ def load_existing_config() -> GatewayConfig | None:
         return None
 
 
+def setup_self_test() -> int:
+    """Prove the frozen Setup contains all startup modules without using secrets/network."""
+    APP_DIR.mkdir(parents=True, exist_ok=True)
+    _ = (
+        GatewayConfig,
+        CloudClient,
+        HikvisionClient,
+        install_resilient_task,
+        start_task,
+        save_config_atomic,
+        CONFIG_PATH,
+    )
+    print("setup_self_test=ok")
+    return 0
+
+
+def _write_error_log(exc: BaseException) -> None:
+    """Persist startup/setup failures without recording entered credentials."""
+    try:
+        APP_DIR.mkdir(parents=True, exist_ok=True)
+        with SETUP_ERROR_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(
+                f"\n[{datetime.now(timezone.utc).isoformat()}] "
+                f"{type(exc).__name__}: {exc}\n"
+            )
+            traceback.print_exc(file=handle)
+    except Exception:
+        pass
+
+
+def _pause_on_failure() -> None:
+    # A console EXE launched by double-click would otherwise disappear before
+    # the operator can read the actual failure. CI self-test must never pause.
+    if getattr(sys, "frozen", False) and "--self-test" not in sys.argv:
+        try:
+            input("Press Enter to close...")
+        except (EOFError, KeyboardInterrupt):
+            pass
+
+
 def main() -> int:
+    if "--self-test" in sys.argv:
+        return setup_self_test()
+
     print("ZHIROX Hikvision Gateway Setup")
     print("NVR password and gateway token are encrypted locally with Windows DPAPI.")
     print("They are never written to Supabase or GitHub.\n")
@@ -66,7 +113,7 @@ def main() -> int:
         print("Existing Gateway configuration detected.")
         print("Leave password/token blank to keep the currently saved encrypted value.\n")
 
-    host = ask("NVR address", existing.nvr_host if existing else "192.168.1.2")
+    host = ask("NVR address", existing.nvr_host if existing else "192.168.1.3")
     username = ask("NVR username", existing.nvr_username if existing else "admin")
 
     password_input = ask_secret(
@@ -129,9 +176,15 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
-        raise SystemExit(main())
+        result = main()
+        if result != 0:
+            _pause_on_failure()
+        raise SystemExit(result)
     except KeyboardInterrupt:
         raise SystemExit(130)
     except Exception as exc:
+        _write_error_log(exc)
         print(f"Setup failed: {type(exc).__name__}: {exc}")
+        print(f"Error log: {SETUP_ERROR_LOG}")
+        _pause_on_failure()
         raise SystemExit(1)
