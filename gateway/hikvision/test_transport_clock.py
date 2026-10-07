@@ -93,6 +93,7 @@ class RelayClockAttestationTests(unittest.TestCase):
 class TransportClockPromotionTests(unittest.TestCase):
     def _agent(self, result):
         verifier = Mock(return_value=dict(result))
+        verifier._zhirox_transport_clock = False
         return types.SimpleNamespace(verify_clip_time=verifier), verifier
 
     def _client_class(self):
