@@ -3,6 +3,7 @@ from __future__ import annotations
 import getpass
 import os
 import pathlib
+import subprocess
 import sys
 import traceback
 from datetime import datetime, timezone
@@ -58,6 +59,75 @@ def load_existing_config() -> GatewayConfig | None:
             f"new credentials are required ({type(exc).__name__})."
         )
         return None
+
+
+def _desktop_dirs() -> list[pathlib.Path]:
+    """Return the normal and OneDrive-backed Desktop locations for this user."""
+    candidates: list[pathlib.Path] = [pathlib.Path.home() / "Desktop"]
+    for key in ("USERPROFILE", "OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        root = os.environ.get(key, "").strip()
+        if root:
+            candidates.append(pathlib.Path(root) / "Desktop")
+
+    result: list[pathlib.Path] = []
+    seen: set[str] = set()
+    for path in candidates:
+        try:
+            key = str(path.resolve()).casefold()
+        except OSError:
+            key = str(path).casefold()
+        if key not in seen:
+            seen.add(key)
+            result.append(path)
+    return result
+
+
+def _current_setup_on_desktop() -> pathlib.Path | None:
+    if os.name != "nt" or not getattr(sys, "frozen", False):
+        return None
+    current = pathlib.Path(sys.executable).resolve()
+    for desktop in _desktop_dirs():
+        try:
+            if current.parent == desktop.resolve():
+                return current
+        except OSError:
+            continue
+    return None
+
+
+def cleanup_stale_desktop_setups() -> None:
+    """Remove only old ZHIROX Setup downloads; never touch unrelated files."""
+    current = pathlib.Path(sys.executable).resolve() if getattr(sys, "frozen", False) else None
+    for desktop in _desktop_dirs():
+        if not desktop.exists():
+            continue
+        for candidate in desktop.glob("zhirox-hikvision-setup*.exe"):
+            try:
+                resolved = candidate.resolve()
+                if current is not None and resolved == current:
+                    continue
+                candidate.unlink(missing_ok=True)
+                print(f"Removed old Setup download: {candidate.name}")
+            except OSError as exc:
+                print(f"Warning: could not remove old Setup download {candidate.name}: {exc}")
+
+
+def schedule_current_setup_cleanup() -> None:
+    """If Setup itself was launched from Desktop, delete it after this process exits."""
+    current = _current_setup_on_desktop()
+    if current is None:
+        return
+    command = f'ping 127.0.0.1 -n 3 >nul & del /f /q "{current}"'
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    subprocess.Popen(
+        ["cmd.exe", "/d", "/c", command],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=flags,
+        close_fds=True,
+    )
+    print("This Desktop Setup download will remove itself after closing.")
 
 
 def setup_self_test() -> int:
@@ -170,6 +240,8 @@ def main() -> int:
     else:
         print("Gateway EXE was not found beside the setup EXE; auto-start was skipped.")
 
+    cleanup_stale_desktop_setups()
+    schedule_current_setup_cleanup()
     print("Setup complete.")
     return 0
 
