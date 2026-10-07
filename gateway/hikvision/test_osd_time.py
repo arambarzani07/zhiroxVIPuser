@@ -77,7 +77,7 @@ class OcrRecipeTests(unittest.TestCase):
                 'osd_time.run_background', return_value=SimpleNamespace(returncode=0)
             ) as run, patch('osd_time.ocr_image') as ocr:
                 # Discover a corner after both normal bands and the first corner.
-                ocr.side_effect = ['', '', '', '', clock]
+                ocr.side_effect = ['', '', '', '', '', clock]
                 self.assertIn(clock, read_image_clock(workspace/'first.png', workspace, cache))
                 first_calls = run.call_count
                 self.assertGreater(first_calls, 1)
@@ -95,7 +95,7 @@ class OcrRecipeTests(unittest.TestCase):
             workspace = pathlib.Path(tmp)
             with patch('osd_time.find_ffmpeg', return_value='ffmpeg'), patch(
                 'osd_time.run_background', return_value=SimpleNamespace(returncode=0)
-            ), patch('osd_time.ocr_image', side_effect=['unreadable', '10-04-2026 09:38:07']):
+            ), patch('osd_time.ocr_image', side_effect=['unreadable', '', '10-04-2026 09:38:07']):
                 text = read_image_clock(workspace/'frame.png', workspace, cache)
             self.assertIn('09:38:07', text)
             self.assertNotEqual(cache['recipe'], ('old-crop', 11))
@@ -108,6 +108,19 @@ class OcrRecipeTests(unittest.TestCase):
             ), patch('osd_time.ocr_image', return_value='unreadable'):
                 text = read_image_clock(workspace/'frame.png', workspace, {'recipe': ('crop', 6)})
             self.assertEqual(dates_in_text(text, ClockTests.offset), [])
+
+    def test_native_full_frame_clock_is_read_before_destructive_cropping(self):
+        cache = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp)
+            with patch('osd_time.run_background') as run, patch(
+                'osd_time.ocr_image', return_value='10-08-2026 Thu 01:05:14'
+            ) as ocr:
+                text = read_image_clock(workspace/'frame.png', workspace, cache)
+            self.assertIn('01:05:14', text)
+            ocr.assert_called_once_with(workspace/'frame.png', psm=6)
+            run.assert_not_called()
+            self.assertEqual(cache['recipe'], ('null', 6))
 
 
 class WindowsOcrSmoke(unittest.TestCase):

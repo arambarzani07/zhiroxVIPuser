@@ -69,8 +69,18 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path,
                     return text
         except Exception:
             pass
-    # Read both common Hikvision OSD bands first. This is cheap and preserves the
-    # existing fast path when the clock is already legible.
+    # Keep a full-frame read before cropping. Large or centrally placed pixel
+    # clocks can be cut off by every 22%-height band/corner. Native PSM 6 reads
+    # the original glyphs without introducing scaling artifacts.
+    try:
+        text = ocr_image(image, psm=6)
+        if dates_in_text(text, BAGHDAD_OFFSET):
+            if recipe_cache is not None:
+                recipe_cache['recipe'] = ('null', 6)
+            return text
+    except Exception:
+        pass
+    # If full-frame OCR cannot isolate a clock, retain the band/corner search.
     for position in ['0', 'ih-oh']:
         target = workspace / ('osd-top.png' if position=='0' else 'osd-bottom.png')
         r = run_background([find_ffmpeg(),'-nostdin','-loglevel','error','-y','-i',str(image),
