@@ -103,9 +103,6 @@ def _retry_recorder_local_clock(
     )
     if not isinstance(observed, (int, float)) or isinstance(observed, bool):
         return False
-    # Old Hikvision firmware can interpret a timestamp ending in Z as a local
-    # wall-clock field. We only retry when the observed OSD displacement agrees
-    # with the recorder's own UTC offset within one hour.
     target = -expected_shift if query_shift == 0 else expected_shift
     shifted = abs(float(observed) - float(target)) <= 3600
     return shifted and int(alignment.get("samples_read") or 0) >= 1
@@ -243,10 +240,6 @@ def process_job(
 
                         raw_path.unlink(missing_ok=True)
                         if legacy_direct_rtsp:
-                            # DS-7616NI-K2 V3.4.107 can answer a bounded HTTP
-                            # request with an entire ~1 GB recording segment. Do
-                            # not download the original file as a fallback on this
-                            # firmware; use the same bounded historical RTSP URI.
                             log(
                                 f"job={job_id} bounded HTTP export rejected; "
                                 "legacy_firmware_direct_rtsp=true"
@@ -365,11 +358,15 @@ def process_job(
                     if clock_check["status"] == "mismatch":
                         raise RuntimeError("clip_clock_mismatch")
 
+                    # A relay-corrected SDP proves codec compatibility, not time.
+                    # Keep that path on the strict independent clock check. Plain
+                    # bounded HTTP/RTSP can be verified by its exact requested
+                    # interval, including the recorder's explicitly advertised
+                    # local UTC offset.
                     bounded_modes = {
                         "time",
                         "http_query_time",
                         "rtsp_time",
-                        "rtsp_h264_sdp",
                     }
                     same_window = abs(
                         (
@@ -456,7 +453,7 @@ def process_job(
                     "gateway_build": (
                         "local-clock-fallback-2"
                         if query_shift
-                        else "bounded-fallback-2"
+                        else "bounded-fallback-1"
                     ),
                     "gateway_version": gateway_common.GATEWAY_VERSION,
                     "query_clock_offset_seconds": query_shift,
