@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import types
 import unittest
 
+import transaction_video_invariant
 from transaction_video_invariant import validate_and_stamp
 
 
 class TransactionVideoInvariantTests(unittest.TestCase):
     def setUp(self):
         self.job = {
+            "job_id": "job-123",
             "transaction_at": "2026-10-07T09:27:59+00:00",
             "clip_start_at": "2026-10-07T09:27:44+00:00",
             "clip_end_at": "2026-10-07T09:28:14+00:00",
@@ -104,6 +107,61 @@ class TransactionVideoInvariantTests(unittest.TestCase):
         result = validate_and_stamp(self.job, metadata, {"firmware": "V4.0.0"})
         self.assertTrue(result["transaction_video_invariant_verified"])
         self.assertEqual(result["transaction_video_clock_domain_seconds"], 0)
+
+    def _fake_agent(self, metadata):
+        calls = []
+
+        class CloudClient:
+            def call(self, action, **body):
+                calls.append((action, body))
+                return {"ok": True}
+
+        def recorder_context(hik, channel_id):
+            return dict(self.facts), 10800
+
+        def process_job(cloud, heartbeat_cloud, hik, job):
+            agent._recorder_clock_context(hik, 10)
+            return cloud.call(
+                "complete",
+                job_id=job["job_id"],
+                playback_metadata=dict(metadata),
+            )
+
+        agent = types.SimpleNamespace(
+            CloudClient=CloudClient,
+            _recorder_clock_context=recorder_context,
+            process_job=process_job,
+        )
+        return agent, CloudClient, calls
+
+    def test_installed_gate_stamps_metadata_before_complete(self):
+        agent, CloudClient, calls = self._fake_agent(self.metadata)
+        transaction_video_invariant.install(agent, lambda _: None)
+        cloud = CloudClient()
+        agent.process_job(cloud, cloud, object(), dict(self.job))
+        self.assertEqual(len(calls), 1)
+        action, body = calls[0]
+        self.assertEqual(action, "complete")
+        self.assertTrue(body["playback_metadata"]["transaction_video_invariant_verified"])
+        self.assertEqual(
+            body["playback_metadata"]["transaction_video_clock_domain_seconds"],
+            10800,
+        )
+
+    def test_installed_gate_blocks_wrong_video_before_complete(self):
+        metadata = dict(self.metadata)
+        metadata.update(
+            query_clock_offset_seconds=0,
+            download_mode="rtsp_h264_sdp",
+            segment_start="2026-10-07T09:27:44Z",
+            segment_end="2026-10-07T09:28:14Z",
+        )
+        agent, CloudClient, calls = self._fake_agent(metadata)
+        transaction_video_invariant.install(agent, lambda _: None)
+        cloud = CloudClient()
+        with self.assertRaisesRegex(RuntimeError, "legacy_clock_domain_mismatch"):
+            agent.process_job(cloud, cloud, object(), dict(self.job))
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":
