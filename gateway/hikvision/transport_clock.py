@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from fast_clock_guard import verify_transport_contradiction
 from rtsp_codec_relay import take_timing_attestation
 
 
@@ -22,12 +23,17 @@ def _attestation_matches_duration(attestation: dict, duration_seconds: float) ->
 
 
 def install(agent_module: Any, client_class: type, log: Callable[[str], None]) -> None:
-    """Promote only independently attested RTSP absolute clock ranges.
+    """Verify corrected RTSP playback without an unbounded OCR bottleneck.
 
     SDP correction alone is never timing proof. The relay must observe a successful
     upstream DESCRIBE and PLAY plus an absolute ``Range: clock=...`` response whose
-    start (and end, when present) matches the exact bounded historical URI. A real
-    OCR mismatch always wins and is never overridden.
+    start (and end, when present) matches the exact bounded historical URI.
+
+    When that independent transport proof is complete, a bounded two-frame OSD
+    guard looks for a contradictory visible clock. A detected mismatch always
+    vetoes approval. Missing/unreadable OSD does not block an otherwise fully
+    attested RTSP clock range. If transport proof is absent or incomplete, the
+    original exhaustive OCR verifier remains the fallback and nothing is promoted.
     """
     original_download = client_class.download_playback_stream
     if not getattr(original_download, "_zhirox_transport_clock", False):
@@ -58,30 +64,52 @@ def install(agent_module: Any, client_class: type, log: Callable[[str], None]) -
         return
 
     def verify_with_transport_clock(hik, channel_id, path, clip_start, duration_seconds):
-        result = original_verify(hik, channel_id, path, clip_start, duration_seconds)
-        if not isinstance(result, dict):
-            return result
-        status = result.get("status")
-        # Never override a positive OCR match or a real mismatch.
-        if status != "unknown":
-            return result
-        if getattr(hik, "_playback_codec_relay_used", False) is not True:
-            return result
-
+        relay_used = getattr(hik, "_playback_codec_relay_used", False) is True
         attestation = getattr(hik, "_playback_timing_attestation", None)
         if not isinstance(attestation, dict):
             attestation = {"verified": False, "reason": "attestation_missing"}
 
-        if _attestation_matches_duration(attestation, duration_seconds):
-            promoted = dict(result)
+        # Fast path is allowed only after the NVR itself has supplied a fully
+        # verified absolute clock range for this exact bounded PLAY request.
+        if relay_used and _attestation_matches_duration(attestation, duration_seconds):
+            guard = verify_transport_contradiction(path, clip_start, duration_seconds)
+            if not isinstance(guard, dict):
+                guard = {
+                    "status": "unknown",
+                    "method": "osd_ocr_fast_guard",
+                    "reason": "guard_result_invalid",
+                }
+
+            if guard.get("status") == "mismatch":
+                rejected = dict(guard)
+                rejected["transport_attestation"] = attestation
+                log("clip_clock_transport_rejected_by=osd_fast_guard")
+                return rejected
+
+            promoted = dict(guard)
             promoted.update(
                 status="matched",
                 method="rtsp_play_absolute_clock",
                 reason="upstream_play_clock_range_matched",
                 transport_attestation=attestation,
+                osd_guard_status=str(guard.get("status") or "unknown"),
+                osd_guard_reason=str(guard.get("reason") or "clock_reading_unavailable")[:120],
             )
-            log("clip_clock_verified_by=rtsp_play_absolute_clock")
+            log(
+                "clip_clock_verified_by=rtsp_play_absolute_clock "
+                f"osd_guard={promoted['osd_guard_status']}"
+            )
             return promoted
+
+        # Without complete transport proof retain the exhaustive legacy verifier.
+        result = original_verify(hik, channel_id, path, clip_start, duration_seconds)
+        if not isinstance(result, dict):
+            return result
+        status = result.get("status")
+        if status != "unknown":
+            return result
+        if not relay_used:
+            return result
 
         reason = str(attestation.get("reason") or "attestation_unverified")
         enriched = dict(result)
