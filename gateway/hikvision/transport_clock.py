@@ -5,19 +5,46 @@ from typing import Any, Callable
 from rtsp_codec_relay import take_timing_attestation
 
 
-def _attestation_matches_duration(attestation: dict, duration_seconds: float) -> bool:
+def _strict_timing_fields_match(attestation: dict, duration_seconds: float) -> bool:
+    """Require the full absolute-clock proof, independent of relay teardown state."""
     try:
         requested = float(attestation.get("requested_duration_seconds"))
         duration = float(duration_seconds)
+        start_delta = float(attestation.get("start_delta_seconds"))
+        end_delta_raw = attestation.get("end_delta_seconds")
+        end_delta = None if end_delta_raw is None else float(end_delta_raw)
     except (TypeError, ValueError):
         return False
+
+    end_present = attestation.get("range_end_present") is True
     return bool(
-        attestation.get("verified") is True
-        and attestation.get("sdp_corrected") is True
+        attestation.get("sdp_corrected") is True
         and attestation.get("describe_accepted") is True
         and attestation.get("play_accepted") is True
         and attestation.get("range_kind") == "clock"
         and abs(requested - duration) <= 0.1
+        and abs(start_delta) <= 1.0
+        and (not end_present or (end_delta is not None and abs(end_delta) <= 1.0))
+    )
+
+
+def _attestation_matches_duration(attestation: dict, duration_seconds: float) -> bool:
+    """Accept normal proof or a proven-success download with only relay teardown noise.
+
+    A relay can see BrokenPipe/ConnectionReset when FFmpeg intentionally closes the
+    loopback RTSP session after the requested duration. The recorder timing proof is
+    still independent and valid if DESCRIBE/PLAY/absolute Range all matched exactly
+    and the download function itself returned successfully. No other relay failure is
+    promoted, and OCR mismatch remains authoritative in ``install`` below.
+    """
+    if not _strict_timing_fields_match(attestation, duration_seconds):
+        return False
+    if attestation.get("verified") is True:
+        return True
+    return bool(
+        attestation.get("reason") == "relay_failed"
+        and attestation.get("relay_failed") is True
+        and attestation.get("download_succeeded") is True
     )
 
 
@@ -41,12 +68,22 @@ def install(agent_module: Any, client_class: type, log: Callable[[str], None]) -
                     "verified": False,
                     "reason": "attestation_missing",
                 }
+                attestation = dict(attestation)
+                # Reaching this line means the guarded relay download returned
+                # normally (FFmpeg returncode 0, corrected SDP, non-empty output).
+                # This flag is intentionally added here, never inside the relay.
+                attestation["download_succeeded"] = True
                 self._playback_timing_attestation = attestation
+                teardown_candidate = bool(
+                    attestation.get("reason") == "relay_failed"
+                    and attestation.get("relay_failed") is True
+                )
                 log(
                     "rtsp_timing_attestation "
                     f"verified={bool(attestation.get('verified'))} "
                     f"reason={str(attestation.get('reason') or 'unknown')[:80]} "
-                    f"range_kind={str(attestation.get('range_kind') or 'none')[:20]}"
+                    f"range_kind={str(attestation.get('range_kind') or 'none')[:20]} "
+                    f"download_succeeded=true teardown_candidate={teardown_candidate}"
                 )
             return result
 
@@ -74,13 +111,24 @@ def install(agent_module: Any, client_class: type, log: Callable[[str], None]) -
 
         if _attestation_matches_duration(attestation, duration_seconds):
             promoted = dict(result)
+            tolerated_teardown = bool(
+                attestation.get("verified") is not True
+                and attestation.get("reason") == "relay_failed"
+            )
             promoted.update(
                 status="matched",
                 method="rtsp_play_absolute_clock",
-                reason="upstream_play_clock_range_matched",
+                reason=(
+                    "upstream_play_clock_range_matched_after_successful_download"
+                    if tolerated_teardown
+                    else "upstream_play_clock_range_matched"
+                ),
                 transport_attestation=attestation,
             )
-            log("clip_clock_verified_by=rtsp_play_absolute_clock")
+            log(
+                "clip_clock_verified_by=rtsp_play_absolute_clock "
+                f"relay_teardown_tolerated={tolerated_teardown}"
+            )
             return promoted
 
         reason = str(attestation.get("reason") or "attestation_unverified")
