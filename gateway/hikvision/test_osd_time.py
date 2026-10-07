@@ -45,6 +45,26 @@ class ClockTests(unittest.TestCase):
     def test_unavailable_ocr_does_not_stop_generic_verifier(self):
         with patch('osd_time.infer_media_start_from_osd',return_value={'status':'unknown','reason':'no OCR'}):
             self.assertEqual(verify_clip_time(None,10,pathlib.Path(__file__),self.start,30)['status'],'unknown')
+    def test_unknown_verifier_preserves_diagnostics_without_verifying(self):
+        diagnostic={
+            'status':'unknown',
+            'reason':'insufficient_clock_readings',
+            'samples_read':1,
+            'first_displayed_at':'2026-10-04T09:38:00+03:00',
+            'first_sample_offset_seconds':0.0,
+            'clock_candidates':['2026-10-04T09:38:00+03:00'],
+            'frames_extracted':5,
+            'source_bytes':12345,
+            'source_codecs':['h264'],
+            'source_probe_ok':True,
+        }
+        with patch('osd_time.infer_media_start_from_osd',return_value=diagnostic):
+            result=verify_clip_time(None,10,pathlib.Path(__file__),self.start,30)
+        self.assertEqual(result['status'],'unknown')
+        self.assertEqual(result['samples_read'],1)
+        self.assertEqual(result['first_sample_offset_seconds'],0.0)
+        self.assertEqual(result['frames_extracted'],5)
+        self.assertEqual(result['source_codecs'],['h264'])
 
 class WindowsOcrSmoke(unittest.TestCase):
     @unittest.skipUnless(sys.platform=='win32','Windows packaged OCR integration')
