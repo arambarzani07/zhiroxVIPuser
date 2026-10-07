@@ -42,20 +42,55 @@ def ask_secret(prompt: str) -> str:
             print("*", end="", flush=True)
 
 
+def load_existing_config() -> GatewayConfig | None:
+    """Load the current DPAPI-protected configuration without exposing secrets."""
+    if not CONFIG_PATH.exists():
+        return None
+    try:
+        return GatewayConfig.load()
+    except Exception as exc:
+        print(
+            "Warning: existing Gateway configuration could not be loaded; "
+            f"new credentials are required ({type(exc).__name__})."
+        )
+        return None
+
+
 def main() -> int:
     print("ZHIROX Hikvision Gateway Setup")
     print("NVR password and gateway token are encrypted locally with Windows DPAPI.")
     print("They are never written to Supabase or GitHub.\n")
 
-    host = ask("NVR address", "192.168.1.2")
-    username = ask("NVR username", "admin")
-    password = ask_secret("NVR password (typing shows *): ")
-    token = ask_secret("ZHIROX gateway token (typing shows *): ")
+    existing = load_existing_config()
+    if existing is not None:
+        print("Existing Gateway configuration detected.")
+        print("Leave password/token blank to keep the currently saved encrypted value.\n")
+
+    host = ask("NVR address", existing.nvr_host if existing else "192.168.1.2")
+    username = ask("NVR username", existing.nvr_username if existing else "admin")
+
+    password_input = ask_secret(
+        "NVR password (blank keeps current; typing shows *): "
+        if existing
+        else "NVR password (typing shows *): "
+    )
+    token_input = ask_secret(
+        "ZHIROX gateway token (blank keeps current; typing shows *): "
+        if existing
+        else "ZHIROX gateway token (typing shows *): "
+    )
+
+    password = password_input or (existing.nvr_password if existing else "")
+    token = token_input or (existing.gateway_token if existing else "")
     if not password or len(token) < 32:
         print("Password or gateway token is missing.")
         return 2
 
-    cfg = GatewayConfig(host, username, password, token)
+    if existing is not None:
+        cfg = GatewayConfig(host, username, password, token, existing.cloud_url)
+    else:
+        cfg = GatewayConfig(host, username, password, token)
+
     hik = HikvisionClient(cfg)
     cloud = CloudClient(cfg)
 
