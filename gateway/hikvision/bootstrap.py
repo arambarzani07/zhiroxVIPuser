@@ -19,7 +19,7 @@ from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.16+evergreen-3"
+GATEWAY_VERSION = "1.4.16+evergreen-4"
 common.GATEWAY_VERSION = GATEWAY_VERSION
 
 # Poll GitHub often enough that routine Gateway fixes arrive quickly, while the
@@ -47,6 +47,47 @@ def _installed_gateway_path() -> pathlib.Path:
     if getattr(sys, "frozen", False):
         return pathlib.Path(sys.executable).resolve()
     return pathlib.Path(__file__).resolve()
+
+
+def _desktop_dirs() -> list[pathlib.Path]:
+    """Return normal and OneDrive-backed Desktop locations for this Windows user."""
+    candidates: list[pathlib.Path] = [pathlib.Path.home() / "Desktop"]
+    for key in ("USERPROFILE", "OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        root = os.environ.get(key, "").strip()
+        if root:
+            candidates.append(pathlib.Path(root) / "Desktop")
+
+    result: list[pathlib.Path] = []
+    seen: set[str] = set()
+    for path in candidates:
+        try:
+            key = str(path.resolve()).casefold()
+        except OSError:
+            key = str(path).casefold()
+        if key not in seen:
+            seen.add(key)
+            result.append(path)
+    return result
+
+
+def _cleanup_stale_setup_downloads() -> None:
+    """Remove only downloaded ZHIROX Setup copies from Desktop locations."""
+    if os.name != "nt":
+        return
+    for desktop in _desktop_dirs():
+        if not desktop.exists():
+            continue
+        for candidate in desktop.glob("zhirox-hikvision-setup*.exe"):
+            try:
+                candidate.unlink(missing_ok=True)
+                log(f"desktop_setup_cleanup_removed={candidate.name}")
+            except OSError as exc:
+                # A Setup that is still running may be locked by Windows. The
+                # next Gateway restart/update will retry automatically.
+                log(
+                    f"desktop_setup_cleanup_deferred={candidate.name}:"
+                    f"{type(exc).__name__}"
+                )
 
 
 def _guarded_download_recording(
@@ -259,6 +300,10 @@ def main() -> int:
     if not runtime_hardening.acquire_single_instance():
         log("duplicate_gateway_instance=ignored")
         return 0
+
+    # Remove old downloaded Setup copies from Desktop automatically. This is
+    # deliberately limited to our exact installer filename family.
+    _cleanup_stale_setup_downloads()
 
     # Preserve one known-good DPAPI config and repair an accidentally corrupted
     # config before any worker/health thread tries to decrypt it.
