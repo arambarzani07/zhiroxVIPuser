@@ -1,0 +1,110 @@
+name: Hikvision Gateway Release Quarantine
+
+on:
+  push:
+    branches: [user-source]
+    paths:
+      - '.github/workflows/hikvision-gateway-quarantine.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  REPOSITORY: arambarzani07/zhiroxVIPuser
+  GATEWAY_PREFIX: hikvision-gateway-v
+  PRODUCTION_WORKFLOW: .github/workflows/hikvision-gateway-windows.yml
+
+jobs:
+  quarantine-failed-releases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mark permanently failed mutable Gateway releases as prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          releases="$(gh api "repos/$REPOSITORY/releases?per_page=100")"
+          mapfile -t rows < <(
+            jq -r --arg prefix "$GATEWAY_PREFIX" '
+              .[]
+              | select(.draft == false)
+              | select(.prerelease == false)
+              | select(.immutable == false)
+              | select(.tag_name | startswith($prefix))
+              | [.id, .tag_name, .target_commitish] | @tsv
+            ' <<<"$releases"
+          )
+
+          quarantined=0
+          for row in "${rows[@]}"; do
+            IFS=$'\t' read -r release_id tag commit <<<"$row"
+
+            # Only exact 40-char commit-pinned releases are eligible for automated
+            # provenance decisions. Anything ambiguous is left untouched.
+            if [[ ! "$commit" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              echo "skip $tag: target_commitish is not a pinned commit"
+              continue
+            fi
+
+            runs="$(gh api "repos/$REPOSITORY/actions/runs?head_sha=$commit&per_page=50")"
+            matching="$(
+              jq -c --arg sha "$commit" --arg workflow "$PRODUCTION_WORKFLOW" '
+                [.workflow_runs[]
+                 | select((.head_sha | ascii_downcase) == ($sha | ascii_downcase))
+                 | select(.head_branch == "user-source")
+                 | select(.path == $workflow)
+                 | select(.event == "push")]
+              ' <<<"$runs"
+            )"
+
+            success_count="$(jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length' <<<"$matching")"
+            pending_count="$(jq '[.[] | select(.status != "completed")] | length' <<<"$matching")"
+            failed_count="$(jq '[.[] | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "startup_failure"))] | length' <<<"$matching")"
+
+            if (( success_count > 0 )); then
+              echo "keep $tag: successful production CI exists"
+              continue
+            fi
+            if (( pending_count > 0 )); then
+              echo "keep $tag: production CI is still pending"
+              continue
+            fi
+            if (( failed_count == 0 )); then
+              echo "keep $tag: no conclusive failed production CI evidence"
+              continue
+            fi
+
+            current="$(gh api "repos/$REPOSITORY/releases/$release_id")"
+            if [[ "$(jq -r '.immutable' <<<"$current")" != "false" ]]; then
+              echo "skip $tag: release became immutable"
+              continue
+            fi
+            if [[ "$(jq -r '.target_commitish' <<<"$current")" != "$commit" ]]; then
+              echo "skip $tag: release target changed during verification"
+              continue
+            fi
+
+            old_body="$(jq -r '.body // ""' <<<"$current")"
+            marker="[AUTO-QUARANTINED] Exact production Gateway CI for commit $commit completed without success. Assets and tag are unchanged; this release is excluded from automatic stable upgrades."
+            if grep -Fq '[AUTO-QUARANTINED]' <<<"$old_body"; then
+              new_body="$old_body"
+            else
+              new_body="$marker"$'\n\n'"$old_body"
+            fi
+
+            gh api --method PATCH "repos/$REPOSITORY/releases/$release_id" \
+              -F prerelease=true \
+              -f body="$new_body" >/dev/null
+
+            verified="$(gh api "repos/$REPOSITORY/releases/$release_id")"
+            [[ "$(jq -r '.prerelease' <<<"$verified")" == "true" ]]
+            [[ "$(jq -r '.target_commitish' <<<"$verified")" == "$commit" ]]
+            echo "quarantined $tag commit=$commit"
+            quarantined=$((quarantined + 1))
+          done
+
+          echo "Gateway releases quarantined: $quarantined"
