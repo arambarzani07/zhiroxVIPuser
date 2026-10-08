@@ -1,4 +1,5 @@
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -121,6 +122,46 @@ class OcrRecipeTests(unittest.TestCase):
             ocr.assert_called_once_with(workspace/'frame.png', psm=6)
             run.assert_not_called()
             self.assertEqual(cache['recipe'], ('null', 6))
+
+    def test_bright_band_clock_is_independently_read_and_cached(self):
+        cache = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp)
+            with patch('osd_time.find_ffmpeg', return_value='ffmpeg'), patch(
+                'osd_time.run_background', return_value=SimpleNamespace(returncode=0)
+            ), patch('osd_time.ocr_image', side_effect=['', '', '', '10-08-2026 Thu 01:05:14']):
+                text = read_image_clock(workspace/'frame.png', workspace, cache)
+            self.assertIn('01:05:14', text)
+            self.assertIn('lut=', cache['recipe'][0])
+            with patch('osd_time.find_ffmpeg', return_value='ffmpeg'), patch(
+                'osd_time.run_background', return_value=SimpleNamespace(returncode=0)
+            ), patch('osd_time.ocr_image', return_value='10-08-2026 Thu 01:05:17'):
+                second = read_image_clock(workspace/'next.png', workspace, cache)
+            aligned = align_readings([(0, text), (3, second)],
+                datetime(2026, 10, 8, 1, 5, 14, tzinfo=ClockTests.offset))
+            self.assertEqual(aligned['status'], 'aligned')
+            self.assertEqual(aligned['offset_seconds'], 0)
+
+    @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('tesseract'), 'Native OCR tools required')
+    def test_native_bright_filter_preserves_exact_clock_digits(self):
+        from osd_time import find_ffmpeg, BAGHDAD_OFFSET
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp)
+            image = workspace/'clock.png'
+            # Real OCR against a busy generated scene; no mocked OCR output.
+            filters = ("drawbox=x=20:y=190:w=1100:h=150:color=gray:t=fill,"
+                       "drawtext=text='10-08-2026 Thu 01\\:05\\:14':"
+                       "fontcolor=white:fontsize=60:x=40:y=230")
+            result = subprocess.run([find_ffmpeg(), '-nostdin', '-loglevel', 'error', '-y',
+                '-f', 'lavfi', '-i', 'testsrc2=size=1920x1080', '-vf', filters,
+                '-frames:v', '1', str(image)], capture_output=True, timeout=20)
+            if result.returncode:
+                self.skipTest('FFmpeg drawtext unavailable')
+            recipe = (r'crop=iw:ih*0.35:0:0,scale=2400:-1:flags=neighbor,format=gray,lut=y=if(gte(val\,210)\,255\,0)', 6)
+            text = read_image_clock(image, workspace, {'recipe': recipe})
+            clocks = dates_in_text(text, BAGHDAD_OFFSET, 'MDY')
+            self.assertTrue(clocks, repr(text))
+            self.assertEqual(clocks[0][1], datetime(2026, 10, 8, 1, 5, 14, tzinfo=BAGHDAD_OFFSET))
 
 
 class WindowsOcrSmoke(unittest.TestCase):

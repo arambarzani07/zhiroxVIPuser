@@ -97,6 +97,28 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path,
             except Exception:
                 pass
 
+    # White pixel clocks can disappear into the scene during layout detection.
+    # Isolate bright glyphs in a taller band, keeping their nearest-neighbour
+    # edges. This changes only a temporary OCR image, never recorded media.
+    for position in ('0', 'ih-oh'):
+        filters = (f'crop=iw:ih*0.35:0:{position},'
+                   'scale=2400:-1:flags=neighbor,format=gray,'
+                   r'lut=y=if(gte(val\,210)\,255\,0)')
+        target = workspace / ('osd-bright-top.png' if position == '0' else 'osd-bright-bottom.png')
+        r = run_background([find_ffmpeg(), '-nostdin', '-loglevel', 'error', '-y',
+            '-i', str(image), '-vf', filters, '-frames:v', '1', str(target)],
+            capture_output=True, timeout=20)
+        if r.returncode == 0:
+            try:
+                text = ocr_image(target, psm=6)
+                parts.append(text)
+                if dates_in_text(text, BAGHDAD_OFFSET):
+                    if recipe_cache is not None:
+                        recipe_cache['recipe'] = (filters, 6)
+                    return text
+            except Exception:
+                pass
+
     # Old Hikvision playback can make the OSD tiny after SDP repair/transcoding.
     # Scan each corner at higher resolution. Never guess digits: every candidate
     # still has to satisfy dates_in_text() and the multi-frame alignment guards.
@@ -118,7 +140,7 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path,
                 capture_output=True, timeout=20)
             if r.returncode != 0:
                 continue
-            for psm in (11, 7):
+            for psm in (6, 11, 7):
                 try:
                     text = ocr_image(target, psm=psm)
                     parts.append(text)
