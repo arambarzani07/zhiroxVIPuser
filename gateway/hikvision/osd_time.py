@@ -50,12 +50,55 @@ def dates_in_text(text: str, offset, order: str | None = None) -> list[tuple[str
     return results
 
 
+def read_split_overlay_clock(image: pathlib.Path, workspace: pathlib.Path) -> str:
+    """Read the adjacent mixed-polarity fields of this recorder's OSD layout.
+
+    The recorder inverts the seconds over bright tiles independently of the
+    preceding white text. OCR of the entire line drops those black glyphs. These
+    normalized, adjacent regions read every digit from the SAME frame; missing
+    digits, punctuation, or a conflicting weekday invalidate the whole reading.
+    Nothing is filled in from the requested time or another frame.
+    """
+    regions = (
+        ('prefix', 'crop=trunc(iw*225/1808)*2:trunc(ih*22/1024)*2:trunc(iw*39/1808)*2:trunc(ih*27/1024)*2,scale=1200:-1', 7),
+        ('seconds', 'crop=trunc(iw*30/1808)*2:trunc(ih*22/1024)*2:trunc(iw*263/1808)*2:trunc(ih*27/1024)*2,scale=1200:-1', 8),
+    )
+    texts = []
+    for label, filters, psm in regions:
+        target = workspace / f'osd-split-{label}.png'
+        try:
+            r = run_background([find_ffmpeg(), '-nostdin', '-loglevel', 'error', '-y',
+                '-i', str(image), '-vf', filters, '-frames:v', '1', str(target)],
+                capture_output=True, timeout=20)
+            if r.returncode:
+                return ''
+            texts.append(' '.join(ocr_image(target, psm=psm).split()))
+        except Exception:
+            return ''
+    prefix, seconds = texts
+    match = re.fullmatch(r'\d{2}-\d{2}-\d{4}\s+(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{2}:\d{2}:', prefix)
+    if not match or not re.fullmatch(r'\d{2}', seconds):
+        return ''
+    text = prefix + seconds
+    weekdays = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
+    # This fixed spatial profile is the observed MM-DD-YYYY recorder layout.
+    # Do not accept a different date interpretation to rescue a wrong weekday.
+    candidates = dates_in_text(text, BAGHDAD_OFFSET, 'MDY')
+    if not any(weekdays[stamp.weekday()] == match.group(1) for _, stamp in candidates):
+        return ''
+    return text
+
+
 def read_image_clock(image: pathlib.Path, workspace: pathlib.Path,
                      recipe_cache: dict | None = None) -> str:
-    parts = []
     # Cache only the crop/OCR settings, never clock text or verification results.
     # Each new frame is decoded and read independently. A failed cached read
     # falls back to the full search; the caller still checks all sampled clocks.
+    # Try the recorder-specific adjacent regions before scene-wide OCR. Every
+    # call reads both regions anew, including when a prior frame succeeded.
+    split_text = read_split_overlay_clock(image, workspace)
+    if split_text:
+        return split_text
     if recipe_cache and 'recipe' in recipe_cache:
         filters, psm = recipe_cache['recipe']
         target = workspace / 'osd-cached.png'
@@ -88,12 +131,11 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path,
         if r.returncode == 0:
             try:
                 text = ocr_image(target)
-                parts.append(text)
                 if dates_in_text(text, BAGHDAD_OFFSET):
                     if recipe_cache is not None:
                         recipe_cache['recipe'] = (
                             f'crop=iw:ih*0.22:0:{position},scale=2400:-1', 6)
-                    return ' '.join(parts)
+                    return text
             except Exception:
                 pass
 
@@ -111,7 +153,6 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path,
         if r.returncode == 0:
             try:
                 text = ocr_image(target, psm=6)
-                parts.append(text)
                 if dates_in_text(text, BAGHDAD_OFFSET):
                     if recipe_cache is not None:
                         recipe_cache['recipe'] = (filters, 6)
@@ -143,14 +184,16 @@ def read_image_clock(image: pathlib.Path, workspace: pathlib.Path,
             for psm in (6, 11, 7):
                 try:
                     text = ocr_image(target, psm=psm)
-                    parts.append(text)
                     if dates_in_text(text, BAGHDAD_OFFSET):
                         if recipe_cache is not None:
                             recipe_cache['recipe'] = (filters, psm)
-                        return ' '.join(parts)
+                        return text
                 except Exception:
                     pass
-    return ' '.join(parts)
+    # Never splice partial OCR from different crops into an apparently complete
+    # timestamp. Only one complete reading (or the validated adjacent fields
+    # above) may be passed to the multi-frame verifier.
+    return ''
 
 
 def _pick_clock(text: str, expected: datetime, offset, order: str | None = None):

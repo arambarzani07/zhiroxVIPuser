@@ -69,6 +69,11 @@ class ClockTests(unittest.TestCase):
         self.assertEqual(result['source_codecs'],['h264'])
 
 class OcrRecipeTests(unittest.TestCase):
+    def setUp(self):
+        split = patch('osd_time.read_split_overlay_clock', return_value='')
+        split.start()
+        self.addCleanup(split.stop)
+
     def test_cached_crop_reads_each_new_frame_and_saves_search_work(self):
         cache = {}
         clock = '10-04-2026 09:38:00'
@@ -162,6 +167,53 @@ class OcrRecipeTests(unittest.TestCase):
             clocks = dates_in_text(text, BAGHDAD_OFFSET, 'MDY')
             self.assertTrue(clocks, repr(text))
             self.assertEqual(clocks[0][1], datetime(2026, 10, 8, 1, 5, 14, tzinfo=BAGHDAD_OFFSET))
+
+
+class SplitOverlayTests(unittest.TestCase):
+    def _read(self, prefix, seconds):
+        from osd_time import read_split_overlay_clock
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp)
+            with patch('osd_time.find_ffmpeg', return_value='ffmpeg'), patch(
+                'osd_time.run_background', return_value=SimpleNamespace(returncode=0)
+            ), patch('osd_time.ocr_image', side_effect=[prefix, seconds]):
+                return read_split_overlay_clock(workspace/'frame.png', workspace)
+
+    def test_adjacent_complete_fields_preserve_every_observed_digit(self):
+        self.assertEqual(self._read('10-08-2026 Thu 08:05:', '02'), '10-08-2026 Thu 08:05:02')
+
+    def test_missing_or_conflicting_fields_are_never_completed(self):
+        for prefix, seconds in [
+            ('10-08-2026 Thu 08:05', '02'),
+            ('10-08-2026 Thu 08:05:', 'O2'),
+            ('10-08-2026 Thu 08:05:', '2'),
+            ('10-08-2026 Thu 08:05:', '029'),
+            ('10-08-2026 Thu 08:65:', '02'),
+            ('10-08-2026 Mon 08:05:', '02'),
+            ('10-08-2026 Thu 08:05:', '60'),
+        ]:
+            with self.subTest(prefix=prefix, seconds=seconds):
+                self.assertEqual(self._read(prefix, seconds), '')
+
+    def test_partial_unrelated_crops_never_create_a_complete_timestamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp)
+            with patch('osd_time.read_split_overlay_clock', return_value=''), patch(
+                'osd_time.find_ffmpeg', return_value='ffmpeg'
+            ), patch('osd_time.run_background', return_value=SimpleNamespace(returncode=0)), patch(
+                'osd_time.ocr_image', side_effect=['10-08-2026 Thu'] + ['08:05:02']*40
+            ):
+                self.assertEqual(read_image_clock(workspace/'frame.png', workspace), '')
+
+    def test_frozen_and_wrong_time_split_readings_remain_rejected(self):
+        first = self._read('10-08-2026 Thu 08:05:', '02')
+        frozen = self._read('10-08-2026 Thu 08:05:', '02')
+        start = datetime(2026, 10, 8, 8, 5, 2, tzinfo=ClockTests.offset)
+        self.assertEqual(align_readings([(0, first), (3, frozen)], start)['status'], 'unknown')
+        late = self._read('10-08-2026 Thu 08:05:', '05')
+        wrong = start + timedelta(seconds=32)
+        with patch('osd_time.infer_media_start_from_osd', return_value=align_readings([(0, first), (3, late)], wrong)):
+            self.assertEqual(verify_clip_time(None, 10, pathlib.Path(__file__), wrong, 30)['status'], 'mismatch')
 
 
 class WindowsOcrSmoke(unittest.TestCase):
