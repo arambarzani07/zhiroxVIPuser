@@ -60,8 +60,10 @@ def read_split_overlay_clock(image: pathlib.Path, workspace: pathlib.Path) -> st
     Nothing is filled in from the requested time or another frame.
     """
     regions = (
-        ('prefix', 'crop=trunc(iw*225/1808)*2:trunc(ih*22/1024)*2:trunc(iw*39/1808)*2:trunc(ih*27/1024)*2,scale=1200:-1', 7),
-        ('seconds', 'crop=trunc(iw*30/1808)*2:trunc(ih*22/1024)*2:trunc(iw*263/1808)*2:trunc(ih*27/1024)*2,scale=1200:-1', 8),
+        # Normalize the temporary frame first. Fractional crops at each source
+        # resolution shift the pixel font by a column and can lose punctuation.
+        ('prefix', 'scale=904:512:flags=bicubic,crop=224:22:38:26,scale=1200:-1', 7),
+        ('seconds', 'scale=904:512:flags=bicubic,crop=30:22:262:26,scale=1200:-1', 8),
     )
     texts = []
     for label, filters, psm in regions:
