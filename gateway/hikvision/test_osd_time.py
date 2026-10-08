@@ -182,6 +182,21 @@ class SplitOverlayTests(unittest.TestCase):
     def test_adjacent_complete_fields_preserve_every_observed_digit(self):
         self.assertEqual(self._read('10-08-2026 Thu 08:05:', '02'), '10-08-2026 Thu 08:05:02')
 
+    def test_midnight_retry_reads_both_fields_again_without_digit_substitution(self):
+        from osd_time import read_split_overlay_clock
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = pathlib.Path(tmp)
+            with patch('osd_time.find_ffmpeg', return_value='ffmpeg'), patch(
+                'osd_time.run_background', return_value=SimpleNamespace(returncode=0)
+            ) as run, patch('osd_time.ocr_image', side_effect=[
+                '10-08-2026 Thu 60:40:', '41',
+                '10-08-2026 Thu 00:40:', '21',
+            ]):
+                text = read_split_overlay_clock(workspace/'frame.png', workspace)
+            self.assertEqual(text, '10-08-2026 Thu 00:40:21')
+            self.assertEqual(run.call_count, 4)
+            self.assertIn('lt(val', run.call_args.args[0][run.call_args.args[0].index('-vf')+1])
+
     def test_missing_or_conflicting_fields_are_never_completed(self):
         for prefix, seconds in [
             ('10-08-2026 Thu 08:05', '02'),

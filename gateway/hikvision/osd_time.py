@@ -59,36 +59,46 @@ def read_split_overlay_clock(image: pathlib.Path, workspace: pathlib.Path) -> st
     digits, punctuation, or a conflicting weekday invalidate the whole reading.
     Nothing is filled in from the requested time or another frame.
     """
-    regions = (
-        # Normalize the temporary frame first. Fractional crops at each source
-        # resolution shift the pixel font by a column and can lose punctuation.
-        ('prefix', 'scale=904:512:flags=bicubic,crop=224:22:38:26,scale=1200:-1', 7),
-        ('seconds', 'scale=904:512:flags=bicubic,crop=30:22:262:26,scale=1200:-1', 8),
+    profiles = (
+        (
+            ('prefix', 'scale=904:512:flags=bicubic,crop=224:22:38:26,scale=1200:-1', 7),
+            ('seconds', 'scale=904:512:flags=bicubic,crop=30:22:262:26,scale=1200:-1', 8),
+        ),
+        # Midnight footage has white and black digits within the seconds field.
+        # Preserve both polarities on the temporary image. A smaller prefix
+        # avoids OCR turning the pixel-font 00 into 60 after excessive scaling.
+        (
+            ('prefix', 'scale=904:512:flags=bicubic,crop=224:22:38:26,scale=180:-1', 7),
+            ('seconds', r'scale=904:512:flags=bicubic,crop=30:22:262:26,format=gray,lut=y=if(lt(val\,40)+gt(val\,210)\,0\,255),scale=1500:-1:flags=neighbor', 8),
+        ),
     )
-    texts = []
-    for label, filters, psm in regions:
-        target = workspace / f'osd-split-{label}.png'
-        try:
-            r = run_background([find_ffmpeg(), '-nostdin', '-loglevel', 'error', '-y',
-                '-i', str(image), '-vf', filters, '-frames:v', '1', str(target)],
-                capture_output=True, timeout=20)
-            if r.returncode:
-                return ''
-            texts.append(' '.join(ocr_image(target, psm=psm).split()))
-        except Exception:
-            return ''
-    prefix, seconds = texts
-    match = re.fullmatch(r'\d{2}-\d{2}-\d{4}\s+(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{2}:\d{2}:', prefix)
-    if not match or not re.fullmatch(r'\d{2}', seconds):
-        return ''
-    text = prefix + seconds
     weekdays = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
-    # This fixed spatial profile is the observed MM-DD-YYYY recorder layout.
-    # Do not accept a different date interpretation to rescue a wrong weekday.
-    candidates = dates_in_text(text, BAGHDAD_OFFSET, 'MDY')
-    if not any(weekdays[stamp.weekday()] == match.group(1) for _, stamp in candidates):
-        return ''
-    return text
+    for regions in profiles:
+        texts = []
+        for label, filters, psm in regions:
+            target = workspace / f'osd-split-{label}.png'
+            try:
+                r = run_background([find_ffmpeg(), '-nostdin', '-loglevel', 'error', '-y',
+                    '-i', str(image), '-vf', filters, '-frames:v', '1', str(target)],
+                    capture_output=True, timeout=20)
+                if r.returncode:
+                    break
+                texts.append(' '.join(ocr_image(target, psm=psm).split()))
+            except Exception:
+                break
+        if len(texts) != 2:
+            continue
+        prefix, seconds = texts
+        match = re.fullmatch(r'\d{2}-\d{2}-\d{4}\s+(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{2}:\d{2}:', prefix)
+        if not match or not re.fullmatch(r'\d{2}', seconds):
+            continue
+        text = prefix + seconds
+        # Never combine partial fields from different profiles or rescue a wrong
+        # weekday with a different date order. Every digit is independently read.
+        candidates = dates_in_text(text, BAGHDAD_OFFSET, 'MDY')
+        if any(weekdays[stamp.weekday()] == match.group(1) for _, stamp in candidates):
+            return text
+    return ''
 
 
 def read_image_clock(image: pathlib.Path, workspace: pathlib.Path,
