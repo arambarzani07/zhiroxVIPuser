@@ -89,11 +89,13 @@ class _OwnerPlatformCenterScreenState
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
             title: Text((tenant['market_name'] ?? 'مارکێت').toString()),
+            scrollable: true,
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
                   initialValue: status,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'دۆخی هەژمار',
                     prefixIcon: Icon(Icons.account_tree_outlined),
@@ -179,6 +181,7 @@ class _OwnerPlatformCenterScreenState
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
             title: const Text('سنوور و ئاستی خزمەتگوزاری'),
+            scrollable: true,
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -202,6 +205,7 @@ class _OwnerPlatformCenterScreenState
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: tier,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'ئاستی پشتیوانی',
                     prefixIcon: Icon(Icons.support_agent_rounded),
@@ -274,7 +278,6 @@ class _OwnerPlatformCenterScreenState
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final secondary = Theme.of(context).colorScheme.onSurfaceVariant;
 
     return Scaffold(
@@ -381,7 +384,6 @@ class _OwnerPlatformCenterScreenState
                           child: _tenantCard(
                             context,
                             tenant,
-                            isDark: isDark,
                             onLifecycle: () => _changeLifecycle(tenant),
                             onLimits: () => _editLimits(tenant),
                           ),
@@ -424,7 +426,6 @@ class _OwnerPlatformCenterScreenState
   Widget _tenantCard(
     BuildContext context,
     Map<String, dynamic> tenant, {
-    required bool isDark,
     required VoidCallback onLifecycle,
     required VoidCallback onLimits,
   }) {
@@ -456,16 +457,24 @@ class _OwnerPlatformCenterScreenState
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      adminName.isEmpty ? phone : '$adminName • $phone',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    if (adminName.isNotEmpty)
+                      Text(
+                        adminName,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    if (phone.isNotEmpty)
+                      Text(
+                        phone,
+                        textDirection: TextDirection.ltr,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                   ],
                 ),
               ),
-              _statusChip(lifecycle),
             ],
           ),
+          const SizedBox(height: 8),
+          _statusChip(lifecycle),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
@@ -490,22 +499,19 @@ class _OwnerPlatformCenterScreenState
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onLifecycle,
-                  icon: const Icon(Icons.account_tree_outlined, size: 18),
-                  label: const Text('دۆخی هەژمار'),
-                ),
+              OutlinedButton.icon(
+                onPressed: onLifecycle,
+                icon: const Icon(Icons.account_tree_outlined, size: 18),
+                label: const Text('دۆخی هەژمار'),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onLimits,
-                  icon: const Icon(Icons.tune_rounded, size: 18),
-                  label: const Text('سنوورەکان'),
-                ),
+              OutlinedButton.icon(
+                onPressed: onLimits,
+                icon: const Icon(Icons.tune_rounded, size: 18),
+                label: const Text('سنوورەکان'),
               ),
             ],
           ),
@@ -514,13 +520,20 @@ class _OwnerPlatformCenterScreenState
     );
   }
 
-  Widget _mini(IconData icon, String label) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14),
-          const SizedBox(width: 5),
-          Text(label, style: const TextStyle(fontSize: 11)),
-        ],
+  Widget _mini(IconData icon, String label) => Text.rich(
+        TextSpan(
+          children: [
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(end: 5),
+                child: Icon(icon, size: 14),
+              ),
+            ),
+            TextSpan(text: label),
+          ],
+        ),
+        style: const TextStyle(fontSize: 12),
       );
 
   Widget _statusChip(String status) {
@@ -541,7 +554,7 @@ class _OwnerPlatformCenterScreenState
         label,
         style: TextStyle(
           color: color,
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: FontWeight.w800,
         ),
       ),
