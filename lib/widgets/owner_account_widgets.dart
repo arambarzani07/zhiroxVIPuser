@@ -131,12 +131,14 @@ class OwnerMetricCard extends StatelessWidget {
     required this.value,
     required this.icon,
     this.width = 160,
+    this.iconColor,
   });
 
   final String label;
   final String value;
   final IconData icon;
   final double width;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -145,7 +147,7 @@ class OwnerMetricCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
+              Icon(icon, color: iconColor ?? Theme.of(context).colorScheme.primary, size: 22),
               const SizedBox(height: 10),
               Text(
                 value,
@@ -160,4 +162,80 @@ class OwnerMetricCard extends StatelessWidget {
           ),
         ),
       );
+}
+
+class OwnerDetailRow extends StatelessWidget {
+  const OwnerDetailRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+    this.valueDirection,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color? valueColor;
+  final TextDirection? valueDirection;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            OwnerMetadata(icon, label),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(start: 19),
+              child: Text(
+                value,
+                textDirection: valueDirection,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: valueColor,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class OwnerCheckBadge extends StatelessWidget {
+  const OwnerCheckBadge({
+    super.key,
+    required this.label,
+    required this.ok,
+    required this.icon,
+  });
+
+  final String label;
+  final bool ok;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ok ? Colors.green : Colors.orange;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+        child: IconTheme(
+          data: IconThemeData(color: color),
+          child: OwnerMetadata(
+            ok ? Icons.check_circle_rounded : icon,
+            label,
+          ),
+        ),
+      ),
+    );
+  }
 }

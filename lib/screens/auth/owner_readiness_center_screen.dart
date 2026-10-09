@@ -4,6 +4,7 @@ import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
+import 'package:zhirox/widgets/owner_account_widgets.dart';
 
 class OwnerReadinessCenterScreen extends StatefulWidget {
   const OwnerReadinessCenterScreen({super.key});
@@ -204,29 +205,13 @@ class _OwnerReadinessCenterScreenState
     String value,
     IconData icon,
     Color color,
-  ) {
-    return SizedBox(
-      width: 160,
-      child: AppSurface(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-              textDirection: TextDirection.ltr,
-            ),
-            const SizedBox(height: 2),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ),
-    );
-  }
+  ) =>
+      OwnerMetricCard(
+        label: label,
+        value: value,
+        icon: icon,
+        iconColor: color,
+      );
 
   Widget _tenantCard(
     BuildContext context,
@@ -277,9 +262,10 @@ class _OwnerReadinessCenterScreenState
                   ],
                 ),
               ),
-              _statusChip(status, color),
             ],
           ),
+          const SizedBox(height: 8),
+          _statusChip(status, color),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -417,60 +403,16 @@ class _OwnerReadinessCenterScreenState
     );
   }
 
-  Widget _checkChip(String label, bool ok, IconData icon) {
-    final color = ok ? Colors.green : Colors.orange;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(ok ? Icons.check_circle_rounded : icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _checkChip(String label, bool ok, IconData icon) =>
+      OwnerCheckBadge(label: label, ok: ok, icon: icon);
 
   Widget _detailRow(
     BuildContext context,
     IconData icon,
     String label,
     String value,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 17, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Expanded(child: Text(label)),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  ) =>
+      OwnerDetailRow(icon: icon, label: label, value: value);
 
   Widget _statusChip(String status, Color color) {
     final label = switch (status) {
@@ -478,20 +420,6 @@ class _OwnerReadinessCenterScreenState
       'blocked' => 'قوفڵکراو',
       _ => 'پێویستی بە سەرنج',
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
+    return OwnerStatusBadge(label: label, color: color);
   }
 }

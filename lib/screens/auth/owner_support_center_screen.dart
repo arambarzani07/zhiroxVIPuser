@@ -4,6 +4,7 @@ import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
+import 'package:zhirox/widgets/owner_account_widgets.dart';
 
 class OwnerSupportCenterScreen extends StatefulWidget {
   const OwnerSupportCenterScreen({super.key});
@@ -130,6 +131,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   initialValue: status,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'دۆخی داواکاری',
                     prefixIcon: Icon(Icons.flag_outlined),
@@ -159,6 +161,7 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: priority,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'پێشەنگی',
                     prefixIcon: Icon(Icons.priority_high_rounded),
@@ -352,9 +355,9 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
                       ),
                       const SizedBox(height: 18),
                       const AppSectionHeader(
-                        title: 'پشتیوانی Tickets',
+                        title: 'داواکارییەکانی پشتیوانی',
                         subtitle:
-                            'SLA بەپێی Standard / پێشەنگی / VIP هەژمار دەکرێت',
+                            'ماوەی وەڵامدانەوە بەپێی ئاستی پشتیوانی دیاری دەکرێت',
                       ),
                       const SizedBox(height: 10),
                       if (visible.isEmpty)
@@ -395,29 +398,12 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
     String label,
     String value,
     IconData icon,
-  ) {
-    return SizedBox(
-      width: 160,
-      child: AppSurface(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: AppColors.primary, size: 22),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-              textDirection: TextDirection.ltr,
-            ),
-            const SizedBox(height: 2),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ),
-    );
-  }
+  ) =>
+      OwnerMetricCard(
+        label: label,
+        value: value,
+        icon: icon,
+      );
 
   Widget _ticketCard(
     BuildContext context,
@@ -439,35 +425,19 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                backgroundColor: AppColors.primarySoft,
-                child: Icon(
-                  Icons.support_agent_rounded,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      subject,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      admin.isEmpty ? '$market • $phone' : '$market • $admin',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              _statusChip(status),
-            ],
+          Text(
+            subject,
+            style: const TextStyle(fontWeight: FontWeight.w800),
           ),
+          const SizedBox(height: 8),
+          OwnerAccountIdentity(
+            marketName: market,
+            adminName: admin,
+            phone: phone,
+            icon: Icons.support_agent_rounded,
+          ),
+          const SizedBox(height: 8),
+          _statusChip(status),
           const SizedBox(height: 10),
           Text(
             message,
@@ -480,24 +450,24 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
             spacing: 12,
             runSpacing: 8,
             children: [
-              _mini(Icons.category_outlined, _categoryLabel((item['category'] ?? '').toString())),
-              _mini(Icons.priority_high_rounded, _priorityLabel(priority)),
-              _mini(Icons.workspace_premium_outlined, _tierLabel(tier)),
-              _mini(
+              OwnerMetadata(Icons.category_outlined, _categoryLabel((item['category'] ?? '').toString())),
+              OwnerMetadata(Icons.priority_high_rounded, _priorityLabel(priority)),
+              OwnerMetadata(Icons.workspace_premium_outlined, _tierLabel(tier)),
+              OwnerMetadata(
                 Icons.timer_outlined,
                 'وەڵام: ${ownerDateTime(item['response_due_at'])}',
               ),
-              _mini(
+              OwnerMetadata(
                 Icons.event_available_outlined,
                 'چارەسەر: ${ownerDateTime(item['resolution_due_at'])}',
               ),
               if ((item['app_version'] ?? '').toString().isNotEmpty)
-                _mini(
+                OwnerMetadata(
                   Icons.system_update_alt_rounded,
                   (item['app_version'] ?? '').toString(),
                 ),
               if ((item['platform'] ?? '').toString().isNotEmpty)
-                _mini(
+                OwnerMetadata(
                   Icons.phone_iphone_rounded,
                   (item['platform'] ?? '').toString(),
                 ),
@@ -550,15 +520,6 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
     );
   }
 
-  Widget _mini(IconData icon, String label) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14),
-          const SizedBox(width: 5),
-          Text(label, style: const TextStyle(fontSize: 11)),
-        ],
-      );
-
   Widget _statusChip(String status) {
     final (label, color) = switch (status) {
       'in_progress' => ('لە کاردایە', Colors.blue),
@@ -567,20 +528,6 @@ class _OwnerSupportCenterScreenState extends State<OwnerSupportCenterScreen> {
       'closed' => ('داخراو', Colors.grey),
       _ => ('کراوە', Colors.red),
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
+    return OwnerStatusBadge(label: label, color: color);
   }
 }

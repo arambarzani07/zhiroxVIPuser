@@ -5,6 +5,7 @@ import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
+import 'package:zhirox/widgets/owner_account_widgets.dart';
 
 class OwnerHealthCenterScreen extends StatefulWidget {
   const OwnerHealthCenterScreen({super.key});
@@ -246,31 +247,24 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
                           (item) => Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: AppSurface(
-                              child: ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const CircleAvatar(
-                                  backgroundColor: AppColors.primarySoft,
-                                  child: Icon(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  OwnerMetadata(
                                     Icons.history_rounded,
-                                    color: AppColors.primary,
-                                    size: 19,
+                                    _actionLabel(
+                                      (item['action'] ?? '').toString(),
+                                    ),
                                   ),
-                                ),
-                                title: Text(
-                                  _actionLabel(
-                                    (item['action'] ?? '').toString(),
+                                  const SizedBox(height: 8),
+                                  Text(_auditSubtitle(item)),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    ownerDateTime(item['created_at']),
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                    textDirection: TextDirection.ltr,
                                   ),
-                                ),
-                                subtitle: Text(
-                                  _auditSubtitle(item),
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: Text(
-                                  ownerDateTime(item['created_at']),
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                  textDirection: TextDirection.ltr,
-                                ),
+                                ],
                               ),
                             ),
                           ),
@@ -287,56 +281,27 @@ class _OwnerHealthCenterScreenState extends State<OwnerHealthCenterScreen> {
     String value,
     IconData icon, {
     required bool good,
-  }) {
-    final color = good ? Colors.green : Colors.orange;
-    return SizedBox(
-      width: 160,
-      child: AppSurface(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 23),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-              textDirection: TextDirection.ltr,
-            ),
-            const SizedBox(height: 2),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ),
-    );
-  }
+  }) =>
+      OwnerMetricCard(
+        label: label,
+        value: value,
+        icon: icon,
+        iconColor: good ? Colors.green : Colors.orange,
+      );
 
   Widget _row(
     IconData icon,
     String label,
     String value,
     Color? valueColor,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        children: [
-          Icon(icon, size: 19, color: AppColors.primary),
-          const SizedBox(width: 9),
-          Expanded(child: Text(label)),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: valueColor,
-            ),
-            textDirection: TextDirection.ltr,
-          ),
-        ],
-      ),
-    );
-  }
+  ) =>
+      OwnerDetailRow(
+        icon: icon,
+        label: label,
+        value: value,
+        valueColor: valueColor,
+        valueDirection: TextDirection.ltr,
+      );
 
   String _actionLabel(String action) => const {
         'tenant_lifecycle_changed': 'گۆڕینی دۆخی هەژمار',
