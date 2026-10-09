@@ -306,16 +306,24 @@ class _OwnerSecurityCenterScreenState
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      admin.isEmpty ? phone : '$admin • $phone',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    if (admin.isNotEmpty)
+                      Text(
+                        admin,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    if (phone.isNotEmpty)
+                      Text(
+                        phone,
+                        textDirection: TextDirection.ltr,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                   ],
                 ),
               ),
-              _statusChip(state),
             ],
           ),
+          const SizedBox(height: 8),
+          _statusChip(state),
           const SizedBox(height: 12),
           Wrap(
             spacing: 14,
@@ -352,34 +360,31 @@ class _OwnerSecurityCenterScreenState
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _asInt(item['active_sessions']) == 0
-                      ? null
-                      : () => _revokeSessions(item),
-                  icon: const Icon(Icons.logout_rounded, size: 18),
-                  label: const Text('ڕاگرتنی دانیشتنەکان'),
-                ),
+              OutlinedButton.icon(
+                onPressed: _asInt(item['active_sessions']) == 0
+                    ? null
+                    : () => _revokeSessions(item),
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('ڕاگرتنی دانیشتنەکان'),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: locked
-                        ? Colors.green
-                        : Theme.of(context).colorScheme.error,
-                  ),
-                  onPressed: () => _toggleLock(item),
-                  icon: Icon(
-                    locked
-                        ? Icons.lock_open_rounded
-                        : Icons.lock_outline_rounded,
-                    size: 18,
-                  ),
-                  label: Text(locked ? 'کردنەوە' : 'قوفڵکردن'),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: locked
+                      ? Colors.green
+                      : Theme.of(context).colorScheme.error,
                 ),
+                onPressed: () => _toggleLock(item),
+                icon: Icon(
+                  locked
+                      ? Icons.lock_open_rounded
+                      : Icons.lock_outline_rounded,
+                  size: 18,
+                ),
+                label: Text(locked ? 'کردنەوە' : 'قوفڵکردن'),
               ),
             ],
           ),
@@ -388,13 +393,20 @@ class _OwnerSecurityCenterScreenState
     );
   }
 
-  Widget _mini(IconData icon, String label) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14),
-          const SizedBox(width: 5),
-          Text(label, style: const TextStyle(fontSize: 11)),
-        ],
+  Widget _mini(IconData icon, String label) => Text.rich(
+        TextSpan(
+          children: [
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(end: 5),
+                child: Icon(icon, size: 14),
+              ),
+            ),
+            TextSpan(text: label),
+          ],
+        ),
+        style: const TextStyle(fontSize: 12),
       );
 
   Widget _statusChip(String state) {
@@ -413,7 +425,7 @@ class _OwnerSecurityCenterScreenState
         label,
         style: TextStyle(
           color: color,
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: FontWeight.w800,
         ),
       ),

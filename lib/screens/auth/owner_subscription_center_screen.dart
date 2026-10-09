@@ -29,6 +29,24 @@ class _OwnerSubscriptionCenterScreenState
   String _money(dynamic value) =>
       "${NumberFormat('#,##0', 'en').format(_asDouble(value))} د.ع";
 
+  String _planLabel(String value) => switch (value) {
+        'monthly' => 'مانگانە',
+        'quarterly' => '٣ مانگ',
+        'semiannual' => '٦ مانگ',
+        'annual' => 'ساڵانە',
+        'custom' => 'تایبەت',
+        _ => 'پلانی نەناسراو',
+      };
+
+  String _paymentLabel(String value) => switch (value.toLowerCase()) {
+        'pending' || 'created' || 'unpaid' => 'چاوەڕوانی پارەدان',
+        'paid' || 'completed' || 'success' => 'پارەدراو',
+        'failed' => 'سەرکەوتوو نەبوو',
+        'declined' => 'ڕەتکراوە',
+        'cancelled' || 'canceled' => 'هەڵوەشاوە',
+        _ => 'دۆخی پارەدان نادیارە',
+      };
+
   String _date(dynamic value) {
     final parsed = DateTime.tryParse('${value ?? ''}');
     if (parsed == null) return 'بێ بەروار';
@@ -93,6 +111,7 @@ class _OwnerSubscriptionCenterScreenState
             children: [
               DropdownButtonFormField<String>(
                 initialValue: plan,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'پلانی بەشداری',
                   prefixIcon: Icon(Icons.workspace_premium_outlined),
@@ -113,6 +132,7 @@ class _OwnerSubscriptionCenterScreenState
               const SizedBox(height: 14),
               DropdownButtonFormField<int>(
                 initialValue: extendDays,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'درێژکردنەوە',
                   prefixIcon: Icon(Icons.event_repeat_rounded),
@@ -371,28 +391,36 @@ class _OwnerSubscriptionCenterScreenState
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      admin.isEmpty ? phone : '$admin • $phone',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    if (admin.isNotEmpty)
+                      Text(
+                        admin,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    if (phone.isNotEmpty)
+                      Text(
+                        phone,
+                        textDirection: TextDirection.ltr,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                   ],
                 ),
               ),
-              _statusChip(lifecycle),
             ],
           ),
+          const SizedBox(height: 8),
+          _statusChip(lifecycle),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
             runSpacing: 8,
             children: [
-              _mini(Icons.sell_outlined, plan),
+              _mini(Icons.sell_outlined, _planLabel(plan)),
               _mini(
                 Icons.event_outlined,
                 _date(item['subscription_end']),
               ),
               if (paymentStatus.isNotEmpty)
-                _mini(Icons.receipt_long_outlined, paymentStatus),
+                _mini(Icons.receipt_long_outlined, _paymentLabel(paymentStatus)),
               if (paymentAmount > 0)
                 _mini(
                   Icons.payments_outlined,
@@ -414,20 +442,27 @@ class _OwnerSubscriptionCenterScreenState
     );
   }
 
-  Widget _mini(IconData icon, String label) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14),
-          const SizedBox(width: 5),
-          Text(label, style: const TextStyle(fontSize: 11)),
-        ],
+  Widget _mini(IconData icon, String label) => Text.rich(
+        TextSpan(
+          children: [
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(end: 5),
+                child: Icon(icon, size: 14),
+              ),
+            ),
+            TextSpan(text: label),
+          ],
+        ),
+        style: const TextStyle(fontSize: 12),
       );
 
   Widget _statusChip(String status) {
     final (label, color) = switch (status) {
       'trial' => ('تاقیکردنەوە', Colors.blue),
       'grace' => ('ماوەی ڕێگەپێدراو', Colors.orange),
-      'suspended' => ('Suspended', Colors.red),
+      'suspended' => ('ڕاگیراو', Colors.red),
       'archived' => ('ئەرشیڤکراو', Colors.grey),
       _ => ('چالاک', Colors.green),
     };
@@ -441,7 +476,7 @@ class _OwnerSubscriptionCenterScreenState
         label,
         style: TextStyle(
           color: color,
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: FontWeight.w800,
         ),
       ),
