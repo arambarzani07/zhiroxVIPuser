@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/utils/latest_request.dart';
 import 'package:zhirox/screens/auth/owner_plan_market_control_screen.dart';
 import 'package:zhirox/services/owner_permission_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -17,6 +18,7 @@ class _OwnerMarketPermissionMatrixScreenState
   List<OwnerMarketSummary> _markets = const [];
   OwnerMarketPermissionMatrix? _matrix;
   String? _selectedMarketId;
+  final LatestRequest _matrixRequest = LatestRequest();
   final Map<String, String> _draftModes = <String, String>{};
   String _query = '';
   bool _editableOnly = true;
@@ -67,14 +69,18 @@ class _OwnerMarketPermissionMatrixScreenState
   }
 
   Future<void> _loadMatrix(String adminId) async {
+    if (!mounted) return;
+    final request = _matrixRequest.begin();
     setState(() {
       _loadingMatrix = true;
       _error = null;
       _selectedMarketId = adminId;
+      _matrix = null;
+      _draftModes.clear();
     });
     try {
       final matrix = await OwnerPermissionService.fetchMarketMatrix(adminId);
-      if (!mounted) return;
+      if (!mounted || !_matrixRequest.isCurrent(request)) return;
       setState(() {
         _matrix = matrix;
         _draftModes
@@ -87,7 +93,7 @@ class _OwnerMarketPermissionMatrixScreenState
         _loadingMatrix = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || !_matrixRequest.isCurrent(request)) return;
       setState(() {
         _loadingMatrix = false;
         _error = error;
@@ -607,3 +613,4 @@ Color _riskColor(int level, BuildContext context) {
       return Theme.of(context).colorScheme.onSurfaceVariant;
   }
 }
+

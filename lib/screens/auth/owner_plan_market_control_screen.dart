@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zhirox/utils/latest_request.dart';
 import 'package:zhirox/services/owner_permission_service.dart';
 import 'package:zhirox/services/owner_plan_control_service.dart';
 import 'package:zhirox/utils/constants.dart';
@@ -18,6 +19,7 @@ class _OwnerPlanMarketControlScreenState
   List<OwnerMarketSummary> _markets = const [];
   OwnerTenantPlanControl? _tenant;
   String? _selectedMarketId;
+  final LatestRequest _tenantRequest = LatestRequest();
   bool _loading = true;
   bool _tenantLoading = false;
   bool _saving = false;
@@ -81,20 +83,23 @@ class _OwnerPlanMarketControlScreenState
   }
 
   Future<void> _loadTenant(String adminId) async {
+    if (!mounted) return;
+    final request = _tenantRequest.begin();
     setState(() {
       _tenantLoading = true;
       _error = null;
       _selectedMarketId = adminId;
+      _tenant = null;
     });
     try {
       final tenant = await OwnerPlanControlService.fetchTenantLimits(adminId);
-      if (!mounted) return;
+      if (!mounted || !_tenantRequest.isCurrent(request)) return;
       setState(() {
         _tenant = tenant;
         _tenantLoading = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || !_tenantRequest.isCurrent(request)) return;
       setState(() {
         _tenantLoading = false;
         _error = error;
@@ -638,3 +643,4 @@ class _InfoChip extends StatelessWidget {
     );
   }
 }
+

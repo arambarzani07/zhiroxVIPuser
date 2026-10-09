@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:zhirox/utils/latest_request.dart';
 import 'package:provider/provider.dart';
 import 'package:zhirox/providers/auth_provider.dart';
 import 'package:zhirox/services/owner_autopilot_service.dart';
@@ -20,6 +21,7 @@ class _OwnerAutoPilotControlCenterScreenState
 
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
+  final LatestRequest _overviewRequest = LatestRequest();
   bool _loading = true;
   String _health = 'all';
   String? _error;
@@ -35,6 +37,7 @@ class _OwnerAutoPilotControlCenterScreenState
   @override
   void dispose() {
     _debounce?.cancel();
+    _overviewRequest.invalidate();
     _searchController.dispose();
     super.dispose();
   }
@@ -49,6 +52,7 @@ class _OwnerAutoPilotControlCenterScreenState
 
   Future<void> _refresh({bool resetPage = false}) async {
     if (!mounted) return;
+    final request = _overviewRequest.begin();
     setState(() {
       if (resetPage) _page = 1;
       _loading = true;
@@ -62,19 +66,22 @@ class _OwnerAutoPilotControlCenterScreenState
         page: _page,
         perPage: _perPage,
       );
-      if (!mounted) return;
+      if (!mounted || !_overviewRequest.isCurrent(request)) return;
       setState(() => _data = data);
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || !_overviewRequest.isCurrent(request)) return;
       setState(() {
         _error = error.toString().replaceFirst('Exception: ', '');
       });
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && _overviewRequest.isCurrent(request)) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   void _onSearchChanged(String _) {
+    _overviewRequest.invalidate();
     _debounce?.cancel();
     _debounce = Timer(
       const Duration(milliseconds: 450),
@@ -103,11 +110,11 @@ class _OwnerAutoPilotControlCenterScreenState
   String _healthLabel(String status) {
     switch (status) {
       case 'healthy':
-        return 'Healthy';
+        return 'باشە';
       case 'degraded':
-        return 'Degraded';
+        return 'کێشەی هەیە';
       default:
-        return 'Attention';
+        return 'پێویستی بە پشکنینە';
     }
   }
 
@@ -645,3 +652,4 @@ class _OwnerAutoPilotControlCenterScreenState
     );
   }
 }
+
