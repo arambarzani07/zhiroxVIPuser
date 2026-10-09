@@ -6,6 +6,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 
 TASK_NAME = "ZHIROX Hikvision Gateway"
 
@@ -26,12 +27,21 @@ def current_windows_user() -> str:
 def task_xml(agent_exe: pathlib.Path, user_id: str) -> str:
     command = html.escape(str(agent_exe.resolve()))
     user = html.escape(user_id)
+    recovery_start = (datetime.now(timezone.utc) + timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     return f'''<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Description>ZHIROX Hikvision Gateway resilient background task</Description>
   </RegistrationInfo>
   <Triggers>
+    <TimeTrigger>
+      <Repetition>
+        <Interval>PT1M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <StartBoundary>{recovery_start}</StartBoundary>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
     <LogonTrigger>
       <Enabled>true</Enabled>
       <UserId>{user}</UserId>
@@ -133,7 +143,7 @@ def main() -> int:
     install_resilient_task(agent)
     start_task()
     print("Resilient auto-start installed and Gateway start requested.")
-    print("The Gateway will start after Windows logon and restart after crashes.")
+    print("The Gateway starts after Windows logon; a recurring check restarts it if stopped.")
     return 0
 
 
@@ -143,3 +153,4 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"Auto-start setup failed: {type(exc).__name__}: {exc}")
         raise SystemExit(1)
+

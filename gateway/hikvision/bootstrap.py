@@ -21,7 +21,7 @@ from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.23+evergreen-24"
+GATEWAY_VERSION = "1.4.24+evergreen-25"
 common.GATEWAY_VERSION = GATEWAY_VERSION
 
 # Poll GitHub often enough that routine Gateway fixes arrive quickly, while the
@@ -29,8 +29,9 @@ common.GATEWAY_VERSION = GATEWAY_VERSION
 CHECK_INTERVAL_SECONDS = 5 * 60
 
 HEALTH_PATH = APP_DIR / "gateway-health.json"
-HEALTH_INTERVAL_SECONDS = 10
 HEALTH_PROBE_RETRY_SECONDS = 5
+CLOUD_HEARTBEAT_SECONDS = 30
+CLOUD_RECONNECT_RETRY_SECONDS = 15
 WORKER_STALL_SECONDS = 15 * 60
 WATCHDOG_INTERVAL_SECONDS = 30
 CLOCK_CHECK_INTERVAL_SECONDS = 10 * 60
@@ -193,8 +194,17 @@ def _write_health() -> None:
     )
 
 
+def _cloud_health_probe(cfg: GatewayConfig) -> None:
+    client = CloudClient(cfg)
+    try:
+        if not client.call("ping").get("ok"):
+            raise RuntimeError("cloud_health_probe_failed")
+    finally:
+        client.session.close()
+
+
 def _health_monitor_loop() -> None:
-    """Retry the live NVR/cloud probe until it succeeds, then heartbeat locally.
+    """Authenticate at startup, then retry cloud heartbeats across outages.
 
     A short network outage exactly at restart must not make a healthy update look
     broken and trigger a false rollback. No healthy marker is written until both
@@ -206,9 +216,7 @@ def _health_monitor_loop() -> None:
                 raise RuntimeError("configuration_missing")
             cfg = GatewayConfig.load()
             HikvisionClient(cfg).device_info()
-            ping = CloudClient(cfg).call("ping")
-            if not ping.get("ok"):
-                raise RuntimeError("cloud_health_probe_failed")
+            _cloud_health_probe(cfg)
             _write_health()
             log("startup_health_probe=healthy")
             break
@@ -217,11 +225,17 @@ def _health_monitor_loop() -> None:
             time.sleep(HEALTH_PROBE_RETRY_SECONDS)
 
     while True:
+        delay = CLOUD_HEARTBEAT_SECONDS
         try:
+            # A fresh session avoids retaining a broken pooled connection after
+            # Wi-Fi/LAN changes or Windows resume. Only ping: never claim/replay
+            # a job from this thread. The capture worker owns all job actions.
+            _cloud_health_probe(GatewayConfig.load())
             _write_health()
         except Exception as exc:
-            log(f"health_marker_error={type(exc).__name__}:{str(exc)[:200]}")
-        time.sleep(HEALTH_INTERVAL_SECONDS)
+            log(f"cloud_heartbeat_retry={type(exc).__name__}")
+            delay = CLOUD_RECONNECT_RETRY_SECONDS
+        time.sleep(delay)
 
 
 def _start_health_monitor() -> None:
@@ -287,7 +301,7 @@ def _start_worker_watchdog() -> None:
 
 def _patched_cloud_call(self, action: str, *args, **kwargs):
     global _next_update_check, _last_worker_progress
-    if action != "heartbeat_job":
+    if action not in {"heartbeat_job", "ping"}:
         _last_worker_progress = time.monotonic()
 
     if action == "claim" and time.monotonic() >= _next_update_check:
@@ -373,3 +387,4 @@ if __name__ == "__main__":
     except Exception as exc:
         log(f"bootstrap_error={type(exc).__name__}:{str(exc)[:500]}")
         raise SystemExit(1)
+
