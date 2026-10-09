@@ -57,7 +57,7 @@ class DashboardHero extends StatelessWidget {
   const DashboardHero({
     super.key,
     required this.title,
-    required this.child,
+    this.child,
     this.subtitle,
     this.icon,
     this.onTitleTap,
@@ -66,7 +66,7 @@ class DashboardHero extends StatelessWidget {
   final String title;
   final String? subtitle;
   final IconData? icon;
-  final Widget child;
+  final Widget? child;
   final VoidCallback? onTitleTap;
 
   @override
@@ -151,8 +151,10 @@ class DashboardHero extends StatelessWidget {
                 ),
               ),
             ),
-          const SizedBox(height: 16),
-          child,
+          if (child != null) ...[
+            const SizedBox(height: 16),
+            child!,
+          ],
         ],
       ),
     );
@@ -306,3 +308,4 @@ class DashboardAction extends StatelessWidget {
     );
   }
 }
+

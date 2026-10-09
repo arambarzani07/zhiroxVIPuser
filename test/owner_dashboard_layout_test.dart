@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zhirox/screens/auth/owner_dashboard.dart';
 import 'package:zhirox/widgets/app_design.dart';
+import 'package:zhirox/widgets/dashboard_design.dart';
 
 void main() {
   for (final dark in [false, true]) {
@@ -30,6 +31,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.text('ناوەندی خاوەن'), findsOneWidget);
+        expect(find.byType(DashboardAction), findsNothing);
+        expect(find.text('مارکێتەکان'), findsOneWidget);
+        expect(find.text('کۆنترۆڵی وەشان'), findsNothing);
         final group = find.text('پاراستن و بەردەوامی');
         await tester.scrollUntilVisible(
           group,
@@ -47,8 +51,10 @@ void main() {
           scrollable: find.byType(Scrollable).first,
         );
         expect(security, findsOneWidget);
+        expect(find.text('پاراستن'), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
   }
 }
+

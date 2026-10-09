@@ -53,7 +53,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
       index: _currentIndex,
       onSelected: _select,
       pages: [
-        _OwnerHome(onOpenMarkets: () => _select(1)),
+        const _OwnerHome(),
         _visited.contains(1)
             ? const AdminManagementScreen()
             : const SizedBox.shrink(),
@@ -81,9 +81,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
 }
 
 class _OwnerHome extends StatelessWidget {
-  const _OwnerHome({required this.onOpenMarkets});
-
-  final VoidCallback onOpenMarkets;
+  const _OwnerHome();
 
   void _open(BuildContext context, Widget page) {
     Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
@@ -98,18 +96,8 @@ class _OwnerHome extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 30),
             children: [
-              _OwnerHero(onOpenMarkets: onOpenMarkets),
-              const SizedBox(height: 16),
-              _QuickActions(
-                onMarkets: onOpenMarkets,
-                onPlatform: () =>
-                    _open(context, const OwnerPlatformCenterScreen()),
-                onPermissions: () =>
-                    _open(context, const OwnerPermissionCenterScreen()),
-                onSecurity: () =>
-                    _open(context, const OwnerSecurityCenterScreen()),
-              ),
-              const SizedBox(height: 24),
+              const _OwnerHero(),
+              const SizedBox(height: 20),
               _OwnerGroup(
                 title: 'مارکێت و پلان',
                 initiallyExpanded: true,
@@ -137,7 +125,6 @@ class _OwnerHome extends StatelessWidget {
                     subtitle: 'دەستگەیشتن و سیاسەتی دەسەڵات',
                     icon: Icons.rule_folder_rounded,
                     tint: scheme.tertiary,
-                    badge: '٢٠٠',
                     onTap: () =>
                         _open(context, const OwnerPermissionCenterScreen()),
                   ),
@@ -220,7 +207,7 @@ class _OwnerHome extends StatelessWidget {
               const SizedBox(height: 18),
               _OwnerGroup(
                 title: 'ژێرخان و ئۆپەراسیۆن',
-                subtitle: 'دۆمەین، automation و کۆنترۆڵی خزمەتگوزاری',
+                subtitle: 'دۆمەین، خۆکاری و کۆنترۆڵی خزمەتگوزاری',
                 accent: scheme.secondary,
                 children: [
                   _OwnerRow(
@@ -259,18 +246,11 @@ class _OwnerHome extends StatelessWidget {
                   ),
                   _OwnerRow(
                     title: 'دۆمەین و HTTPS',
-                    subtitle: 'DNS، CNAME و certificate',
+                    subtitle: 'ڕێکخستنی دۆمەین و بڕوانامەی پاراستن',
                     icon: Icons.language_rounded,
                     tint: const Color(0xFF3B73C5),
                     onTap: () =>
                         _open(context, const OwnerDomainCenterScreen()),
-                  ),
-                  _OwnerRow(
-                    title: 'کۆنترۆڵی وەشان',
-                    subtitle: 'وەشانی پێویست و فایلەکانی نوێکردنەوە',
-                    icon: Icons.system_update_rounded,
-                    tint: const Color(0xFF0C8F69),
-                    onTap: () => _open(context, const UpdateControlScreen()),
                   ),
                 ],
               ),
@@ -307,8 +287,6 @@ class _OwnerHome extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
-              const _PrivacyBoundaryCard(),
             ],
           ),
         ),
@@ -318,95 +296,14 @@ class _OwnerHome extends StatelessWidget {
 }
 
 class _OwnerHero extends StatelessWidget {
-  const _OwnerHero({required this.onOpenMarkets});
-
-  final VoidCallback onOpenMarkets;
+  const _OwnerHero();
 
   @override
   Widget build(BuildContext context) {
-    return DashboardHero(
+    return const DashboardHero(
       title: 'ناوەندی خاوەن',
-      subtitle: 'بەڕێوەبردنی مارکێت، پلان و دەسەڵاتەکان',
+      subtitle: 'بەڕێوەبردنی مارکێت، پلان و خزمەتگوزارییەکان',
       icon: Icons.shield_outlined,
-      child: DashboardGrid(
-        minTileWidth: 150,
-        children: [
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF3157E0),
-              padding: const EdgeInsets.all(12),
-            ),
-            onPressed: onOpenMarkets,
-            icon: const Icon(Icons.storefront_outlined, size: 20),
-            label: const Text('مارکێتەکان'),
-          ),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white70),
-              padding: const EdgeInsets.all(12),
-            ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => const OwnerPermissionCenterScreen(),
-              ),
-            ),
-            icon: const Icon(Icons.admin_panel_settings_outlined, size: 20),
-            label: const Text('دەسەڵات'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActions extends StatelessWidget {
-  const _QuickActions({
-    required this.onMarkets,
-    required this.onPlatform,
-    required this.onPermissions,
-    required this.onSecurity,
-  });
-
-  final VoidCallback onMarkets;
-  final VoidCallback onPlatform;
-  final VoidCallback onPermissions;
-  final VoidCallback onSecurity;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return DashboardGrid(
-      maxColumns: 4,
-      minTileWidth: 120,
-      children: [
-        DashboardAction(
-          icon: Icons.storefront_rounded,
-          label: 'مارکێت',
-          accent: scheme.primary,
-          onTap: onMarkets,
-        ),
-        DashboardAction(
-          icon: Icons.dashboard_customize_rounded,
-          label: 'پلاتفۆرم',
-          accent: scheme.secondary,
-          onTap: onPlatform,
-        ),
-        DashboardAction(
-          icon: Icons.rule_rounded,
-          label: 'دەسەڵات',
-          accent: scheme.tertiary,
-          onTap: onPermissions,
-        ),
-        DashboardAction(
-          icon: Icons.shield_rounded,
-          label: 'پاراستن',
-          accent: scheme.error,
-          onTap: onSecurity,
-        ),
-      ],
     );
   }
 }
@@ -476,7 +373,6 @@ class _OwnerRow extends StatelessWidget {
     required this.icon,
     required this.tint,
     required this.onTap,
-    this.badge,
   });
 
   final String title;
@@ -484,7 +380,6 @@ class _OwnerRow extends StatelessWidget {
   final IconData icon;
   final Color tint;
   final VoidCallback onTap;
-  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -514,24 +409,6 @@ class _OwnerRow extends StatelessWidget {
               ),
             ),
           ),
-          if (badge != null) ...[
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: tint.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Text(
-                badge!,
-                style: TextStyle(
-                  color: tint,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ],
         ],
       ),
       subtitle: Padding(
@@ -540,7 +417,7 @@ class _OwnerRow extends StatelessWidget {
           subtitle,
           style: theme.textTheme.bodySmall?.copyWith(
             color: scheme.onSurfaceVariant,
-            fontSize: 10.3,
+            fontSize: 12,
           ),
         ),
       ),
@@ -600,7 +477,7 @@ class _PrivacyBoundaryCard extends StatelessWidget {
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                     height: 1.55,
-                    fontSize: 10.5,
+                    fontSize: 12,
                   ),
                 ),
               ],
@@ -634,7 +511,7 @@ class _OwnerSettings extends StatelessWidget {
             ),
             const SizedBox(height: 3),
             Text(
-              'ڕووکار، وەشان و هەژماری Owner',
+              'ڕووکار، نوێکردنەوە و هەژمار',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
@@ -656,7 +533,7 @@ class _OwnerSettings extends StatelessWidget {
                       tint: scheme.primary,
                     ),
                     title: Text(isDark ? 'دۆخی تاریک' : 'دۆخی ڕووناک'),
-                    subtitle: const Text('ڕووکار بۆ هەموو پەڕەکانی Owner'),
+                    subtitle: const Text('ڕووکار بۆ هەموو پەڕەکانی ئەپ'),
                     value: isDark,
                     onChanged: (_) =>
                         context.read<ThemeProvider>().toggleTheme(),
@@ -671,7 +548,7 @@ class _OwnerSettings extends StatelessWidget {
                     ),
                     title: const Text('کۆنترۆڵی نوێکردنەوە'),
                     subtitle: const Text(
-                      'Minimum version، forced update و فایل',
+                      'وەشانی پێویست و فایلەکانی نوێکردنەوە',
                     ),
                     trailing: const Icon(Icons.chevron_left_rounded),
                     onTap: () => Navigator.push(
@@ -685,38 +562,7 @@ class _OwnerSettings extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            AppSurface(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  _SettingsIcon(
-                    icon: Icons.shield_rounded,
-                    tint: scheme.primary,
-                  ),
-                  const SizedBox(width: 11),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'System Owner',
-                          style: TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'دەسەڵاتی پلاتفۆرم بە Privacy Boundary',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontSize: 10.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.verified_rounded, color: scheme.primary, size: 20),
-                ],
-              ),
-            ),
+            const _PrivacyBoundaryCard(),
             const SizedBox(height: 14),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
@@ -763,3 +609,4 @@ class _SettingsIcon extends StatelessWidget {
     );
   }
 }
+
