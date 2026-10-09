@@ -206,27 +206,13 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'مارکێتەکان',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: textPrimary,
-              ),
-            ),
-            if (!_isLoading)
-              Text(
-                '$_totalItems مارکێت',
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w500,
-                  color: textSecondary,
-                ),
-              ),
-          ],
+        title: Text(
+          'مارکێتەکان',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: textPrimary,
+          ),
         ),
         backgroundColor: theme.appBarTheme.backgroundColor,
         foregroundColor: textPrimary,
@@ -252,6 +238,16 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            if (!_isLoading)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                  child: Text(
+                    '$_totalItems مارکێت',
+                    style: TextStyle(fontSize: 12, color: textSecondary),
+                  ),
+                ),
+              ),
             if (_isLoading && _admins.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
