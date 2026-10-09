@@ -686,9 +686,16 @@ if edition == 'owner-source':
         if required not in owner_dashboard:
             fail(f'lib/screens/auth/owner_dashboard.dart: protected management marker missing: {required}')
     owner_management = (LIB / 'screens/auth/admin_management_screen.dart').read_text(encoding='utf-8')
+    # Logout lives in Owner settings; market management must not duplicate it.
+    for required in (
+        'class _OwnerSettings',
+        'AppHelpers.showConfirmDialog(',
+        "context.read<AuthProvider>().logout()",
+    ):
+        if required not in owner_dashboard:
+            fail(f'lib/screens/auth/owner_dashboard.dart: protected logout marker missing: {required}')
     for required in (
         '_showCreateAdminDialog',
-        "context.read<AuthProvider>().logout()",
         'PBService.registerAdmin(',
     ):
         if required not in owner_management:
