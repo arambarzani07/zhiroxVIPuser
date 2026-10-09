@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:zhirox/widgets/app_design.dart';
-import 'package:provider/provider.dart';
-import 'package:zhirox/providers/auth_provider.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:zhirox/services/pb_service.dart';
@@ -200,7 +198,6 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final surface = scheme.surfaceContainerLowest;
     final border = scheme.outlineVariant;
     final textPrimary = scheme.onSurface;
     final textSecondary = scheme.onSurfaceVariant;
@@ -213,7 +210,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'بەڕێوەبردنی بەڕێوەبەران',
+              'مارکێتەکان',
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
@@ -222,7 +219,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
             ),
             if (!_isLoading)
               Text(
-                '$_totalItems بەڕێوەبەر',
+                '$_totalItems مارکێت',
                 style: TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w500,
@@ -246,13 +243,6 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
             onPressed: _showCreateAdminDialog,
             icon: const Icon(Icons.person_add_alt_1_rounded, size: 21),
           ),
-          IconButton(
-            tooltip: 'چوونەدەرەوە',
-            onPressed: () async {
-              await context.read<AuthProvider>().logout();
-            },
-            icon: const Icon(Icons.logout_rounded, size: 21),
-          ),
           const SizedBox(width: 4),
         ],
       ),
@@ -262,78 +252,6 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: border),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.admin_panel_settings_outlined,
-                        color: AppColors.primary,
-                        size: 21,
-                      ),
-                    ),
-                    const SizedBox(width: 11),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'هەژمار و بەشداریی پلاتفۆرم',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'دۆخ، ماوەی بەشداری و ژمارەی بەکارهێنەران لە یەک شوێن',
-                            style: TextStyle(
-                              fontSize: 11,
-                              height: 1.45,
-                              color: textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.07),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                      child: Text(
-                        '$_totalItems',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
             if (_isLoading && _admins.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -361,7 +279,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) => _AdminCard(
+                    (context, index) => OwnerMarketCard(
                       data: _admins[index],
                       isDark: isDark,
                       onRenew: _showRenewDialog,
@@ -1062,8 +980,9 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
   }
 }
 
-class _AdminCard extends StatelessWidget {
-  const _AdminCard({
+class OwnerMarketCard extends StatelessWidget {
+  const OwnerMarketCard({
+    super.key,
     required this.data,
     required this.isDark,
     required this.onRenew,
@@ -1129,8 +1048,6 @@ class _AdminCard extends StatelessWidget {
                     children: [
                       Text(
                         marketName.isEmpty ? 'مارکێت' : marketName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 14.5,
                           fontWeight: FontWeight.w800,
@@ -1138,50 +1055,23 @@ class _AdminCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        adminName.isEmpty ? phone : '$adminName • $phone',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textDirection: TextDirection.ltr,
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: textSecondary,
+                      if (adminName.isNotEmpty)
+                        Text(
+                          adminName,
+                          style: TextStyle(fontSize: 12, color: textSecondary),
                         ),
-                      ),
+                      if (phone.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          phone,
+                          textDirection: TextDirection.ltr,
+                          style: TextStyle(fontSize: 12, color: textSecondary),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: status.color.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: status.color,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        status.label,
-                        style: TextStyle(
-                          color: status.color,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 PopupMenuButton<String>(
                   tooltip: 'کردارەکان',
                   icon: Icon(
@@ -1213,7 +1103,7 @@ class _AdminCard extends StatelessWidget {
                             color: AppColors.primary,
                           ),
                           SizedBox(width: 10),
-                          Text('نوێکردنەوەی بەشداری'),
+                          Expanded(child: Text('نوێکردنەوەی بەشداری')),
                         ],
                       ),
                     ),
@@ -1227,13 +1117,25 @@ class _AdminCard extends StatelessWidget {
                             color: AppColors.primary,
                           ),
                           SizedBox(width: 10),
-                          Text('گۆڕینی وشەی نهێنی'),
+                          Expanded(child: Text('گۆڕینی وشەی نهێنی')),
                         ],
                       ),
                     ),
                   ],
                 ),
               ],
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                'بەشداری: ${status.label}',
+                style: TextStyle(
+                  color: status.color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
             const SizedBox(height: 10),
             Divider(height: 1, color: border),
@@ -1268,20 +1170,24 @@ class _AdminCard extends StatelessWidget {
   }
 
   Widget _meta(IconData icon, String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w500,
-            color: color,
+    return Text.rich(
+      TextSpan(
+        children: [
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.only(end: 5),
+              child: Icon(icon, size: 14, color: color),
+            ),
           ),
-        ),
-      ],
+          TextSpan(text: label),
+        ],
+      ),
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: color,
+      ),
     );
   }
 
@@ -1424,3 +1330,4 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
+
