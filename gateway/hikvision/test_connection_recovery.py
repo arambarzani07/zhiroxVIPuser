@@ -16,6 +16,24 @@ class EndLoop(BaseException):
 
 
 class ConnectionRecoveryTests(unittest.TestCase):
+    def test_running_windows_payload_refreshes_existing_task_without_launching_worker(self):
+        with patch.object(bootstrap.os, 'name', 'nt'), patch.object(
+            bootstrap.sys, 'frozen', True, create=True
+        ), patch.object(bootstrap, '_installed_gateway_path', return_value='installed-gateway.exe'), patch.object(
+            bootstrap, 'install_resilient_task'
+        ) as install, patch.object(bootstrap, 'log'):
+            bootstrap._repair_resilient_autostart()
+            install.assert_called_once_with('installed-gateway.exe')
+
+    def test_task_repair_failure_does_not_stop_network_recovery(self):
+        with patch.object(bootstrap.os, 'name', 'nt'), patch.object(
+            bootstrap.sys, 'frozen', True, create=True
+        ), patch.object(bootstrap, '_installed_gateway_path', return_value='installed-gateway.exe'), patch.object(
+            bootstrap, 'install_resilient_task', side_effect=PermissionError()
+        ), patch.object(bootstrap, 'log') as log:
+            bootstrap._repair_resilient_autostart()
+            log.assert_called_once_with('autostart_periodic_recovery_error=PermissionError')
+
     def test_cloud_outage_recovers_without_restarting_or_claiming_jobs(self):
         calls = []
         clients = []

@@ -15,13 +15,14 @@ import maintenance
 import recording_recovery
 import runtime_hardening
 import transport_clock
+from autostart import install_resilient_task
 from common import CONFIG_PATH, APP_DIR, CloudClient, GatewayConfig, HikvisionClient, log
 from self_update import CHECK_INTERVAL_SECONDS as DEFAULT_UPDATE_CHECK_INTERVAL_SECONDS, UPDATE_PROTOCOL
 from update_policy import maybe_auto_update
 
 # Evergreen release: future Gateway releases must bump x.y.z or the final
 # numeric build revision (for example +evergreen-2) so clients can order them.
-GATEWAY_VERSION = "1.4.24+evergreen-25"
+GATEWAY_VERSION = "1.4.25+evergreen-26"
 common.GATEWAY_VERSION = GATEWAY_VERSION
 
 # Poll GitHub often enough that routine Gateway fixes arrive quickly, while the
@@ -50,6 +51,19 @@ def _installed_gateway_path() -> pathlib.Path:
     if getattr(sys, "frozen", False):
         return pathlib.Path(sys.executable).resolve()
     return pathlib.Path(__file__).resolve()
+
+
+def _repair_resilient_autostart() -> None:
+    # Existing tasks can still start successfully with the OLD trigger set.
+    # Refresh it from the running payload as well as during initial setup.
+    # Never stop this process or launch a second capture worker here.
+    if os.name != "nt" or not getattr(sys, "frozen", False):
+        return
+    try:
+        install_resilient_task(_installed_gateway_path())
+        log("autostart_periodic_recovery=installed")
+    except Exception as exc:
+        log(f"autostart_periodic_recovery_error={type(exc).__name__}")
 
 
 def _desktop_dirs() -> list[pathlib.Path]:
@@ -351,6 +365,8 @@ def main() -> int:
     if not runtime_hardening.acquire_single_instance():
         log("duplicate_gateway_instance=ignored")
         return 0
+
+    _repair_resilient_autostart()
 
     _cleanup_stale_setup_downloads()
     _start_deferred_desktop_cleanup()
