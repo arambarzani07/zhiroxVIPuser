@@ -4,6 +4,7 @@ import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
+import 'package:zhirox/widgets/owner_account_widgets.dart';
 
 class OwnerPlatformCenterScreen extends StatefulWidget {
   const OwnerPlatformCenterScreen({super.key});
@@ -400,28 +401,13 @@ class _OwnerPlatformCenterScreenState
     String label,
     int value,
     IconData icon,
-  ) {
-    return SizedBox(
-      width: 155,
-      child: AppSurface(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: AppColors.primary, size: 22),
-            const SizedBox(height: 12),
-            Text(
-              value.toString(),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-            ),
-            const SizedBox(height: 2),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ),
-    );
-  }
+  ) =>
+      OwnerMetricCard(
+        label: label,
+        value: value.toString(),
+        icon: icon,
+        width: 155,
+      );
 
   Widget _tenantCard(
     BuildContext context,
@@ -441,56 +427,30 @@ class _OwnerPlatformCenterScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                backgroundColor: AppColors.primarySoft,
-                child: Icon(Icons.storefront_rounded, color: AppColors.primary),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      market,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 2),
-                    if (adminName.isNotEmpty)
-                      Text(
-                        adminName,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    if (phone.isNotEmpty)
-                      Text(
-                        phone,
-                        textDirection: TextDirection.ltr,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                  ],
-                ),
-              ),
-            ],
+          OwnerAccountIdentity(
+            marketName: market,
+            adminName: adminName,
+            phone: phone,
+            icon: Icons.storefront_rounded,
           ),
           const SizedBox(height: 8),
-          _statusChip(lifecycle),
+          OwnerLifecycleBadge(lifecycle),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
             runSpacing: 8,
             children: [
-              _mini(Icons.workspace_premium_outlined, _planLabel(plan)),
-              _mini(Icons.support_agent_rounded, _supportLabel(tier)),
-              _mini(
+              OwnerMetadata(Icons.workspace_premium_outlined, _planLabel(plan)),
+              OwnerMetadata(Icons.support_agent_rounded, _supportLabel(tier)),
+              OwnerMetadata(
                 Icons.devices_outlined,
                 '${_asInt(tenant['device_limit'])} ئامێر',
               ),
-              _mini(
+              OwnerMetadata(
                 Icons.badge_outlined,
                 '${_asInt(tenant['staff_limit'])} کارمەند',
               ),
-              _mini(
+              OwnerMetadata(
                 Icons.event_outlined,
                 end == null
                     ? 'بێ بەروار'
@@ -516,47 +476,6 @@ class _OwnerPlatformCenterScreenState
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _mini(IconData icon, String label) => Text.rich(
-        TextSpan(
-          children: [
-            WidgetSpan(
-              alignment: PlaceholderAlignment.middle,
-              child: Padding(
-                padding: const EdgeInsetsDirectional.only(end: 5),
-                child: Icon(icon, size: 14),
-              ),
-            ),
-            TextSpan(text: label),
-          ],
-        ),
-        style: const TextStyle(fontSize: 12),
-      );
-
-  Widget _statusChip(String status) {
-    final (label, color) = switch (status) {
-      'trial' => ('تاقیکردنەوە', Colors.blue),
-      'grace' => ('ماوەی ڕێگەپێدراو', Colors.orange),
-      'suspended' => ('ڕاگیراو', Colors.red),
-      'archived' => ('ئەرشیڤکراو', Colors.grey),
-      _ => ('چالاک', Colors.green),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-        ),
       ),
     );
   }

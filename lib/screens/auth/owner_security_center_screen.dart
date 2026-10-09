@@ -4,6 +4,7 @@ import 'package:zhirox/services/pb_service.dart';
 import 'package:zhirox/utils/constants.dart';
 import 'package:zhirox/utils/helpers.dart';
 import 'package:zhirox/widgets/app_design.dart';
+import 'package:zhirox/widgets/owner_account_widgets.dart';
 
 class OwnerSecurityCenterScreen extends StatefulWidget {
   const OwnerSecurityCenterScreen({super.key});
@@ -249,29 +250,12 @@ class _OwnerSecurityCenterScreenState
     String label,
     String value,
     IconData icon,
-  ) {
-    return SizedBox(
-      width: 160,
-      child: AppSurface(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: AppColors.primary, size: 22),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-              textDirection: TextDirection.ltr,
-            ),
-            const SizedBox(height: 2),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ),
-    );
-  }
+  ) =>
+      OwnerMetricCard(
+        label: label,
+        value: value,
+        icon: icon,
+      );
 
   Widget _accountCard(
     BuildContext context,
@@ -287,40 +271,11 @@ class _OwnerSecurityCenterScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                backgroundColor: AppColors.primarySoft,
-                child: Icon(
-                  Icons.admin_panel_settings_rounded,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      market,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 2),
-                    if (admin.isNotEmpty)
-                      Text(
-                        admin,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    if (phone.isNotEmpty)
-                      Text(
-                        phone,
-                        textDirection: TextDirection.ltr,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                  ],
-                ),
-              ),
-            ],
+          OwnerAccountIdentity(
+            marketName: market,
+            adminName: admin,
+            phone: phone,
+            icon: Icons.admin_panel_settings_rounded,
           ),
           const SizedBox(height: 8),
           _statusChip(state),
@@ -329,31 +284,31 @@ class _OwnerSecurityCenterScreenState
             spacing: 14,
             runSpacing: 8,
             children: [
-              _mini(
+              OwnerMetadata(
                 Icons.devices_outlined,
                 '${_asInt(item['active_sessions'])} دانیشتن',
               ),
-              _mini(
+              OwnerMetadata(
                 Icons.verified_user_outlined,
                 '${_asInt(item['aal2_sessions'])} پاراستنی دوو ئاستی',
               ),
-              _mini(
+              OwnerMetadata(
                 Icons.network_check_rounded,
                 '${_asInt(item['recent_ip_count_24h'])} ناونیشانی تۆڕ/٢٤ک',
               ),
-              _mini(
+              OwnerMetadata(
                 Icons.devices_other_outlined,
                 '${_asInt(item['recent_device_count_30d'])} ئامێر/٣٠ ڕۆژ',
               ),
-              _mini(
+              OwnerMetadata(
                 Icons.event_available_outlined,
                 'چوونەژوورەوە: ${ownerDateTime(item['last_sign_in_at'])}',
               ),
-              _mini(
+              OwnerMetadata(
                 Icons.history_rounded,
                 'دانیشتن: ${ownerDateTime(item['last_session_at'])}',
               ),
-              _mini(
+              OwnerMetadata(
                 Icons.rule_rounded,
                 'سنوور: ${_asInt(item['device_limit'])}',
               ),
@@ -393,42 +348,12 @@ class _OwnerSecurityCenterScreenState
     );
   }
 
-  Widget _mini(IconData icon, String label) => Text.rich(
-        TextSpan(
-          children: [
-            WidgetSpan(
-              alignment: PlaceholderAlignment.middle,
-              child: Padding(
-                padding: const EdgeInsetsDirectional.only(end: 5),
-                child: Icon(icon, size: 14),
-              ),
-            ),
-            TextSpan(text: label),
-          ],
-        ),
-        style: const TextStyle(fontSize: 12),
-      );
-
   Widget _statusChip(String state) {
     final (label, color) = switch (state) {
       'locked' => ('قوفڵکراو', Colors.red),
       'review' => ('پشکنین', Colors.orange),
       _ => ('ئاسایی', Colors.green),
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
+    return OwnerStatusBadge(label: label, color: color);
   }
 }
