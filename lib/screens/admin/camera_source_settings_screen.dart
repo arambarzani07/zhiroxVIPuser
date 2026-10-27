@@ -81,10 +81,12 @@ class _CameraSourceSettingsScreenState extends State<CameraSourceSettingsScreen>
     setState(() { _working = true; _message = null; });
     try {
       await A11CameraService.instance.setProvider(marketId, 'local_gateway');
-      if (mounted) setState(() {
-        _provider = 'local_gateway';
-        _message = 'Hikvision وەک سەرچاوەی سەرەکی هەڵبژێردرا ✅';
-      });
+      if (mounted) {
+        setState(() {
+          _provider = 'local_gateway';
+          _message = 'Hikvision وەک سەرچاوەی سەرەکی هەڵبژێردرا ✅';
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _message = 'هەڵە: $error');
     } finally {
@@ -113,10 +115,12 @@ class _CameraSourceSettingsScreenState extends State<CameraSourceSettingsScreen>
       if (!ok) throw StateError('RTSP connection failed');
       await A11CameraService.instance.setProvider(marketId, 'a11_local_rtsp');
       unawaited(A11CameraCoordinator.instance.start());
-      if (mounted) setState(() {
-        _provider = 'a11_local_rtsp';
-        _message = 'A11 پەیوەست بوو و وەک سەرچاوەی سەرەکی هەڵبژێردرا ✅';
-      });
+      if (mounted) {
+        setState(() {
+          _provider = 'a11_local_rtsp';
+          _message = 'A11 پەیوەست بوو و وەک سەرچاوەی سەرەکی هەڵبژێردرا ✅';
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _message = 'A11 چالاک نەکرا: $error');
     } finally {
