@@ -395,6 +395,17 @@ class AuthProvider extends ChangeNotifier {
         text.contains('no route to host');
   }
 
+  // Count only actual credential failures toward local rate limiting. A
+  // server outage, subscription restriction, or device approval must not
+  // penalize the user as an invalid password attempt.
+  bool _isCredentialError(Object error) {
+    final value = error.toString().toLowerCase();
+    return value.contains('وشەی نهێنی هەڵەیە') ||
+        value.contains('invalid login') ||
+        value.contains('invalid credentials') ||
+        value.contains('invalid grant');
+  }
+
   Future<void> login(String phone, String password) async {
     if (_isLoading) return;
     _isLoading = true;
@@ -402,10 +413,14 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       await _checkLockout();
-      final user = await PBService.login(phone, password);
+      // Dart's Future.timeout bounds the spinner even when Supabase Auth
+      // or the database does not return (e.g. HTTP 504).
+      final user = await PBService.login(phone, password)
+          .timeout(const Duration(seconds: 25));
       _user = user;
-      await _validateSubscription();
-      await _enforceAdminDeviceAuthorization();
+      await _validateSubscription().timeout(const Duration(seconds: 15));
+      await _enforceAdminDeviceAuthorization()
+          .timeout(const Duration(seconds: 15));
       _subscribeToUserChanges();
       _startDeviceAuthorizationHeartbeat();
       unawaited(_refreshExpiryReminders());
@@ -413,8 +428,13 @@ class AuthProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(kFailedAttemptsKey);
       await prefs.remove(kLockoutTimeKey);
+    } on TimeoutException {
+      _user = null;
+      throw 'سێرڤەر لە ماوەی دیاریکراودا وەڵامی نەدایەوە. دووبارە هەوڵ بدە.';
     } catch (error) {
-      if (!_isConnectivityError(error) && !PBService.isServiceRestrictionError(error)) {
+      // Never expose a partially validated account when a later check fails.
+      _user = null;
+      if (_isCredentialError(error)) {
         await _handleLoginFailure();
       }
       rethrow;
