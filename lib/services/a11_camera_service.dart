@@ -206,7 +206,7 @@ class A11CameraService {
       throw StateError('a11_mp4_remux_failed');
     }
     final probe = await FFprobeKit.getMediaInformation(output.path);
-    final info = await probe.getMediaInformation();
+    final info = probe.getMediaInformation();
     final duration = double.tryParse(info?.getDuration() ?? '') ?? 0;
     if (duration < 27.5 || duration > 32.5) throw StateError('a11_quality_gate_duration');
     try { await concat.delete(); } catch (_) {}
