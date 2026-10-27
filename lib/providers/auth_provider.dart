@@ -380,21 +380,6 @@ class AuthProvider extends ChangeNotifier {
     await prefs.setInt(kFailedAttemptsKey, attempts);
   }
 
-  bool _isConnectivityError(Object error) {
-    final text = error.toString().toLowerCase();
-    return text.contains('socketexception') ||
-        text.contains('clientexception') ||
-        text.contains('failed host lookup') ||
-        text.contains('connection refused') ||
-        text.contains('connection reset') ||
-        text.contains('connection closed') ||
-        text.contains('timed out') ||
-        text.contains('timeout') ||
-        text.contains('network') ||
-        text.contains('offline') ||
-        text.contains('no route to host');
-  }
-
   // Count only actual credential failures toward local rate limiting. A
   // server outage, subscription restriction, or device approval must not
   // penalize the user as an invalid password attempt.
