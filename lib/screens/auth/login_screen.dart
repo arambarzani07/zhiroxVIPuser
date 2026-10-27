@@ -36,12 +36,23 @@ class _LoginScreenState extends State<LoginScreen> {
     if (original.contains('لەلایەن خاوەنی سیستەمەوە ڕاگیراوە')) {
       return 'ئەم ئامێرە لەلایەن خاوەنی سیستەمەوە ڕاگیراوە.';
     }
+    if (original.contains('سێرڤەر لە ماوەی دیاریکراودا')) {
+      return original;
+    }
+    if (raw.contains('gateway timeout') ||
+        raw.contains('timed out') ||
+        raw.contains('timeout') ||
+        raw.contains('504') ||
+        raw.contains('503') ||
+        raw.contains('502')) {
+      return 'سێرڤەر وەڵامی داواکاری چوونەژوورەوەی نەدایەوە. دووبارە هەوڵ بدە.';
+    }
     if (raw.contains('socketexception') ||
         raw.contains('clientexception') ||
         raw.contains('network') ||
         raw.contains('failed host lookup') ||
         raw.contains('connection')) {
-      return 'پەیوەندی بە سێرڤەر نەکرا. ئینتەرنێتەکەت بپشکنە و دووبارە هەوڵ بدە.';
+      return 'پەیوەندی بە سێرڤەر نەکرا یان وەڵامەکە دوا کەوت. تکایە پەیوەندی و سێرڤەر بپشکنە.';
     }
     if (raw.contains('invalid') ||
         raw.contains('credential') ||
