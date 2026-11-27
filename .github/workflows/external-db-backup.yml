@@ -1,10 +1,6 @@
 name: Encrypted external database backup
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/external-db-backup.yml'
   workflow_dispatch:
   schedule:
     - cron: '15 2 * * *'
@@ -12,29 +8,42 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: zhirox-final-external-backup
+  cancel-in-progress: false
+
 jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Require private backup repository
+        if: github.event.repository.private != true
+        run: |
+          echo '::error::External backup is disabled for public repositories. Configure an approved private backup destination before running.'
+          exit 1
       - uses: actions/checkout@v4
         with:
           ref: user-source
       - name: Validate backup secrets
         env:
-          BACKUP_URL: ${{ secrets.ZHIROX_BACKUP_DB_URL }}
-          BACKUP_KEY: ${{ secrets.ZHIROX_BACKUP_KEY_B64 }}
+          BACKUP_URL: ${{ secrets.ZHIROX_TARGET_DB_URL }}
+          BACKUP_KEY: ${{ secrets.ZHIROX_FINAL_BACKUP_KEY_B64 }}
         run: |
           if [[ -z "$BACKUP_URL" || -z "$BACKUP_KEY" ]]; then
-            echo "::error::Encrypted backup is not configured. Set ZHIROX_BACKUP_DB_URL and ZHIROX_BACKUP_KEY_B64 as repository Actions secrets."
-            exit 1
-          fi
-          if [[ "$BACKUP_URL" != *"madoflmbretqghqbqaak"* ]]; then
-            echo "::error::Backup URL does not identify the production project."
+            echo "::error::Encrypted backup is not configured. Set ZHIROX_TARGET_DB_URL and a newly generated ZHIROX_FINAL_BACKUP_KEY_B64 as repository Actions secrets."
             exit 1
           fi
           python3 - <<'PY'
           import base64, hashlib, os
+          from urllib.parse import urlsplit, unquote
+          ref = 'ryzgbajgjctmliwhvezo'
+          try:
+              u = urlsplit(os.environ['BACKUP_URL'])
+              assert u.scheme in ('postgres','postgresql') and u.port == 5432 and u.path == '/postgres' and u.password
+              assert (u.hostname == 'db.'+ref+'.supabase.co' and unquote(u.username or '') == 'postgres') or (u.hostname.endswith('.pooler.supabase.com') and unquote(u.username or '') == 'postgres.'+ref)
+          except Exception:
+              raise SystemExit('::error::Backup URL does not identify the approved target project')
           try:
               key = base64.b64decode(os.environ['BACKUP_KEY'], validate=True)
           except Exception:
@@ -44,18 +53,18 @@ jobs:
           if hashlib.sha256(key).hexdigest() == 'dc2296fa78993f4d93a4226fbf003e4bcc41aefac625756d07c2d4102461414d':
               raise SystemExit('::error::Rotate the previously disclosed backup key before publishing any archive')
           PY
-      - name: Dump production database (temporary runner only)
+      - name: Dump target database (temporary runner only)
         env:
-          ZHIROX_BACKUP_DB_URL: ${{ secrets.ZHIROX_BACKUP_DB_URL }}
+          ZHIROX_BACKUP_DB_URL: ${{ secrets.ZHIROX_TARGET_DB_URL }}
         run: |
           mkdir -m 700 -p "$RUNNER_TEMP/zhirox-backup"
           docker run --rm --network host --user "$(id -u):$(id -g)" \
-            --env ZHIROX_BACKUP_DB_URL \
+            --env ZHIROX_BACKUP_DB_URL --env PGSSLMODE=require --env 'PGOPTIONS=-c default_transaction_read_only=on' \
             -v "$RUNNER_TEMP/zhirox-backup:/backup" postgres:17 \
-            sh -c 'pg_dump --format=custom --no-owner --no-acl --file=/backup/database.dump "$ZHIROX_BACKUP_DB_URL" && pg_restore --list /backup/database.dump >/dev/null'
+            sh -c 'pg_dump --format=custom --no-owner --no-acl --exclude-schema=vault --file=/backup/database.dump "$ZHIROX_BACKUP_DB_URL" 2>/backup/dump.err && pg_restore --list /backup/database.dump >/dev/null || { echo "Target dump failed"; exit 1; }'
       - name: Encrypt, authenticate and remove plaintext
         env:
-          ZHIROX_BACKUP_KEY_B64: ${{ secrets.ZHIROX_BACKUP_KEY_B64 }}
+          ZHIROX_BACKUP_KEY_B64: ${{ secrets.ZHIROX_FINAL_BACKUP_KEY_B64 }}
         run: |
           python -m pip install 'cryptography==46.0.3'
           python scripts/encrypt_external_backup.py "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/database.zhxb"
@@ -64,10 +73,11 @@ jobs:
           docker run --rm -v "$RUNNER_TEMP/zhirox-backup:/backup:ro" postgres:17 pg_restore --list /backup/verified.dump >/dev/null
           shred -u "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/verified.dump"
       - name: Cleanup temporary plaintext on failure
-        if: failure()
+        if: always()
         run: |
-          sudo rm -f -- "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/verified.dump"
-      - name: Upload encrypted archive
+          sudo rm -f -- "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/verified.dump" "$RUNNER_TEMP/zhirox-backup/dump.err"
+      - name: Upload encrypted archive (private repository only)
+        if: success() && github.event.repository.private == true
         uses: actions/upload-artifact@v4
         with:
           name: zhirox-db-${{ github.run_id }}
@@ -75,8 +85,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Confirm encrypted backup artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test -s "$RUNNER_TEMP/zhirox-backup/database.zhxb"
