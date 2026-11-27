@@ -1,0 +1,37 @@
+name: VIP final readiness static checks
+on:
+  push:
+    branches: [vip-final-release-gate]
+    paths:
+      - '.github/workflows/vip-final-readiness-static.yml'
+      - 'supabase/checks/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-check:
+    if: github.ref_name == 'vip-final-release-gate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate staged client endpoints
+        run: |
+          set -euo pipefail
+          bash -n supabase/checks/check_vip_client_endpoints.sh
+          bash supabase/checks/check_vip_client_endpoints.sh 05a8811b432789623cea2348cb53256cfe807d2b 4e0b2331983f3d58d95408829506c95f2b98d4fe
+      - name: Verify external backup guard and destination
+        if: always()
+        run: |
+          set -euo pipefail
+          git show d87cde38864c2aadca4062f080048342e249d25d:.github/workflows/external-db-backup.yml > "$RUNNER_TEMP/backup.yml"
+          ruby -e 'require "yaml"; YAML.safe_load(File.read(ARGV[0]), aliases: true)' "$RUNNER_TEMP/backup.yml"
+          grep -F 'ryzgbajgjctmliwhvezo' "$RUNNER_TEMP/backup.yml" >/dev/null
+          ! grep -F 'madoflmbretqghqbqaak' "$RUNNER_TEMP/backup.yml"
+          grep -F 'github.event.repository.private != true' "$RUNNER_TEMP/backup.yml" >/dev/null
+          grep -F 'success() && github.event.repository.private == true' "$RUNNER_TEMP/backup.yml" >/dev/null
+          grep -F 'ZHIROX_FINAL_BACKUP_KEY_B64' "$RUNNER_TEMP/backup.yml" >/dev/null
+          echo 'Static checks only: no database connection, backup upload, IPA build or deployment.'
