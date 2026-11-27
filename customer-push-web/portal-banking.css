@@ -110,3 +110,24 @@ html[data-portal-theme=dark] #portalShell :is(.period-statement-document,.period
 html[data-portal-theme=dark] #portalShell .period-statement-document :is(input,select,button.secondary-action){background:#fff!important;color:#172b45!important}
 }
 @media print{#ledger .ledger-day{color:#111827;font-size:11px;break-after:avoid;page-break-after:avoid}}
+
+/* v5: transaction detail and compact ledger. */
+@media screen{
+#ledger .ledger-print-date{display:none}
+#ledger .entry-detail-trigger{width:100%;min-height:44px;border:0;background:transparent;color:inherit;text-align:start;padding:0;gap:8px;cursor:pointer;font:inherit}
+#ledger .entry-detail-trigger>strong:last-child{direction:ltr;unicode-bidi:isolate;display:flex;align-items:center;gap:8px;font-size:15px;white-space:nowrap}
+#ledger .entry-detail-trigger>strong:last-child:before{content:"";width:7px;height:7px;border-top:1.5px solid var(--muted);border-left:1.5px solid var(--muted);transform:rotate(-45deg)}
+#ledger .entry-note-preview{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.transaction-detail-dialog{width:min(440px,calc(100% - 28px));max-height:85dvh;overflow:auto;padding:0;border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--text)}
+.transaction-detail-dialog::backdrop{background:#0c1c2b80}
+.transaction-detail-sheet{padding:22px;display:grid;gap:16px}
+.transaction-detail-sheet h2{font-size:19px}
+.transaction-detail-amount{border-radius:14px;background:#18354b;color:white;padding:18px;display:grid;gap:8px}
+.transaction-detail-amount span{font-size:13px;color:#d5e2ed}
+.transaction-detail-amount strong{font-size:28px;direction:ltr;text-align:right;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.transaction-detail-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);align-items:start;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.transaction-detail-row span{color:var(--muted);font-size:13px}
+.transaction-detail-row strong{font-size:14px;overflow-wrap:anywhere;white-space:pre-wrap;text-align:end;unicode-bidi:plaintext}
+.transaction-close{width:100%;min-height:44px;background:var(--surface);color:var(--text);border-color:var(--line)}
+}
+@media print{#transactionDetailDialog{display:none!important}#ledger .entry-detail-trigger{border:0!important;padding:0!important;background:none!important;min-height:0!important;width:100%;text-align:start;color:#111827!important}#ledger .entry-detail-trigger>strong:last-child:before{display:none!important}}

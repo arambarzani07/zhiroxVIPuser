@@ -251,6 +251,7 @@ let activeToken = '';
 let vapidPublicKey = '';
 let nextOffset = 0;
 let currentPortalData = null;
+let portalLoadRevision=0,portalLoadsInFlight=0,autoDashboardBusy=false,portalInitialized=false,lastDashboardCheck=0;
 let currentPeriodStatement = null;
 let currentStatementVisibleRows = [];
 let statementItemQuery = '';
@@ -551,28 +552,46 @@ function mergeLoadedRows(rows, append) {
   loadedRows = [...byKey.values()];
 }
 
+function transactionKindLabel(item){return item.kind==='payment'?(item.payment_scope==='general'?'پارەدانەوەی گشتی':'پارەدانەوەی مامەڵە'):'قەرز'}
+function openTransactionDetail(item) {
+ const dialog=document.getElementById('transactionDetailDialog');
+ const content=document.getElementById('transactionDetailContent');
+ if(typeof dialog.showModal!=='function')return;
+ content.replaceChildren();
+ const amount=document.createElement('div');amount.className='transaction-detail-amount';
+ addText(amount,'span',transactionKindLabel(item));
+ addText(amount,'strong',money(item.amount,item.currency));
+ content.appendChild(amount);
+ const row=(label,value)=>{if(value==null||value==='')return;const el=document.createElement('div');el.className='transaction-detail-row';addText(el,'span',label);addText(el,'strong',String(value));content.appendChild(el)};
+ const date=new Date(item.occurred_at);
+ if(!Number.isNaN(date.getTime()))row('بەروار و کات',date.toLocaleString('en-GB',{timeZone:'Asia/Baghdad',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}));
+ if(item.kind!=='payment'){
+  if(item.remaining!=null)row('قەرزی ماوە',money(item.remaining,item.currency));
+  if(item.due_date)row('بەرواری دانەوە',statementDateLabel(item.due_date));
+  if(isOverdueDebt(item))row('دۆخ','دواکەوتوو');
+ }
+ if(typeof item.note==='string'&&item.note.trim())row('تێبینی',item.note.trim());
+ if(!dialog.open)dialog.showModal();
+}
 function buildLedgerEntry(item) {
   const isPayment = item.kind === 'payment';
   const entry = document.createElement('article');
   entry.className = 'entry';
   if (item.id) entry.dataset.eventId = String(item.id);
-  const head = document.createElement('div');
-  head.className = 'entry-head';
-  addText(
-    head,
-    'strong',
-    isPayment
-      ? (item.payment_scope === 'general' ? 'پارەدانەوەی گشتی' : 'پارەدانەوەی مامەڵە')
-      : 'قەرز',
-    isPayment ? 'payment-label' : 'debt-label',
-  );
-  addText(head, 'strong', money(item.amount, item.currency));
+  const head = document.createElement('button');
+  head.type='button';
+  head.className = 'entry-head entry-detail-trigger';
+  head.setAttribute('aria-haspopup','dialog');
+  head.setAttribute('aria-label',transactionKindLabel(item)+'، '+money(item.amount,item.currency)+'، وردەکاری');
+  addText(head,'strong',transactionKindLabel(item),isPayment?'payment-label':'debt-label');
+  addText(head,'strong',money(item.amount,item.currency));
+  head.addEventListener('click',()=>openTransactionDetail(item));
   entry.appendChild(head);
 
   const date = new Date(item.occurred_at);
   const dateText = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('ku-IQ');
-  const detail = [dateText, typeof item.note === 'string' ? item.note : ''].filter(Boolean).join(' — ');
-  if (detail) addText(entry, 'div', detail, 'entry-meta');
+  if(dateText)addText(entry,'div',dateText,'entry-meta ledger-print-date');
+  if(typeof item.note==='string'&&item.note.trim())addText(entry,'div',item.note.trim(),'entry-meta entry-note-preview');
   if (!isPayment) {
     addText(entry, 'div', `ماوە: ${money(item.remaining, item.currency)}`, 'entry-meta');
     if (item.due_date) {
@@ -1088,6 +1107,8 @@ function showLockedPortal() {
 async function loadPortal(offset = 0, append = false) {
   const credentials = portalCredentials(offset);
   if (!credentials) throw new Error('link_unavailable');
+  portalLoadRevision+=1;portalLoadsInFlight+=1;
+  try{
   const data = await api(credentials);
 
   const marketName = typeof data.market_name === 'string' ? data.market_name.trim() : '';
@@ -1110,9 +1131,26 @@ async function loadPortal(offset = 0, append = false) {
 
   nextOffset = offset + (Array.isArray(data.rows) ? data.rows.length : 0);
   loadMoreButton.hidden = data.has_more !== true;
+  lastDashboardCheck=Date.now();
   return data;
+  }finally{portalLoadsInFlight-=1;}
 }
 
+function mayAutoRefresh(s){return s.ready&&s.visible&&s.home&&s.online&&!s.dialog&&!s.printing&&!s.busy&&!s.autoBusy}
+function autoRefreshState(){return {ready:portalInitialized&&!portalAppEl.hidden,visible:document.visibilityState==='visible',home:!views.home.hidden,online:navigator.onLine!==false,dialog:!!document.querySelector('dialog[open]'),printing:['printing-statement','printing-receipt','printing-period-statement'].some(x=>document.body.classList.contains(x)),busy:portalLoadsInFlight>0||headerRefreshButton.disabled,autoBusy:autoDashboardBusy}}
+async function refreshDashboardIfDue(){
+ if(!mayAutoRefresh(autoRefreshState())||Date.now()-lastDashboardCheck<120000)return;
+ const credentials=portalCredentials(0);if(!credentials)return;
+ const revision=portalLoadRevision;
+ autoDashboardBusy=true;lastDashboardCheck=Date.now();
+ try{
+  const data=await api(credentials);
+  if(revision!==portalLoadRevision||!mayAutoRefresh({...autoRefreshState(),autoBusy:false}))return;
+  // Update only the visible dashboard; leave transaction pagination, filters, reports and preferences untouched.
+  renderPrimaryBalance(data);renderSummaryMetrics(data);renderAccountInsights(data);
+ }catch(_){setStatus('نوێکردنەوەی خۆکار سەرکەوتوو نەبوو.','err');}
+ finally{autoDashboardBusy=false;}
+}
 async function refreshPortal() {
   const buttons = [headerRefreshButton];
   for (const button of buttons) button.disabled = true;
@@ -1882,6 +1920,7 @@ async function initialize() {
     }
     if (eventId) await focusTransaction(eventId);
     if (receiptId) await openReceipt(receiptId);
+    portalInitialized=true;
     setStatus('هەژمارەکەت ئامادەیە.', 'ok');
   } catch (_) {
     showLockedPortal();
@@ -2083,4 +2122,6 @@ themeSelect.addEventListener('change',()=>{
 });
 if(themeMedia.addEventListener)themeMedia.addEventListener('change',applyPortalTheme);
 applyPortalTheme();
+window.setInterval(()=>void refreshDashboardIfDue(),30000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void refreshDashboardIfDue();});
 initialize();

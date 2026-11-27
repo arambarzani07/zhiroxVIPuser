@@ -13,11 +13,11 @@
   <title>ZHIROX Customer Portal</title>
   <script src="./manifest-bootstrap.js"></script>
   <noscript><link rel="manifest" href="./manifest.webmanifest"></noscript>
-  <link rel="stylesheet" href="./styles.css?v=20261128-4">
-  <link rel="stylesheet" href="./portal-banking.css?v=20261128-4">
+  <link rel="stylesheet" href="./styles.css?v=20261128-5">
+  <link rel="stylesheet" href="./portal-banking.css?v=20261128-5">
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script defer src="./app.js?v=20261128-4"></script>
+  <script defer src="./app.js?v=20261128-5"></script>
 </head>
 <body>
   <main id="portalShell" class="portal-shell">
@@ -332,7 +332,13 @@
 
     </div>
 
-    <dialog id="receiptDialog" class="receipt-dialog">
+    <dialog id="transactionDetailDialog" class="transaction-detail-dialog" aria-labelledby="transactionDetailTitle">
+<form method="dialog" class="transaction-detail-sheet">
+<h2 id="transactionDetailTitle">وردەکاریی مامەڵە</h2>
+<div id="transactionDetailContent"></div>
+<button class="secondary-action transaction-close" value="close" autofocus>داخستن</button>
+</form></dialog>
+<dialog id="receiptDialog" class="receipt-dialog">
       <form method="dialog" class="receipt-sheet">
         <button class="dialog-close" value="cancel" aria-label="داخستن">×</button>
         <div class="digital-receipt-head">
