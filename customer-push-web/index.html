@@ -13,11 +13,11 @@
   <title>ZHIROX Customer Portal</title>
   <script src="./manifest-bootstrap.js"></script>
   <noscript><link rel="manifest" href="./manifest.webmanifest"></noscript>
-  <link rel="stylesheet" href="./styles.css?v=20261128-6">
-  <link rel="stylesheet" href="./portal-banking.css?v=20261128-6">
+  <link rel="stylesheet" href="./styles.css?v=20261128-7">
+  <link rel="stylesheet" href="./portal-banking.css?v=20261128-7">
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script defer src="./app.js?v=20261128-6"></script>
+  <script defer src="./app.js?v=20261128-7"></script>
 </head>
 <body>
   <main id="portalShell" class="portal-shell">
@@ -71,8 +71,8 @@
       <section id="homeView" class="portal-view" aria-labelledby="homeHeading">
         <div class="view-heading"><h2 id="homeHeading">پوختەی دارایی</h2></div>
         <article class="balance-card"><div class="balance-topline"><span>قەرزی ماوە</span><span id="balanceUpdated" class="balance-status">—</span></div><strong id="primaryRemaining" dir="ltr">—</strong><span id="primaryCurrency" hidden>IQD</span><div id="otherBalances" class="other-balances" hidden></div></article>
-        <section class="panel financial-details"><h3>کۆی مامەڵەکان</h3><div id="summaryMetrics" class="summary-grid"></div><details id="balanceDetails" class="balance-details" hidden><summary>وردەکاریی پارەدانەوە</summary><div id="paymentDetails"></div></details></section>
-        <section id="debtLimitCard" class="panel debt-limit-panel" hidden><p class="eyebrow">سنووری قەرز</p><h2 id="debtLimitTitle">—</h2><p id="debtLimitMeta" class="muted"></p><div class="vip-limit-track"><div id="debtLimitProgress"></div></div></section>
+        <section class="panel financial-details"><h3>کۆی مامەڵەکان</h3><div id="summaryMetrics" class="summary-grid"></div><div id="repaymentProgress" class="repayment-progress" hidden></div><details id="balanceDetails" class="balance-details" hidden><summary>وردەکاریی پارەدانەوە</summary><div id="paymentDetails"></div></details></section>
+        <section id="monthlyActivity" class="panel monthly-activity" hidden aria-labelledby="monthlyActivityHeading"><h3 id="monthlyActivityHeading">چالاکیی مانگانە</h3><div id="monthlyActivityContent"></div></section><section id="debtLimitCard" class="panel debt-limit-panel" hidden><p class="eyebrow">سنووری قەرز</p><h2 id="debtLimitTitle">—</h2><p id="debtLimitMeta" class="muted"></p><div class="vip-limit-track"><div id="debtLimitProgress"></div></div></section>
         <section id="schedulePanel" class="panel payment-timeline-panel" hidden><h2>بەرواری دانەوە</h2><div id="scheduleStats" class="summary-grid"></div><div id="paymentTimeline" class="payment-timeline"></div></section>
       </section>
       <section id="transactionsView" class="portal-view" aria-labelledby="transactionsHeading" hidden>

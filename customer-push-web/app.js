@@ -363,7 +363,7 @@ function renderPaymentTimeline(data) {
   scheduleStatsEl.replaceChildren(
     scheduleStat('دانەوەی کراوە', openCount),
     scheduleStat('دواکەوتوو', overdueCount, overdueCount > 0 ? 'danger' : 'ok'),
-    scheduleStat('٧ ڕۆژی داهاتوو', dueNext7, dueNext7 > 0 ? 'warning' : ''),
+    scheduleStat('7 ڕۆژی داهاتوو', dueNext7, dueNext7 > 0 ? 'warning' : ''),
   );
 
   paymentTimelineEl.replaceChildren();
@@ -417,6 +417,66 @@ function renderPaymentTimeline(data) {
   }
 }
 
+function repaymentRatio(total,paid,remaining){
+ if([total,paid,remaining].some(v=>v==null||v===''||!Number.isFinite(Number(v))))return null;
+ const t=Number(total),p=Number(paid),r=Number(remaining);
+ if(t<=0||p<0||r<0||p>t||Math.abs(t-p-r)>0.011)return null;
+ return Math.round(p/t*1000)/10;
+}
+function monthlyRecordedActivity(rows,hasMore){
+ if(hasMore!==false||!Array.isArray(rows)||!rows.length)return [];
+ const groups=new Map(),seen=new Set();
+ for(const row of rows){
+  const id=String(row?.id||''),kind=row?.kind,currency=String(row?.currency||'').toUpperCase(),date=String(row?.occurred_at||'').slice(0,7),amount=Number(row?.amount);
+  if(!id||!['debt','payment'].includes(kind)||!['IQD','USD'].includes(currency)||!/^\d{4}-(0[1-9]|1[0-2])$/.test(date)||row.amount==null||row.amount===''||!Number.isFinite(amount)||amount<0)return [];
+  const key=kind+':'+id;if(seen.has(key))return [];seen.add(key);
+  if(!groups.has(currency))groups.set(currency,new Map());
+  const months=groups.get(currency);if(!months.has(date))months.set(date,{month:date,debt:0,payment:0});
+  months.get(date)[kind]+=amount;
+ }
+ return [...groups].map(([currency,months])=>({currency,months:[...months.values()].sort((a,b)=>a.month.localeCompare(b.month)).slice(-6)})).filter(g=>g.months.length>=2&&g.months.some(m=>m.debt>0||m.payment>0));
+}
+function renderRepaymentProgress(data){
+ const root=document.getElementById('repaymentProgress');root.replaceChildren();
+ const totals=Array.isArray(data?.totals)?data.totals:[];
+ for(const item of totals){
+  const currency=String(item.currency||'').toUpperCase();
+  if(!['IQD','USD'].includes(currency)||item.paid==null)continue;
+  const general=currency==='IQD'?Number(data.general_paid_iqd??0):0;
+  const remaining=currency==='IQD'&&data.effective_remaining_iqd!=null?data.effective_remaining_iqd:item.remaining;
+  const ratio=repaymentRatio(item.total_debt,Number(item.paid)+general,remaining);
+  if(ratio===null)continue;
+  const row=document.createElement('div');row.className='repayment-progress-row';
+  const label=addText(row,'div','ڕێژەی پارەدانەوە'+(totals.length>1?' — '+currency:''),'repayment-label');
+  addText(label,'strong',ratio.toLocaleString('en-US',{maximumFractionDigits:1})+'%');
+  const progress=document.createElement('progress');progress.max=100;progress.value=ratio;progress.setAttribute('aria-label','ڕێژەی پارەدانەوە '+currency);row.appendChild(progress);root.appendChild(row);
+ }
+ root.hidden=!root.children.length;
+}
+function renderMonthlyActivity(data){
+ const section=document.getElementById('monthlyActivity'),root=document.getElementById('monthlyActivityContent');root.replaceChildren();
+ const groups=monthlyRecordedActivity(data?.rows,data?.has_more);
+ for(const group of groups){
+  const block=document.createElement('div');block.className='activity-currency';
+  addText(block,'h4',group.currency);
+  const legend=document.createElement('div');legend.className='activity-legend';
+  addText(legend,'span','قەرز','activity-debt');addText(legend,'span','پارەدانەوە','activity-paid');block.appendChild(legend);
+  const max=Math.max(...group.months.flatMap(m=>[m.debt,m.payment]));
+  for(const m of group.months){
+   const row=document.createElement('div');row.className='activity-month';
+   addText(row,'strong',m.month,'activity-month-label');
+   const bars=document.createElement('div');bars.className='activity-bars';
+   for(const [kind,label] of [['debt','قەرز'],['payment','پارەدانەوە']]){
+    const line=document.createElement('div');line.className='activity-line '+kind;
+    const bar=document.createElement('meter');bar.min=0;bar.max=max;bar.value=m[kind];bar.setAttribute('aria-label',label+' '+money(m[kind],group.currency));line.appendChild(bar);
+    addText(line,'span',money(m[kind],group.currency));bars.appendChild(line);
+   }
+   row.appendChild(bars);block.appendChild(row);
+  }
+  root.appendChild(block);
+ }
+ section.hidden=!groups.length;
+}
 function renderSummaryMetrics(data) {
  const totals=Array.isArray(data?.totals)?data.totals:[];
  const primary=primaryCurrencyEl.textContent.trim()||'IQD';
@@ -430,6 +490,7 @@ function renderSummaryMetrics(data) {
   if(currency==='IQD'&&general!==0&&data?.gross_remaining_iqd!=null&&number(data.gross_remaining_iqd)!==number(item.total_debt)&&number(data.gross_remaining_iqd)!==number(data.effective_remaining_iqd))paymentDetails.append(metric('ماوە پێش پارەدانەوەی گشتی',data.gross_remaining_iqd,currency));
  }
  other.hidden=!other.children.length;details.hidden=!paymentDetails.children.length;
+ renderRepaymentProgress(data);
  const date=new Date(data?.as_of||Date.now());document.getElementById('balanceUpdated').textContent=Number.isNaN(date.getTime())?'نوێکراوە':'نوێکراوە '+date.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 }
 
@@ -1125,6 +1186,7 @@ async function loadPortal(offset = 0, append = false) {
   currentPortalData = data;
   renderPrimaryBalance(data);
   renderSummaryMetrics(data);
+  if(offset===0&&!append)renderMonthlyActivity(data);
   renderAccountDetails(data);
   renderAccountInsights(data);
   renderRows(data.rows, append);
@@ -1147,7 +1209,7 @@ async function refreshDashboardIfDue(){
   const data=await api(credentials);
   if(revision!==portalLoadRevision||!mayAutoRefresh({...autoRefreshState(),autoBusy:false}))return;
   // Update only the visible dashboard; leave transaction pagination, filters, reports and preferences untouched.
-  renderPrimaryBalance(data);renderSummaryMetrics(data);renderAccountInsights(data);
+  renderPrimaryBalance(data);renderSummaryMetrics(data);renderMonthlyActivity(data);renderAccountInsights(data);
  }catch(_){setStatus('نوێکردنەوەی خۆکار سەرکەوتوو نەبوو.','err');}
  finally{autoDashboardBusy=false;}
 }
