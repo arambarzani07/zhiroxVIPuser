@@ -1,0 +1,110 @@
+name: VIP database restore (no cutover)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vip-database-migration
+  cancel-in-progress: false
+jobs:
+  restore:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SOURCE_URL: ${{ secrets.ZHIROX_BACKUP_DB_URL }}
+      TARGET_URL: ${{ secrets.ZHIROX_TARGET_DB_URL }}
+    steps:
+      - name: Validate approved project references
+        run: |
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit, unquote
+          for label, ref in [('SOURCE','madoflmbretqghqbqaak'),('TARGET','ryzgbajgjctmliwhvezo')]:
+              try:
+                  u = urlsplit(os.environ[label+'_URL'])
+                  assert u.scheme in ('postgres','postgresql') and u.port == 5432 and u.path == '/postgres' and u.password
+                  assert (u.hostname == 'db.'+ref+'.supabase.co' and unquote(u.username or '') == 'postgres') or (u.hostname.endswith('.pooler.supabase.com') and unquote(u.username or '') == 'postgres.'+ref)
+              except Exception:
+                  raise SystemExit(label+' endpoint invalid')
+              print(label+' endpoint verified')
+          PY
+      - name: Restore application and Auth data into approved empty target
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -i --network host -e SOURCE_URL -e TARGET_URL -e PGSSLMODE=require postgres:17 bash -s <<'SH'
+          set -euo pipefail
+          umask 077
+          work=$(mktemp -d)
+          trap 'rm -rf -- "$work"' EXIT
+          cd "$work"
+          psql_s() { PGOPTIONS='-c default_transaction_read_only=on' psql -X -v ON_ERROR_STOP=1 -At -d "$SOURCE_URL" "$@"; }
+          psql_t() { psql -X -v ON_ERROR_STOP=1 -At -d "$TARGET_URL" "$@"; }
+          guard="SELECT CASE WHEN (SELECT count(*) FROM auth.users)=0 AND (SELECT count(*) FROM storage.objects)=0 AND (SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('public','private') AND table_type='BASE TABLE')=0 THEN 'empty' ELSE 'occupied' END"
+          test "$(psql_t -c "$guard")" = empty
+          echo "Target empty; preparing private temporary dumps"
+          export PGOPTIONS='-c default_transaction_read_only=on'
+          pg_dump -Fc --schema=public --schema=private --exclude-table-data='private.hikvision_*' --exclude-table-data='public.transaction_video_evidence' --exclude-table-data='public.hikvision_market_config' --exclude-table-data='public._chatgpt_tmp_daftar28_export' -f app.dump "$SOURCE_URL" 2>dump.err || { echo 'Application dump failed'; exit 1; }
+          pg_dump -Fc --data-only --table=auth.users --table=auth.identities -f auth.dump "$SOURCE_URL" 2>auth.err || { echo 'Auth dump failed'; exit 1; }
+          unset PGOPTIONS
+          pg_restore -l app.dump >app.list
+          # Keep the existing platform-owned public schema; retain original ACLs and policies.
+          sed -E '/^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public /s/^/;/; /^[0-9]+; [0-9]+ [0-9]+ DEFAULT ACL public .* supabase_admin$/s/^/;/' app.list >selected.list
+          pg_restore --no-owner --use-list=selected.list --section=pre-data -f pre.sql app.dump
+          pg_restore --no-owner --use-list=selected.list --section=data -f appdata.sql app.dump
+          pg_restore --no-owner --use-list=selected.list --section=post-data -f post.sql app.dump
+          pg_restore --data-only --no-owner -f authdata.sql auth.dump
+          expected=$(psql_s -c "SELECT concat_ws('|',(SELECT count(*) FROM auth.users),(SELECT count(*) FROM auth.identities),(SELECT count(*) FROM public.profiles),(SELECT count(*) FROM public.debts),(SELECT count(*) FROM public.payments),(SELECT count(*) FROM public.customer_general_payments))")
+          [[ "$expected" =~ ^[0-9]+\|[0-9]+\|[0-9]+\|[0-9]+\|[0-9]+\|[0-9]+$ ]]
+          # Compare counts for every application table, including intentionally empty video/temp tables.
+          psql_s -q -c "SELECT format('SELECT %L, %L, %s;', schemaname, tablename, CASE WHEN (schemaname='private' AND tablename LIKE 'hikvision_%') OR (schemaname='public' AND tablename IN ('transaction_video_evidence','hikvision_market_config','_chatgpt_tmp_daftar28_export')) THEN '0::bigint' ELSE format('(SELECT count(*) FROM %I.%I)',schemaname,tablename) END) FROM pg_tables WHERE schemaname IN ('public','private') ORDER BY schemaname,tablename;" >inventory_queries.sql
+          psql_s -q -f inventory_queries.sql >inventory.txt
+          test -s inventory.txt
+          : >allcounts.sql
+          while IFS='|' read -r schema table amount; do
+            [[ "$schema" =~ ^(public|private)$ && "$table" =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ && "$amount" =~ ^[0-9]+$ ]] || exit 1
+            printf 'DO $check$ BEGIN IF (SELECT count(*) FROM "%s"."%s") <> %s THEN RAISE EXCEPTION '\''Table count mismatch: %s.%s'\''; END IF; END $check$;\n' "$schema" "$table" "$amount" "$schema" "$table" >>allcounts.sql
+          done <inventory.txt
+          test "$(wc -l <allcounts.sql)" -gt 100
+          cat >start.sql <<'SQL'
+          BEGIN;
+          SET LOCAL lock_timeout='30s';
+          CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
+          CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
+          CREATE EXTENSION IF NOT EXISTS pg_cron;
+          SQL
+          cat >check.sql <<SQL
+          DO \$verify\$
+          DECLARE observed text;
+          BEGIN
+            SELECT concat_ws('|',(SELECT count(*) FROM auth.users),(SELECT count(*) FROM auth.identities),(SELECT count(*) FROM public.profiles),(SELECT count(*) FROM public.debts),(SELECT count(*) FROM public.payments),(SELECT count(*) FROM public.customer_general_payments)) INTO observed;
+            IF observed <> '$expected' THEN RAISE EXCEPTION 'Inventory mismatch'; END IF;
+            IF EXISTS (SELECT 1 FROM public.transaction_video_evidence) THEN RAISE EXCEPTION 'Video data not excluded'; END IF;
+          END
+          \$verify\$;
+          ALTER TABLE IF EXISTS public._chatgpt_tmp_daftar28_export ENABLE ROW LEVEL SECURITY;
+          REVOKE ALL ON TABLE public._chatgpt_tmp_daftar28_export FROM PUBLIC, anon, authenticated;
+          DO \$rls\$
+          BEGIN
+            IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p') AND NOT c.relrowsecurity) THEN RAISE EXCEPTION 'Public table without RLS'; END IF;
+          END
+          \$rls\$;
+          COMMIT;
+          SQL
+          # One session, one transaction. Any error disconnects and rolls back all writes.
+          if ! psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -q -d "$TARGET_URL" -f start.sql -f pre.sql -f authdata.sql -f appdata.sql -f post.sql -f allcounts.sql -f check.sql >restore.out 2>restore.err; then
+            echo "Restore stopped; uncommitted target transaction rolled back."
+            grep -Eo 'psql:[a-z]+\.sql:[0-9]+: (ERROR|FATAL): +[0-9A-Z]{5}' restore.err | head -15 || true
+            # Print only the SQL command category at the failing line, never row data or function bodies.
+            line=$(sed -nE 's/^psql:post\.sql:([0-9]+): ERROR:.*/\1/p' restore.err | head -1)
+            if [[ "$line" =~ ^[0-9]+$ ]]; then
+              sed -n "${line}p" post.sql | awk '{if ($1=="ALTER" && $2=="DEFAULT") print "Failed command category: ALTER DEFAULT PRIVILEGES"; else if ($1 ~ /^(ALTER|CREATE|GRANT|REVOKE|SET|COMMENT)$/) print "Failed command category: " $1; else print "Failed command category: other"}'
+            fi
+            exit 1
+          fi
+          actual=$(psql_t -c "SELECT concat_ws('|',(SELECT count(*) FROM auth.users),(SELECT count(*) FROM auth.identities),(SELECT count(*) FROM public.profiles),(SELECT count(*) FROM public.debts),(SELECT count(*) FROM public.payments),(SELECT count(*) FROM public.customer_general_payments))")
+          test "$actual" = "$expected"
+          echo "Committed and verified matching Auth, profile, debt and payment counts: $expected"
+          echo "All application table counts checked before commit. No artifacts uploaded. No app cutover performed."
+          SH
