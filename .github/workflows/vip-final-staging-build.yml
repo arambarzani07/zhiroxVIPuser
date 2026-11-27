@@ -26,12 +26,45 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
-      - name: Verify unsigned iOS build only
+      - name: Set separate staging app identity
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          p = Path('ios/Runner.xcodeproj/project.pbxproj')
+          s = p.read_text()
+          s, n = re.subn(r'PRODUCT_BUNDLE_IDENTIFIER = com\.karoxghafoor\.zhirox(?:\.[a-zA-Z0-9_]+)*;', 'PRODUCT_BUNDLE_IDENTIFIER = com.karoxghafoor.zhirox.owner.staging;', s)
+          assert n >= 3, 'Expected app bundle identifier settings'
+          p.write_text(s)
+          PY
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName ZHIROX Owner Test' ios/Runner/Info.plist
+      - name: Build staging app without signing
         run: |
           flutter build ios --release --no-codesign \
             --build-number "$GITHUB_RUN_NUMBER" \
             --dart-define=ZHIROX_BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
-            --dart-define=ZHIROX_APP_EDITION=owner
+            --dart-define=ZHIROX_APP_EDITION=owner \
+            --dart-define=ZHIROX_STAGING=true
           test -f build/ios/iphoneos/Runner.app/Info.plist
+      - name: Package and verify unsigned staging IPA
+        run: |
+          set -euo pipefail
+          APP=build/ios/iphoneos/Runner.app
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.karoxghafoor.zhirox.owner.staging'
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          find Payload -type d -name _CodeSignature -prune -exec rm -rf {} \;
+          find Payload -type f -name embedded.mobileprovision -delete
+          /usr/bin/zip -qry 'ZHIROX-Owner-Staging.ipa' Payload
+          unzip -t 'ZHIROX-Owner-Staging.ipa'
+          shasum -a 256 'ZHIROX-Owner-Staging.ipa' > 'ZHIROX-Owner-Staging.ipa.sha256'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZHIROX-Owner-Staging-IPA
+          path: |
+            ZHIROX-Owner-Staging.ipa
+            ZHIROX-Owner-Staging.ipa.sha256
+          if-no-files-found: error
+          retention-days: 7
       - name: Confirm no production release
-        run: echo 'Staging compilation only. No release, IPA distribution or database cutover.'
+        run: echo 'Staging artifact only. No official release or database cutover.'
