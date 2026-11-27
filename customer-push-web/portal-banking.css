@@ -131,3 +131,41 @@ html[data-portal-theme=dark] #portalShell .period-statement-document :is(input,s
 .transaction-close{width:100%;min-height:44px;background:var(--surface);color:var(--text);border-color:var(--line)}
 }
 @media print{#transactionDetailDialog{display:none!important}#ledger .entry-detail-trigger{border:0!important;padding:0!important;background:none!important;min-height:0!important;width:100%;text-align:start;color:#111827!important}#ledger .entry-detail-trigger>strong:last-child:before{display:none!important}}
+
+/* v6: consistent A4 statement and receipt visual identity. */
+.pdf-a4-page{background:#fff!important;color:#18354b!important;padding:40px 42px 48px!important}
+.pdf-a4-head{border-bottom:2px solid #176f71!important;min-height:0!important;gap:18px!important;padding-bottom:16px!important}
+.pdf-a4-kicker{color:#176f71!important;letter-spacing:0;font-size:13px!important}
+.pdf-a4-market h1{font-size:24px!important;color:#18354b!important;line-height:1.45!important}
+.pdf-a4-market p,.pdf-a4-meta span{color:#536578!important;font-size:11px!important}
+.pdf-a4-meta strong{font-size:12px!important;line-height:1.55!important}
+.pdf-a4-table{width:100%!important;table-layout:fixed!important;margin-top:18px!important}
+.pdf-a4-table th{background:#18354b!important;color:#fff!important;height:36px!important;font-size:11px!important}
+.pdf-a4-table td{height:34px!important;line-height:1.5!important;font-size:12px!important;padding:7px 8px!important;overflow-wrap:anywhere}
+.pdf-a4-table :is(th,td):nth-child(1){width:9%!important}
+.pdf-a4-table :is(th,td):nth-child(2){width:48%!important}
+.pdf-a4-table :is(th,td):nth-child(3){width:24%!important}
+.pdf-a4-table :is(th,td):nth-child(4){width:19%!important}
+.pdf-a4-totals{gap:6px!important;margin-top:14px!important}
+.pdf-a4-totals>div{background:#edf6f4!important;border:1px solid #c9dfd9!important;min-height:42px!important;padding:8px 12px!important}
+.pdf-a4-totals strong{font-size:19px!important;color:#18354b!important}
+.pdf-a4-page-number{bottom:18px!important;border-top:1px solid #dce4eb;padding-top:9px;font-size:10px!important;color:#536578!important}
+@media screen{
+#periodStatementDocument .period-statement-head{border-bottom:2px solid #176f71!important;gap:12px!important}
+#periodStatementDocument .period-statement-head h2{font-size:19px!important;line-height:1.5!important}
+#periodStatementDocument .period-statement-table thead th{background:#18354b!important;color:white!important}
+#periodStatementDocument .period-statement-table td{font-size:12px!important}
+#periodStatementDocument .period-statement-totals .period-total-row{background:#edf6f4!important;color:#18354b!important}
+#receiptDialog{background:#fff!important;color:#18354b!important;--text:#18354b;--muted:#536578;--brand:#176f71;--surface:#fff;--line:#dce4eb}
+#receiptDialog .receipt-brand-mark{background:#18354b!important;box-shadow:none!important}
+#receiptDialog .receipt-meta-grid>div{border:1px solid #e0e6ec;background:#f6f8fa!important}
+#receiptDialog .receipt-amount-card{border-radius:14px;background:#18354b!important;box-shadow:none!important}
+#receiptDialog .receipt-amount-card strong{direction:ltr;text-align:right;overflow-wrap:anywhere}
+#receiptDialog .receipt-item{break-inside:avoid;border-bottom:1px solid #dce4eb}
+}
+@media print{
+body.printing-receipt .receipt-dialog{border:0!important;color:#18354b!important}
+body.printing-receipt .digital-receipt-head{border-bottom:2px solid #176f71;padding-bottom:12px}
+body.printing-receipt .receipt-amount-card{break-inside:avoid}
+body.printing-receipt .receipt-item{break-inside:avoid;page-break-inside:avoid}
+}

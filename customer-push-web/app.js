@@ -1421,7 +1421,7 @@ async function generatePeriodStatement() {
 
     renderPeriodStatement(data);
     statementBuilderResultEl.textContent =
-      `${Number(data?.row_count || rows.length)} بابەت بۆ پسووڵەکە ئامادە کرا.`;
+      `${Number(data?.row_count || rows.length)} بابەت بۆ کەشفی حیساب ئامادە کرا.`;
     statementBuilderResultEl.className = 'action-result ok';
   } catch (_) {
     periodStatementDocumentEl.hidden = true;
@@ -1466,8 +1466,8 @@ function safePdfFilename(value) {
 function periodPdfFilename() {
   const market = safePdfFilename(statementMarketNameEl?.textContent || 'ZHIROX');
   const customer = safePdfFilename(statementCustomerNameEl?.textContent || 'customer');
-  const fromDate = String(statementFromDateEl?.value || '').replaceAll('-', '');
-  const toDate = String(statementToDateEl?.value || '').replaceAll('-', '');
+  const fromDate = String(currentPeriodStatement?.from_date || '').replaceAll('-', '');
+  const toDate = String(currentPeriodStatement?.to_date || '').replaceAll('-', '');
   return `${market}-${customer}-statement-${fromDate || 'from'}-${toDate || 'to'}.pdf`;
 }
 
@@ -1578,7 +1578,7 @@ function buildPdfA4Page(data, pageRows, pageNumber, pageCount, includeTotals) {
   marketWrap.className = 'pdf-a4-market';
   const kicker = document.createElement('div');
   kicker.className = 'pdf-a4-kicker';
-  kicker.textContent = 'پسووڵەی ماوە';
+  kicker.textContent = 'کەشفی حیساب | ZHIROX VIP';
   const market = document.createElement('h1');
   market.textContent =
     String(data?.market_name || currentPortalData?.market_name || 'ZHIROX').trim() ||
@@ -1673,6 +1673,20 @@ function buildPdfA4Page(data, pageRows, pageNumber, pageCount, includeTotals) {
   return page;
 }
 
+function numberedStatementRows(rows){return rows.map((row,index)=>({...row,row_no:index+1}))}
+function paginateStatementRows(rows,fits,limit=18){
+  const pages=[];
+  let offset=0;
+  while(offset<rows.length){
+    let n=Math.min(limit,rows.length-offset);
+    while(n>0&&!fits(rows.slice(offset,offset+n),offset+n===rows.length))n--;
+    if(n>0){pages.push(rows.slice(offset,offset+n));offset+=n;continue;}
+    if(!fits(rows.slice(offset,offset+1),false))throw new Error('pdf_row_overflow');
+    pages.push(rows.slice(offset,offset+1));offset++;
+    if(offset===rows.length){if(!fits([],true))throw new Error('pdf_totals_overflow');pages.push([]);}
+  }
+  return pages;
+}
 function splitStatementRows(rows, rowsPerPage = 18) {
   const pages = [];
   for (let index = 0; index < rows.length; index += rowsPerPage) {
@@ -1689,14 +1703,12 @@ async function deliverPdfBlob(blob, filename) {
       if (navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: 'پسووڵەی ماوە',
+          title: 'کەشفی حیساب',
         });
         delivered = true;
       }
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        delivered = true;
-      }
+      if (error instanceof DOMException && error.name === 'AbortError') return false;
     }
   }
 
@@ -1712,13 +1724,14 @@ async function deliverPdfBlob(blob, filename) {
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
+  return true;
 }
 
 async function downloadPeriodStatementPdf() {
   const baseData = currentPeriodStatement;
-  const rows = Array.isArray(currentStatementVisibleRows)
+  const rows = numberedStatementRows(Array.isArray(currentStatementVisibleRows)
     ? currentStatementVisibleRows
-    : [];
+    : []);
   const data = baseData
     ? {
         ...baseData,
@@ -1729,7 +1742,7 @@ async function downloadPeriodStatementPdf() {
 
   if (!data || rows.length === 0) {
     statementBuilderResultEl.textContent =
-      'سەرەتا پسووڵەکە دروست بکە، پاشان PDF دروست بکە.';
+      'سەرەتا کەشفی حیساب دروست بکە.';
     statementBuilderResultEl.className = 'action-result err';
     return;
   }
@@ -1740,7 +1753,7 @@ async function downloadPeriodStatementPdf() {
     typeof window.jspdf.jsPDF !== 'function'
   ) {
     statementBuilderResultEl.textContent =
-      'PDF engine بار نەبووە؛ پەڕەکە Refresh بکە و دووبارە هەوڵ بدە.';
+      'ئامادەکەرەکەی PDF بار نەبووە؛ پەڕەکە نوێ بکەرەوە.';
     statementBuilderResultEl.className = 'action-result err';
     return;
   }
@@ -1757,7 +1770,15 @@ async function downloadPeriodStatementPdf() {
   document.body.appendChild(stage);
 
   try {
-    const pages = splitStatementRows(rows, 18);
+    if(document.fonts?.ready)await document.fonts.ready;
+    const fits=(pageRows,last)=>{
+      const probe=buildPdfA4Page(data,pageRows,1,1,last);
+      stage.replaceChildren(probe);
+      const footer=probe.querySelector('.pdf-a4-page-number').getBoundingClientRect();
+      const body=[...probe.children].filter(x=>!x.classList.contains('pdf-a4-page-number'));
+      return body.every(x=>x.getBoundingClientRect().bottom<=footer.top-12);
+    };
+    const pages=paginateStatementRows(rows,fits);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -1782,7 +1803,8 @@ async function downloadPeriodStatementPdf() {
       statementBuilderResultEl.className = 'action-result ok';
 
       await nextPaint();
-
+      const footer=page.querySelector('.pdf-a4-page-number').getBoundingClientRect();
+      if([...page.children].some(x=>!x.classList.contains('pdf-a4-page-number')&&x.getBoundingClientRect().bottom>footer.top-12))throw new Error('pdf_layout_overflow');
       const canvas = await window.html2canvas(page, {
         scale: Math.min(2, Math.max(1.5, window.devicePixelRatio || 2)),
         backgroundColor: '#ffffff',
@@ -1810,7 +1832,8 @@ async function downloadPeriodStatementPdf() {
       throw new Error('empty_pdf');
     }
 
-    await deliverPdfBlob(blob, periodPdfFilename());
+    const delivered=await deliverPdfBlob(blob, periodPdfFilename());
+    if(!delivered){statementBuilderResultEl.textContent='دابەزاندنی PDF هەڵوەشایەوە.';statementBuilderResultEl.className='action-result';return;}
 
     statementBuilderResultEl.textContent =
       `PDF ـەکە بە ${rows.length} بابەت و ${pages.length} پەڕە ئامادە کرا.`;
@@ -1819,7 +1842,7 @@ async function downloadPeriodStatementPdf() {
     const reason = error instanceof Error ? error.message : '';
     statementBuilderResultEl.textContent = reason.startsWith('blank_page_')
       ? 'یەکێک لە پەڕەکانی PDF بەتاڵ render بوو؛ فایلە بەتاڵەکە دروست نەکرا.'
-      : 'دروستکردنی PDF سەرکەوتوو نەبوو؛ تکایە دووبارە هەوڵ بدە.';
+      : reason.startsWith('pdf_') ? 'ناوەڕۆکی PDF لە پەڕەکە جێ نابێتەوە؛ تکایە ماوەکە کورتتر بکە.' : 'دروستکردنی PDF سەرکەوتوو نەبوو؛ تکایە دووبارە هەوڵ بدە.';
     statementBuilderResultEl.className = 'action-result err';
   } finally {
     stage.remove();
