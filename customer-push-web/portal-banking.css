@@ -20,3 +20,72 @@ html,body{max-width:100%;overflow-x:hidden}body{padding:max(12px,env(safe-area-i
 @media(min-width:760px){body{padding:24px 32px 40px}.portal-nav.app-tab-bar{position:sticky!important;top:0!important;bottom:auto!important;left:auto!important;right:auto!important;width:100%!important;border:1px solid var(--line)!important;border-radius:14px!important;padding:6px!important;margin:0 0 20px!important}.app-tab-bar .nav-item{flex-direction:row!important;gap:8px}.app-tab-bar .nav-item .tab-label{font-size:13px!important}.portal-view{gap:16px}#homeView .balance-card{padding:28px!important}}
 @media(max-width:360px){body{padding-inline:10px}.header-actions{gap:5px}.header-actions .icon-action{width:38px;height:38px;min-height:38px}.app-tab-bar .nav-item .tab-label{font-size:9px!important}.financial-details{padding:13px!important}.statement-toolbar{grid-template-columns:1fr!important}}
 }
+
+/* 20261128-3: unified compact customer-first visual system. */
+@media screen{
+:root{--bg:#f4f6f8;--surface:#fff;--text:#182d42;--muted:#647386;--line:#e0e6ec;--brand:#126d69;--brand-soft:#e6f3ef;--shadow:none}
+body{background:var(--bg);color:var(--text);padding-inline:16px}
+#portalShell{max-width:880px}
+#portalShell .portal-header{position:static!important;grid-template-columns:minmax(0,1fr) auto!important;background:transparent!important;border-bottom:0!important;padding:14px 0 12px!important;margin:0 0 16px!important;gap:8px}
+#portalShell .brand-lockup{display:flex!important;align-items:center;gap:9px!important;min-width:0}
+#portalShell .brand-mark{flex:0 0 38px;width:38px!important;height:38px!important;border-radius:11px!important;background:#18354b!important}
+#portalShell .brand-copy h1{font-size:clamp(14px,3.9vw,23px)!important;font-weight:800;line-height:1.45;letter-spacing:0}
+#portalShell .brand-copy .eyebrow{font-size:10px!important;color:var(--muted);margin:0 0 2px}
+#portalShell #customerGreeting{font-size:12px!important;line-height:1.5;margin:2px 0 0}
+#portalShell .header-actions{gap:6px!important}
+#portalShell .header-actions .icon-action{width:40px!important;min-width:40px;height:40px!important;min-height:40px!important;border-radius:12px!important}
+#portalShell .header-notification-badge{background:#b43340!important;border:2px solid white!important;font-size:10px!important;min-width:20px!important;line-height:16px}
+#portalShell .view-heading{min-height:0!important;margin:0 0 2px!important}
+#portalShell .view-heading h2{font-size:20px!important;font-weight:800;line-height:1.5}
+#portalShell .portal-view{gap:12px!important;animation:none!important}
+#homeView .balance-card{background:#18354b!important;border:0!important;border-radius:18px!important;padding:22px!important}
+#homeView .balance-topline{margin-bottom:16px!important}
+#homeView .balance-topline>span:first-child{font-size:14px!important}
+#homeView #primaryRemaining{font-size:clamp(28px,8vw,46px)!important;font-weight:800;line-height:1.25!important;font-variant-numeric:tabular-nums}
+#homeView .balance-status{font-size:10px!important;white-space:nowrap}
+#homeView .financial-details{padding:16px!important}
+#homeView .financial-details h3{font-weight:750;color:#263e53;font-size:14px!important}
+#homeView .financial-details .metric-card{min-height:49px!important;gap:10px}
+#homeView .financial-details .metric-card strong{font-size:16px!important}
+#homeView .financial-details .metric-card span{font-size:13px!important}
+#homeView .balance-details>summary{font-size:12px;min-height:36px}
+#portalShell .portal-nav.app-tab-bar{gap:1px!important;padding:5px 8px calc(5px + env(safe-area-inset-bottom))!important;background:#fff!important}
+#portalShell .app-tab-bar .nav-item{min-height:54px!important;border-radius:12px!important;gap:3px!important}
+#portalShell .app-tab-bar .nav-item .tab-label{font-size:10px!important;letter-spacing:0!important}
+#portalShell .app-tab-bar .nav-item.is-active{background:#e6f3ef!important;color:#126d69!important}
+#portalShell .app-tab-bar .nav-item .tab-icon{background:transparent!important;box-shadow:none!important;color:inherit!important}
+#transactionsView .statement-tools-panel,#statementView .period-builder-panel{padding:14px!important}
+#transactionsView .statement-panel{padding:4px 12px!important}
+#transactionsView .transaction-filters{gap:4px!important;flex-wrap:wrap!important}
+#transactionsView .filter-chip{flex:1 1 auto;min-height:38px!important;font-size:12px!important;border-radius:9px!important;box-shadow:none!important}
+#portalShell .transaction-search-wrap,#portalShell .period-search-wrap{min-width:0}
+#portalShell .primary-action,#portalShell .secondary-action,#portalShell .statement-print{border-radius:11px!important;box-shadow:none!important}
+#portalShell .primary-action{background:#126d69!important;color:white!important}
+#portalShell .period-presets{gap:5px!important}
+#portalShell .period-presets button{min-height:36px!important;flex:1 1 auto;font-size:12px!important}
+#portalShell .period-statement-summary{gap:6px!important}
+#portalShell .period-statement-tools{gap:7px!important;flex-wrap:wrap}
+#portalShell .period-table-wrap{overflow-x:auto;max-width:100%}
+#portalShell .period-statement-table{font-size:12px!important}
+#portalShell .period-statement-actions .period-pdf-action{min-height:44px!important}
+#portalShell #periodPdfHint:empty{display:none}
+#receiptsView .receipt-summary-strip{padding:13px!important}
+#receiptsView .receipt-history-card{border-radius:12px!important;box-shadow:none!important}
+#notificationsView .notification-history-panel{padding:12px!important}
+#notificationsView .notification-history-panel .section-heading{display:none}
+#notificationsView .notification-history-item{border-radius:12px!important;box-shadow:none!important}
+#notificationsView .notification-settings{padding:10px 14px!important}
+#notificationsView .preference-row{min-height:48px!important}
+#accountView .account-hero{border-radius:16px!important;padding:16px!important}
+#accountView .account-avatar{background:#e6f3ef!important;color:#126d69!important;box-shadow:none!important}
+#accountView .account-row{min-height:44px}
+#lockedState{margin:clamp(35px,12vh,115px) auto 0!important;max-width:430px;padding:28px 22px!important;text-align:center;border-radius:20px!important}
+#lockedState .state-icon{display:grid;place-items:center;margin:0 auto 16px;width:56px;height:56px;background:#e6f3ef!important;color:#126d69!important;border-radius:18px}
+#lockedState .state-icon svg{width:28px;height:28px}
+#lockedState .state-copy{font-size:14px;line-height:1.9}
+#lockedState .access-guide{background:transparent!important;border:0!important;padding:0!important}
+#lockedState .access-retry{width:100%;min-height:44px;border-radius:12px;background:#126d69;color:#fff}
+@media(max-width:375px){body{padding-inline:12px}#portalShell .brand-mark{flex-basis:32px;width:32px!important;height:32px!important}#portalShell .header-actions .icon-action{min-width:36px!important;width:36px!important;height:36px!important;min-height:36px!important}#portalShell .app-tab-bar .nav-item .tab-label{font-size:9px!important}}
+@media(min-width:760px){#portalShell .portal-header{padding:12px 0 18px!important}#portalShell .portal-nav.app-tab-bar{padding:6px!important}#portalShell .app-tab-bar .nav-item .tab-label{font-size:13px!important}#homeView .financial-details .metric-card strong{font-size:18px!important}}
+@media(prefers-reduced-motion:reduce){#portalShell *{animation:none!important;transition:none!important}}
+}

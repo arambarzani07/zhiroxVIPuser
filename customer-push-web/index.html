@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ku" dir="rtl">
+<html lang="ckb" dir="rtl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -13,11 +13,11 @@
   <title>ZHIROX Customer Portal</title>
   <script src="./manifest-bootstrap.js"></script>
   <noscript><link rel="manifest" href="./manifest.webmanifest"></noscript>
-  <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./portal-banking.css">
+  <link rel="stylesheet" href="./styles.css?v=20261128-3">
+  <link rel="stylesheet" href="./portal-banking.css?v=20261128-3">
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script defer src="./app.js"></script>
+  <script defer src="./app.js?v=20261128-3"></script>
 </head>
 <body>
   <main id="portalShell" class="portal-shell">
@@ -42,19 +42,11 @@
     <p id="status" class="sr-status" aria-live="polite">پشکنینی لینک...</p>
 
     <section id="lockedState" class="state-card" hidden>
-      <div class="state-icon" aria-hidden="true">!</div>
+      <div class="state-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
       <p class="eyebrow">پاراستنی هەژمار</p>
-      <h2>دەستگەیشتن بەردەست نییە</h2>
-      <p class="state-copy">ئەم لینکە بەردەست نییە یان ڕاگیراوە. تکایە QR ـێکی چالاک لە سوپەرمارکێتەکە وەربگرە.</p>
-      <div class="access-guide">
-        <h3>چۆن هەژمارەکەت ببینیت؟</h3>
-        <ol>
-          <li>لە ئاگادارکردنەوەی کڕیارەکەت لینکە تایبەتییەکە بکەرەوە.</li>
-          <li>یان QR ـی نوێ لە بەڕێوەبەری مارکێتەکەت وەربگرە.</li>
-          <li>ئەگەر لینکەکە لەکارکەوتووە، داوای لینکی نوێ بکە.</li>
-        </ol>
-        <button class="access-retry" type="button">دووبارە پشکنین</button>
-      </div>
+      <h2>بچۆرە هەژمارەکەت</h2>
+      <p class="state-copy">بۆ بینینی هەژمارەکەت، QR یان لینکی تایبەتی چالاک لە مارکێتەکەت بەکاربهێنە.</p>
+      <div class="access-guide"><button class="access-retry" type="button">دووبارە پشکنین</button></div>
     </section>
 
     <div id="portalApp" hidden>
@@ -77,9 +69,9 @@
       </nav>
 
       <section id="homeView" class="portal-view" aria-labelledby="homeHeading">
-        <div class="view-heading"><h2 id="homeHeading">پوختەی دارایی</h2><span class="portal-wordmark" dir="ltr">ZHIROX VIP</span></div>
+        <div class="view-heading"><h2 id="homeHeading">پوختەی دارایی</h2></div>
         <article class="balance-card"><div class="balance-topline"><span>قەرزی ماوە</span><span id="balanceUpdated" class="balance-status">—</span></div><strong id="primaryRemaining" dir="ltr">—</strong><span id="primaryCurrency" hidden>IQD</span><div id="otherBalances" class="other-balances" hidden></div></article>
-        <section class="panel financial-details"><h3>پوختەی مامەڵەکان</h3><div id="summaryMetrics" class="summary-grid"></div><details id="balanceDetails" class="balance-details" hidden><summary>وردەکاریی پارەدانەوە</summary><div id="paymentDetails"></div></details></section>
+        <section class="panel financial-details"><h3>کۆی مامەڵەکان</h3><div id="summaryMetrics" class="summary-grid"></div><details id="balanceDetails" class="balance-details" hidden><summary>وردەکاریی پارەدانەوە</summary><div id="paymentDetails"></div></details></section>
         <section id="debtLimitCard" class="panel debt-limit-panel" hidden><p class="eyebrow">سنووری قەرز</p><h2 id="debtLimitTitle">—</h2><p id="debtLimitMeta" class="muted"></p><div class="vip-limit-track"><div id="debtLimitProgress"></div></div></section>
         <section id="schedulePanel" class="panel payment-timeline-panel" hidden><h2>بەرواری دانەوە</h2><div id="scheduleStats" class="summary-grid"></div><div id="paymentTimeline" class="payment-timeline"></div></section>
       </section>
@@ -157,7 +149,7 @@
         <article id="periodStatementDocument" class="period-statement-document" hidden>
           <header class="period-statement-head">
             <div>
-              <p class="period-statement-kicker">پسووڵەی ماوە</p>
+              <p class="period-statement-kicker">کەشفی حیساب</p>
               <h2 id="statementMarketName">ZHIROX</h2>
               <p id="statementMarketMeta" class="period-statement-market-meta"></p>
             </div>
@@ -168,7 +160,7 @@
             </div>
           </header>
 
-          <div class="period-statement-summary" aria-label="پوختەی پسووڵە">
+          <div class="period-statement-summary" aria-label="پوختەی کەشفی حیساب">
             <div><span>ژمارەی بابەت</span><strong id="statementItemCount">0</strong></div>
             <div><span>ژمارەی ڕۆژ</span><strong id="statementDayCount">0</strong></div>
             <div><span>ژمارەی دراو</span><strong id="statementCurrencyCount">0</strong></div>
@@ -215,10 +207,9 @@
               <span class="period-pdf-icon" aria-hidden="true">PDF</span>
               <span>
                 <strong>PDF / چاپ</strong>
-                <small>پیشاندان و Save PDF</small>
               </span>
             </button>
-            <p id="periodPdfHint" class="period-pdf-hint">لە iPhone: دوگمەکە PDF ـی ڕاستەقینە دروست دەکات و Share / Save to Files دەکات.</p>
+            <p id="periodPdfHint" class="period-pdf-hint"></p>
           </div>
         </article>
       </section>
@@ -246,7 +237,16 @@
             <h2 id="notificationsHeading">ئاگادارکردنەوەکان</h2>
           </div>
         </div>
-        <details id="notificationSettings" class="notification-settings"><summary>ڕێکخستنی ئاگادارکردنەوە</summary><article class="notification-card">
+        <section class="panel notification-history-panel">
+          <div class="section-heading">
+            <div>
+              
+              <h2 class="sr-only">مێژووی ئاگاداری</h2>
+            </div>
+            
+          </div>
+          <div id="notificationHistory" class="notification-history" aria-live="polite"></div>
+        </section><details id="notificationSettings" class="notification-settings"><summary>ڕێکخستنی ئاگادارکردنەوە</summary><article class="notification-card">
           <div class="notification-header">
             <div class="notification-dot" aria-hidden="true"></div>
             <div>
@@ -289,20 +289,11 @@
               <input id="prefManualMessages" type="checkbox" checked>
             </label>
           </div>
-          <input id="prefInstallmentReminders" type="checkbox" hidden><button id="saveNotificationPreferences" class="secondary-action" type="button">پاشەکەوتکردنی هەڵبژاردەکان</button>
+          <label class="preference-row"><span><strong>یادخستنەوەی قیستەکان</strong></span><input id="prefInstallmentReminders" type="checkbox"></label><button id="saveNotificationPreferences" class="secondary-action" type="button">پاشەکەوتکردنی هەڵبژاردەکان</button>
           <p id="preferenceResult" class="action-result" aria-live="polite"></p>
         </section>
 
-        </details><section class="panel notification-history-panel">
-          <div class="section-heading">
-            <div>
-              
-              <h2>مێژووی ئاگاداری</h2>
-            </div>
-            
-          </div>
-          <div id="notificationHistory" class="notification-history" aria-live="polite"></div>
-        </section>
+        </details>
 
         </section>
 
@@ -374,7 +365,7 @@
         </div>
         <p id="receiptFooter" class="receipt-footer"></p>
         <div class="receipt-actions">
-          <button id="receiptPrint" class="secondary-action" type="button">Print / Save PDF</button>
+          <button id="receiptPrint" class="secondary-action" type="button">PDF / چاپ</button>
           <button class="primary-action" value="default">داخستن</button>
         </div>
       </form>
