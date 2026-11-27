@@ -1121,12 +1121,24 @@ async function focusTransaction(eventId) {
   return false;
 }
 
-async function loadNotificationHistory() {
-  const credentials = portalCredentials(0, 'notifications');
-  if (!credentials) return;
+let pendingNotificationHistory=null;
+function mayReuseHistoryRequest(pending,scope){return !!pending&&pending.scope===scope}
+function loadNotificationHistory(){
+  const credentials=portalCredentials(0,'notifications');
+  if(!credentials)return Promise.resolve();
+  // Only deduplicate an outstanding read; never persist or cache financial data.
+  const scope=JSON.stringify(credentials);
+  if(mayReuseHistoryRequest(pendingNotificationHistory,scope))return pendingNotificationHistory.promise;
+  const request={scope,promise:null};
+  request.promise=loadNotificationHistoryImpl(credentials).finally(()=>{if(pendingNotificationHistory===request)pendingNotificationHistory=null;});
+  pendingNotificationHistory=request;
+  return request.promise;
+}
+async function loadNotificationHistoryImpl(credentials) {
 
   try {
     const data = await api({ ...credentials, limit: 50 });
+    if(portalAppEl.hidden||JSON.stringify(portalCredentials(0,'notifications'))!==JSON.stringify(credentials))return;
     currentNotificationItems = (Array.isArray(data.items) ? data.items : [])
       .filter((item) => item?.event_type !== 'installment_reminder');
     renderNotificationHistory(currentNotificationItems);
@@ -1992,13 +2004,9 @@ function configureNotificationExperience(data) {
 }
 
 async function initialize() {
-  activeToken = resolveLinkToken();
-  if (!activeToken && !portalCredentials()) {
-    showLockedPortal();
-    return;
-  }
-
   try {
+    activeToken=resolveLinkToken();
+    if(!activeToken&&!portalCredentials()){showLockedPortal();return;}
     const data = await loadPortal();
     initializeStatementDates();
     configureNotificationExperience(data);
@@ -2228,4 +2236,15 @@ if(themeMedia.addEventListener)themeMedia.addEventListener('change',applyPortalT
 applyPortalTheme();
 window.setInterval(()=>void refreshDashboardIfDue(),30000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void refreshDashboardIfDue();});
+function shouldRevalidateRestoredPage(event,masked){return event?.persisted===true||masked===true}
+window.addEventListener('pagehide',event=>{
+  if(event.persisted)document.documentElement.classList.add('portal-restoring');
+});
+window.addEventListener('pageshow',event=>{
+  if(!shouldRevalidateRestoredPage(event,document.documentElement.classList.contains('portal-restoring')))return;
+  document.documentElement.classList.add('portal-restoring');
+  // A BFCache restore can bypass network and HTTP cache-control. Reload and
+  // revalidate the current portal credential before showing personal details.
+  window.location.reload();
+});
 initialize();

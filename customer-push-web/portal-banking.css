@@ -182,3 +182,6 @@ body.printing-receipt .receipt-item{break-inside:avoid;page-break-inside:avoid}
 .activity-line meter{appearance:none;-webkit-appearance:none;width:100%;height:8px;background:var(--line);border:0;border-radius:5px;direction:rtl}.activity-line meter::-webkit-meter-bar{background:var(--line);border:0;border-radius:5px}.activity-line.debt meter::-webkit-meter-optimum-value{background:#52708c}.activity-line.payment meter::-webkit-meter-optimum-value{background:#24947f}.activity-line.debt meter::-moz-meter-bar{background:#52708c}.activity-line.payment meter::-moz-meter-bar{background:#24947f}
 html[data-portal-theme=dark] .repayment-progress-row progress::-webkit-progress-value{background:#7dd4c6}html[data-portal-theme=dark] .repayment-progress-row progress::-moz-progress-bar{background:#7dd4c6}
 }
+
+/* v9: never show a restored financial page before revalidation. */
+html.portal-restoring body{visibility:hidden!important}
