@@ -1,0 +1,55 @@
+name: VIP database migration preflight
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/vip-migration-preflight.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vip-migration-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_URL: ${{ secrets.ZHIROX_BACKUP_DB_URL }}
+      TARGET_URL: ${{ secrets.ZHIROX_TARGET_DB_URL }}
+    steps:
+      - name: Validate endpoints without exposing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit, unquote
+          for label, ref in [('SOURCE','madoflmbretqghqbqaak'),('TARGET','ryzgbajgjctmliwhvezo')]:
+              try:
+                  u = urlsplit(os.environ[label+'_URL'])
+                  assert u.scheme in ('postgres','postgresql')
+                  assert u.port == 5432 and u.path == '/postgres' and u.password
+                  assert (u.hostname == 'db.'+ref+'.supabase.co' and unquote(u.username or '') == 'postgres') or (u.hostname.endswith('.pooler.supabase.com') and unquote(u.username or '') == 'postgres.'+ref)
+              except Exception:
+                  raise SystemExit(label+' URL missing or incorrect project/connection method')
+              print(label+' project reference validated')
+          PY
+      - name: Read-only connection and inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull postgres:17 >/dev/null
+          psql_ro() {
+            docker run --rm --network host -e SOURCE_URL -e TARGET_URL -e PGSSLMODE=require -e PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=120000' postgres:17 sh -c 'case "$1" in source) url="$SOURCE_URL";; target) url="$TARGET_URL";; *) exit 2;; esac; psql -X -v ON_ERROR_STOP=1 -At -d "$url" -c "$2"' sh "$1" "$2"
+          }
+          echo "SOURCE inventory:"
+          psql_ro source "SELECT json_build_object('auth_users',(SELECT count(*) FROM auth.users),'profiles',(SELECT count(*) FROM public.profiles),'debts',(SELECT count(*) FROM public.debts),'payments',(SELECT count(*) FROM public.payments),'general_payments',(SELECT count(*) FROM public.customer_general_payments),'receipt_files',(SELECT count(*) FROM storage.objects WHERE bucket_id='receipts'),'excluded_video_files',(SELECT count(*) FROM storage.objects WHERE bucket_id='transaction-camera-clips'));"
+          echo "TARGET emptiness check:"
+          psql_ro target "SELECT json_build_object('auth_users',(SELECT count(*) FROM auth.users),'app_tables',(SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('public','private') AND table_type='BASE TABLE'),'storage_objects',(SELECT count(*) FROM storage.objects));"
+          test "$(psql_ro target "SELECT CASE WHEN (SELECT count(*) FROM auth.users)=0 AND (SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('public','private') AND table_type='BASE TABLE')=0 AND (SELECT count(*) FROM storage.objects)=0 THEN 'empty' ELSE 'NOT EMPTY' END")" = empty
+          echo "SOURCE extension names:"
+          psql_ro source "SELECT extname FROM pg_extension ORDER BY extname;"
+          echo "TARGET extension names:"
+          psql_ro target "SELECT extname FROM pg_extension ORDER BY extname;"
+          echo "Preflight passed. No database writes or data artifacts created."
