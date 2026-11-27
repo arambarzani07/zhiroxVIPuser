@@ -14,6 +14,7 @@
   <script src="./manifest-bootstrap.js"></script>
   <noscript><link rel="manifest" href="./manifest.webmanifest"></noscript>
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./portal-banking.css">
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script defer src="./app.js"></script>
@@ -29,8 +30,7 @@
           <p id="customerGreeting" class="muted">بارکردنی زانیاریی هەژمار...</p>
         </div>
       </div>
-      <div class="header-actions">
-        <div id="accountBadge" class="status-badge" role="status">پشکنین...</div>
+      <div class="header-actions" id="portalHeaderActions" hidden>
         <button id="notificationsTab" class="icon-action header-notification-action" type="button" data-portal-tab="notifications" aria-controls="notificationsView" aria-label="ئاگادارکردنەوەکان" title="ئاگادارکردنەوەکان">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9.5a6 6 0 0 0-12 0c0 6-2.5 6.5-2.5 6.5h17S18 15.5 18 9.5Z"/><path d="M9.5 19.5a2.8 2.8 0 0 0 5 0"/></svg>
           <span id="notificationUnreadBadge" class="header-notification-badge" hidden>0</span>
@@ -77,68 +77,16 @@
       </nav>
 
       <section id="homeView" class="portal-view" aria-labelledby="homeHeading">
-        <div class="view-heading">
-          <div>
-            <p class="eyebrow">پوختەی هەژمار</p>
-            <h2 id="homeHeading">دۆخی دارایی</h2>
-          </div>
-          <span class="powered-by">Powered by ZHIROX</span>
-        </div>
-
-        <article class="balance-card">
-          <div class="balance-topline">
-            <span>قەرزی ماوە</span>
-            <span class="balance-status">نوێکراوە</span>
-          </div>
-          <strong id="primaryRemaining">0 IQD</strong>
-          <span id="primaryCurrency" class="balance-caption">IQD</span>
-          <div class="balance-breakdown">
-            <div>
-              <span>قەرزی مامەڵەکان</span>
-              <b id="grossRemaining">0 IQD</b>
-            </div>
-            <div>
-              <span>پارەدانەوەی گشتی</span>
-              <b id="generalPaid">0 IQD</b>
-            </div>
-          </div>
-        </article>
-
-        <div id="summaryMetrics" class="summary-grid"></div>
-
-        <section class="panel quick-actions-panel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">کرداری خێرا</p>
-              <h2>خزمەتگوزارییەکان</h2>
-            </div>
-            <span id="lastUpdatedLabel" class="last-updated">—</span>
-          </div>
-          <div class="quick-action-grid">
-            <button id="quickTransactions" class="quick-action" type="button"><span aria-hidden="true">↔</span><strong>مامەڵەکان</strong><small>قەرز و پارەدان</small></button>
-            <button id="quickStatement" class="quick-action" type="button"><span aria-hidden="true">▤</span><strong>کەشفی حیساب</strong><small>هەڵبژاردنی ماوە</small></button>
-            <button id="quickReceipts" class="quick-action" type="button"><span aria-hidden="true">✓</span><strong>پسووڵەکان</strong><small>پسووڵەی دیجیتاڵ</small></button>
-            <button id="quickRefresh" class="quick-action" type="button"><span aria-hidden="true">↻</span><strong>نوێکردنەوە</strong><small>داتای تازە</small></button>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">دوایین چالاکی</p>
-              <h2>مامەڵە نوێیەکان</h2>
-            </div>
-            <button id="openTransactions" class="text-action" type="button">هەمووی ببینە</button>
-          </div>
-          <div id="recentLedger" class="ledger compact-ledger"></div>
-        </section>
+        <div class="view-heading"><h2 id="homeHeading">پوختەی دارایی</h2><span class="portal-wordmark" dir="ltr">ZHIROX VIP</span></div>
+        <article class="balance-card"><div class="balance-topline"><span>قەرزی ماوە</span><span id="balanceUpdated" class="balance-status">—</span></div><strong id="primaryRemaining" dir="ltr">—</strong><span id="primaryCurrency" hidden>IQD</span><div id="otherBalances" class="other-balances" hidden></div></article>
+        <section class="panel financial-details"><h3>پوختەی مامەڵەکان</h3><div id="summaryMetrics" class="summary-grid"></div><details id="balanceDetails" class="balance-details" hidden><summary>وردەکاریی پارەدانەوە</summary><div id="paymentDetails"></div></details></section>
+        <section id="debtLimitCard" class="panel debt-limit-panel" hidden><p class="eyebrow">سنووری قەرز</p><h2 id="debtLimitTitle">—</h2><p id="debtLimitMeta" class="muted"></p><div class="vip-limit-track"><div id="debtLimitProgress"></div></div></section>
+        <section id="schedulePanel" class="panel payment-timeline-panel" hidden><h2>بەرواری دانەوە</h2><div id="scheduleStats" class="summary-grid"></div><div id="paymentTimeline" class="payment-timeline"></div></section>
       </section>
-
       <section id="transactionsView" class="portal-view" aria-labelledby="transactionsHeading" hidden>
         <div class="view-heading">
           <div>
-            <p class="eyebrow">کەشفی حیساب</p>
-            <h2 id="transactionsHeading">قەرز و پارەدانەکان</h2>
+            <h2 id="transactionsHeading">مامەڵەکان</h2>
           </div>
         </div>
         <section class="panel statement-tools-panel">
@@ -147,7 +95,7 @@
               <span class="sr-only">گەڕان لە مامەڵەکان</span>
               <input id="transactionSearch" type="search" inputmode="search" autocomplete="off" placeholder="گەڕان بە بڕ، تێبینی، بەروار...">
             </label>
-            <button id="printStatement" class="statement-print" type="button">Print / PDF</button>
+            <button id="printStatement" class="statement-print" type="button">چاپی لیست</button>
           </div>
           <div class="transaction-filters" role="group" aria-label="فلتەری مامەڵەکان">
             <button type="button" class="filter-chip is-active" data-transaction-filter="all">هەموو</button>
@@ -169,7 +117,6 @@
       <section id="statementView" class="portal-view statement-view" aria-labelledby="statementHeading" hidden>
         <div class="view-heading">
           <div>
-            <p class="eyebrow">پسووڵەی ماوە</p>
             <h2 id="statementHeading">کەشفی حیساب</h2>
           </div>
         </div>
@@ -177,8 +124,7 @@
         <section class="panel period-builder-panel">
           <div class="period-builder-head">
             <div>
-              <strong>ماوەکە دیاری بکە</strong>
-              <small>هەموو بابەتەکانی ئەو ماوەیە لە یەک پسووڵەدا کۆدەکرێنەوە.</small>
+              <strong>ماوەی ڕاپۆرت</strong>
             </div>
           </div>
           <div class="period-date-grid">
@@ -204,7 +150,7 @@
             <button type="button" data-statement-preset="year">ئەم ساڵە</button>
             <button type="button" data-statement-preset="all">هەموو</button>
           </div>
-          <button id="generatePeriodStatement" class="primary-action period-generate" type="button">دروستکردنی پسووڵە</button>
+          <button id="generatePeriodStatement" class="primary-action period-generate" type="button">دروستکردنی کەشفی حیساب</button>
           <p id="statementBuilderResult" class="action-result" aria-live="polite"></p>
         </section>
 
@@ -280,10 +226,9 @@
       <section id="receiptsView" class="portal-view" aria-labelledby="receiptsHeading" hidden>
         <div class="view-heading">
           <div>
-            <p class="eyebrow">پسووڵەی دیجیتاڵ</p>
             <h2 id="receiptsHeading">پسووڵەکان</h2>
           </div>
-          <button id="receiptsRefresh" class="text-action" type="button">نوێکردنەوە</button>
+          
         </div>
         <section class="receipt-summary-strip">
           <div><span>کۆی پسووڵە</span><strong id="receiptCount">0</strong></div>
@@ -297,11 +242,11 @@
       <section id="notificationsView" class="portal-view" aria-labelledby="notificationsHeading" hidden>
         <div class="view-heading">
           <div>
-            <p class="eyebrow">Web Push</p>
+            
             <h2 id="notificationsHeading">ئاگادارکردنەوەکان</h2>
           </div>
         </div>
-        <article class="notification-card">
+        <details id="notificationSettings" class="notification-settings"><summary>ڕێکخستنی ئاگادارکردنەوە</summary><article class="notification-card">
           <div class="notification-header">
             <div class="notification-dot" aria-hidden="true"></div>
             <div>
@@ -309,7 +254,7 @@
               <div id="notificationState" class="notification-state">پشکنین...</div>
             </div>
           </div>
-          <p class="notification-copy">ئاگادارکردنەوەکانی قەرز، پارەدان و پەیامی بەڕێوەبەر بە ناوی سوپەرمارکێتەکەت دەنێردرێن.</p>
+          
           <button id="enable" class="primary-action" type="button" hidden>چالاککردنی ئاگادارکردنەوە</button>
           <button id="showIosHelp" class="secondary-action" type="button" hidden>ڕێنمایی iPhone / iPad</button>
           <p id="result" class="action-result" aria-live="polite"></p>
@@ -344,27 +289,22 @@
               <input id="prefManualMessages" type="checkbox" checked>
             </label>
           </div>
-          <button id="saveNotificationPreferences" class="secondary-action" type="button">پاشەکەوتکردنی هەڵبژاردەکان</button>
+          <input id="prefInstallmentReminders" type="checkbox" hidden><button id="saveNotificationPreferences" class="secondary-action" type="button">پاشەکەوتکردنی هەڵبژاردەکان</button>
           <p id="preferenceResult" class="action-result" aria-live="polite"></p>
         </section>
 
-        <section class="panel notification-history-panel">
+        </details><section class="panel notification-history-panel">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">مێژوو</p>
-              <h2>ئاگادارکردنەوە نێردراوەکان</h2>
+              
+              <h2>مێژووی ئاگاداری</h2>
             </div>
-            <button id="notificationHistoryRefresh" class="text-action" type="button">نوێکردنەوە</button>
+            
           </div>
           <div id="notificationHistory" class="notification-history" aria-live="polite"></div>
         </section>
 
-        <section class="panel privacy-panel">
-          <p class="eyebrow">پاراستن</p>
-          <h2>زانیاریی هەژمارەکەت پارێزراوە</h2>
-          <p>لینک و ناسنامەی ئامێر لە پۆرتالەکەدا پیشان نادرێن. بەڕێوەبەر دەتوانێت دەستگەیشتن ڕابگرێت.</p>
         </section>
-      </section>
 
       <section id="accountView" class="portal-view" aria-labelledby="accountHeading" hidden>
         <div class="view-heading">
@@ -379,7 +319,7 @@
           <div class="account-identity">
             <span class="account-caption">کڕیار</span>
             <strong id="accountCustomerName">—</strong>
-            <small id="accountCustomerPhone">—</small>
+            <small id="accountCustomerPhone">—</small><span id="accountBadge" class="status-badge" role="status">—</span>
           </div>
         </section>
 
@@ -392,27 +332,10 @@
           </div>
           <div class="account-row"><span>ژمارەی مۆبایل</span><strong id="accountMarketPhone">—</strong></div>
           <div class="account-row"><span>ناونیشان</span><strong id="accountMarketAddress">—</strong></div>
-          <div class="account-row"><span>دۆخی هەژمار</span><strong class="account-ok">چالاک</strong></div>
+          
         </section>
 
-        <section class="panel account-security-panel">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">پاراستن</p>
-              <h2>دەستگەیشتن و ئاگاداری</h2>
-            </div>
-          </div>
-          <button id="accountNotifications" class="account-action" type="button">
-            <span><strong>ڕێکخستنی ئاگادارکردنەوە</strong><small>Reminder، monthly statement و پەیامی مارکێت</small></span>
-            <b aria-hidden="true">‹</b>
-          </button>
-          <button id="accountRefresh" class="account-action" type="button">
-            <span><strong>نوێکردنەوەی داتا</strong><small>دۆخی هەژمار و مامەڵەکان تازە بکەرەوە</small></span>
-            <b aria-hidden="true">↻</b>
-          </button>
-        </section>
-
-        <p class="account-footnote">داتای دارایی لەم پۆرتالە تەنها بۆ بینینە؛ دەستکاری قەرز و پارەدانەوە لەلایەن مارکێتەوە ئەنجام دەدرێت.</p>
+        <p class="account-footnote">زانیاریی دارایی تەنها بۆ بینینە. بۆ گۆڕانکاری لە قەرز و پارەدانەوە پەیوەندی بە مارکێتەکەت بکە.</p>
       </section>
 
     </div>

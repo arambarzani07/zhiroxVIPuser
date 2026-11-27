@@ -20,32 +20,17 @@ const accountBadgeEl = document.getElementById('accountBadge');
 const headerRefreshButton = document.getElementById('headerRefresh');
 const primaryRemainingEl = document.getElementById('primaryRemaining');
 const primaryCurrencyEl = document.getElementById('primaryCurrency');
-const grossRemainingEl = document.getElementById('grossRemaining');
-const generalPaidEl = document.getElementById('generalPaid');
 const summaryMetricsEl = document.getElementById('summaryMetrics');
 const scheduleStatsEl = document.getElementById('scheduleStats');
 const paymentTimelineEl = document.getElementById('paymentTimeline');
-const openDueTransactionsButton = document.getElementById('openDueTransactions');
-const dueInsightCardEl = document.getElementById('dueInsightCard');
-const dueInsightTitleEl = document.getElementById('dueInsightTitle');
-const dueInsightMetaEl = document.getElementById('dueInsightMeta');
 const debtLimitCardEl = document.getElementById('debtLimitCard');
 const debtLimitTitleEl = document.getElementById('debtLimitTitle');
 const debtLimitMetaEl = document.getElementById('debtLimitMeta');
 const debtLimitProgressEl = document.getElementById('debtLimitProgress');
-const lastUpdatedLabelEl = document.getElementById('lastUpdatedLabel');
-const quickTransactionsButton = document.getElementById('quickTransactions');
-const quickStatementButton = document.getElementById('quickStatement');
-const quickReceiptsButton = document.getElementById('quickReceipts');
-const quickNotificationsButton = document.getElementById('quickNotifications');
-const quickPrintButton = document.getElementById('quickPrint');
-const quickRefreshButton = document.getElementById('quickRefresh');
-const recentLedgerEl = document.getElementById('recentLedger');
 const ledgerEl = document.getElementById('ledger');
 const loadMoreButton = document.getElementById('loadMore');
 const notificationStateEl = document.getElementById('notificationState');
 const notificationHistoryEl = document.getElementById('notificationHistory');
-const notificationHistoryRefreshButton = document.getElementById('notificationHistoryRefresh');
 const notificationUnreadBadgeEl = document.getElementById('notificationUnreadBadge');
 const prefDueRemindersEl = document.getElementById('prefDueReminders');
 const prefInstallmentRemindersEl = document.getElementById('prefInstallmentReminders');
@@ -72,7 +57,6 @@ const receiptItemsSectionEl = document.getElementById('receiptItemsSection');
 const receiptItemsEl = document.getElementById('receiptItems');
 const receiptFooterEl = document.getElementById('receiptFooter');
 const receiptPrintButton = document.getElementById('receiptPrint');
-const openTransactionsButton = document.getElementById('openTransactions');
 const transactionSearchEl = document.getElementById('transactionSearch');
 const transactionFilterButtons = [...document.querySelectorAll('[data-transaction-filter]')];
 const transactionResultCountEl = document.getElementById('transactionResultCount');
@@ -85,7 +69,6 @@ const receiptsTab = document.getElementById('receiptsTab');
 const notificationsTab = document.getElementById('notificationsTab');
 const accountTab = document.getElementById('accountTab');
 const receiptHistoryEl = document.getElementById('receiptHistory');
-const receiptsRefreshButton = document.getElementById('receiptsRefresh');
 const receiptCountEl = document.getElementById('receiptCount');
 const latestReceiptDateEl = document.getElementById('latestReceiptDate');
 const accountCustomerNameEl = document.getElementById('accountCustomerName');
@@ -93,8 +76,6 @@ const accountCustomerPhoneEl = document.getElementById('accountCustomerPhone');
 const accountMarketNameEl = document.getElementById('accountMarketName');
 const accountMarketPhoneEl = document.getElementById('accountMarketPhone');
 const accountMarketAddressEl = document.getElementById('accountMarketAddress');
-const accountNotificationsButton = document.getElementById('accountNotifications');
-const accountRefreshButton = document.getElementById('accountRefresh');
 const statementFromDateEl = document.getElementById('statementFromDate');
 const statementToDateEl = document.getElementById('statementToDate');
 const statementFromDisplayEl = document.getElementById('statementFromDisplay');
@@ -171,7 +152,6 @@ notificationsTab.addEventListener('click', () => {
   void loadNotificationPreferences();
 });
 accountTab.addEventListener('click', () => setActiveView('account'));
-openTransactionsButton.addEventListener('click', () => setActiveView('transactions'));
 
 function isIos() {
   const ua = navigator.userAgent || '';
@@ -333,15 +313,6 @@ function metric(label, value, currency) {
   return card;
 }
 
-function renderBalanceBreakdown(data) {
-  const gross = data?.gross_remaining_iqd != null
-    ? number(data.gross_remaining_iqd)
-    : number(data?.effective_remaining_iqd) + number(data?.general_paid_iqd);
-  const generalPaid = number(data?.general_paid_iqd);
-  if (grossRemainingEl) grossRemainingEl.textContent = money(gross, 'IQD');
-  if (generalPaidEl) generalPaidEl.textContent = money(generalPaid, 'IQD');
-}
-
 function scheduleStat(label, value, tone = '') {
   const card = document.createElement('div');
   card.className = `schedule-stat${tone ? ` is-${tone}` : ''}`;
@@ -446,32 +417,19 @@ function renderPaymentTimeline(data) {
 }
 
 function renderSummaryMetrics(data) {
-  const totals = data?.totals;
-  summaryMetricsEl.replaceChildren();
-  if (!Array.isArray(totals) || totals.length === 0) {
-    summaryMetricsEl.append(
-      metric('کۆی قەرز', 0, 'IQD'),
-      metric('کۆی پارەدان', 0, 'IQD'),
-    );
-  } else {
-    for (const item of totals) {
-      const currency = typeof item.currency === 'string' ? item.currency : 'IQD';
-      summaryMetricsEl.append(
-        metric(`کۆی قەرز — ${currency}`, item.total_debt, currency),
-        metric(`پارەدانەوەی مامەڵە — ${currency}`, item.paid, currency),
-      );
-      if (totals.length > 1) {
-        summaryMetricsEl.append(metric(`قەرزی مامەڵەکان — ${currency}`, item.remaining, currency));
-      }
-    }
-  }
-
-  if (number(data?.general_paid_iqd) > 0) {
-    summaryMetricsEl.append(
-      metric('پارەدانەوەی گشتی', data.general_paid_iqd, 'IQD'),
-      metric('کۆی گشتی ماوە', data.effective_remaining_iqd, 'IQD'),
-    );
-  }
+ const totals=Array.isArray(data?.totals)?data.totals:[];
+ const primary=primaryCurrencyEl.textContent.trim()||'IQD';
+ const other=document.getElementById('otherBalances'),details=document.getElementById('balanceDetails'),paymentDetails=document.getElementById('paymentDetails');
+ summaryMetricsEl.replaceChildren();other.replaceChildren();paymentDetails.replaceChildren();
+ for(const item of totals.length?totals:[{currency:primary,total_debt:0,paid:0,remaining:0}]){
+  const currency=String(item.currency||'IQD').toUpperCase(),direct=number(item.paid),general=currency==='IQD'?number(data?.general_paid_iqd):0;
+  summaryMetricsEl.append(metric('کۆی قەرز',item.total_debt,currency),metric('کۆی پارەدانەوە',direct+general,currency));
+  if(currency!==primary)other.append(metric('قەرزی ماوە',item.remaining,currency));
+  if(general!==0&&direct!==0)paymentDetails.append(metric('پارەدانەوەی مامەڵە',direct,currency),metric('پارەدانەوەی گشتی',general,currency));
+  if(currency==='IQD'&&general!==0&&data?.gross_remaining_iqd!=null&&number(data.gross_remaining_iqd)!==number(item.total_debt)&&number(data.gross_remaining_iqd)!==number(data.effective_remaining_iqd))paymentDetails.append(metric('ماوە پێش پارەدانەوەی گشتی',data.gross_remaining_iqd,currency));
+ }
+ other.hidden=!other.children.length;details.hidden=!paymentDetails.children.length;
+ const date=new Date(data?.as_of||Date.now());document.getElementById('balanceUpdated').textContent=Number.isNaN(date.getTime())?'نوێکراوە':'نوێکراوە '+date.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 }
 
 function formatShortDate(value) {
@@ -485,80 +443,10 @@ function formatShortDate(value) {
 }
 
 function renderAccountInsights(data) {
-  const due = data?.due_summary && typeof data.due_summary === 'object'
-    ? data.due_summary
-    : {};
-  const overdueCount = number(due.overdue_count);
-  const dueToday = number(due.due_today_count);
-  const nextDue = due.next_due && typeof due.next_due === 'object'
-    ? due.next_due
-    : null;
-  const oldestOverdue = due.oldest_overdue && typeof due.oldest_overdue === 'object'
-    ? due.oldest_overdue
-    : null;
-
-  dueInsightCardEl?.classList.remove('is-danger', 'is-warning', 'is-ok');
-  if (overdueCount > 0) {
-    dueInsightCardEl?.classList.add('is-danger');
-    dueInsightTitleEl.textContent = `${overdueCount} دانە دواکەوتوو`;
-    const pieces = [];
-    if (number(due.overdue_iqd) > 0) pieces.push(money(due.overdue_iqd, 'IQD'));
-    if (number(due.overdue_usd) > 0) pieces.push(money(due.overdue_usd, 'USD'));
-    if (oldestOverdue?.days_overdue != null) {
-      pieces.push(`کۆنترین: ${number(oldestOverdue.days_overdue)} ڕۆژ`);
-    }
-    dueInsightMetaEl.textContent = pieces.join(' • ') || 'پێویستی بە پارەدانەوە هەیە';
-  } else if (dueToday > 0) {
-    dueInsightCardEl?.classList.add('is-warning');
-    dueInsightTitleEl.textContent = 'دانەوەی ئەمڕۆ';
-    dueInsightMetaEl.textContent = nextDue
-      ? `${money(nextDue.amount, nextDue.currency)} • ${nextDue.kind === 'installment' ? 'قسط' : 'قەرز'}`
-      : 'بەرواری دانەوە گەیشتووە';
-  } else if (nextDue) {
-    dueInsightCardEl?.classList.add('is-ok');
-    const days = number(nextDue.days_until_due);
-    const kind = nextDue.kind === 'installment'
-      ? `قسط${nextDue.installment_no ? `ی ${nextDue.installment_no}` : ''}`
-      : 'قەرز';
-    dueInsightTitleEl.textContent = days === 1
-      ? 'سبەی دانەوەیە'
-      : `${days} ڕۆژ ماوە`;
-    dueInsightMetaEl.textContent =
-      `${kind} • ${money(nextDue.amount, nextDue.currency)} • ${formatShortDate(nextDue.due_date)}`;
-  } else {
-    dueInsightCardEl?.classList.add('is-ok');
-    dueInsightTitleEl.textContent = 'هیچ دانەوەیەکی نزیک نییە';
-    dueInsightMetaEl.textContent = 'هەژمارەکەت لە ڕووی بەرواری دانەوە ئارامە';
-  }
-
-  const limit = number(data?.debt_limit);
-  const iqdTotal = Array.isArray(data?.totals)
-    ? data.totals.find((item) => String(item?.currency || '').toUpperCase() !== 'USD')
-    : null;
-  if (limit > 0 && debtLimitCardEl) {
-    const remaining = data?.effective_remaining_iqd != null
-      ? number(data.effective_remaining_iqd)
-      : number(iqdTotal?.remaining);
-    const percent = Math.max(0, (remaining / limit) * 100);
-    debtLimitCardEl.hidden = false;
-    debtLimitCardEl.classList.toggle('is-danger', percent >= 100);
-    debtLimitCardEl.classList.toggle('is-warning', percent >= 80 && percent < 100);
-    debtLimitTitleEl.textContent = `${Math.round(percent)}٪ بەکارهاتوو`;
-    debtLimitMetaEl.textContent = `${money(remaining, 'IQD')} لە ${money(limit, 'IQD')}`;
-    debtLimitProgressEl.style.width = `${Math.min(percent, 100)}%`;
-  } else if (debtLimitCardEl) {
-    debtLimitCardEl.hidden = true;
-  }
-
-  if (lastUpdatedLabelEl) {
-    const asOf = new Date(data?.as_of || Date.now());
-    lastUpdatedLabelEl.textContent = Number.isNaN(asOf.getTime())
-      ? 'نوێکراوە'
-      : `نوێکراوە ${asOf.toLocaleTimeString('ku-IQ', {
-          hour: '2-digit',
-          minute: '2-digit',
-        })}`;
-  }
+ const limit=number(data?.debt_limit),iqdTotal=Array.isArray(data?.totals)?data.totals.find(x=>String(x?.currency||'').toUpperCase()!=='USD'):null;
+ debtLimitCardEl.hidden=limit<=0;
+ if(limit>0){const remaining=data?.effective_remaining_iqd!=null?number(data.effective_remaining_iqd):number(iqdTotal?.remaining),percent=Math.max(0,remaining/limit*100);debtLimitCardEl.classList.toggle('is-danger',percent>=100);debtLimitCardEl.classList.toggle('is-warning',percent>=80&&percent<100);debtLimitTitleEl.textContent=money(limit,'IQD');debtLimitMetaEl.textContent=money(remaining,'IQD')+' بەکارهاتوو';debtLimitProgressEl.style.width=Math.min(percent,100)+'%';}
+ const due=data?.due_summary;document.getElementById('schedulePanel').hidden=!(due&&(number(due.open_schedule_count)>0||number(due.overdue_count)>0||number(due.due_today_count)>0||due.next_due));if(due)renderPaymentTimeline(data);
 }
 
 function isOverdueDebt(item) {
@@ -693,16 +581,6 @@ function buildLedgerEntry(item) {
 function renderRows(rows, append = false) {
   mergeLoadedRows(rows, append);
   renderFilteredTransactions();
-}
-
-function renderRecentRows(rows) {
-  recentLedgerEl.replaceChildren();
-  const recent = Array.isArray(rows) ? rows.slice(0, 4) : [];
-  if (recent.length === 0) {
-    addText(recentLedgerEl, 'p', 'هێشتا هیچ مامەڵەیەک تۆمار نەکراوە.', 'empty');
-    return;
-  }
-  for (const item of recent) recentLedgerEl.appendChild(buildLedgerEntry(item));
 }
 
 function renderNotificationState(state, message) {
@@ -1158,7 +1036,6 @@ async function loadNotificationHistory() {
   const credentials = portalCredentials(0, 'notifications');
   if (!credentials) return;
 
-  notificationHistoryRefreshButton.disabled = true;
   try {
     const data = await api({ ...credentials, limit: 50 });
     currentNotificationItems = (Array.isArray(data.items) ? data.items : [])
@@ -1176,7 +1053,7 @@ async function loadNotificationHistory() {
     if (unread > 0) {
       notificationsTab.setAttribute('aria-label', `ئاگادارکردنەوە — ${unread} نەخوێندراو`);
     } else {
-      notificationsTab.removeAttribute('aria-label');
+      notificationsTab.setAttribute('aria-label', 'ئاگادارکردنەوەکان');
     }
   } catch (_) {
     notificationHistoryEl.replaceChildren();
@@ -1186,14 +1063,13 @@ async function loadNotificationHistory() {
       'نەتوانرا مێژووی ئاگادارکردنەوەکان باربکرێت.',
       'empty',
     );
-  } finally {
-    notificationHistoryRefreshButton.disabled = false;
   }
 }
 
 function showLockedPortal() {
   portalAppEl.hidden = true;
   lockedStateEl.hidden = false;
+  document.getElementById('portalHeaderActions').hidden = true;
   accountBadgeEl.textContent = 'ڕاگیراو / نادروست';
   accountBadgeEl.classList.add('err');
   setStatus('ئەم لینکە بەردەست نییە یان ڕاگیراوە.', 'err');
@@ -1213,14 +1089,14 @@ async function loadPortal(offset = 0, append = false) {
   vapidPublicKey = typeof data.vapid_public_key === 'string' ? data.vapid_public_key : '';
 
   lockedStateEl.hidden = true;
+  document.getElementById('portalHeaderActions').hidden = false;
   portalAppEl.hidden = false;
   currentPortalData = data;
   renderPrimaryBalance(data);
-  renderBalanceBreakdown(data);
   renderSummaryMetrics(data);
   renderAccountDetails(data);
+  renderAccountInsights(data);
   renderRows(data.rows, append);
-  if (!append) renderRecentRows(data.rows);
 
   nextOffset = offset + (Array.isArray(data.rows) ? data.rows.length : 0);
   loadMoreButton.hidden = data.has_more !== true;
@@ -1228,7 +1104,7 @@ async function loadPortal(offset = 0, append = false) {
 }
 
 async function refreshPortal() {
-  const buttons = [headerRefreshButton, quickRefreshButton].filter(Boolean);
+  const buttons = [headerRefreshButton];
   for (const button of buttons) button.disabled = true;
   try {
     const data = await loadPortal(0, false);
@@ -1915,7 +1791,7 @@ async function ensureAllTransactionsLoaded() {
 }
 
 async function printStatement() {
-  const buttons = [quickPrintButton, printStatementButton].filter(Boolean);
+  const buttons = [printStatementButton].filter(Boolean);
   for (const button of buttons) button.disabled = true;
   try {
     await ensureAllTransactionsLoaded();
@@ -2020,55 +1896,7 @@ if (receiptPrintButton) {
   });
 }
 
-if (openDueTransactionsButton) {
-  openDueTransactionsButton.addEventListener('click', () => {
-    transactionFilter = 'overdue';
-    renderFilteredTransactions();
-    setActiveView('transactions');
-  });
-}
-
-if (receiptsRefreshButton) {
-  receiptsRefreshButton.addEventListener('click', () => void loadNotificationHistory());
-}
-if (accountNotificationsButton) {
-  accountNotificationsButton.addEventListener('click', () => {
-    setActiveView('notifications');
-    void loadNotificationPreferences();
-    void loadNotificationHistory();
-  });
-}
-if (accountRefreshButton) {
-  accountRefreshButton.addEventListener('click', () => void refreshPortal());
-}
-
-if (headerRefreshButton) {
-  headerRefreshButton.addEventListener('click', () => void refreshPortal());
-}
-if (quickStatementButton) {
-  quickStatementButton.addEventListener('click', () => setActiveView('statement'));
-}
-if (quickReceiptsButton) {
-  quickReceiptsButton.addEventListener('click', () => {
-    setActiveView('receipts');
-    if (currentNotificationItems.length === 0) void loadNotificationHistory();
-  });
-}
-if (quickRefreshButton) {
-  quickRefreshButton.addEventListener('click', () => void refreshPortal());
-}
-if (quickTransactionsButton) {
-  quickTransactionsButton.addEventListener('click', () => setActiveView('transactions'));
-}
-if (quickNotificationsButton) {
-  quickNotificationsButton.addEventListener('click', () => {
-    setActiveView('notifications');
-    void loadNotificationHistory();
-  });
-}
-if (quickPrintButton) {
-  quickPrintButton.addEventListener('click', () => void printStatement());
-}
+headerRefreshButton.addEventListener('click', () => void refreshPortal());
 if (printStatementButton) {
   printStatementButton.addEventListener('click', () => void printStatement());
 }
@@ -2143,9 +1971,6 @@ window.addEventListener('afterprint', () => {
   document.body.classList.remove('printing-period-statement');
 });
 
-notificationHistoryRefreshButton.addEventListener('click', () => {
-  void loadNotificationHistory();
-});
 if (saveNotificationPreferencesButton) {
   saveNotificationPreferencesButton.addEventListener('click', () => {
     void saveNotificationPreferences();
