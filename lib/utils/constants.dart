@@ -111,8 +111,8 @@ class AppStrings {
 }
 
 class SupabaseConfig {
-  static const String url = 'https://madoflmbretqghqbqaak.supabase.co';
+  static const String url = 'https://ryzgbajgjctmliwhvezo.supabase.co';
   static const String publishableKey =
-      'sb_publishable_RKhrmsR7hHRmrOVl7kvXhQ_vfsgM6N1';
+      'sb_publishable_f9IiiKzbAEJzyqRngJ8pIQ_jkN9iJVO';
 }
 
