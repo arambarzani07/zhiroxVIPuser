@@ -126,6 +126,9 @@ class AppUpdateService {
   }
 
   static Future<AppUpdateInfo?> checkForUpdate() async {
+    if (const bool.fromEnvironment('ZHIROX_STAGING', defaultValue: false)) {
+      return null;
+    }
     // Only CI-built applications have a trusted monotonically increasing build
     // number. Local/debug builds intentionally do not show update prompts.
     if (currentBuild <= 0) return null;
