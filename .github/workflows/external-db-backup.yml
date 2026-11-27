@@ -34,20 +34,22 @@ jobs:
             exit 1
           fi
           python3 - <<'PY'
-          import base64, os
+          import base64, hashlib, os
           try:
               key = base64.b64decode(os.environ['BACKUP_KEY'], validate=True)
           except Exception:
               raise SystemExit('::error::Backup key must be base64 encoded')
           if len(key) != 32:
               raise SystemExit('::error::Backup key must encode exactly 32 bytes')
+          if hashlib.sha256(key).hexdigest() == 'dc2296fa78993f4d93a4226fbf003e4bcc41aefac625756d07c2d4102461414d':
+              raise SystemExit('::error::Rotate the previously disclosed backup key before publishing any archive')
           PY
       - name: Dump production database (temporary runner only)
         env:
           ZHIROX_BACKUP_DB_URL: ${{ secrets.ZHIROX_BACKUP_DB_URL }}
         run: |
           mkdir -m 700 -p "$RUNNER_TEMP/zhirox-backup"
-          docker run --rm --network host \
+          docker run --rm --network host --user "$(id -u):$(id -g)" \
             --env ZHIROX_BACKUP_DB_URL \
             -v "$RUNNER_TEMP/zhirox-backup:/backup" postgres:17 \
             sh -c 'pg_dump --format=custom --no-owner --no-acl --file=/backup/database.dump "$ZHIROX_BACKUP_DB_URL" && pg_restore --list /backup/database.dump >/dev/null'
@@ -61,6 +63,10 @@ jobs:
           cmp "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/verified.dump"
           docker run --rm -v "$RUNNER_TEMP/zhirox-backup:/backup:ro" postgres:17 pg_restore --list /backup/verified.dump >/dev/null
           shred -u "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/verified.dump"
+      - name: Cleanup temporary plaintext on failure
+        if: failure()
+        run: |
+          sudo rm -f -- "$RUNNER_TEMP/zhirox-backup/database.dump" "$RUNNER_TEMP/zhirox-backup/verified.dump"
       - name: Upload encrypted archive
         uses: actions/upload-artifact@v4
         with:
