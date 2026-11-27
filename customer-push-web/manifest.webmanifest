@@ -4,9 +4,9 @@
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "theme_color": "#f6f7fb",
-  "background_color": "#f6f7fb",
-  "lang": "ku",
+  "theme_color": "#f4f6f8",
+  "background_color": "#f4f6f8",
+  "lang": "ckb",
   "dir": "rtl",
   "icons": [
     {
@@ -15,5 +15,7 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "id": "./index.html",
+  "description": "پۆرتاڵی کڕیارانی ZHIROX VIP"
 }

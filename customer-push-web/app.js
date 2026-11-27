@@ -6,6 +6,16 @@ const LINK_TOKEN_KEY = 'zhirox_push_link_token';
 const DEVICE_SECRET_KEY = 'zhirox_push_device_secret';
 const ENDPOINT_KEY = 'zhirox_push_endpoint';
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
+const LINK_BLOCK_KEY='zhirox.portal.explicit-link-block';
+let explicitLinkBlocked=false;
+function linkBlockState(){try{return sessionStorage.getItem(LINK_BLOCK_KEY)==='1';}catch(_){return explicitLinkBlocked;}}
+function setLinkBlockState(value){explicitLinkBlocked=value;try{if(value)sessionStorage.setItem(LINK_BLOCK_KEY,'1');else sessionStorage.removeItem(LINK_BLOCK_KEY);}catch(_){}}
+function selectPortalLink(query,fragment,pattern){
+ const values=[...query.getAll('token'),...fragment.getAll('token')];
+ if(!values.length)return {explicit:false,token:'',blocked:false};
+ if(values.length!==1||!pattern.test(values[0]))return {explicit:true,token:'',blocked:true};
+ return {explicit:true,token:values[0],blocked:false};
+}
 
 const statusEl = document.getElementById('status');
 const enableButton = document.getElementById('enable');
@@ -177,19 +187,17 @@ function decodeVapidKey(value) {
 }
 
 async function api(payload) {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    mode: 'cors',
-    credentials: 'omit',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  const body = await response.json().catch(() => null);
-  if (!response.ok || !body || typeof body !== 'object') {
-    throw new Error('request_failed');
+ const controller=new AbortController();
+ const timer=window.setTimeout(()=>controller.abort(),20000);
+ try{
+  const response=await fetch(API_URL,{method:'POST',mode:'cors',credentials:'omit',cache:'no-store',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const body=await response.json().catch(()=>null);
+  if(!response.ok||!body||typeof body!=='object'){
+   const reason=body?.error==='link_unavailable'&&[400,404].includes(response.status)?'link_unavailable':'request_failed';
+   throw new Error(reason);
   }
   return body;
+ }finally{window.clearTimeout(timer);}
 }
 
 function persistedPushCredentials() {
@@ -215,36 +223,27 @@ function scrubLinkCredentialsFromLocation() {
   window.history.replaceState(null, '', `${url.pathname}${suffix}`);
 }
 
-function resolveLinkToken() {
-  const persisted = persistedPushCredentials();
-  if (isStandalone() && persisted) {
-    localStorage.removeItem(LINK_TOKEN_KEY);
-    scrubLinkCredentialsFromLocation();
-    return '';
+function resolveLinkToken(){
+ const currentUrl=new URL(window.location.href);
+ const fragment=new URLSearchParams(currentUrl.hash.startsWith('#')?currentUrl.hash.slice(1):currentUrl.hash);
+ const link=selectPortalLink(currentUrl.searchParams,fragment,TOKEN_PATTERN);
+ const persisted=persistedPushCredentials();
+ if(link.explicit){
+  if(link.blocked||(isStandalone()&&persisted)){
+   setLinkBlockState(true);scrubLinkCredentialsFromLocation();return '';
   }
-
-  const currentUrl = new URL(window.location.href);
-  const queryToken = currentUrl.searchParams.get('token') || '';
-  const fragmentToken = new URLSearchParams(
-    currentUrl.hash.startsWith('#') ? currentUrl.hash.slice(1) : currentUrl.hash,
-  ).get('token') || '';
-  const linkToken = queryToken || fragmentToken;
-
-  if (linkToken) {
-    if (!TOKEN_PATTERN.test(linkToken)) {
-      scrubLinkCredentialsFromLocation();
-      return '';
-    }
-    localStorage.setItem(LINK_TOKEN_KEY, linkToken);
-    scrubLinkCredentialsFromLocation();
-    if (manifestEl) {
-      manifestEl.href = './manifest.webmanifest';
-    }
-    return linkToken;
-  }
-
-  const savedToken = localStorage.getItem(LINK_TOKEN_KEY) || '';
-  return TOKEN_PATTERN.test(savedToken) ? savedToken : '';
+  setLinkBlockState(false);
+  localStorage.setItem(LINK_TOKEN_KEY,link.token);
+  scrubLinkCredentialsFromLocation();
+  if(manifestEl)manifestEl.href='./manifest.webmanifest';
+  return link.token;
+ }
+ if(linkBlockState()){explicitLinkBlocked=true;return '';}
+ if(isStandalone()&&persisted){
+  localStorage.removeItem(LINK_TOKEN_KEY);scrubLinkCredentialsFromLocation();return '';
+ }
+ const savedToken=localStorage.getItem(LINK_TOKEN_KEY)||'';
+ return TOKEN_PATTERN.test(savedToken)?savedToken:'';
 }
 
 let activeToken = '';
@@ -266,11 +265,11 @@ function number(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function money(value, currency) {
-  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number(value))} ${currency || 'IQD'}`;
-}
+const portalMoneyFormatter=new Intl.NumberFormat('en-US',{maximumFractionDigits:2});
+function money(value,currency){return `${portalMoneyFormatter.format(number(value))} ${currency||'IQD'}`;}
 
 function portalCredentials(offset = 0, action = 'portal') {
+  if(explicitLinkBlocked)return null;
   if (activeToken) {
     return action === 'portal'
       ? { action, token: activeToken, offset }
@@ -1157,8 +1156,12 @@ async function loadNotificationHistory() {
 }
 
 function showLockedPortal() {
+  portalInitialized=false;
   portalAppEl.hidden = true;
   lockedStateEl.hidden = false;
+  customerGreetingEl.textContent='هەژماری کڕیار';
+  marketBrandEl.textContent='ZHIROX';
+  for(const dialog of document.querySelectorAll('dialog[open]'))dialog.close();
   document.getElementById('portalHeaderActions').hidden = true;
   accountBadgeEl.textContent = 'ڕاگیراو / نادروست';
   accountBadgeEl.classList.add('err');
@@ -1210,7 +1213,7 @@ async function refreshDashboardIfDue(){
   if(revision!==portalLoadRevision||!mayAutoRefresh({...autoRefreshState(),autoBusy:false}))return;
   // Update only the visible dashboard; leave transaction pagination, filters, reports and preferences untouched.
   renderPrimaryBalance(data);renderSummaryMetrics(data);renderMonthlyActivity(data);renderAccountInsights(data);
- }catch(_){setStatus('نوێکردنەوەی خۆکار سەرکەوتوو نەبوو.','err');}
+ }catch(error){if(error?.message==='link_unavailable'&&revision===portalLoadRevision)showLockedPortal();else setStatus('نوێکردنەوەی خۆکار سەرکەوتوو نەبوو.','err');}
  finally{autoDashboardBusy=false;}
 }
 async function refreshPortal() {
@@ -1224,8 +1227,9 @@ async function refreshPortal() {
       loadNotificationPreferences(),
     ]);
     setStatus('هەژمارەکەت نوێکرایەوە.', 'ok');
-  } catch (_) {
-    setStatus('نوێکردنەوە سەرکەوتوو نەبوو.', 'err');
+  } catch (error) {
+    if(error?.message==='link_unavailable')showLockedPortal();
+    else setStatus('نوێکردنەوە سەرکەوتوو نەبوو.', 'err');
   } finally {
     for (const button of buttons) button.disabled = false;
   }
@@ -1789,6 +1793,27 @@ async function deliverPdfBlob(blob, filename) {
   return true;
 }
 
+let pdfEnginePromise=null;
+function loadPdfDependency(url,available){
+ if(available())return Promise.resolve();
+ return new Promise((resolve,reject)=>{
+  const script=document.createElement('script');
+  const cleanup=()=>{window.clearTimeout(timer);script.onload=null;script.onerror=null;};
+  const fail=()=>{cleanup();script.remove();reject(new Error('pdf_dependency_unavailable'));};
+  const timer=window.setTimeout(fail,20000);
+  script.src=url;script.crossOrigin='anonymous';script.referrerPolicy='no-referrer';
+  script.onload=()=>{if(!available()){fail();return;}cleanup();resolve();};
+  script.onerror=fail;
+  document.head.appendChild(script);
+ });
+}
+async function ensurePdfEngine(){
+ if(!pdfEnginePromise)pdfEnginePromise=Promise.all([
+  loadPdfDependency("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",()=>typeof window.html2canvas==='function'),
+  loadPdfDependency("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",()=>typeof window.jspdf?.jsPDF==='function')
+ ]).catch(error=>{pdfEnginePromise=null;throw error;});
+ return pdfEnginePromise;
+}
 async function downloadPeriodStatementPdf() {
   const baseData = currentPeriodStatement;
   const rows = numberedStatementRows(Array.isArray(currentStatementVisibleRows)
@@ -1809,16 +1834,7 @@ async function downloadPeriodStatementPdf() {
     return;
   }
 
-  if (
-    typeof window.html2canvas !== 'function' ||
-    !window.jspdf ||
-    typeof window.jspdf.jsPDF !== 'function'
-  ) {
-    statementBuilderResultEl.textContent =
-      'ئامادەکەرەکەی PDF بار نەبووە؛ پەڕەکە نوێ بکەرەوە.';
-    statementBuilderResultEl.className = 'action-result err';
-    return;
-  }
+  if(printPeriodStatementButton?.disabled)return;
 
   const originalHtml = printPeriodStatementButton?.innerHTML || '';
   if (printPeriodStatementButton) {
@@ -1832,6 +1848,7 @@ async function downloadPeriodStatementPdf() {
   document.body.appendChild(stage);
 
   try {
+    await ensurePdfEngine();
     if(document.fonts?.ready)await document.fonts.ready;
     const fits=(pageRows,last)=>{
       const probe=buildPdfA4Page(data,pageRows,1,1,last);
@@ -2006,6 +2023,7 @@ async function initialize() {
     if (eventId) await focusTransaction(eventId);
     if (receiptId) await openReceipt(receiptId);
     portalInitialized=true;
+    if(window.isSecureContext&&'serviceWorker' in navigator){void navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(()=>{});}
     setStatus('هەژمارەکەت ئامادەیە.', 'ok');
   } catch (_) {
     showLockedPortal();
@@ -2124,7 +2142,7 @@ enableButton.addEventListener('click', async () => {
   setResult('');
 
   try {
-    if (!activeToken || !TOKEN_PATTERN.test(activeToken)) throw new Error('link_unavailable');
+    if (explicitLinkBlocked||!activeToken||!TOKEN_PATTERN.test(activeToken)) throw new Error('link_unavailable');
     if (!supportsPush()) throw new Error('push_unsupported');
     if (isIos() && !isStandalone()) throw new Error('ios_not_standalone');
 
@@ -2200,6 +2218,7 @@ function applyPortalTheme(){
   if(!['system','light','dark'].includes(mode))mode='system';
   themeSelect.value=mode;
   document.documentElement.dataset.portalTheme=(mode==='dark'||(mode==='system'&&themeMedia.matches))?'dark':'light';
+  document.getElementById('portalThemeColor').content=document.documentElement.dataset.portalTheme==='dark'?'#101923':'#f4f6f8';
 }
 themeSelect.addEventListener('change',()=>{
   try{localStorage.setItem('zhirox.portal.theme',themeSelect.value);}catch(_){document.documentElement.dataset.portalTheme=(themeSelect.value==='dark'||(themeSelect.value==='system'&&themeMedia.matches))?'dark':'light';return;}
