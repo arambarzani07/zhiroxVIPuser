@@ -53,7 +53,7 @@ jobs:
           unset PGOPTIONS
           pg_restore -l app.dump >app.list
           # Keep the existing platform-owned public schema; retain original ACLs and policies.
-          sed -E '/^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public /s/^/;/' app.list >selected.list
+          sed -E '/^[0-9]+; [0-9]+ [0-9]+ SCHEMA - public /s/^/;/; /^[0-9]+; [0-9]+ [0-9]+ DEFAULT ACL public .* supabase_admin$/s/^/;/' app.list >selected.list
           pg_restore --no-owner --use-list=selected.list --section=pre-data -f pre.sql app.dump
           pg_restore --no-owner --use-list=selected.list --section=data -f appdata.sql app.dump
           pg_restore --no-owner --use-list=selected.list --section=post-data -f post.sql app.dump
@@ -82,6 +82,11 @@ jobs:
           if ! psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -q -d "$TARGET_URL" -f start.sql -f pre.sql -f authdata.sql -f appdata.sql -f post.sql -f check.sql >restore.out 2>restore.err; then
             echo "Restore rehearsal stopped; target transaction rolled back."
             grep -Eo 'psql:[a-z]+\.sql:[0-9]+: (ERROR|FATAL): +[0-9A-Z]{5}' restore.err | head -15 || true
+            # Print only the SQL command category at the failing line, never row data or function bodies.
+            line=$(sed -nE 's/^psql:post\.sql:([0-9]+): ERROR:.*/\1/p' restore.err | head -1)
+            if [[ "$line" =~ ^[0-9]+$ ]]; then
+              sed -n "${line}p" post.sql | awk '{if ($1=="ALTER" && $2=="DEFAULT") print "Failed command category: ALTER DEFAULT PRIVILEGES"; else if ($1 ~ /^(ALTER|CREATE|GRANT|REVOKE|SET|COMMENT)$/) print "Failed command category: " $1; else print "Failed command category: other"}'
+            fi
             exit 1
           fi
           test "$(psql_t -c "$guard")" = empty
