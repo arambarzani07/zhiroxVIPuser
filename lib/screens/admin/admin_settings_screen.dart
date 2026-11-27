@@ -8,7 +8,6 @@ import 'package:zhirox/screens/admin/collection_center_screen.dart';
 import 'package:zhirox/screens/admin/debt_restore_screen.dart';
 import 'package:zhirox/screens/admin/daftar_sync_dashboard_screen.dart';
 import 'package:zhirox/screens/admin/governance_center_screen.dart';
-import 'package:zhirox/screens/admin/hikvision_settings_screen.dart';
 import 'package:zhirox/screens/admin/intelligence_center_screen.dart';
 import 'package:zhirox/screens/admin/legacy_import_screen.dart';
 import 'package:zhirox/screens/admin/pending_requests_screen.dart';
@@ -164,13 +163,6 @@ class AdminSettingsScreen extends StatelessWidget {
                         title: 'گواستنەوەی داتای کۆن',
                         subtitle: 'هێنانەژوورەوەی کڕیار، قەرز و پارەدانەوە',
                         onTap: () => _open(context, const LegacyImportScreen()),
-                      ),
-                      _SettingsRow(
-                        icon: Icons.videocam_rounded,
-                        title: 'Hikvision و ڤیدیۆی مامەلە',
-                        subtitle: 'ڕێکخستنی کامێرا و ڤیدیۆی مامەڵەکان',
-                        onTap: () =>
-                            _open(context, const HikvisionSettingsScreen()),
                       ),
                     ],
                   ),

@@ -19,8 +19,6 @@ import 'package:zhirox/widgets/app_async_state.dart';
 import 'package:zhirox/widgets/zhirox_shell.dart';
 import 'package:zhirox/widgets/app_design.dart';
 import 'package:zhirox/widgets/dashboard_design.dart';
-import 'package:zhirox/widgets/gateway_health_card.dart';
-import 'package:zhirox/screens/admin/hikvision_settings_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -750,16 +748,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ),
                       ),
                     ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: GatewayHealthCard(
-                      onOpen: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const HikvisionSettingsScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
                   if (auth.subscriptionDaysLeft <= 10)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
