@@ -460,6 +460,8 @@ function isOverdueDebt(item) {
   return due < today;
 }
 
+function normalizeLedgerSearch(value){return String(value??'').normalize('NFKC').toLowerCase().replace(/[٠-٩۰-۹]/g,ch=>String(ch.charCodeAt(0)-(ch.charCodeAt(0)>=1776?1776:1632))).replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/[,\u066c](?=\d{3}(?:\D|$))/g,'').replace(/\s+/g,' ').trim()}
+function ledgerTimestamp(item){const t=Date.parse(item?.occurred_at??'');return Number.isFinite(t)?t:-Infinity}
 function transactionSearchText(item) {
   const date = new Date(item?.occurred_at);
   const localizedDate = Number.isNaN(date.getTime())
@@ -476,11 +478,13 @@ function transactionSearchText(item) {
     item?.due_date,
     item?.status,
     localizedDate,
-  ].filter((value) => value != null).join(' ').toLowerCase();
+    item?.occurred_at,
+    money(item?.amount,item?.currency),
+  ].filter((value) => value != null).join(' ');
 }
 
 function filteredTransactionRows() {
-  const query = transactionQuery.trim().toLowerCase();
+  const query = normalizeLedgerSearch(transactionQuery);
   return loadedRows.filter((item) => {
     const filterMatch =
       transactionFilter === 'all' ||
@@ -488,8 +492,8 @@ function filteredTransactionRows() {
       (transactionFilter === 'overdue' && isOverdueDebt(item));
     if (!filterMatch) return false;
     if (!query) return true;
-    return transactionSearchText(item).includes(query);
-  });
+    return query.split(' ').every(term=>normalizeLedgerSearch(transactionSearchText(item)).includes(term));
+  }).sort((a,b)=>{const x=ledgerTimestamp(a),y=ledgerTimestamp(b);return x===y?0:x>y?-1:1;});
 }
 
 function updateTransactionFilterUi() {
@@ -518,10 +522,16 @@ function renderFilteredTransactions() {
       'empty',
     );
   } else {
-    for (const item of rows) ledgerEl.appendChild(buildLedgerEntry(item));
+    let lastDay=null;
+    for (const item of rows) {
+      const date=new Date(item.occurred_at);
+      const day=Number.isNaN(date.getTime())?'بەروار دیاری نەکراوە':formatShortDate(item.occurred_at);
+      if(day!==lastDay){addText(ledgerEl,'h3',day,'ledger-day');lastDay=day;}
+      ledgerEl.appendChild(buildLedgerEntry(item));
+    }
   }
   if (transactionResultCountEl) {
-    transactionResultCountEl.textContent = `${rows.length} مامەڵە`;
+    transactionResultCountEl.textContent = `${rows.length} مامەڵەی پیشاندراو`;
   }
   updateTransactionFilterUi();
 }
@@ -2058,4 +2068,19 @@ enableButton.addEventListener('click', async () => {
   }
 });
 
+const themeSelect=document.getElementById('portalTheme');
+const themeMedia=window.matchMedia('(prefers-color-scheme: dark)');
+function applyPortalTheme(){
+  let mode='system';
+  try {mode=localStorage.getItem('zhirox.portal.theme')||'system';}catch(_){}
+  if(!['system','light','dark'].includes(mode))mode='system';
+  themeSelect.value=mode;
+  document.documentElement.dataset.portalTheme=(mode==='dark'||(mode==='system'&&themeMedia.matches))?'dark':'light';
+}
+themeSelect.addEventListener('change',()=>{
+  try{localStorage.setItem('zhirox.portal.theme',themeSelect.value);}catch(_){document.documentElement.dataset.portalTheme=(themeSelect.value==='dark'||(themeSelect.value==='system'&&themeMedia.matches))?'dark':'light';return;}
+  applyPortalTheme();
+});
+if(themeMedia.addEventListener)themeMedia.addEventListener('change',applyPortalTheme);
+applyPortalTheme();
 initialize();

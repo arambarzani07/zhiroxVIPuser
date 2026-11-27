@@ -89,3 +89,24 @@ body{background:var(--bg);color:var(--text);padding-inline:16px}
 @media(min-width:760px){#portalShell .portal-header{padding:12px 0 18px!important}#portalShell .portal-nav.app-tab-bar{padding:6px!important}#portalShell .app-tab-bar .nav-item .tab-label{font-size:13px!important}#homeView .financial-details .metric-card strong{font-size:18px!important}}
 @media(prefers-reduced-motion:reduce){#portalShell *{animation:none!important;transition:none!important}}
 }
+
+/* v4: dates and customer appearance, independent of report document colors. */
+@media screen{
+#ledger .ledger-day{font-size:12px;color:var(--muted);font-weight:700;margin:12px 0 0;padding:3px 4px}
+#ledger .ledger-day:first-child{margin-top:4px}
+#ledger .entry{padding:12px!important;box-shadow:none!important}
+#portalShell .appearance-panel label{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#portalTheme{font:inherit;font-size:16px;min-height:44px;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);max-width:52%}
+html[data-portal-theme=dark]{color-scheme:dark;--bg:#101923;--surface:#192633;--text:#edf3fa;--muted:#aebdcd;--line:#344555;--brand:#7dd4c6;--brand-soft:#23433f;--danger:#ff9ca8;--danger-soft:#482b36;--success:#7ce0b3;--success-soft:#23443a;--warning:#f3cf85;--warning-soft:#4b3b27}
+html[data-portal-theme=dark] #portalShell :is(.panel,.notification-card,.state-card,.account-hero,.receipt-summary-strip,.notification-settings,.entry,.receipt-history-card,.notification-history-item,.metric-card,.filter-chip,.schedule-stat,.payment-timeline-item){background:var(--surface)!important;color:var(--text);border-color:var(--line)!important}
+html[data-portal-theme=dark] #portalShell :is(.portal-nav.app-tab-bar,.header-actions .icon-action,.secondary-action,.statement-print,.transaction-search-wrap,.transaction-search-wrap input,.date-picker-control,.period-presets button){background:var(--surface)!important;color:var(--text)!important;border-color:var(--line)!important}
+html[data-portal-theme=dark] #portalShell .app-tab-bar .nav-item{color:var(--muted)!important;background:transparent!important}
+html[data-portal-theme=dark] #portalShell :is(.app-tab-bar .nav-item.is-active,.filter-chip.is-active,.header-notification-action.is-active){color:var(--brand)!important;background:var(--brand-soft)!important}
+html[data-portal-theme=dark] #portalShell :is(.financial-details h3,.balance-details>summary,.notification-settings>summary,.account-row strong,.account-identity strong,.receipt-history-copy strong,.entry-head strong){color:var(--text)}
+html[data-portal-theme=dark] #portalShell :is(.muted,.eyebrow,.entry-meta,.account-footnote,.receipt-history-copy small,.preference-row small){color:var(--muted)}
+html[data-portal-theme=dark] #portalShell .other-balances .metric-card{background:transparent!important;color:white}
+html[data-portal-theme=dark] #portalShell .primary-action{background:#176f71!important;color:white!important}
+html[data-portal-theme=dark] #portalShell :is(.period-statement-document,.period-statement-document .metric-card){color:#172b45!important;background:#fff!important;border-color:#e1e7ee!important;color-scheme:light;--text:#172b45;--muted:#596a7b;--line:#e1e7ee;--surface:#fff;--brand:#176f71}
+html[data-portal-theme=dark] #portalShell .period-statement-document :is(input,select,button.secondary-action){background:#fff!important;color:#172b45!important}
+}
+@media print{#ledger .ledger-day{color:#111827;font-size:11px;break-after:avoid;page-break-after:avoid}}
