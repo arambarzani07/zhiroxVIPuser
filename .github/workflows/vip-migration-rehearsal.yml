@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm --network host -e SOURCE_URL -e TARGET_URL -e PGSSLMODE=require postgres:17 bash -s <<'SH'
+          docker run --rm -i --network host -e SOURCE_URL -e TARGET_URL -e PGSSLMODE=require postgres:17 bash -s <<'SH'
           set -euo pipefail
           umask 077
           work=$(mktemp -d)
