@@ -65,5 +65,7 @@
       "source": "/install-manifest.webmanifest",
       "destination": "/manifest.webmanifest"
     }
-  ]
+  ],
+  "buildCommand": "node scripts/release-gate.cjs",
+  "outputDirectory": "dist"
 }
