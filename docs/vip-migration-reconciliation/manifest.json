@@ -1,0 +1,251 @@
+{
+  "format": 1,
+  "captured_date": "2026-11-28",
+  "git_baseline_commit": "4156f49c4b268780de00611927b49bf730bbd62f",
+  "purpose": "Read-only migration history reconciliation checkpoint; NOT a runnable schema or backup",
+  "digest_definition": "SHA-256 of UTF-8 stored SQL statements joined by LF (PostgreSQL array_to_string); Git blob SHA-1 for existing repository files",
+  "live_migrations": [
+    {
+      "version": "20261127130814",
+      "statement_count": 1,
+      "bytes": 3089,
+      "sha256": "4fae0e9c358571075cfa2a1b0c6a8ca495f58ecf9ee4b3ae316524d5a5a8d366"
+    },
+    {
+      "version": "20261127132110",
+      "statement_count": 1,
+      "bytes": 114,
+      "sha256": "a9ef0988bc1df7d504ed99526ad6ddb26a28b72050065f494cecbf1606844762"
+    },
+    {
+      "version": "20261127132130",
+      "statement_count": 1,
+      "bytes": 1000,
+      "sha256": "b3710d33fe66d963244e6bbd14e6a76922ffda0093bac377f61a50072d8d29f5"
+    },
+    {
+      "version": "20261127132640",
+      "statement_count": 1,
+      "bytes": 173,
+      "sha256": "44bce46a7bfd936d653928cf716ff7cba490ea5c1ee3ad317459d675c568f3f1"
+    },
+    {
+      "version": "20261127132728",
+      "statement_count": 1,
+      "bytes": 5301,
+      "sha256": "8e6be5a571198e6fbf9a28d6dfa4a8b4a967fae147e73cd1578883f5f4638f11"
+    },
+    {
+      "version": "20261127133522",
+      "statement_count": 1,
+      "bytes": 73457,
+      "sha256": "b6ffde911833ba5095cb1ea7ddb82e567ef90b34bd2a2bd79120d61eb0e81c14"
+    },
+    {
+      "version": "20261127143428",
+      "statement_count": 1,
+      "bytes": 636,
+      "sha256": "346771af8d1323749091000ba0e0e4ddebe1b914ba58c744a6ceb18ab020ac19"
+    },
+    {
+      "version": "20261127143648",
+      "statement_count": 1,
+      "bytes": 752,
+      "sha256": "2468964e7ae22f802a94a23bb04d561d40503fe3f00da60bf62520bcb761c7e4"
+    },
+    {
+      "version": "20261127144909",
+      "statement_count": 1,
+      "bytes": 3284,
+      "sha256": "c00a0f2149837c1e79cec6973456568daecc774ba17baab17b0e0bd488dc15df"
+    },
+    {
+      "version": "20261127144948",
+      "statement_count": 1,
+      "bytes": 7992,
+      "sha256": "e152ddd0c6a81c9a274cbe7a056ff6f3943dcab4ff29e1f28f0de542ce17ad57"
+    },
+    {
+      "version": "20261127151143",
+      "statement_count": 1,
+      "bytes": 5096,
+      "sha256": "293479137cc4345c080af88f6feb814abd38f500264d2014438611c41cad43a1"
+    },
+    {
+      "version": "20261127153535",
+      "statement_count": 1,
+      "bytes": 6227,
+      "sha256": "822668cb6ee90b0c10063009e84b080df236f46d9b39b5cdfa0f932458e6433a"
+    },
+    {
+      "version": "20261127163557",
+      "statement_count": 1,
+      "bytes": 7203,
+      "sha256": "a2e8648e4b0de144e9b8e39f2972a7e4efaad0d10be0397f6b691d5bbe1e8f6e"
+    },
+    {
+      "version": "20261127200527",
+      "statement_count": 1,
+      "bytes": 1254,
+      "sha256": "80d89ddd6f98a3d066c184287ec9698772f60e9153959eaa3affce32bb7f3d81"
+    },
+    {
+      "version": "20261127202053",
+      "statement_count": 1,
+      "bytes": 1431,
+      "sha256": "8192c1268662574b90505b330ecd96879643512a45565a46b7a5db05847b2395"
+    },
+    {
+      "version": "20261127202253",
+      "statement_count": 1,
+      "bytes": 1351,
+      "sha256": "304a1c44abed9431e98b890c2a1a61885c34852684c669718ebe4dad51da18f6"
+    },
+    {
+      "version": "20261127202725",
+      "statement_count": 1,
+      "bytes": 1172,
+      "sha256": "71f37fd7983da82614c680e9a387fa68d37f67fb335c0bb21981606bbd25c3ad"
+    },
+    {
+      "version": "20261127204316",
+      "statement_count": 1,
+      "bytes": 1056,
+      "sha256": "e406298606dbbd561fb79562c2065767291f5e120ea600a6aac6dd28d1e91792"
+    },
+    {
+      "version": "20261128045515",
+      "statement_count": 1,
+      "bytes": 1268,
+      "sha256": "be9b16924ff0035d99d556989325f959c9c2daa47a6ecd6a7d819262b27f5de5"
+    }
+  ],
+  "repository_migrations": [
+    {
+      "version": "20260927053000",
+      "file": "20260927053000_preserve_daftar_archived_links_for_deleted_profiles.sql",
+      "git_blob_sha1": "b2ce37b1b9395979f28495ee1bc39938be70ce37",
+      "bytes": 262
+    },
+    {
+      "version": "20260927053500",
+      "file": "20260927053500_delegate_daftar_account_reconciliation_to_general_payment_aware_check.sql",
+      "git_blob_sha1": "043892994bb3032b33c495a095286adeb66425ac",
+      "bytes": 695
+    },
+    {
+      "version": "20260927094500",
+      "file": "20260927094500_daftar_cutover_general_payment_awareness.sql",
+      "git_blob_sha1": "cc670d215b32b7b2be922b0b68ca8cc5e5411a31",
+      "bytes": 7880
+    },
+    {
+      "version": "20260929170500",
+      "file": "20260929170500_daftar_sync_runtime_hardening.sql",
+      "git_blob_sha1": "b62a9d614536632955d56261fe92019783d71f0d",
+      "bytes": 5012
+    },
+    {
+      "version": "20260929171500",
+      "file": "20260929171500_optimize_daftar_reconciliation_timeout.sql",
+      "git_blob_sha1": "6f0b8941a7dca12a69e3c07caf575ebc91964d6e",
+      "bytes": 8522
+    },
+    {
+      "version": "20260929172500",
+      "file": "20260929172500_market_exchange_rate_cache.sql",
+      "git_blob_sha1": "1fcbbf82d75a6e1d5488297a1776ce9284bd654c",
+      "bytes": 1030
+    },
+    {
+      "version": "20260929223500",
+      "file": "20260929223500_drop_redundant_receipt_documents_index.sql",
+      "git_blob_sha1": "ac73ec825bdc67f6e93db894ddcab5849fdf5d27",
+      "bytes": 58
+    },
+    {
+      "version": "20260929224500",
+      "file": "20260929224500_optimize_daftar_reconciliation_indexes.sql",
+      "git_blob_sha1": "4531ac99883a1a599d1b886a4edebebbeda71099",
+      "bytes": 471
+    },
+    {
+      "version": "20260930004000",
+      "file": "20260930004000_expand_employee_permissions_to_40.sql",
+      "git_blob_sha1": "e5ed2d510652372b3ab49da26915ae1155a42ede",
+      "bytes": 1864
+    },
+    {
+      "version": "20260930004500",
+      "file": "20260930004500_expand_employee_permissions.sql",
+      "git_blob_sha1": "47761b52c5300c7134a860d54c157ed18da04d84",
+      "bytes": 829
+    },
+    {
+      "version": "20260930005500",
+      "file": "20260930005500_unify_employee_permissions_41.sql",
+      "git_blob_sha1": "8b7f6776aaeb43aa878927c11eacbfdb14d9ee90",
+      "bytes": 15395
+    },
+    {
+      "version": "20260930072700",
+      "file": "20260930072700_expand_employee_permissions_to_60.sql",
+      "git_blob_sha1": "2ba69e72539b230cff57e31621ded2b4e5901e73",
+      "bytes": 7858
+    },
+    {
+      "version": "20260930073500",
+      "file": "20260930073500_backfill_employee_permissions_60.sql",
+      "git_blob_sha1": "6d645bd32501aeee8a05e65409d39cf9929f2138",
+      "bytes": 2294
+    },
+    {
+      "version": "20260930075000",
+      "file": "20260930075000_sync_all_60_employee_permissions.sql",
+      "git_blob_sha1": "fe423dfa4390b729a1ed6652d7fb6927412e6859",
+      "bytes": 11280
+    }
+  ],
+  "comparison": {
+    "live_only": [
+      "20261127130814",
+      "20261127132110",
+      "20261127132130",
+      "20261127132640",
+      "20261127132728",
+      "20261127133522",
+      "20261127143428",
+      "20261127143648",
+      "20261127144909",
+      "20261127144948",
+      "20261127151143",
+      "20261127153535",
+      "20261127163557",
+      "20261127200527",
+      "20261127202053",
+      "20261127202253",
+      "20261127202725",
+      "20261127204316",
+      "20261128045515"
+    ],
+    "repository_only": [
+      "20260927053000",
+      "20260927053500",
+      "20260927094500",
+      "20260929170500",
+      "20260929171500",
+      "20260929172500",
+      "20260929223500",
+      "20260929224500",
+      "20260930004000",
+      "20260930004500",
+      "20260930005500",
+      "20260930072700",
+      "20260930073500",
+      "20260930075000"
+    ],
+    "shared": []
+  },
+  "replay_status": "NOT_VERIFIED",
+  "production_database_modified": false
+}
