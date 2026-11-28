@@ -6,10 +6,7 @@ on:
       - '.github/workflows/portal-mobile-browser.yml'
   push:
     branches:
-      - 'test/portal-mobile-browser-pdf-20261128'
-    paths:
-      - 'customer-portal/**'
-      - '.github/workflows/portal-mobile-browser.yml'
+      - main
 permissions:
   contents: read
 jobs:
