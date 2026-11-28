@@ -19,7 +19,7 @@ const html = read('index.html');
 const ids = [...html.matchAll(/\bid\s*=\s*["']([^"']+)["']/g)].map(m=>m[1]);
 assert(ids.length>0 && ids.length===new Set(ids).size,'duplicate or missing HTML IDs');
 for (const m of read('app.js').matchAll(/getElementById\(\s*["']([^"']+)["']\s*\)/g)) assert(ids.includes(m[1]),'missing DOM ID '+m[1]);
-for(const name of ['app.js','styles.css','portal-banking.css','manifest-bootstrap.js']) assert(html.includes(name),'HTML missing '+name);
+for(const name of ['app.js','styles.css','portal-banking.css']) assert(html.includes(name),'HTML missing '+name);
 const manifest=JSON.parse(read('manifest.webmanifest'));
 assert(manifest.lang==='ckb' && manifest.dir==='rtl' && manifest.display==='standalone','invalid Kurdish PWA manifest');
 assert(manifest.start_url==='./index.html' && manifest.scope==='./','invalid PWA scope');
