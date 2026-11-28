@@ -1,0 +1,2250 @@
+'use strict';
+// Production portal uses the current ZHIROX backend; publish after backend migration.
+
+const API_URL = 'https://ryzgbajgjctmliwhvezo.supabase.co/functions/v1/customer-push';
+const LINK_TOKEN_KEY = 'zhirox_push_link_token';
+const DEVICE_SECRET_KEY = 'zhirox_push_device_secret';
+const ENDPOINT_KEY = 'zhirox_push_endpoint';
+const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
+const LINK_BLOCK_KEY='zhirox.portal.explicit-link-block';
+let explicitLinkBlocked=false;
+function linkBlockState(){try{return sessionStorage.getItem(LINK_BLOCK_KEY)==='1';}catch(_){return explicitLinkBlocked;}}
+function setLinkBlockState(value){explicitLinkBlocked=value;try{if(value)sessionStorage.setItem(LINK_BLOCK_KEY,'1');else sessionStorage.removeItem(LINK_BLOCK_KEY);}catch(_){}}
+function selectPortalLink(query,fragment,pattern){
+ const values=[...query.getAll('token'),...fragment.getAll('token')];
+ if(!values.length)return {explicit:false,token:'',blocked:false};
+ if(values.length!==1||!pattern.test(values[0]))return {explicit:true,token:'',blocked:true};
+ return {explicit:true,token:values[0],blocked:false};
+}
+
+const statusEl = document.getElementById('status');
+const enableButton = document.getElementById('enable');
+const resultEl = document.getElementById('result');
+const manifestEl = document.getElementById('appManifest');
+const portalAppEl = document.getElementById('portalApp');
+const lockedStateEl = document.getElementById('lockedState');
+lockedStateEl.querySelector('.access-retry')?.addEventListener('click', () => window.location.reload());
+const marketBrandEl = document.getElementById('marketBrand');
+const customerGreetingEl = document.getElementById('customerGreeting');
+const accountBadgeEl = document.getElementById('accountBadge');
+const headerRefreshButton = document.getElementById('headerRefresh');
+const primaryRemainingEl = document.getElementById('primaryRemaining');
+const primaryCurrencyEl = document.getElementById('primaryCurrency');
+const summaryMetricsEl = document.getElementById('summaryMetrics');
+const scheduleStatsEl = document.getElementById('scheduleStats');
+const paymentTimelineEl = document.getElementById('paymentTimeline');
+const debtLimitCardEl = document.getElementById('debtLimitCard');
+const debtLimitTitleEl = document.getElementById('debtLimitTitle');
+const debtLimitMetaEl = document.getElementById('debtLimitMeta');
+const debtLimitProgressEl = document.getElementById('debtLimitProgress');
+const ledgerEl = document.getElementById('ledger');
+const loadMoreButton = document.getElementById('loadMore');
+const notificationStateEl = document.getElementById('notificationState');
+const notificationHistoryEl = document.getElementById('notificationHistory');
+const notificationUnreadBadgeEl = document.getElementById('notificationUnreadBadge');
+const prefDueRemindersEl = document.getElementById('prefDueReminders');
+const prefInstallmentRemindersEl = document.getElementById('prefInstallmentReminders');
+const prefMonthlyStatementsEl = document.getElementById('prefMonthlyStatements');
+const prefManualMessagesEl = document.getElementById('prefManualMessages');
+const saveNotificationPreferencesButton = document.getElementById('saveNotificationPreferences');
+const preferenceResultEl = document.getElementById('preferenceResult');
+const showIosHelpButton = document.getElementById('showIosHelp');
+const iosHelpDialog = document.getElementById('iosHelpDialog');
+const receiptDialog = document.getElementById('receiptDialog');
+const receiptMarketNameEl = document.getElementById('receiptMarketName');
+const receiptNumberEl = document.getElementById('receiptNumber');
+const receiptCustomerNameEl = document.getElementById('receiptCustomerName');
+const receiptDateEl = document.getElementById('receiptDate');
+const receiptTypeEl = document.getElementById('receiptType');
+const receiptAmountLabelEl = document.getElementById('receiptAmountLabel');
+const receiptAmountEl = document.getElementById('receiptAmount');
+const receiptRemainingEl = document.getElementById('receiptRemaining');
+const receiptDueRowEl = document.getElementById('receiptDueRow');
+const receiptDueDateEl = document.getElementById('receiptDueDate');
+const receiptNoteRowEl = document.getElementById('receiptNoteRow');
+const receiptNoteEl = document.getElementById('receiptNote');
+const receiptItemsSectionEl = document.getElementById('receiptItemsSection');
+const receiptItemsEl = document.getElementById('receiptItems');
+const receiptFooterEl = document.getElementById('receiptFooter');
+const receiptPrintButton = document.getElementById('receiptPrint');
+const transactionSearchEl = document.getElementById('transactionSearch');
+const transactionFilterButtons = [...document.querySelectorAll('[data-transaction-filter]')];
+const transactionResultCountEl = document.getElementById('transactionResultCount');
+const clearTransactionSearchButton = document.getElementById('clearTransactionSearch');
+const printStatementButton = document.getElementById('printStatement');
+const homeTab = document.getElementById('homeTab');
+const transactionsTab = document.getElementById('transactionsTab');
+const statementTab = document.getElementById('statementTab');
+const receiptsTab = document.getElementById('receiptsTab');
+const notificationsTab = document.getElementById('notificationsTab');
+const accountTab = document.getElementById('accountTab');
+const receiptHistoryEl = document.getElementById('receiptHistory');
+const receiptCountEl = document.getElementById('receiptCount');
+const latestReceiptDateEl = document.getElementById('latestReceiptDate');
+const accountCustomerNameEl = document.getElementById('accountCustomerName');
+const accountCustomerPhoneEl = document.getElementById('accountCustomerPhone');
+const accountMarketNameEl = document.getElementById('accountMarketName');
+const accountMarketPhoneEl = document.getElementById('accountMarketPhone');
+const accountMarketAddressEl = document.getElementById('accountMarketAddress');
+const statementFromDateEl = document.getElementById('statementFromDate');
+const statementToDateEl = document.getElementById('statementToDate');
+const statementFromDisplayEl = document.getElementById('statementFromDisplay');
+const statementToDisplayEl = document.getElementById('statementToDisplay');
+const generatePeriodStatementButton = document.getElementById('generatePeriodStatement');
+const statementBuilderResultEl = document.getElementById('statementBuilderResult');
+const periodStatementDocumentEl = document.getElementById('periodStatementDocument');
+const periodStatementRowsEl = document.getElementById('periodStatementRows');
+const periodStatementTotalsEl = document.getElementById('periodStatementTotals');
+const statementMarketNameEl = document.getElementById('statementMarketName');
+const statementMarketMetaEl = document.getElementById('statementMarketMeta');
+const statementCustomerNameEl = document.getElementById('statementCustomerName');
+const statementPeriodLabelEl = document.getElementById('statementPeriodLabel');
+const statementCreatedDateEl = document.getElementById('statementCreatedDate');
+const periodStatementFooterEl = document.getElementById('periodStatementFooter');
+const printPeriodStatementButton = document.getElementById('printPeriodStatement');
+const statementItemCountEl = document.getElementById('statementItemCount');
+const statementDayCountEl = document.getElementById('statementDayCount');
+const statementCurrencyCountEl = document.getElementById('statementCurrencyCount');
+const statementItemSearchEl = document.getElementById('statementItemSearch');
+const statementSortEl = document.getElementById('statementSort');
+const exportStatementCsvButton = document.getElementById('exportStatementCsv');
+const statementVisibleCountEl = document.getElementById('statementVisibleCount');
+const clearStatementFiltersButton = document.getElementById('clearStatementFilters');
+const statementPresetButtons = [...document.querySelectorAll('[data-statement-preset]')];
+const tabButtons = [...document.querySelectorAll('[data-portal-tab]')];
+const views = {
+  home: document.getElementById('homeView'),
+  transactions: document.getElementById('transactionsView'),
+  statement: document.getElementById('statementView'),
+  receipts: document.getElementById('receiptsView'),
+  notifications: document.getElementById('notificationsView'),
+  account: document.getElementById('accountView'),
+};
+
+function setStatus(message, kind = 'muted') {
+  statusEl.textContent = message;
+  statusEl.className = `sr-status ${kind}`;
+}
+
+function setResult(message, kind = '') {
+  resultEl.textContent = message;
+  resultEl.className = `action-result ${kind}`.trim();
+}
+
+function setActiveView(name) {
+  if (!views[name]) return;
+  for (const [viewName, element] of Object.entries(views)) {
+    element.hidden = viewName !== name;
+  }
+  for (const button of tabButtons) {
+    const active = button.dataset.portalTab === name;
+    button.classList.toggle('is-active', active);
+    if (active) {
+      button.setAttribute('aria-current', 'page');
+    } else {
+      button.removeAttribute('aria-current');
+    }
+  }
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+}
+
+homeTab.addEventListener('click', () => setActiveView('home'));
+transactionsTab.addEventListener('click', () => setActiveView('transactions'));
+statementTab.addEventListener('click', () => setActiveView('statement'));
+receiptsTab.addEventListener('click', () => {
+  setActiveView('receipts');
+  if (currentNotificationItems.length === 0) void loadNotificationHistory();
+});
+notificationsTab.addEventListener('click', () => {
+  setActiveView('notifications');
+  void loadNotificationHistory();
+  void loadNotificationPreferences();
+});
+accountTab.addEventListener('click', () => setActiveView('account'));
+
+function isIos() {
+  const ua = navigator.userAgent || '';
+  const classicIos = /iPad|iPhone|iPod/.test(ua);
+  const modernIpad = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return classicIos || modernIpad;
+}
+
+function isStandalone() {
+  return window.navigator.standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches;
+}
+
+function supportsPush() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+function decodeVapidKey(value) {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4);
+  const normalized = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(normalized);
+  return Uint8Array.from([...raw].map((character) => character.charCodeAt(0)));
+}
+
+async function api(payload) {
+ const controller=new AbortController();
+ const timer=window.setTimeout(()=>controller.abort(),20000);
+ try{
+  const response=await fetch(API_URL,{method:'POST',mode:'cors',credentials:'omit',cache:'no-store',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const body=await response.json().catch(()=>null);
+  if(!response.ok||!body||typeof body!=='object'){
+   const reason=body?.error==='link_unavailable'&&[400,404].includes(response.status)?'link_unavailable':'request_failed';
+   throw new Error(reason);
+  }
+  return body;
+ }finally{window.clearTimeout(timer);}
+}
+
+function persistedPushCredentials() {
+  const endpoint = localStorage.getItem(ENDPOINT_KEY) || '';
+  const deviceSecret = localStorage.getItem(DEVICE_SECRET_KEY) || '';
+  if (!endpoint.startsWith('https://') || !TOKEN_PATTERN.test(deviceSecret)) {
+    return null;
+  }
+  return { endpoint, deviceSecret };
+}
+
+function scrubLinkCredentialsFromLocation() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('token');
+  if (url.hash) {
+    const fragment = new URLSearchParams(
+      url.hash.startsWith('#') ? url.hash.slice(1) : url.hash,
+    );
+    fragment.delete('token');
+    url.hash = fragment.toString() ? `#${fragment.toString()}` : '';
+  }
+  const suffix = `${url.search}${url.hash}`;
+  window.history.replaceState(null, '', `${url.pathname}${suffix}`);
+}
+
+function resolveLinkToken(){
+ const currentUrl=new URL(window.location.href);
+ const fragment=new URLSearchParams(currentUrl.hash.startsWith('#')?currentUrl.hash.slice(1):currentUrl.hash);
+ const link=selectPortalLink(currentUrl.searchParams,fragment,TOKEN_PATTERN);
+ const persisted=persistedPushCredentials();
+ if(link.explicit){
+  if(link.blocked||(isStandalone()&&persisted)){
+   setLinkBlockState(true);scrubLinkCredentialsFromLocation();return '';
+  }
+  setLinkBlockState(false);
+  localStorage.setItem(LINK_TOKEN_KEY,link.token);
+  scrubLinkCredentialsFromLocation();
+  if(manifestEl)manifestEl.href='./manifest.webmanifest';
+  return link.token;
+ }
+ if(linkBlockState()){explicitLinkBlocked=true;return '';}
+ if(isStandalone()&&persisted){
+  localStorage.removeItem(LINK_TOKEN_KEY);scrubLinkCredentialsFromLocation();return '';
+ }
+ const savedToken=localStorage.getItem(LINK_TOKEN_KEY)||'';
+ return TOKEN_PATTERN.test(savedToken)?savedToken:'';
+}
+
+let activeToken = '';
+let vapidPublicKey = '';
+let nextOffset = 0;
+let currentPortalData = null;
+let portalLoadRevision=0,portalLoadsInFlight=0,autoDashboardBusy=false,portalInitialized=false,lastDashboardCheck=0;
+let currentPeriodStatement = null;
+let currentStatementVisibleRows = [];
+let statementItemQuery = '';
+let statementSortMode = 'date-asc';
+let currentNotificationItems = [];
+let loadedRows = [];
+let transactionFilter = 'all';
+let transactionQuery = '';
+
+function number(value) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+const portalMoneyFormatter=new Intl.NumberFormat('en-US',{maximumFractionDigits:2});
+function money(value,currency){return `${portalMoneyFormatter.format(number(value))} ${currency||'IQD'}`;}
+
+function portalCredentials(offset = 0, action = 'portal') {
+  if(explicitLinkBlocked)return null;
+  if (activeToken) {
+    return action === 'portal'
+      ? { action, token: activeToken, offset }
+      : { action, token: activeToken };
+  }
+  const persisted = persistedPushCredentials();
+  if (persisted) {
+    return action === 'portal'
+      ? { action, endpoint: persisted.endpoint, device_secret: persisted.deviceSecret, offset }
+      : { action, endpoint: persisted.endpoint, device_secret: persisted.deviceSecret };
+  }
+  return null;
+}
+
+function addText(parent, tag, text, className = '') {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (className) node.className = className;
+  parent.appendChild(node);
+  return node;
+}
+
+function renderPrimaryBalance(data) {
+  if (data?.effective_remaining_iqd != null) {
+    primaryRemainingEl.textContent = money(data.effective_remaining_iqd, 'IQD');
+    primaryCurrencyEl.textContent = 'IQD';
+    return;
+  }
+  const totals = data?.totals;
+  const first = Array.isArray(totals) && totals.length > 0 ? totals[0] : null;
+  const currency = typeof first?.currency === 'string' ? first.currency : 'IQD';
+  primaryRemainingEl.textContent = money(first?.remaining ?? 0, currency);
+  primaryCurrencyEl.textContent = currency;
+}
+
+function metric(label, value, currency) {
+  const card = document.createElement('article');
+  card.className = 'metric-card';
+  addText(card, 'span', label);
+  addText(card, 'strong', money(value, currency));
+  return card;
+}
+
+function scheduleStat(label, value, tone = '') {
+  const card = document.createElement('div');
+  card.className = `schedule-stat${tone ? ` is-${tone}` : ''}`;
+  addText(card, 'span', label);
+  addText(card, 'strong', String(value));
+  return card;
+}
+
+function timelineItem({ tone = '', title, meta, amount = '', tag = '' }) {
+  const item = document.createElement('article');
+  item.className = `payment-timeline-item${tone ? ` is-${tone}` : ''}`;
+
+  const rail = document.createElement('span');
+  rail.className = 'timeline-rail';
+  item.appendChild(rail);
+
+  const copy = document.createElement('div');
+  copy.className = 'timeline-copy';
+  addText(copy, 'strong', title);
+  if (meta) addText(copy, 'small', meta);
+  item.appendChild(copy);
+
+  const side = document.createElement('div');
+  side.className = 'timeline-side';
+  if (amount) addText(side, 'b', amount);
+  if (tag) addText(side, 'span', tag);
+  item.appendChild(side);
+  return item;
+}
+
+function renderPaymentTimeline(data) {
+  if (!scheduleStatsEl || !paymentTimelineEl) return;
+  const due = data?.due_summary && typeof data.due_summary === 'object'
+    ? data.due_summary
+    : {};
+  const openCount = number(due.open_schedule_count);
+  const overdueCount = number(due.overdue_count);
+  const dueTodayCount = number(due.due_today_count);
+  const dueNext7 = number(due.due_next_7_days);
+  const oldestOverdue = due.oldest_overdue && typeof due.oldest_overdue === 'object'
+    ? due.oldest_overdue
+    : null;
+  const nextDue = due.next_due && typeof due.next_due === 'object'
+    ? due.next_due
+    : null;
+
+  scheduleStatsEl.replaceChildren(
+    scheduleStat('دانەوەی کراوە', openCount),
+    scheduleStat('دواکەوتوو', overdueCount, overdueCount > 0 ? 'danger' : 'ok'),
+    scheduleStat('7 ڕۆژی داهاتوو', dueNext7, dueNext7 > 0 ? 'warning' : ''),
+  );
+
+  paymentTimelineEl.replaceChildren();
+
+  if (overdueCount > 0) {
+    const overdueAmount = oldestOverdue?.amount != null
+      ? money(oldestOverdue.amount, oldestOverdue.currency)
+      : '';
+    const overdueMeta = oldestOverdue
+      ? `${number(oldestOverdue.days_overdue)} ڕۆژ دواکەوتوو • ${formatShortDate(oldestOverdue.due_date)}`
+      : `${overdueCount} دانە پێویستی بە دانەوە هەیە`;
+    paymentTimelineEl.appendChild(timelineItem({
+      tone: 'danger',
+      title: overdueCount === 1 ? 'دانەوەی دواکەوتوو' : `${overdueCount} دانەوەی دواکەوتوو`,
+      meta: overdueMeta,
+      amount: overdueAmount,
+      tag: 'دواکەوتوو',
+    }));
+  }
+
+  if (dueTodayCount > 0) {
+    paymentTimelineEl.appendChild(timelineItem({
+      tone: 'warning',
+      title: dueTodayCount === 1 ? 'دانەوەی ئەمڕۆ' : `${dueTodayCount} دانەوەی ئەمڕۆ`,
+      meta: 'بەرواری دانەوە گەیشتووە',
+      tag: 'ئەمڕۆ',
+    }));
+  }
+
+  if (nextDue && number(nextDue.days_until_due) > 0) {
+    const days = number(nextDue.days_until_due);
+    const installment = nextDue.kind === 'installment'
+      ? `قسط${nextDue.installment_no ? `ی ${nextDue.installment_no}` : ''}`
+      : 'قەرز';
+    paymentTimelineEl.appendChild(timelineItem({
+      tone: days <= 3 ? 'warning' : 'ok',
+      title: 'نزیکترین دانەوە',
+      meta: `${installment} • ${formatShortDate(nextDue.due_date)}`,
+      amount: money(nextDue.amount, nextDue.currency),
+      tag: days === 1 ? 'سبەی' : `${days} ڕۆژ`,
+    }));
+  }
+
+  if (paymentTimelineEl.children.length === 0) {
+    paymentTimelineEl.appendChild(timelineItem({
+      tone: 'ok',
+      title: 'هیچ دانەوەیەکی نزیک نییە',
+      meta: 'لە ئێستادا هیچ قەرز یان قسطێکی دواکەوتوو نییە.',
+      tag: 'باشە',
+    }));
+  }
+}
+
+function repaymentRatio(total,paid,remaining){
+ if([total,paid,remaining].some(v=>v==null||v===''||!Number.isFinite(Number(v))))return null;
+ const t=Number(total),p=Number(paid),r=Number(remaining);
+ if(t<=0||p<0||r<0||p>t||Math.abs(t-p-r)>0.011)return null;
+ return Math.round(p/t*1000)/10;
+}
+function monthlyRecordedActivity(rows,hasMore){
+ if(hasMore!==false||!Array.isArray(rows)||!rows.length)return [];
+ const groups=new Map(),seen=new Set();
+ for(const row of rows){
+  const id=String(row?.id||''),kind=row?.kind,currency=String(row?.currency||'').toUpperCase(),date=String(row?.occurred_at||'').slice(0,7),amount=Number(row?.amount);
+  if(!id||!['debt','payment'].includes(kind)||!['IQD','USD'].includes(currency)||!/^\d{4}-(0[1-9]|1[0-2])$/.test(date)||row.amount==null||row.amount===''||!Number.isFinite(amount)||amount<0)return [];
+  const key=kind+':'+id;if(seen.has(key))return [];seen.add(key);
+  if(!groups.has(currency))groups.set(currency,new Map());
+  const months=groups.get(currency);if(!months.has(date))months.set(date,{month:date,debt:0,payment:0});
+  months.get(date)[kind]+=amount;
+ }
+ return [...groups].map(([currency,months])=>({currency,months:[...months.values()].sort((a,b)=>a.month.localeCompare(b.month)).slice(-6)})).filter(g=>g.months.length>=2&&g.months.some(m=>m.debt>0||m.payment>0));
+}
+function renderRepaymentProgress(data){
+ const root=document.getElementById('repaymentProgress');root.replaceChildren();
+ const totals=Array.isArray(data?.totals)?data.totals:[];
+ for(const item of totals){
+  const currency=String(item.currency||'').toUpperCase();
+  if(!['IQD','USD'].includes(currency)||item.paid==null)continue;
+  const general=currency==='IQD'?Number(data.general_paid_iqd??0):0;
+  const remaining=currency==='IQD'&&data.effective_remaining_iqd!=null?data.effective_remaining_iqd:item.remaining;
+  const ratio=repaymentRatio(item.total_debt,Number(item.paid)+general,remaining);
+  if(ratio===null)continue;
+  const row=document.createElement('div');row.className='repayment-progress-row';
+  const label=addText(row,'div','ڕێژەی پارەدانەوە'+(totals.length>1?' — '+currency:''),'repayment-label');
+  addText(label,'strong',ratio.toLocaleString('en-US',{maximumFractionDigits:1})+'%');
+  const progress=document.createElement('progress');progress.max=100;progress.value=ratio;progress.setAttribute('aria-label','ڕێژەی پارەدانەوە '+currency);row.appendChild(progress);root.appendChild(row);
+ }
+ root.hidden=!root.children.length;
+}
+function renderMonthlyActivity(data){
+ const section=document.getElementById('monthlyActivity'),root=document.getElementById('monthlyActivityContent');root.replaceChildren();
+ const groups=monthlyRecordedActivity(data?.rows,data?.has_more);
+ for(const group of groups){
+  const block=document.createElement('div');block.className='activity-currency';
+  addText(block,'h4',group.currency);
+  const legend=document.createElement('div');legend.className='activity-legend';
+  addText(legend,'span','قەرز','activity-debt');addText(legend,'span','پارەدانەوە','activity-paid');block.appendChild(legend);
+  const max=Math.max(...group.months.flatMap(m=>[m.debt,m.payment]));
+  for(const m of group.months){
+   const row=document.createElement('div');row.className='activity-month';
+   addText(row,'strong',m.month,'activity-month-label');
+   const bars=document.createElement('div');bars.className='activity-bars';
+   for(const [kind,label] of [['debt','قەرز'],['payment','پارەدانەوە']]){
+    const line=document.createElement('div');line.className='activity-line '+kind;
+    const bar=document.createElement('meter');bar.min=0;bar.max=max;bar.value=m[kind];bar.setAttribute('aria-label',label+' '+money(m[kind],group.currency));line.appendChild(bar);
+    addText(line,'span',money(m[kind],group.currency));bars.appendChild(line);
+   }
+   row.appendChild(bars);block.appendChild(row);
+  }
+  root.appendChild(block);
+ }
+ section.hidden=!groups.length;
+}
+function renderSummaryMetrics(data) {
+ const totals=Array.isArray(data?.totals)?data.totals:[];
+ const primary=primaryCurrencyEl.textContent.trim()||'IQD';
+ const other=document.getElementById('otherBalances'),details=document.getElementById('balanceDetails'),paymentDetails=document.getElementById('paymentDetails');
+ summaryMetricsEl.replaceChildren();other.replaceChildren();paymentDetails.replaceChildren();
+ for(const item of totals.length?totals:[{currency:primary,total_debt:0,paid:0,remaining:0}]){
+  const currency=String(item.currency||'IQD').toUpperCase(),direct=number(item.paid),general=currency==='IQD'?number(data?.general_paid_iqd):0;
+  summaryMetricsEl.append(metric('کۆی قەرز',item.total_debt,currency),metric('کۆی پارەدانەوە',direct+general,currency));
+  if(currency!==primary)other.append(metric('قەرزی ماوە',item.remaining,currency));
+  if(general!==0&&direct!==0)paymentDetails.append(metric('پارەدانەوەی مامەڵە',direct,currency),metric('پارەدانەوەی گشتی',general,currency));
+  if(currency==='IQD'&&general!==0&&data?.gross_remaining_iqd!=null&&number(data.gross_remaining_iqd)!==number(item.total_debt)&&number(data.gross_remaining_iqd)!==number(data.effective_remaining_iqd))paymentDetails.append(metric('ماوە پێش پارەدانەوەی گشتی',data.gross_remaining_iqd,currency));
+ }
+ other.hidden=!other.children.length;details.hidden=!paymentDetails.children.length;
+ renderRepaymentProgress(data);
+ const date=new Date(data?.as_of||Date.now());document.getElementById('balanceUpdated').textContent=Number.isNaN(date.getTime())?'نوێکراوە':'نوێکراوە '+date.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+
+function formatShortDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('ku-IQ', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function renderAccountInsights(data) {
+ const limit=number(data?.debt_limit),iqdTotal=Array.isArray(data?.totals)?data.totals.find(x=>String(x?.currency||'').toUpperCase()!=='USD'):null;
+ debtLimitCardEl.hidden=limit<=0;
+ if(limit>0){const remaining=data?.effective_remaining_iqd!=null?number(data.effective_remaining_iqd):number(iqdTotal?.remaining),percent=Math.max(0,remaining/limit*100);debtLimitCardEl.classList.toggle('is-danger',percent>=100);debtLimitCardEl.classList.toggle('is-warning',percent>=80&&percent<100);debtLimitTitleEl.textContent=money(limit,'IQD');debtLimitMetaEl.textContent=money(remaining,'IQD')+' بەکارهاتوو';debtLimitProgressEl.style.width=Math.min(percent,100)+'%';}
+ const due=data?.due_summary;document.getElementById('schedulePanel').hidden=!(due&&(number(due.open_schedule_count)>0||number(due.overdue_count)>0||number(due.due_today_count)>0||due.next_due));if(due)renderPaymentTimeline(data);
+}
+
+function isOverdueDebt(item) {
+  if (item?.kind !== 'debt' || number(item?.remaining) <= 0 || !item?.due_date) {
+    return false;
+  }
+  const due = new Date(`${item.due_date}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return due < today;
+}
+
+function normalizeLedgerSearch(value){return String(value??'').normalize('NFKC').toLowerCase().replace(/[٠-٩۰-۹]/g,ch=>String(ch.charCodeAt(0)-(ch.charCodeAt(0)>=1776?1776:1632))).replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/[,\u066c](?=\d{3}(?:\D|$))/g,'').replace(/\s+/g,' ').trim()}
+function ledgerTimestamp(item){const t=Date.parse(item?.occurred_at??'');return Number.isFinite(t)?t:-Infinity}
+function transactionSearchText(item) {
+  const date = new Date(item?.occurred_at);
+  const localizedDate = Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleDateString('ku-IQ');
+  return [
+    item?.kind === 'payment'
+      ? (item?.payment_scope === 'general' ? 'پارەدانەوەی گشتی' : 'پارەدانەوەی مامەڵە')
+      : 'قەرز',
+    item?.amount,
+    item?.remaining,
+    item?.currency,
+    item?.note,
+    item?.due_date,
+    item?.status,
+    localizedDate,
+    item?.occurred_at,
+    money(item?.amount,item?.currency),
+  ].filter((value) => value != null).join(' ');
+}
+
+function filteredTransactionRows() {
+  const query = normalizeLedgerSearch(transactionQuery);
+  return loadedRows.filter((item) => {
+    const filterMatch =
+      transactionFilter === 'all' ||
+      transactionFilter === item.kind ||
+      (transactionFilter === 'overdue' && isOverdueDebt(item));
+    if (!filterMatch) return false;
+    if (!query) return true;
+    return query.split(' ').every(term=>normalizeLedgerSearch(transactionSearchText(item)).includes(term));
+  }).sort((a,b)=>{const x=ledgerTimestamp(a),y=ledgerTimestamp(b);return x===y?0:x>y?-1:1;});
+}
+
+function updateTransactionFilterUi() {
+  for (const button of transactionFilterButtons) {
+    button.classList.toggle(
+      'is-active',
+      button.dataset.transactionFilter === transactionFilter,
+    );
+  }
+  if (clearTransactionSearchButton) {
+    clearTransactionSearchButton.hidden =
+      !transactionQuery && transactionFilter === 'all';
+  }
+}
+
+function renderFilteredTransactions() {
+  ledgerEl.replaceChildren();
+  const rows = filteredTransactionRows();
+  if (rows.length === 0) {
+    addText(
+      ledgerEl,
+      'p',
+      loadedRows.length === 0
+        ? 'هێشتا هیچ مامەڵەیەک تۆمار نەکراوە.'
+        : 'هیچ مامەڵەیەک لەم گەڕان/فلتەرەدا نەدۆزرایەوە.',
+      'empty',
+    );
+  } else {
+    let lastDay=null;
+    for (const item of rows) {
+      const date=new Date(item.occurred_at);
+      const day=Number.isNaN(date.getTime())?'بەروار دیاری نەکراوە':formatShortDate(item.occurred_at);
+      if(day!==lastDay){addText(ledgerEl,'h3',day,'ledger-day');lastDay=day;}
+      ledgerEl.appendChild(buildLedgerEntry(item));
+    }
+  }
+  if (transactionResultCountEl) {
+    transactionResultCountEl.textContent = `${rows.length} مامەڵەی پیشاندراو`;
+  }
+  updateTransactionFilterUi();
+}
+
+function mergeLoadedRows(rows, append) {
+  const incoming = Array.isArray(rows) ? rows : [];
+  if (!append) {
+    loadedRows = incoming.slice();
+    return;
+  }
+  const byKey = new Map(
+    loadedRows.map((item) => [`${item.kind || ''}:${item.id || ''}`, item]),
+  );
+  for (const item of incoming) {
+    byKey.set(`${item.kind || ''}:${item.id || ''}`, item);
+  }
+  loadedRows = [...byKey.values()];
+}
+
+function transactionKindLabel(item){return item.kind==='payment'?(item.payment_scope==='general'?'پارەدانەوەی گشتی':'پارەدانەوەی مامەڵە'):'قەرز'}
+function openTransactionDetail(item) {
+ const dialog=document.getElementById('transactionDetailDialog');
+ const content=document.getElementById('transactionDetailContent');
+ if(typeof dialog.showModal!=='function')return;
+ content.replaceChildren();
+ const amount=document.createElement('div');amount.className='transaction-detail-amount';
+ addText(amount,'span',transactionKindLabel(item));
+ addText(amount,'strong',money(item.amount,item.currency));
+ content.appendChild(amount);
+ const row=(label,value)=>{if(value==null||value==='')return;const el=document.createElement('div');el.className='transaction-detail-row';addText(el,'span',label);addText(el,'strong',String(value));content.appendChild(el)};
+ const date=new Date(item.occurred_at);
+ if(!Number.isNaN(date.getTime()))row('بەروار و کات',date.toLocaleString('en-GB',{timeZone:'Asia/Baghdad',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}));
+ if(item.kind!=='payment'){
+  if(item.remaining!=null)row('قەرزی ماوە',money(item.remaining,item.currency));
+  if(item.due_date)row('بەرواری دانەوە',statementDateLabel(item.due_date));
+  if(isOverdueDebt(item))row('دۆخ','دواکەوتوو');
+ }
+ if(typeof item.note==='string'&&item.note.trim())row('تێبینی',item.note.trim());
+ if(!dialog.open)dialog.showModal();
+}
+function buildLedgerEntry(item) {
+  const isPayment = item.kind === 'payment';
+  const entry = document.createElement('article');
+  entry.className = 'entry';
+  if (item.id) entry.dataset.eventId = String(item.id);
+  const head = document.createElement('button');
+  head.type='button';
+  head.className = 'entry-head entry-detail-trigger';
+  head.setAttribute('aria-haspopup','dialog');
+  head.setAttribute('aria-label',transactionKindLabel(item)+'، '+money(item.amount,item.currency)+'، وردەکاری');
+  addText(head,'strong',transactionKindLabel(item),isPayment?'payment-label':'debt-label');
+  addText(head,'strong',money(item.amount,item.currency));
+  head.addEventListener('click',()=>openTransactionDetail(item));
+  entry.appendChild(head);
+
+  const date = new Date(item.occurred_at);
+  const dateText = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('ku-IQ');
+  if(dateText)addText(entry,'div',dateText,'entry-meta ledger-print-date');
+  if(typeof item.note==='string'&&item.note.trim())addText(entry,'div',item.note.trim(),'entry-meta entry-note-preview');
+  if (!isPayment) {
+    addText(entry, 'div', `ماوە: ${money(item.remaining, item.currency)}`, 'entry-meta');
+    if (item.due_date) {
+      const overdue = isOverdueDebt(item);
+      const dueLine = document.createElement('div');
+      dueLine.className = overdue ? 'entry-due is-overdue' : 'entry-due';
+      dueLine.textContent = overdue
+        ? `دواکەوتوو • ${formatShortDate(item.due_date)}`
+        : `دانەوە: ${formatShortDate(item.due_date)}`;
+      entry.appendChild(dueLine);
+    }
+  }
+  return entry;
+}
+
+function renderRows(rows, append = false) {
+  mergeLoadedRows(rows, append);
+  renderFilteredTransactions();
+}
+
+function renderNotificationState(state, message) {
+  notificationStateEl.dataset.state = state;
+  notificationStateEl.textContent = message;
+}
+
+function notificationEventLabel(eventType) {
+  switch (eventType) {
+    case 'debt_created':
+      return 'قەرز';
+    case 'payment_created':
+      return 'پارەدانەوە';
+    case 'manual':
+      return 'پەیامی بەڕێوەبەر';
+    case 'due_reminder':
+      return 'یادخستنەوەی قەرز';
+    case 'installment_reminder':
+      return 'یادخستنەوەی قسط';
+    case 'debt_limit_changed':
+      return 'گۆڕانی سنووری قەرز';
+    case 'monthly_statement':
+      return 'کەشفی حیسابی مانگانە';
+    default:
+      return 'ئاگادارکردنەوە';
+  }
+}
+
+function notificationStatusLabel(status) {
+  switch (status) {
+    case 'sent':
+      return 'نێردرا';
+    case 'pending':
+      return 'لە ڕیزدایە';
+    case 'partial':
+      return 'بەشێکی نێردرا';
+    case 'failed':
+      return 'شکست';
+    case 'no_device':
+      return 'ئامێری چالاک نەبوو';
+    default:
+      return '';
+  }
+}
+
+function renderAccountDetails(data) {
+  if (!data || typeof data !== 'object') return;
+  if (accountCustomerNameEl) {
+    accountCustomerNameEl.textContent =
+      String(data.customer_name || '').trim() || 'کڕیار';
+  }
+  if (accountCustomerPhoneEl) {
+    accountCustomerPhoneEl.textContent =
+      String(data.customer_phone || '').trim() || 'ژمارەی مۆبایل تۆمار نەکراوە';
+  }
+  if (accountMarketNameEl) {
+    accountMarketNameEl.textContent =
+      String(data.market_name || '').trim() || 'ZHIROX';
+  }
+  if (accountMarketPhoneEl) {
+    accountMarketPhoneEl.textContent =
+      String(data.market_phone || '').trim() || '—';
+  }
+  if (accountMarketAddressEl) {
+    accountMarketAddressEl.textContent =
+      String(data.market_address || '').trim() || '—';
+  }
+}
+
+function renderReceiptHistory(items) {
+  if (!receiptHistoryEl) return;
+  const receipts = (Array.isArray(items) ? items : [])
+    .filter((item) => String(item?.receipt_id || '').trim());
+
+  receiptHistoryEl.replaceChildren();
+  if (receiptCountEl) receiptCountEl.textContent = String(receipts.length);
+  if (latestReceiptDateEl) {
+    latestReceiptDateEl.textContent = receipts.length > 0
+      ? formatShortDate(receipts[0].created_at) || '—'
+      : '—';
+  }
+
+  if (receipts.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'receipt-empty-state';
+    addText(empty, 'strong', 'هێشتا پسووڵەیەک نییە');
+    addText(
+      empty,
+      'span',
+      'کاتێک قەرز یان پارەدانەوەیەک پسووڵەی هەبێت، لێرە پیشان دەدرێت.',
+    );
+    receiptHistoryEl.appendChild(empty);
+    return;
+  }
+
+  for (const item of receipts) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'receipt-history-card';
+    card.addEventListener('click', () => void openReceipt(item.receipt_id));
+
+    const icon = document.createElement('span');
+    icon.className = 'receipt-history-icon';
+    icon.textContent = item.event_type === 'payment_created' ? '✓' : '▤';
+
+    const copy = document.createElement('span');
+    copy.className = 'receipt-history-copy';
+    addText(
+      copy,
+      'strong',
+      item.event_type === 'payment_created'
+        ? 'پسووڵەی پارەدانەوە'
+        : 'پسووڵەی قەرز',
+    );
+    addText(
+      copy,
+      'small',
+      item.receipt_number
+        ? `#${item.receipt_number} • ${formatShortDate(item.created_at)}`
+        : formatShortDate(item.created_at) || 'پسووڵەی دیجیتاڵ',
+    );
+
+    const amount = document.createElement('span');
+    amount.className = 'receipt-history-amount';
+    amount.textContent = item.amount != null
+      ? money(item.amount, item.currency)
+      : 'کردنەوە';
+
+    card.append(icon, copy, amount);
+    receiptHistoryEl.appendChild(card);
+  }
+}
+
+function notificationDeepLink(item) {
+  const raw = typeof item.deep_link === 'string' ? item.deep_link.trim() : '';
+  if (!raw) return null;
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+    return url;
+  } catch (_) {
+    return null;
+  }
+}
+
+function receiptItemLabel(item, index) {
+  if (!item || typeof item !== 'object') return `بابەتی ${index + 1}`;
+  return String(
+    item.name ??
+    item.title ??
+    item.item_name ??
+    item.product_name ??
+    item.description ??
+    `بابەتی ${index + 1}`
+  ).trim();
+}
+
+function receiptItemMeta(item) {
+  if (!item || typeof item !== 'object') return '';
+  const parts = [];
+  const quantity = item.quantity ?? item.qty;
+  const price = item.price ?? item.unit_price;
+  const total = item.total ?? item.total_price;
+  if (quantity != null) parts.push(`ژمارە: ${quantity}`);
+  if (price != null) parts.push(`نرخ: ${number(price).toLocaleString('en-US')}`);
+  if (total != null) parts.push(`کۆ: ${number(total).toLocaleString('en-US')}`);
+  return parts.join(' • ');
+}
+
+function renderReceipt(data) {
+  const source = data?.source && typeof data.source === 'object'
+    ? data.source
+    : {};
+  const settings = data?.settings && typeof data.settings === 'object'
+    ? data.settings
+    : {};
+  const isPayment = source.kind === 'payment';
+  const currency = String(source.currency || 'IQD').toUpperCase();
+  const rawAmount = number(source.amount);
+  const dollarRate = number(source.dollar_rate);
+  const displayAmount = currency === 'USD' && dollarRate > 0
+    ? rawAmount / dollarRate
+    : rawAmount;
+  const displayCurrency = currency === 'USD' && dollarRate > 0 ? 'USD' : 'IQD';
+
+  receiptMarketNameEl.textContent =
+    String(data.market_name || settings.receipt_title || 'ZHIROX');
+  receiptNumberEl.textContent =
+    data.receipt_number ? `#${data.receipt_number}` : '—';
+  receiptCustomerNameEl.textContent = String(data.customer_name || '—');
+  receiptDateEl.textContent = formatShortDate(source.occurred_at || data.created_at) || '—';
+  receiptTypeEl.textContent = isPayment ? 'پارەدانەوە' : 'قەرز';
+  receiptAmountLabelEl.textContent = isPayment ? 'بڕی پارەدانەوە' : 'بڕی قەرز';
+  receiptAmountEl.textContent = money(displayAmount, displayCurrency);
+
+  if (!isPayment && source.remaining != null) {
+    const rawRemaining = number(source.remaining);
+    const remaining = currency === 'USD' && dollarRate > 0
+      ? rawRemaining / dollarRate
+      : rawRemaining;
+    receiptRemainingEl.textContent = `ماوە: ${money(remaining, displayCurrency)}`;
+  } else {
+    receiptRemainingEl.textContent = '';
+  }
+
+  const dueDate = String(source.due_date || '').trim();
+  receiptDueRowEl.hidden = !dueDate;
+  if (dueDate) receiptDueDateEl.textContent = formatShortDate(dueDate);
+
+  const note = String(source.note || '').trim();
+  receiptNoteRowEl.hidden = !note;
+  if (note) receiptNoteEl.textContent = note;
+
+  receiptItemsEl.replaceChildren();
+  const items = Array.isArray(source.items) ? source.items : [];
+  receiptItemsSectionEl.hidden = items.length === 0;
+  items.forEach((item, index) => {
+    const row = document.createElement('div');
+    row.className = 'receipt-item';
+    const copy = document.createElement('div');
+    addText(copy, 'strong', receiptItemLabel(item, index));
+    const meta = receiptItemMeta(item);
+    if (meta) addText(copy, 'small', meta);
+    row.appendChild(copy);
+    receiptItemsEl.appendChild(row);
+  });
+
+  receiptFooterEl.textContent = String(settings.footer_note || '').trim();
+}
+
+async function openReceipt(receiptId) {
+  const id = String(receiptId || '').trim();
+  if (!id) return false;
+  const credentials = portalCredentials(0, 'receipt');
+  if (!credentials) return false;
+  try {
+    const data = await api({ ...credentials, receipt_id: id });
+    renderReceipt(data);
+    if (typeof receiptDialog?.showModal === 'function') {
+      if (!receiptDialog.open) receiptDialog.showModal();
+    }
+    return true;
+  } catch (_) {
+    setResult('نەتوانرا پسووڵەکە بکرێتەوە.', 'err');
+    return false;
+  }
+}
+
+async function markNotification(item, acknowledge = false) {
+  const id = String(item?.id || '').trim();
+  if (!id) return false;
+  const action = acknowledge ? 'acknowledge' : 'mark_read';
+  const credentials = portalCredentials(0, action);
+  if (!credentials) return false;
+  try {
+    await api({ ...credentials, notification_id: id });
+    item.read_at = item.read_at || new Date().toISOString();
+    if (acknowledge) item.acknowledged_at = item.acknowledged_at || new Date().toISOString();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function followNotification(item) {
+  await markNotification(item, false);
+  const target = notificationDeepLink(item);
+  if (!target) {
+    setActiveView('notifications');
+    await loadNotificationHistory();
+    return;
+  }
+
+  const view = target.searchParams.get('view') || 'notifications';
+  setActiveView(views[view] ? view : 'notifications');
+  const eventId = target.searchParams.get('event') || '';
+  const receiptId = target.searchParams.get('receipt') || '';
+  if (eventId) await focusTransaction(eventId);
+  if (receiptId) await openReceipt(receiptId);
+  await loadNotificationHistory();
+}
+
+function renderNotificationHistory(items) {
+  notificationHistoryEl.replaceChildren();
+  if (!Array.isArray(items) || items.length === 0) {
+    addText(
+      notificationHistoryEl,
+      'p',
+      'هێشتا هیچ ئاگادارکردنەوەیەک تۆمار نەکراوە.',
+      'empty',
+    );
+    return;
+  }
+
+  for (const item of items) {
+    const card = document.createElement('article');
+    card.className = 'notification-history-item';
+    if (!item.read_at) card.classList.add('is-unread');
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+
+    const head = document.createElement('div');
+    head.className = 'notification-history-head';
+    addText(head, 'strong', notificationEventLabel(item.event_type));
+
+    const stateWrap = document.createElement('div');
+    stateWrap.className = 'notification-history-state-wrap';
+    if (!item.read_at) addText(stateWrap, 'span', 'نوێ', 'unread-badge');
+    addText(
+      stateWrap,
+      'span',
+      notificationStatusLabel(item.status),
+      `notification-history-status status-${item.status || 'unknown'}`,
+    );
+    head.appendChild(stateWrap);
+    card.appendChild(head);
+
+    const detail = typeof item.message === 'string' && item.message.trim()
+      ? item.message.trim()
+      : item.amount != null
+        ? money(item.amount, item.currency)
+        : item.event_type === 'monthly_statement' && item.period
+          ? `کەشفی حیسابی ${item.period}`
+          : '';
+    if (detail) addText(card, 'div', detail, 'notification-history-body');
+
+    if (item.receipt_number) {
+      addText(
+        card,
+        'div',
+        `پسووڵە: ${item.receipt_number}`,
+        'notification-receipt-number',
+      );
+    }
+
+    const date = new Date(item.created_at);
+    if (!Number.isNaN(date.getTime())) {
+      addText(
+        card,
+        'div',
+        date.toLocaleString('ku-IQ'),
+        'notification-history-time',
+      );
+    }
+
+    if (item.requires_ack === true) {
+      const actions = document.createElement('div');
+      actions.className = 'notification-history-actions';
+      if (item.acknowledged_at) {
+        addText(actions, 'span', '✓ بینرا / پەسەندکرا', 'receipt-acked');
+      } else {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'receipt-ack';
+        button.textContent = 'بینیم / پەسەندم کرد';
+        button.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          button.disabled = true;
+          const ok = await markNotification(item, true);
+          if (ok) {
+            renderNotificationHistory(items);
+          } else {
+            button.disabled = false;
+          }
+        });
+        actions.appendChild(button);
+      }
+      card.appendChild(actions);
+    }
+
+    const open = () => { void followNotification(item); };
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
+      }
+    });
+    notificationHistoryEl.appendChild(card);
+  }
+}
+
+async function loadNotificationPreferences() {
+  const credentials = portalCredentials(0, 'preferences');
+  if (!credentials || !prefDueRemindersEl) return;
+  try {
+    const data = await api(credentials);
+    prefDueRemindersEl.checked = data.due_reminders !== false;
+    if (prefInstallmentRemindersEl) {
+      prefInstallmentRemindersEl.checked = data.installment_reminders !== false;
+    }
+    prefMonthlyStatementsEl.checked = data.monthly_statements !== false;
+    prefManualMessagesEl.checked = data.manual_messages !== false;
+  } catch (_) {
+    if (preferenceResultEl) {
+      preferenceResultEl.textContent = 'نەتوانرا هەڵبژاردەکانی ئاگادارکردنەوە باربکرێن.';
+      preferenceResultEl.className = 'action-result err';
+    }
+  }
+}
+
+async function saveNotificationPreferences() {
+  const credentials = portalCredentials(0, 'update_preferences');
+  if (!credentials || !saveNotificationPreferencesButton) return;
+  saveNotificationPreferencesButton.disabled = true;
+  if (preferenceResultEl) preferenceResultEl.textContent = '';
+  try {
+    await api({
+      ...credentials,
+      due_reminders: prefDueRemindersEl.checked,
+      installment_reminders: false,
+      monthly_statements: prefMonthlyStatementsEl.checked,
+      manual_messages: prefManualMessagesEl.checked,
+    });
+    if (preferenceResultEl) {
+      preferenceResultEl.textContent = 'هەڵبژاردەکان پاشەکەوت کران.';
+      preferenceResultEl.className = 'action-result ok';
+    }
+  } catch (_) {
+    if (preferenceResultEl) {
+      preferenceResultEl.textContent = 'پاشەکەوتکردنی هەڵبژاردەکان سەرکەوتوو نەبوو.';
+      preferenceResultEl.className = 'action-result err';
+    }
+  } finally {
+    saveNotificationPreferencesButton.disabled = false;
+  }
+}
+
+async function focusTransaction(eventId) {
+  const id = String(eventId || '').trim();
+  if (!id) return false;
+  transactionFilter = 'all';
+  transactionQuery = '';
+  if (transactionSearchEl) transactionSearchEl.value = '';
+  renderFilteredTransactions();
+  setActiveView('transactions');
+
+  for (let page = 0; page < 10; page += 1) {
+    const target = ledgerEl.querySelector(`[data-event-id="${CSS.escape(id)}"]`);
+    if (target) {
+      target.classList.add('is-targeted');
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => target.classList.remove('is-targeted'), 3500);
+      return true;
+    }
+    if (loadMoreButton.hidden) break;
+    await loadPortal(nextOffset, true);
+  }
+  return false;
+}
+
+let pendingNotificationHistory=null;
+function mayReuseHistoryRequest(pending,scope){return !!pending&&pending.scope===scope}
+function loadNotificationHistory(){
+  const credentials=portalCredentials(0,'notifications');
+  if(!credentials)return Promise.resolve();
+  // Only deduplicate an outstanding read; never persist or cache financial data.
+  const scope=JSON.stringify(credentials);
+  if(mayReuseHistoryRequest(pendingNotificationHistory,scope))return pendingNotificationHistory.promise;
+  const request={scope,promise:null};
+  request.promise=loadNotificationHistoryImpl(credentials).finally(()=>{if(pendingNotificationHistory===request)pendingNotificationHistory=null;});
+  pendingNotificationHistory=request;
+  return request.promise;
+}
+async function loadNotificationHistoryImpl(credentials) {
+
+  try {
+    const data = await api({ ...credentials, limit: 50 });
+    if(portalAppEl.hidden||JSON.stringify(portalCredentials(0,'notifications'))!==JSON.stringify(credentials))return;
+    currentNotificationItems = (Array.isArray(data.items) ? data.items : [])
+      .filter((item) => item?.event_type !== 'installment_reminder');
+    renderNotificationHistory(currentNotificationItems);
+    renderReceiptHistory(currentNotificationItems);
+    const unread = currentNotificationItems
+      .filter((item) => !item?.read_at)
+      .length;
+    notificationsTab.dataset.unread = unread > 0 ? String(unread) : '';
+    if (notificationUnreadBadgeEl) {
+      notificationUnreadBadgeEl.hidden = unread <= 0;
+      notificationUnreadBadgeEl.textContent = unread > 99 ? '99+' : String(unread);
+    }
+    if (unread > 0) {
+      notificationsTab.setAttribute('aria-label', `ئاگادارکردنەوە — ${unread} نەخوێندراو`);
+    } else {
+      notificationsTab.setAttribute('aria-label', 'ئاگادارکردنەوەکان');
+    }
+  } catch (_) {
+    notificationHistoryEl.replaceChildren();
+    addText(
+      notificationHistoryEl,
+      'p',
+      'نەتوانرا مێژووی ئاگادارکردنەوەکان باربکرێت.',
+      'empty',
+    );
+  }
+}
+
+function showLockedPortal() {
+  portalInitialized=false;
+  portalAppEl.hidden = true;
+  lockedStateEl.hidden = false;
+  customerGreetingEl.textContent='هەژماری کڕیار';
+  marketBrandEl.textContent='ZHIROX';
+  for(const dialog of document.querySelectorAll('dialog[open]'))dialog.close();
+  document.getElementById('portalHeaderActions').hidden = true;
+  accountBadgeEl.textContent = 'ڕاگیراو / نادروست';
+  accountBadgeEl.classList.add('err');
+  setStatus('ئەم لینکە بەردەست نییە یان ڕاگیراوە.', 'err');
+}
+
+async function loadPortal(offset = 0, append = false) {
+  const credentials = portalCredentials(offset);
+  if (!credentials) throw new Error('link_unavailable');
+  portalLoadRevision+=1;portalLoadsInFlight+=1;
+  try{
+  const data = await api(credentials);
+
+  const marketName = typeof data.market_name === 'string' ? data.market_name.trim() : '';
+  const customerName = typeof data.customer_name === 'string' ? data.customer_name.trim() : '';
+  marketBrandEl.textContent = marketName || 'ZHIROX';
+  customerGreetingEl.textContent = customerName ? `بەخێربێیت، ${customerName}` : 'هەژماری کڕیار';
+  accountBadgeEl.textContent = 'هەژماری چالاک';
+  accountBadgeEl.classList.remove('err');
+  vapidPublicKey = typeof data.vapid_public_key === 'string' ? data.vapid_public_key : '';
+
+  lockedStateEl.hidden = true;
+  document.getElementById('portalHeaderActions').hidden = false;
+  portalAppEl.hidden = false;
+  currentPortalData = data;
+  renderPrimaryBalance(data);
+  renderSummaryMetrics(data);
+  if(offset===0&&!append)renderMonthlyActivity(data);
+  renderAccountDetails(data);
+  renderAccountInsights(data);
+  renderRows(data.rows, append);
+
+  nextOffset = offset + (Array.isArray(data.rows) ? data.rows.length : 0);
+  loadMoreButton.hidden = data.has_more !== true;
+  lastDashboardCheck=Date.now();
+  return data;
+  }finally{portalLoadsInFlight-=1;}
+}
+
+function mayAutoRefresh(s){return s.ready&&s.visible&&s.home&&s.online&&!s.dialog&&!s.printing&&!s.busy&&!s.autoBusy}
+function autoRefreshState(){return {ready:portalInitialized&&!portalAppEl.hidden,visible:document.visibilityState==='visible',home:!views.home.hidden,online:navigator.onLine!==false,dialog:!!document.querySelector('dialog[open]'),printing:['printing-statement','printing-receipt','printing-period-statement'].some(x=>document.body.classList.contains(x)),busy:portalLoadsInFlight>0||headerRefreshButton.disabled,autoBusy:autoDashboardBusy}}
+async function refreshDashboardIfDue(){
+ if(!mayAutoRefresh(autoRefreshState())||Date.now()-lastDashboardCheck<120000)return;
+ const credentials=portalCredentials(0);if(!credentials)return;
+ const revision=portalLoadRevision;
+ autoDashboardBusy=true;lastDashboardCheck=Date.now();
+ try{
+  const data=await api(credentials);
+  if(revision!==portalLoadRevision||!mayAutoRefresh({...autoRefreshState(),autoBusy:false}))return;
+  // Update only the visible dashboard; leave transaction pagination, filters, reports and preferences untouched.
+  renderPrimaryBalance(data);renderSummaryMetrics(data);renderMonthlyActivity(data);renderAccountInsights(data);
+ }catch(error){if(error?.message==='link_unavailable'&&revision===portalLoadRevision)showLockedPortal();else setStatus('نوێکردنەوەی خۆکار سەرکەوتوو نەبوو.','err');}
+ finally{autoDashboardBusy=false;}
+}
+async function refreshPortal() {
+  const buttons = [headerRefreshButton];
+  for (const button of buttons) button.disabled = true;
+  try {
+    const data = await loadPortal(0, false);
+    configureNotificationExperience(data);
+    await Promise.all([
+      loadNotificationHistory(),
+      loadNotificationPreferences(),
+    ]);
+    setStatus('هەژمارەکەت نوێکرایەوە.', 'ok');
+  } catch (error) {
+    if(error?.message==='link_unavailable')showLockedPortal();
+    else setStatus('نوێکردنەوە سەرکەوتوو نەبوو.', 'err');
+  } finally {
+    for (const button of buttons) button.disabled = false;
+  }
+}
+
+function toLocalIsoDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function statementDateLabel(value) {
+  if (!value) return '—';
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+  if (!match) return String(value);
+  return `${match[3]} / ${match[2]} / ${match[1]}`;
+}
+
+function syncStatementDateDisplays() {
+  if (statementFromDisplayEl) {
+    statementFromDisplayEl.textContent = statementDateLabel(statementFromDateEl?.value);
+  }
+  if (statementToDisplayEl) {
+    statementToDisplayEl.textContent = statementDateLabel(statementToDateEl?.value);
+  }
+}
+
+function initializeStatementDates() {
+  if (!statementFromDateEl || !statementToDateEl) return;
+  const today = new Date();
+  if (!statementFromDateEl.value) {
+    statementFromDateEl.value = `${today.getFullYear()}-01-01`;
+  }
+  if (!statementToDateEl.value) {
+    statementToDateEl.value = toLocalIsoDate(today);
+  }
+  syncStatementDateDisplays();
+}
+
+function statementRowSearchText(row) {
+  return [
+    row?.name,
+    row?.amount,
+    row?.currency,
+    row?.date,
+    statementDateLabel(row?.date),
+  ]
+    .filter((value) => value != null)
+    .join(' ')
+    .toLocaleLowerCase('ku');
+}
+
+function statementTotalsForRows(rows) {
+  const totals = new Map();
+  for (const row of rows) {
+    const currency = String(row?.currency || 'IQD').toUpperCase();
+    totals.set(currency, number(totals.get(currency)) + number(row?.amount));
+  }
+  return [...totals.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, total]) => ({ currency, total }));
+}
+
+function statementSortedRows(rows) {
+  const result = [...rows];
+  switch (statementSortMode) {
+    case 'date-desc':
+      result.sort((a, b) =>
+        String(b?.occurred_at || b?.date || '').localeCompare(
+          String(a?.occurred_at || a?.date || ''),
+        ));
+      break;
+    case 'name-asc':
+      result.sort((a, b) =>
+        String(a?.name || '').localeCompare(String(b?.name || ''), 'ku'));
+      break;
+    case 'amount-desc':
+      result.sort((a, b) => number(b?.amount) - number(a?.amount));
+      break;
+    case 'amount-asc':
+      result.sort((a, b) => number(a?.amount) - number(b?.amount));
+      break;
+    case 'date-asc':
+    default:
+      result.sort((a, b) =>
+        String(a?.occurred_at || a?.date || '').localeCompare(
+          String(b?.occurred_at || b?.date || ''),
+        ));
+      break;
+  }
+  return result;
+}
+
+function renderStatementTotals(totals) {
+  periodStatementTotalsEl.replaceChildren();
+  for (const item of totals) {
+    const totalRow = document.createElement('div');
+    totalRow.className = 'period-total-row';
+    addText(
+      totalRow,
+      'span',
+      totals.length > 1
+        ? `کۆی گشتی — ${String(item?.currency || 'IQD')}`
+        : 'کۆی گشتی',
+    );
+    addText(totalRow, 'strong', money(item?.total, item?.currency));
+    periodStatementTotalsEl.appendChild(totalRow);
+  }
+}
+
+function renderStatementRowsView() {
+  const sourceRows = Array.isArray(currentPeriodStatement?.rows)
+    ? currentPeriodStatement.rows
+    : [];
+  const query = statementItemQuery.trim().toLocaleLowerCase('ku');
+  const filtered = query
+    ? sourceRows.filter((row) => statementRowSearchText(row).includes(query))
+    : [...sourceRows];
+
+  currentStatementVisibleRows = statementSortedRows(filtered);
+  periodStatementRowsEl.replaceChildren();
+
+  currentStatementVisibleRows.forEach((row, index) => {
+    const tr = document.createElement('tr');
+
+    const rowNo = document.createElement('td');
+    rowNo.className = 'period-col-row';
+    rowNo.textContent = String(index + 1);
+
+    const name = document.createElement('td');
+    name.className = 'period-col-name';
+    name.textContent = String(row?.name || 'بابەت');
+
+    const price = document.createElement('td');
+    price.className = 'period-col-price';
+    price.textContent = money(row?.amount, row?.currency);
+
+    const date = document.createElement('td');
+    date.className = 'period-col-date';
+    date.textContent = statementDateLabel(row?.date);
+
+    tr.append(rowNo, name, price, date);
+    periodStatementRowsEl.appendChild(tr);
+  });
+
+  renderStatementTotals(statementTotalsForRows(currentStatementVisibleRows));
+
+  if (statementVisibleCountEl) {
+    statementVisibleCountEl.textContent =
+      `${currentStatementVisibleRows.length} بابەت`;
+  }
+  if (clearStatementFiltersButton) {
+    clearStatementFiltersButton.hidden =
+      !statementItemQuery && statementSortMode === 'date-asc';
+  }
+}
+
+function renderStatementSummary(data) {
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  const uniqueDays = new Set(
+    rows.map((row) => String(row?.date || '')).filter(Boolean),
+  );
+  const uniqueCurrencies = new Set(
+    rows.map((row) => String(row?.currency || 'IQD').toUpperCase()),
+  );
+
+  if (statementItemCountEl) statementItemCountEl.textContent = String(rows.length);
+  if (statementDayCountEl) statementDayCountEl.textContent = String(uniqueDays.size);
+  if (statementCurrencyCountEl) {
+    statementCurrencyCountEl.textContent = String(uniqueCurrencies.size);
+  }
+}
+
+function renderPeriodStatement(data) {
+  currentPeriodStatement = data && typeof data === 'object' ? data : null;
+  statementItemQuery = '';
+  statementSortMode = 'date-asc';
+  if (statementItemSearchEl) statementItemSearchEl.value = '';
+  if (statementSortEl) statementSortEl.value = 'date-asc';
+
+  statementMarketNameEl.textContent =
+    String(data?.market_name || currentPortalData?.market_name || 'ZHIROX').trim() ||
+    'ZHIROX';
+  statementCustomerNameEl.textContent =
+    String(data?.customer_name || currentPortalData?.customer_name || '—').trim() ||
+    '—';
+  statementPeriodLabelEl.textContent =
+    `${statementDateLabel(data?.from_date)} تا ${statementDateLabel(data?.to_date)}`;
+  statementCreatedDateEl.textContent =
+    statementDateLabel(toLocalIsoDate(data?.generated_at || new Date()));
+
+  const marketMeta = [
+    String(data?.market_phone || currentPortalData?.market_phone || '').trim(),
+    String(data?.market_address || currentPortalData?.market_address || '').trim(),
+  ].filter(Boolean);
+  statementMarketMetaEl.textContent = marketMeta.join(' • ');
+  periodStatementFooterEl.textContent =
+    String(data?.footer_note || currentPortalData?.footer_note || '').trim();
+
+  renderStatementSummary(data);
+  renderStatementRowsView();
+  periodStatementDocumentEl.hidden = false;
+}
+
+async function generatePeriodStatement() {
+  if (!statementFromDateEl || !statementToDateEl) return;
+  const fromDate = statementFromDateEl.value;
+  const toDate = statementToDateEl.value;
+
+  statementBuilderResultEl.textContent = '';
+  statementBuilderResultEl.className = 'action-result';
+
+  if (!fromDate || !toDate) {
+    statementBuilderResultEl.textContent = 'تکایە هەردوو بەروارەکە دیاری بکە.';
+    statementBuilderResultEl.className = 'action-result err';
+    return;
+  }
+  if (fromDate > toDate) {
+    statementBuilderResultEl.textContent = 'بەرواری دەستپێک نابێت دوای بەرواری کۆتایی بێت.';
+    statementBuilderResultEl.className = 'action-result err';
+    return;
+  }
+
+  const credentials = portalCredentials(0, 'statement');
+  if (!credentials) {
+    statementBuilderResultEl.textContent = 'دەستگەیشتن بە هەژمارەکە بەردەست نییە.';
+    statementBuilderResultEl.className = 'action-result err';
+    return;
+  }
+
+  generatePeriodStatementButton.disabled = true;
+  try {
+    const data = await api({
+      ...credentials,
+      from_date: fromDate,
+      to_date: toDate,
+    });
+    const rows = Array.isArray(data?.rows) ? data.rows : [];
+    if (rows.length === 0) {
+      periodStatementDocumentEl.hidden = true;
+      statementBuilderResultEl.textContent = 'هیچ بابەتێک لەم ماوەیەدا نەدۆزرایەوە.';
+      statementBuilderResultEl.className = 'action-result err';
+      return;
+    }
+    if (data?.truncated === true) {
+      periodStatementDocumentEl.hidden = true;
+      statementBuilderResultEl.textContent =
+        'ژمارەی بابەتەکان زۆرە؛ تکایە ماوەکە کورتتر بکە.';
+      statementBuilderResultEl.className = 'action-result err';
+      return;
+    }
+
+    renderPeriodStatement(data);
+    statementBuilderResultEl.textContent =
+      `${Number(data?.row_count || rows.length)} بابەت بۆ کەشفی حیساب ئامادە کرا.`;
+    statementBuilderResultEl.className = 'action-result ok';
+  } catch (_) {
+    periodStatementDocumentEl.hidden = true;
+    statementBuilderResultEl.textContent =
+      'نەتوانرا پسووڵەی ماوە دروست بکرێت. تکایە دووبارە هەوڵ بدە.';
+    statementBuilderResultEl.className = 'action-result err';
+  } finally {
+    generatePeriodStatementButton.disabled = false;
+  }
+}
+
+async function applyStatementPreset(preset) {
+  if (!statementFromDateEl || !statementToDateEl) return;
+  const today = new Date();
+  statementToDateEl.value = toLocalIsoDate(today);
+
+  if (preset === '7d' || preset === '30d') {
+    const days = preset === '7d' ? 6 : 29;
+    const from = new Date(today);
+    from.setDate(today.getDate() - days);
+    statementFromDateEl.value = toLocalIsoDate(from);
+  } else if (preset === 'month') {
+    statementFromDateEl.value =
+      `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  } else if (preset === 'year') {
+    statementFromDateEl.value = `${today.getFullYear()}-01-01`;
+  } else if (preset === 'all') {
+    statementFromDateEl.value = `${Math.max(2006, today.getFullYear() - 20)}-01-01`;
+  }
+  syncStatementDateDisplays();
+}
+
+function safePdfFilename(value) {
+  return String(value || 'ZHIROX')
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || 'ZHIROX';
+}
+
+function periodPdfFilename() {
+  const market = safePdfFilename(statementMarketNameEl?.textContent || 'ZHIROX');
+  const customer = safePdfFilename(statementCustomerNameEl?.textContent || 'customer');
+  const fromDate = String(currentPeriodStatement?.from_date || '').replaceAll('-', '');
+  const toDate = String(currentPeriodStatement?.to_date || '').replaceAll('-', '');
+  return `${market}-${customer}-statement-${fromDate || 'from'}-${toDate || 'to'}.pdf`;
+}
+
+function csvCell(value) {
+  const text = String(value ?? '');
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function exportPeriodStatementCsv() {
+  const rows = Array.isArray(currentStatementVisibleRows)
+    ? currentStatementVisibleRows
+    : [];
+  if (rows.length === 0) {
+    statementBuilderResultEl.textContent = 'هیچ بابەتێک بۆ CSV نییە.';
+    statementBuilderResultEl.className = 'action-result err';
+    return;
+  }
+
+  const lines = [
+    ['ژمارەی ڕیز', 'ناوی بابەت', 'نرخ', 'دراو', 'بەروار']
+      .map(csvCell)
+      .join(','),
+    ...rows.map((row, index) =>
+      [
+        index + 1,
+        row?.name || 'بابەت',
+        number(row?.amount),
+        String(row?.currency || 'IQD').toUpperCase(),
+        row?.date || '',
+      ].map(csvCell).join(',')),
+  ];
+
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], {
+    type: 'text/csv;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = periodPdfFilename().replace(/\.pdf$/i, '.csv');
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+
+  statementBuilderResultEl.textContent =
+    `CSV ـەکە بە ${rows.length} بابەت ئامادە کرا.`;
+  statementBuilderResultEl.className = 'action-result ok';
+}
+
+function canvasHasVisibleContent(canvas) {
+  if (!canvas || canvas.width < 20 || canvas.height < 20) return false;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return true;
+  try {
+    const cols = 18;
+    const rows = 26;
+    let visible = 0;
+    for (let y = 0; y < rows; y += 1) {
+      const py = Math.min(
+        canvas.height - 1,
+        Math.floor(((y + 0.5) / rows) * canvas.height),
+      );
+      for (let x = 0; x < cols; x += 1) {
+        const px = Math.min(
+          canvas.width - 1,
+          Math.floor(((x + 0.5) / cols) * canvas.width),
+        );
+        const pixel = ctx.getImageData(px, py, 1, 1).data;
+        if (
+          pixel[3] > 10 &&
+          (pixel[0] < 245 || pixel[1] < 245 || pixel[2] < 245)
+        ) {
+          visible += 1;
+          if (visible >= 4) return true;
+        }
+      }
+    }
+    return false;
+  } catch (_) {
+    return true;
+  }
+}
+
+function nextPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
+function appendPdfCell(row, text, className = '') {
+  const cell = document.createElement('td');
+  if (className) cell.className = className;
+  cell.textContent = String(text ?? '');
+  row.appendChild(cell);
+  return cell;
+}
+
+function buildPdfA4Page(data, pageRows, pageNumber, pageCount, includeTotals) {
+  const page = document.createElement('section');
+  page.className = 'pdf-a4-page';
+  page.dir = 'rtl';
+
+  const head = document.createElement('header');
+  head.className = 'pdf-a4-head';
+
+  const marketWrap = document.createElement('div');
+  marketWrap.className = 'pdf-a4-market';
+  const kicker = document.createElement('div');
+  kicker.className = 'pdf-a4-kicker';
+  kicker.textContent = 'کەشفی حیساب | ZHIROX VIP';
+  const market = document.createElement('h1');
+  market.textContent =
+    String(data?.market_name || currentPortalData?.market_name || 'ZHIROX').trim() ||
+    'ZHIROX';
+  const marketMeta = document.createElement('p');
+  marketMeta.textContent = [
+    String(data?.market_phone || currentPortalData?.market_phone || '').trim(),
+    String(data?.market_address || currentPortalData?.market_address || '').trim(),
+  ].filter(Boolean).join(' • ');
+  marketWrap.append(kicker, market, marketMeta);
+
+  const meta = document.createElement('div');
+  meta.className = 'pdf-a4-meta';
+  const metaRows = [
+    ['کڕیار', String(data?.customer_name || currentPortalData?.customer_name || '—')],
+    ['ماوە', `${statementDateLabel(data?.from_date)} تا ${statementDateLabel(data?.to_date)}`],
+    ['بەرواری دروستکردن', statementDateLabel(toLocalIsoDate(data?.generated_at || new Date()))],
+    ['ژمارەی بابەت', String(Array.isArray(data?.rows) ? data.rows.length : 0)],
+  ];
+  for (const [label, value] of metaRows) {
+    const item = document.createElement('div');
+    const key = document.createElement('span');
+    key.textContent = label;
+    const val = document.createElement('strong');
+    val.textContent = value;
+    item.append(key, val);
+    meta.appendChild(item);
+  }
+  head.append(marketWrap, meta);
+  page.appendChild(head);
+
+  const table = document.createElement('table');
+  table.className = 'pdf-a4-table';
+  table.dir = 'rtl';
+
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  for (const label of ['ژمارەی ڕیز', 'ناوی بابەت', 'نرخ', 'بەروار']) {
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.textContent = label;
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  for (const row of pageRows) {
+    const tr = document.createElement('tr');
+    appendPdfCell(tr, row?.row_no ?? '', 'pdf-row-no');
+    appendPdfCell(tr, row?.name || 'بابەت', 'pdf-item-name');
+    appendPdfCell(tr, money(row?.amount, row?.currency), 'pdf-price');
+    appendPdfCell(tr, statementDateLabel(row?.date), 'pdf-date');
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  page.appendChild(table);
+
+  if (includeTotals) {
+    const totals = document.createElement('div');
+    totals.className = 'pdf-a4-totals';
+    const items = Array.isArray(data?.totals) ? data.totals : [];
+    for (const item of items) {
+      const line = document.createElement('div');
+      const label = document.createElement('span');
+      label.textContent =
+        items.length > 1
+          ? `کۆی گشتی — ${String(item?.currency || 'IQD')}`
+          : 'کۆی گشتی';
+      const value = document.createElement('strong');
+      value.textContent = money(item?.total, item?.currency);
+      line.append(label, value);
+      totals.appendChild(line);
+    }
+    page.appendChild(totals);
+
+    const footerNote = String(
+      data?.footer_note || currentPortalData?.footer_note || '',
+    ).trim();
+    if (footerNote) {
+      const note = document.createElement('p');
+      note.className = 'pdf-a4-note';
+      note.textContent = footerNote;
+      page.appendChild(note);
+    }
+  }
+
+  const footer = document.createElement('footer');
+  footer.className = 'pdf-a4-page-number';
+  footer.textContent = `پەڕە ${pageNumber} لە ${pageCount}`;
+  page.appendChild(footer);
+  return page;
+}
+
+function numberedStatementRows(rows){return rows.map((row,index)=>({...row,row_no:index+1}))}
+function paginateStatementRows(rows,fits,limit=18){
+  const pages=[];
+  let offset=0;
+  while(offset<rows.length){
+    let n=Math.min(limit,rows.length-offset);
+    while(n>0&&!fits(rows.slice(offset,offset+n),offset+n===rows.length))n--;
+    if(n>0){pages.push(rows.slice(offset,offset+n));offset+=n;continue;}
+    if(!fits(rows.slice(offset,offset+1),false))throw new Error('pdf_row_overflow');
+    pages.push(rows.slice(offset,offset+1));offset++;
+    if(offset===rows.length){if(!fits([],true))throw new Error('pdf_totals_overflow');pages.push([]);}
+  }
+  return pages;
+}
+function splitStatementRows(rows, rowsPerPage = 18) {
+  const pages = [];
+  for (let index = 0; index < rows.length; index += rowsPerPage) {
+    pages.push(rows.slice(index, index + rowsPerPage));
+  }
+  return pages.length > 0 ? pages : [[]];
+}
+
+async function deliverPdfBlob(blob, filename) {
+  let delivered = false;
+  if (typeof File === 'function' && navigator.share && navigator.canShare) {
+    try {
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'کەشفی حیساب',
+        });
+        delivered = true;
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return false;
+    }
+  }
+
+  if (!delivered) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = 'noopener';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+  return true;
+}
+
+let pdfEnginePromise=null;
+function loadPdfDependency(url,available){
+ if(available())return Promise.resolve();
+ return new Promise((resolve,reject)=>{
+  const script=document.createElement('script');
+  const cleanup=()=>{window.clearTimeout(timer);script.onload=null;script.onerror=null;};
+  const fail=()=>{cleanup();script.remove();reject(new Error('pdf_dependency_unavailable'));};
+  const timer=window.setTimeout(fail,20000);
+  script.src=url;script.crossOrigin='anonymous';script.referrerPolicy='no-referrer';
+  script.onload=()=>{if(!available()){fail();return;}cleanup();resolve();};
+  script.onerror=fail;
+  document.head.appendChild(script);
+ });
+}
+async function ensurePdfEngine(){
+ if(!pdfEnginePromise)pdfEnginePromise=Promise.all([
+  loadPdfDependency("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",()=>typeof window.html2canvas==='function'),
+  loadPdfDependency("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",()=>typeof window.jspdf?.jsPDF==='function')
+ ]).catch(error=>{pdfEnginePromise=null;throw error;});
+ return pdfEnginePromise;
+}
+async function downloadPeriodStatementPdf() {
+  const baseData = currentPeriodStatement;
+  const rows = numberedStatementRows(Array.isArray(currentStatementVisibleRows)
+    ? currentStatementVisibleRows
+    : []);
+  const data = baseData
+    ? {
+        ...baseData,
+        rows,
+        totals: statementTotalsForRows(rows),
+      }
+    : null;
+
+  if (!data || rows.length === 0) {
+    statementBuilderResultEl.textContent =
+      'سەرەتا کەشفی حیساب دروست بکە.';
+    statementBuilderResultEl.className = 'action-result err';
+    return;
+  }
+
+  if(printPeriodStatementButton?.disabled)return;
+
+  const originalHtml = printPeriodStatementButton?.innerHTML || '';
+  if (printPeriodStatementButton) {
+    printPeriodStatementButton.disabled = true;
+    printPeriodStatementButton.innerHTML =
+      '<span class="period-pdf-icon" aria-hidden="true">PDF</span><span><strong>دروستکردنی PDF...</strong><small>پەڕەکان یەک بە یەک ئامادە دەکرێن</small></span>';
+  }
+
+  const stage = document.createElement('div');
+  stage.className = 'pdf-page-stage';
+  document.body.appendChild(stage);
+
+  try {
+    await ensurePdfEngine();
+    if(document.fonts?.ready)await document.fonts.ready;
+    const fits=(pageRows,last)=>{
+      const probe=buildPdfA4Page(data,pageRows,1,1,last);
+      stage.replaceChildren(probe);
+      const footer=probe.querySelector('.pdf-a4-page-number').getBoundingClientRect();
+      const body=[...probe.children].filter(x=>!x.classList.contains('pdf-a4-page-number'));
+      return body.every(x=>x.getBoundingClientRect().bottom<=footer.top-12);
+    };
+    const pages=paginateStatementRows(rows,fits);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+      compress: true,
+    });
+
+    for (let index = 0; index < pages.length; index += 1) {
+      const pageNumber = index + 1;
+      const page = buildPdfA4Page(
+        data,
+        pages[index],
+        pageNumber,
+        pages.length,
+        pageNumber === pages.length,
+      );
+
+      stage.replaceChildren(page);
+      statementBuilderResultEl.textContent =
+        `دروستکردنی PDF — پەڕە ${pageNumber} لە ${pages.length}`;
+      statementBuilderResultEl.className = 'action-result ok';
+
+      await nextPaint();
+      const footer=page.querySelector('.pdf-a4-page-number').getBoundingClientRect();
+      if([...page.children].some(x=>!x.classList.contains('pdf-a4-page-number')&&x.getBoundingClientRect().bottom>footer.top-12))throw new Error('pdf_layout_overflow');
+      const canvas = await window.html2canvas(page, {
+        scale: Math.min(2, Math.max(1.5, window.devicePixelRatio || 2)),
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        width: 794,
+        height: 1123,
+        windowWidth: 794,
+        windowHeight: 1123,
+        scrollX: 0,
+        scrollY: 0,
+      });
+
+      if (!canvasHasVisibleContent(canvas)) {
+        throw new Error(`blank_page_${pageNumber}`);
+      }
+
+      const image = canvas.toDataURL('image/jpeg', 0.96);
+      if (index > 0) pdf.addPage('a4', 'portrait');
+      pdf.addImage(image, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+    }
+
+    const blob = pdf.output('blob');
+    if (!(blob instanceof Blob) || blob.size < 1500) {
+      throw new Error('empty_pdf');
+    }
+
+    const delivered=await deliverPdfBlob(blob, periodPdfFilename());
+    if(!delivered){statementBuilderResultEl.textContent='دابەزاندنی PDF هەڵوەشایەوە.';statementBuilderResultEl.className='action-result';return;}
+
+    statementBuilderResultEl.textContent =
+      `PDF ـەکە بە ${rows.length} بابەت و ${pages.length} پەڕە ئامادە کرا.`;
+    statementBuilderResultEl.className = 'action-result ok';
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : '';
+    statementBuilderResultEl.textContent = reason.startsWith('blank_page_')
+      ? 'یەکێک لە پەڕەکانی PDF بەتاڵ render بوو؛ فایلە بەتاڵەکە دروست نەکرا.'
+      : reason.startsWith('pdf_') ? 'ناوەڕۆکی PDF لە پەڕەکە جێ نابێتەوە؛ تکایە ماوەکە کورتتر بکە.' : 'دروستکردنی PDF سەرکەوتوو نەبوو؛ تکایە دووبارە هەوڵ بدە.';
+    statementBuilderResultEl.className = 'action-result err';
+  } finally {
+    stage.remove();
+    if (printPeriodStatementButton) {
+      printPeriodStatementButton.disabled = false;
+      printPeriodStatementButton.innerHTML = originalHtml;
+    }
+  }
+}
+
+async function ensureAllTransactionsLoaded() {
+  let pages = 0;
+  while (!loadMoreButton.hidden && pages < 100) {
+    await loadPortal(nextOffset, true);
+    pages += 1;
+  }
+}
+
+async function printStatement() {
+  const buttons = [printStatementButton].filter(Boolean);
+  for (const button of buttons) button.disabled = true;
+  try {
+    await ensureAllTransactionsLoaded();
+    transactionFilter = 'all';
+    transactionQuery = '';
+    if (transactionSearchEl) transactionSearchEl.value = '';
+    renderFilteredTransactions();
+    setActiveView('transactions');
+    document.body.classList.add('printing-statement');
+    window.setTimeout(() => window.print(), 80);
+  } catch (_) {
+    setResult('نەتوانرا کەشفی حیساب ئامادە بکرێت.', 'err');
+  } finally {
+    for (const button of buttons) button.disabled = false;
+  }
+}
+
+function configureNotificationExperience(data) {
+  enableButton.hidden = true;
+  showIosHelpButton.hidden = true;
+  setResult('');
+
+  if (data.can_subscribe !== true) {
+    renderNotificationState('active', 'ئاگادارکردنەوە چالاکە');
+    return;
+  }
+
+  if (isIos() && !isStandalone()) {
+    showIosHelpButton.hidden = false;
+    renderNotificationState('install-required', 'بۆ iPhone سەرەتا پۆرتال زیاد بکە بۆ Home Screen');
+    setResult('لە Safari: Share → Add to Home Screen، پاشان پۆرتالەکە لە Home Screen بکەرەوە و ئاگادارکردنەوە چالاک بکە.', 'err');
+    return;
+  }
+
+  if (!supportsPush()) {
+    renderNotificationState('error', 'ئەم وێبگەڕە پشتگیری Web Push ناکات');
+    return;
+  }
+
+  if (Notification.permission === 'denied') {
+    renderNotificationState('error', 'مۆڵەتی ئاگادارکردنەوە ڕەتکراوەتەوە');
+    setResult('لە ڕێکخستنەکانی وێبگەڕ یان ئامێرەکەت مۆڵەتی ئاگادارکردنەوە چالاک بکە.', 'err');
+    return;
+  }
+
+  enableButton.hidden = false;
+  renderNotificationState('ready', 'ئاگادارکردنەوە هێشتا چالاک نەکراوە');
+}
+
+async function initialize() {
+  try {
+    activeToken=resolveLinkToken();
+    if(!activeToken&&!portalCredentials()){showLockedPortal();return;}
+    const data = await loadPortal();
+    initializeStatementDates();
+    configureNotificationExperience(data);
+    await Promise.all([
+      loadNotificationHistory(),
+      loadNotificationPreferences(),
+    ]);
+
+    const deepLink = new URL(window.location.href);
+    const requestedView = deepLink.searchParams.get('view');
+    const notificationId = deepLink.searchParams.get('notification') || '';
+    const eventId = deepLink.searchParams.get('event') || '';
+    const receiptId = deepLink.searchParams.get('receipt') || '';
+
+    setActiveView(views[requestedView] ? requestedView : (eventId ? 'transactions' : 'home'));
+    if (notificationId) {
+      const credentials = portalCredentials(0, 'mark_read');
+      if (credentials) {
+        void api({ ...credentials, notification_id: notificationId }).catch(() => {});
+      }
+    }
+    if (eventId) await focusTransaction(eventId);
+    if (receiptId) await openReceipt(receiptId);
+    portalInitialized=true;
+    if(window.isSecureContext&&'serviceWorker' in navigator){void navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(()=>{});}
+    setStatus('هەژمارەکەت ئامادەیە.', 'ok');
+  } catch (_) {
+    showLockedPortal();
+  }
+}
+
+loadMoreButton.addEventListener('click', async () => {
+  loadMoreButton.disabled = true;
+  try {
+    await loadPortal(nextOffset, true);
+  } catch (_) {
+    setResult('نەتوانرا مامەڵەی زیاتر بهێنرێت. دووبارە هەوڵ بدە.', 'err');
+  } finally {
+    loadMoreButton.disabled = false;
+  }
+});
+
+if (receiptPrintButton) {
+  receiptPrintButton.addEventListener('click', () => {
+    document.body.classList.add('printing-receipt');
+    window.setTimeout(() => window.print(), 80);
+  });
+}
+
+headerRefreshButton.addEventListener('click', () => void refreshPortal());
+if (printStatementButton) {
+  printStatementButton.addEventListener('click', () => void printStatement());
+}
+if (statementFromDateEl) {
+  statementFromDateEl.addEventListener('change', syncStatementDateDisplays);
+}
+if (statementToDateEl) {
+  statementToDateEl.addEventListener('change', syncStatementDateDisplays);
+}
+if (statementItemSearchEl) {
+  statementItemSearchEl.addEventListener('input', () => {
+    statementItemQuery = statementItemSearchEl.value || '';
+    renderStatementRowsView();
+  });
+}
+if (statementSortEl) {
+  statementSortEl.addEventListener('change', () => {
+    statementSortMode = statementSortEl.value || 'date-asc';
+    renderStatementRowsView();
+  });
+}
+if (clearStatementFiltersButton) {
+  clearStatementFiltersButton.addEventListener('click', () => {
+    statementItemQuery = '';
+    statementSortMode = 'date-asc';
+    if (statementItemSearchEl) statementItemSearchEl.value = '';
+    if (statementSortEl) statementSortEl.value = 'date-asc';
+    renderStatementRowsView();
+  });
+}
+if (exportStatementCsvButton) {
+  exportStatementCsvButton.addEventListener('click', exportPeriodStatementCsv);
+}
+if (generatePeriodStatementButton) {
+  generatePeriodStatementButton.addEventListener('click', () => {
+    void generatePeriodStatement();
+  });
+}
+for (const button of statementPresetButtons) {
+  button.addEventListener('click', () => {
+    void applyStatementPreset(button.dataset.statementPreset || '');
+  });
+}
+if (printPeriodStatementButton) {
+  printPeriodStatementButton.addEventListener('click', () => {
+    void downloadPeriodStatementPdf();
+  });
+}
+if (transactionSearchEl) {
+  transactionSearchEl.addEventListener('input', () => {
+    transactionQuery = transactionSearchEl.value || '';
+    renderFilteredTransactions();
+  });
+}
+for (const button of transactionFilterButtons) {
+  button.addEventListener('click', () => {
+    transactionFilter = button.dataset.transactionFilter || 'all';
+    renderFilteredTransactions();
+  });
+}
+if (clearTransactionSearchButton) {
+  clearTransactionSearchButton.addEventListener('click', () => {
+    transactionFilter = 'all';
+    transactionQuery = '';
+    if (transactionSearchEl) transactionSearchEl.value = '';
+    renderFilteredTransactions();
+  });
+}
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('printing-statement');
+  document.body.classList.remove('printing-receipt');
+  document.body.classList.remove('printing-period-statement');
+});
+
+if (saveNotificationPreferencesButton) {
+  saveNotificationPreferencesButton.addEventListener('click', () => {
+    void saveNotificationPreferences();
+  });
+}
+
+showIosHelpButton.addEventListener('click', () => {
+  if (typeof iosHelpDialog.showModal === 'function') {
+    iosHelpDialog.showModal();
+  } else {
+    setResult('لە Safari: Share → Add to Home Screen، پاشان لە Home Screen پۆرتالەکە بکەرەوە.', 'err');
+  }
+});
+
+enableButton.addEventListener('click', async () => {
+  enableButton.disabled = true;
+  setResult('');
+
+  try {
+    if (explicitLinkBlocked||!activeToken||!TOKEN_PATTERN.test(activeToken)) throw new Error('link_unavailable');
+    if (!supportsPush()) throw new Error('push_unsupported');
+    if (isIos() && !isStandalone()) throw new Error('ios_not_standalone');
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') throw new Error('permission_denied');
+
+    const registration = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    await navigator.serviceWorker.ready;
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: decodeVapidKey(vapidPublicKey),
+      });
+    }
+
+    const data = await api({
+      action: 'subscribe',
+      token: activeToken,
+      subscription: subscription.toJSON(),
+      platform: isIos() ? 'ios' : (/Android/i.test(navigator.userAgent || '') ? 'android' : 'desktop'),
+    });
+
+    if (data.linked !== true || typeof data.device_secret !== 'string' || !data.device_secret) {
+      throw new Error('request_failed');
+    }
+
+    localStorage.setItem(DEVICE_SECRET_KEY, data.device_secret);
+    localStorage.setItem(ENDPOINT_KEY, subscription.endpoint);
+    localStorage.removeItem(LINK_TOKEN_KEY);
+    activeToken = '';
+    scrubLinkCredentialsFromLocation();
+
+    renderNotificationState('active', 'ئاگادارکردنەوە چالاک کرا');
+    setStatus('پەیوەستکرا.', 'ok');
+    setResult('ئاگادارکردنەوە بە سەرکەوتوویی چالاک کرا و بە ناوی سوپەرمارکێتەکەت دێت.', 'ok');
+    enableButton.hidden = true;
+    showIosHelpButton.hidden = true;
+    await loadPortal();
+    await Promise.all([
+      loadNotificationHistory(),
+      loadNotificationPreferences(),
+    ]);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'request_failed';
+    if (reason === 'permission_denied') {
+      renderNotificationState('error', 'مۆڵەتی ئاگادارکردنەوە ڕەتکرایەوە');
+      setResult('لە ڕێکخستنەکانی ئامێرەکەت مۆڵەت بدە و دووبارە هەوڵ بدە.', 'err');
+    } else if (reason === 'ios_not_standalone') {
+      showIosHelpButton.hidden = false;
+      renderNotificationState('install-required', 'بۆ iPhone سەرەتا پۆرتال زیاد بکە بۆ Home Screen');
+      setResult('لە Safari زیادیکە بۆ Home Screen و لەوێوە بیکەرەوە.', 'err');
+    } else if (reason === 'push_unsupported') {
+      renderNotificationState('error', 'ئەم وێبگەڕە پشتگیری Web Push ناکات');
+      setResult('وێبگەڕێکی پشتگیریکراو بەکاربهێنە.', 'err');
+    } else if (reason === 'link_unavailable') {
+      renderNotificationState('error', 'لینکی پەیوەستکردن بەردەست نییە');
+      setResult('QR ـی چالاکی هەمان هەژمار بەکاربهێنە.', 'err');
+    } else {
+      renderNotificationState('error', 'چالاککردن سەرکەوتوو نەبوو');
+      setResult('دووبارە هەوڵ بدە. زانیاریی دارایییەکانت هەر بەردەستن.', 'err');
+    }
+    enableButton.disabled = false;
+  }
+});
+
+const themeSelect=document.getElementById('portalTheme');
+const themeMedia=window.matchMedia('(prefers-color-scheme: dark)');
+function applyPortalTheme(){
+  let mode='system';
+  try {mode=localStorage.getItem('zhirox.portal.theme')||'system';}catch(_){}
+  if(!['system','light','dark'].includes(mode))mode='system';
+  themeSelect.value=mode;
+  document.documentElement.dataset.portalTheme=(mode==='dark'||(mode==='system'&&themeMedia.matches))?'dark':'light';
+  document.getElementById('portalThemeColor').content=document.documentElement.dataset.portalTheme==='dark'?'#101923':'#f4f6f8';
+}
+themeSelect.addEventListener('change',()=>{
+  try{localStorage.setItem('zhirox.portal.theme',themeSelect.value);}catch(_){document.documentElement.dataset.portalTheme=(themeSelect.value==='dark'||(themeSelect.value==='system'&&themeMedia.matches))?'dark':'light';return;}
+  applyPortalTheme();
+});
+if(themeMedia.addEventListener)themeMedia.addEventListener('change',applyPortalTheme);
+applyPortalTheme();
+window.setInterval(()=>void refreshDashboardIfDue(),30000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void refreshDashboardIfDue();});
+function shouldRevalidateRestoredPage(event,masked){return event?.persisted===true||masked===true}
+window.addEventListener('pagehide',event=>{
+  if(event.persisted)document.documentElement.classList.add('portal-restoring');
+});
+window.addEventListener('pageshow',event=>{
+  if(!shouldRevalidateRestoredPage(event,document.documentElement.classList.contains('portal-restoring')))return;
+  document.documentElement.classList.add('portal-restoring');
+  // A BFCache restore can bypass network and HTTP cache-control. Reload and
+  // revalidate the current portal credential before showing personal details.
+  window.location.reload();
+});
+initialize();

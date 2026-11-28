@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="ckb" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f4f6f8" id="portalThemeColor">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ZHIROX">
+  <link rel="apple-touch-icon" sizes="1024x1024" href="./apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="./apple-touch-icon.png">
+  <meta name="description" content="پۆرتالی ڕەسمی کڕیار بۆ بینینی قەرز، پارەدان و ئاگادارکردنەوەکان">
+  <title>ZHIROX Customer Portal</title>
+  <link id="appManifest" rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css?v=20261128-9">
+  <link rel="stylesheet" href="./portal-banking.css?v=20261128-9">
+  
+  
+  <script defer src="./app.js?v=20261128-9"></script>
+</head>
+<body>
+  <main id="portalShell" class="portal-shell">
+    <header class="portal-header">
+      <div class="brand-lockup">
+        <div class="brand-mark" aria-hidden="true">Z</div>
+        <div class="brand-copy">
+          <p class="eyebrow">پۆرتالی ڕەسمی کڕیار</p>
+          <h1 id="marketBrand">ZHIROX</h1>
+          <p id="customerGreeting" class="muted">بارکردنی زانیاریی هەژمار...</p>
+        </div>
+      </div>
+      <div class="header-actions" id="portalHeaderActions" hidden>
+        <button id="notificationsTab" class="icon-action header-notification-action" type="button" data-portal-tab="notifications" aria-controls="notificationsView" aria-label="ئاگادارکردنەوەکان" title="ئاگادارکردنەوەکان">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9.5a6 6 0 0 0-12 0c0 6-2.5 6.5-2.5 6.5h17S18 15.5 18 9.5Z"/><path d="M9.5 19.5a2.8 2.8 0 0 0 5 0"/></svg>
+          <span id="notificationUnreadBadge" class="header-notification-badge" hidden>0</span>
+        </button>
+        <button id="headerRefresh" class="icon-action" type="button" aria-label="نوێکردنەوەی هەژمار" title="نوێکردنەوە">↻</button>
+      </div>
+    </header>
+
+    <p id="status" class="sr-status" aria-live="polite">پشکنینی لینک...</p>
+
+    <section id="lockedState" class="state-card" hidden>
+      <div class="state-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+      <p class="eyebrow">پاراستنی هەژمار</p>
+      <h2>بچۆرە هەژمارەکەت</h2>
+      <p class="state-copy">بۆ بینینی هەژمارەکەت، QR یان لینکی تایبەتی چالاک لە مارکێتەکەت بەکاربهێنە.</p>
+      <div class="access-guide"><button class="access-retry" type="button">دووبارە پشکنین</button></div>
+    </section>
+
+    <div id="portalApp" hidden>
+      <nav class="portal-nav app-tab-bar" aria-label="بەشەکانی پۆرتال">
+        <button id="homeTab" type="button" class="nav-item is-active" data-portal-tab="home" aria-controls="homeView" aria-current="page">
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 10.6 12 3.8l8.5 6.8v8.6a1.8 1.8 0 0 1-1.8 1.8h-4.2v-6.2h-5V21H5.3a1.8 1.8 0 0 1-1.8-1.8Z"/></svg></span><span class="tab-label">سەرەکی</span>
+        </button>
+        <button id="transactionsTab" type="button" class="nav-item" data-portal-tab="transactions" aria-controls="transactionsView">
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6.5 3.5h11A2.5 2.5 0 0 1 20 6v12a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18V6a2.5 2.5 0 0 1 2.5-2.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span class="tab-label">مامەڵە</span>
+        </button>
+        <button id="statementTab" type="button" class="nav-item nav-item-statement" data-portal-tab="statement" aria-controls="statementView">
+          <span class="tab-icon statement-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3.5h14v17H5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><span class="tab-label">کەشفی حیساب</span>
+        </button>
+        <button id="receiptsTab" type="button" class="nav-item" data-portal-tab="receipts" aria-controls="receiptsView">
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2.2-1.4-1.9 1.4-1.9-1.4-1.9 1.4-1.9-1.4L6 20.5Z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></span><span class="tab-label">پسووڵە</span>
+        </button>
+        <button id="accountTab" type="button" class="nav-item" data-portal-tab="account" aria-controls="accountView">
+          <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.7-4 3-6 6.5-6s5.8 2 6.5 6"/></svg></span><span class="tab-label">هەژمار</span>
+        </button>
+      </nav>
+
+      <section id="homeView" class="portal-view" aria-labelledby="homeHeading">
+        <div class="view-heading"><h2 id="homeHeading">پوختەی دارایی</h2></div>
+        <article class="balance-card"><div class="balance-topline"><span>قەرزی ماوە</span><span id="balanceUpdated" class="balance-status">—</span></div><strong id="primaryRemaining" dir="ltr">—</strong><span id="primaryCurrency" hidden>IQD</span><div id="otherBalances" class="other-balances" hidden></div></article>
+        <section class="panel financial-details"><h3>کۆی مامەڵەکان</h3><div id="summaryMetrics" class="summary-grid"></div><div id="repaymentProgress" class="repayment-progress" hidden></div><details id="balanceDetails" class="balance-details" hidden><summary>وردەکاریی پارەدانەوە</summary><div id="paymentDetails"></div></details></section>
+        <section id="monthlyActivity" class="panel monthly-activity" hidden aria-labelledby="monthlyActivityHeading"><h3 id="monthlyActivityHeading">چالاکیی مانگانە</h3><div id="monthlyActivityContent"></div></section><section id="debtLimitCard" class="panel debt-limit-panel" hidden><p class="eyebrow">سنووری قەرز</p><h2 id="debtLimitTitle">—</h2><p id="debtLimitMeta" class="muted"></p><div class="vip-limit-track"><div id="debtLimitProgress"></div></div></section>
+        <section id="schedulePanel" class="panel payment-timeline-panel" hidden><h2>بەرواری دانەوە</h2><div id="scheduleStats" class="summary-grid"></div><div id="paymentTimeline" class="payment-timeline"></div></section>
+      </section>
+      <section id="transactionsView" class="portal-view" aria-labelledby="transactionsHeading" hidden>
+        <div class="view-heading">
+          <div>
+            <h2 id="transactionsHeading">مامەڵەکان</h2>
+          </div>
+        </div>
+        <section class="panel statement-tools-panel">
+          <div class="statement-toolbar">
+            <label class="transaction-search-wrap">
+              <span class="sr-only">گەڕان لە مامەڵەکان</span>
+              <input id="transactionSearch" type="search" inputmode="search" autocomplete="off" placeholder="گەڕان بە بڕ، تێبینی، بەروار...">
+            </label>
+            <button id="printStatement" class="statement-print" type="button">چاپی لیست</button>
+          </div>
+          <div class="transaction-filters" role="group" aria-label="فلتەری مامەڵەکان">
+            <button type="button" class="filter-chip is-active" data-transaction-filter="all">هەموو</button>
+            <button type="button" class="filter-chip" data-transaction-filter="debt">قەرز</button>
+            <button type="button" class="filter-chip" data-transaction-filter="payment">پارەدان</button>
+            <button type="button" class="filter-chip" data-transaction-filter="overdue">دواکەوتوو</button>
+          </div>
+          <div class="statement-meta-row">
+            <span id="transactionResultCount">0 مامەڵە</span>
+            <button id="clearTransactionSearch" class="text-action" type="button" hidden>پاککردنەوە</button>
+          </div>
+        </section>
+        <section class="panel statement-panel">
+          <div id="ledger" class="ledger"></div>
+          <button id="loadMore" class="secondary-action load-more" type="button" hidden>بینینی مامەڵەی زیاتر</button>
+        </section>
+      </section>
+
+      <section id="statementView" class="portal-view statement-view" aria-labelledby="statementHeading" hidden>
+        <div class="view-heading">
+          <div>
+            <h2 id="statementHeading">کەشفی حیساب</h2>
+          </div>
+        </div>
+
+        <section class="panel period-builder-panel">
+          <div class="period-builder-head">
+            <div>
+              <strong>ماوەی ڕاپۆرت</strong>
+            </div>
+          </div>
+          <div class="period-date-grid">
+            <label>
+              <span>لە بەروار</span>
+              <span class="date-picker-control">
+                <span id="statementFromDisplay" class="date-picker-display">—</span>
+                <input id="statementFromDate" class="date-picker-native" type="date" aria-label="لە بەروار">
+              </span>
+            </label>
+            <label>
+              <span>تا بەروار</span>
+              <span class="date-picker-control">
+                <span id="statementToDisplay" class="date-picker-display">—</span>
+                <input id="statementToDate" class="date-picker-native" type="date" aria-label="تا بەروار">
+              </span>
+            </label>
+          </div>
+          <div class="period-presets">
+            <button type="button" data-statement-preset="7d">7 ڕۆژ</button>
+            <button type="button" data-statement-preset="30d">30 ڕۆژ</button>
+            <button type="button" data-statement-preset="month">ئەم مانگە</button>
+            <button type="button" data-statement-preset="year">ئەم ساڵە</button>
+            <button type="button" data-statement-preset="all">هەموو</button>
+          </div>
+          <button id="generatePeriodStatement" class="primary-action period-generate" type="button">دروستکردنی کەشفی حیساب</button>
+          <p id="statementBuilderResult" class="action-result" aria-live="polite"></p>
+        </section>
+
+        <article id="periodStatementDocument" class="period-statement-document" hidden>
+          <header class="period-statement-head">
+            <div>
+              <p class="period-statement-kicker">کەشفی حیساب</p>
+              <h2 id="statementMarketName">ZHIROX</h2>
+              <p id="statementMarketMeta" class="period-statement-market-meta"></p>
+            </div>
+            <div class="period-statement-meta">
+              <div><span>کڕیار</span><strong id="statementCustomerName">—</strong></div>
+              <div><span>ماوە</span><strong id="statementPeriodLabel">—</strong></div>
+              <div><span>بەرواری دروستکردن</span><strong id="statementCreatedDate">—</strong></div>
+            </div>
+          </header>
+
+          <div class="period-statement-summary" aria-label="پوختەی کەشفی حیساب">
+            <div><span>ژمارەی بابەت</span><strong id="statementItemCount">0</strong></div>
+            <div><span>ژمارەی ڕۆژ</span><strong id="statementDayCount">0</strong></div>
+            <div><span>ژمارەی دراو</span><strong id="statementCurrencyCount">0</strong></div>
+          </div>
+
+          <div class="period-statement-tools">
+            <label class="period-search-wrap">
+              <span class="sr-only">گەڕان لە بابەتەکان</span>
+              <input id="statementItemSearch" type="search" inputmode="search" autocomplete="off" placeholder="گەڕان بە ناوی بابەت...">
+            </label>
+            <select id="statementSort" class="period-sort" aria-label="ڕیزکردنی بابەتەکان">
+              <option value="date-asc">بەروار: کۆن → نوێ</option>
+              <option value="date-desc">بەروار: نوێ → کۆن</option>
+              <option value="name-asc">ناوی بابەت</option>
+              <option value="amount-desc">نرخ: زۆر → کەم</option>
+              <option value="amount-asc">نرخ: کەم → زۆر</option>
+            </select>
+            <button id="exportStatementCsv" class="secondary-action period-csv-action" type="button">CSV</button>
+          </div>
+
+          <div class="period-table-wrap">
+            <table class="period-statement-table" dir="rtl">
+              <thead>
+                <tr>
+                  <th scope="col">ژمارەی ڕیز</th>
+                  <th scope="col">ناوی بابەت</th>
+                  <th scope="col">نرخ</th>
+                  <th scope="col">بەروار</th>
+                </tr>
+              </thead>
+              <tbody id="periodStatementRows"></tbody>
+            </table>
+          </div>
+
+          <div class="period-result-meta">
+            <span id="statementVisibleCount">0 بابەت</span>
+            <button id="clearStatementFilters" class="text-action" type="button" hidden>پاککردنەوەی فلتەر</button>
+          </div>
+          <div id="periodStatementTotals" class="period-statement-totals"></div>
+          <p id="periodStatementFooter" class="period-statement-footer"></p>
+
+          <div class="period-statement-actions">
+            <button id="printPeriodStatement" class="primary-action period-pdf-action" type="button">
+              <span class="period-pdf-icon" aria-hidden="true">PDF</span>
+              <span>
+                <strong>PDF / چاپ</strong>
+              </span>
+            </button>
+            <p id="periodPdfHint" class="period-pdf-hint"></p>
+          </div>
+        </article>
+      </section>
+
+      <section id="receiptsView" class="portal-view" aria-labelledby="receiptsHeading" hidden>
+        <div class="view-heading">
+          <div>
+            <h2 id="receiptsHeading">پسووڵەکان</h2>
+          </div>
+          
+        </div>
+        <section class="receipt-summary-strip">
+          <div><span>کۆی پسووڵە</span><strong id="receiptCount">0</strong></div>
+          <div><span>دوایین پسووڵە</span><strong id="latestReceiptDate">—</strong></div>
+        </section>
+        <section class="panel receipts-panel">
+          <div id="receiptHistory" class="receipt-history" aria-live="polite"></div>
+        </section>
+      </section>
+
+      <section id="notificationsView" class="portal-view" aria-labelledby="notificationsHeading" hidden>
+        <div class="view-heading">
+          <div>
+            
+            <h2 id="notificationsHeading">ئاگادارکردنەوەکان</h2>
+          </div>
+        </div>
+        <section class="panel notification-history-panel">
+          <div class="section-heading">
+            <div>
+              
+              <h2 class="sr-only">مێژووی ئاگاداری</h2>
+            </div>
+            
+          </div>
+          <div id="notificationHistory" class="notification-history" aria-live="polite"></div>
+        </section><details id="notificationSettings" class="notification-settings"><summary>ڕێکخستنی ئاگادارکردنەوە</summary><article class="notification-card">
+          <div class="notification-header">
+            <div class="notification-dot" aria-hidden="true"></div>
+            <div>
+              <p class="eyebrow">دۆخی ئاگادارکردنەوە</p>
+              <div id="notificationState" class="notification-state">پشکنین...</div>
+            </div>
+          </div>
+          
+          <button id="enable" class="primary-action" type="button" hidden>چالاککردنی ئاگادارکردنەوە</button>
+          <button id="showIosHelp" class="secondary-action" type="button" hidden>ڕێنمایی iPhone / iPad</button>
+          <p id="result" class="action-result" aria-live="polite"></p>
+        </article>
+
+        <section class="panel notification-preferences-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">هەڵبژاردەکان</p>
+              <h2>جۆری ئاگادارکردنەوە</h2>
+            </div>
+          </div>
+          <p class="preference-note">ئاگادارییە دارایییە گرنگەکان وەک قەرز، پارەدانەوە و گۆڕانی سنووری قەرز هەمیشە چالاکن.</p>
+          <div class="preference-list">
+            <label class="preference-row is-mandatory">
+              <span>
+                <strong>قەرز و پارەدانەوە</strong>
+                <small>ئاگاداری داراییی گرنگ — ناچالاک ناکرێت</small>
+              </span>
+              <input type="checkbox" checked disabled aria-label="ئاگاداری داراییی گرنگ هەمیشە چالاکە">
+            </label>
+            <label class="preference-row">
+              <span><strong>یادخستنەوەی بەرواری قەرز</strong><small>٣ ڕۆژ، ١ ڕۆژ، ئەمڕۆ و دواکەوتن</small></span>
+              <input id="prefDueReminders" type="checkbox" checked>
+            </label>
+            <label class="preference-row">
+              <span><strong>کەشفی حیسابی مانگانە</strong><small>پوختەی قەرز، پارەدان و ماوە</small></span>
+              <input id="prefMonthlyStatements" type="checkbox" checked>
+            </label>
+            <label class="preference-row">
+              <span><strong>پەیامی بەڕێوەبەر</strong><small>پەیامە تایبەتەکانی مارکێت</small></span>
+              <input id="prefManualMessages" type="checkbox" checked>
+            </label>
+          </div>
+          <input id="prefInstallmentReminders" type="checkbox" hidden><button id="saveNotificationPreferences" class="secondary-action" type="button">پاشەکەوتکردنی هەڵبژاردەکان</button>
+          <p id="preferenceResult" class="action-result" aria-live="polite"></p>
+        </section>
+
+        </details>
+
+        </section>
+
+      <section id="accountView" class="portal-view" aria-labelledby="accountHeading" hidden>
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">هەژمار و مارکێت</p>
+            <h2 id="accountHeading">هەژمارەکەم</h2>
+          </div>
+        </div>
+
+        <section class="account-hero">
+          <div class="account-avatar" aria-hidden="true">ک</div>
+          <div class="account-identity">
+            <span class="account-caption">کڕیار</span>
+            <strong id="accountCustomerName">—</strong>
+            <small id="accountCustomerPhone">—</small><span id="accountBadge" class="status-badge" role="status">—</span>
+          </div>
+        </section>
+
+        <section class="panel account-details-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">زانیاریی مارکێت</p>
+              <h2 id="accountMarketName">—</h2>
+            </div>
+          </div>
+          <div class="account-row"><span>ژمارەی مۆبایل</span><strong id="accountMarketPhone">—</strong></div>
+          <div class="account-row"><span>ناونیشان</span><strong id="accountMarketAddress">—</strong></div>
+          
+        </section>
+
+        <section class="panel appearance-panel"><label for="portalTheme"><strong>ڕووکاری پۆرتاڵ</strong><select id="portalTheme" class="appearance-select"><option value="system">وەک ئامێر</option><option value="light">ڕۆژ</option><option value="dark">شەو</option></select></label></section>
+        <p class="account-footnote">زانیاریی دارایی تەنها بۆ بینینە. بۆ گۆڕانکاری لە قەرز و پارەدانەوە پەیوەندی بە مارکێتەکەت بکە.</p>
+      </section>
+
+    </div>
+
+    <dialog id="transactionDetailDialog" class="transaction-detail-dialog" aria-labelledby="transactionDetailTitle">
+<form method="dialog" class="transaction-detail-sheet">
+<h2 id="transactionDetailTitle">وردەکاریی مامەڵە</h2>
+<div id="transactionDetailContent"></div>
+<button class="secondary-action transaction-close" value="close" autofocus>داخستن</button>
+</form></dialog>
+<dialog id="receiptDialog" class="receipt-dialog">
+      <form method="dialog" class="receipt-sheet">
+        <button class="dialog-close" value="cancel" aria-label="داخستن">×</button>
+        <div class="digital-receipt-head">
+          <div class="receipt-brand-mark" aria-hidden="true">Z</div>
+          <div>
+            <p class="eyebrow">پسووڵەی دیجیتاڵ</p>
+            <h2 id="receiptMarketName">ZHIROX</h2>
+            <p id="receiptNumber" class="receipt-number">—</p>
+          </div>
+        </div>
+        <div class="receipt-meta-grid">
+          <div><span>کڕیار</span><strong id="receiptCustomerName">—</strong></div>
+          <div><span>بەروار</span><strong id="receiptDate">—</strong></div>
+          <div><span>جۆر</span><strong id="receiptType">—</strong></div>
+          <div><span>دۆخ</span><strong id="receiptStatus">ڕەسمی</strong></div>
+        </div>
+        <div class="receipt-amount-card">
+          <span id="receiptAmountLabel">بڕ</span>
+          <strong id="receiptAmount">—</strong>
+          <small id="receiptRemaining"></small>
+        </div>
+        <div id="receiptDueRow" class="receipt-line" hidden>
+          <span>بەرواری دانەوە</span><strong id="receiptDueDate">—</strong>
+        </div>
+        <div id="receiptNoteRow" class="receipt-line receipt-note-row" hidden>
+          <span>تێبینی</span><strong id="receiptNote">—</strong>
+        </div>
+        <div id="receiptItemsSection" class="receipt-items-section" hidden>
+          <div class="receipt-section-title">وردەکارییەکان</div>
+          <div id="receiptItems" class="receipt-items"></div>
+        </div>
+        <p id="receiptFooter" class="receipt-footer"></p>
+        <div class="receipt-actions">
+          <button id="receiptPrint" class="secondary-action" type="button">PDF / چاپ</button>
+          <button class="primary-action" value="default">داخستن</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="iosHelpDialog" class="help-dialog">
+      <form method="dialog">
+        <button class="dialog-close" value="cancel" aria-label="داخستن">×</button>
+        <p class="eyebrow">iPhone / iPad</p>
+        <h2>Add to Home Screen</h2>
+        <p class="dialog-copy">بۆ چالاککردنی ئاگادارکردنەوە لە iPhone، پۆرتالەکە دەبێت لە Home Screen بێت.</p>
+        <ol>
+          <li>پۆرتالەکە لە Safari بکەرەوە.</li>
+          <li>Share بکە و <strong>Add to Home Screen</strong> هەڵبژێرە.</li>
+          <li>لە Home Screen پۆرتالەکە بکەرەوە.</li>
+          <li>بچۆ بۆ «ئاگادارکردنەوە» و چالاکی بکە.</li>
+        </ol>
+        <button class="primary-action" value="default">تێگەیشتم</button>
+      </form>
+    </dialog>
+  </main>
+</body>
+</html>
