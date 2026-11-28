@@ -7,7 +7,7 @@
   "theme_color": "#f4f6f8",
   "background_color": "#f4f6f8",
   "lang": "ckb",
-  "dir": "rtl",
+  "dir": "ltr",
   "icons": [
     {
       "src": "./apple-touch-icon.png",
