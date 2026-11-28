@@ -1,0 +1,31 @@
+name: VIP synthetic encrypted backup rehearsal
+on:
+  pull_request:
+    paths:
+      - 'tests/vip-backup/**'
+      - '.github/workflows/vip-backup-selftest.yml'
+  push:
+    branches:
+      - 'test/vip-encrypted-backup-rehearsal-20261128'
+    paths:
+      - 'tests/vip-backup/**'
+      - '.github/workflows/vip-backup-selftest.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fb1b213b2cb43d41741ae4f2cb930cd7463aa46f
+          path: reviewed-backup-source
+          persist-credentials: false
+      - name: Install encryption dependency
+        run: python -m pip install cryptography==46.0.3
+      - name: Synthetic database encryption and isolated restore
+        run: bash tests/vip-backup/rehearse.sh "$PWD/reviewed-backup-source"
