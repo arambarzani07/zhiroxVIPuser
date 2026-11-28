@@ -1,0 +1,187 @@
+/* ZHIROX banking portal: screen-only, preserve printing. */
+@media screen {
+:root{--bg:#f5f7fa;--surface:#fff;--text:#172b45;--muted:#596a7b;--line:#e2e8ef;--brand:#176f71;--brand-deep:#125657;--brand-soft:#e8f4f2;--shadow:none}
+html,body{max-width:100%;overflow-x:hidden}body{padding:max(12px,env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom));font-size:14px;line-height:1.65;background:var(--bg)}
+.portal-shell{width:100%;max-width:860px;margin:auto}.portal-header{display:grid!important;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px 0 16px;margin:0 0 18px;background:transparent;border-bottom:1px solid var(--line);box-shadow:none;position:static}
+.brand-lockup{min-width:0;gap:10px}.brand-mark{width:40px;height:40px;border-radius:12px;background:#172b45;color:white;box-shadow:none;font-size:21px}.brand-copy{min-width:0}.brand-copy h1{font-size:clamp(15px,3.8vw,23px);line-height:1.4;letter-spacing:0;overflow-wrap:anywhere}.brand-copy .eyebrow{font-size:10px;line-height:1.5}.brand-copy .muted{font-size:12px;line-height:1.5}
+.header-actions{display:flex!important;align-items:center;gap:8px;min-width:0}.header-actions[hidden]{display:none!important}.header-actions .icon-action{width:42px;height:42px;min-height:42px;border-radius:12px;border:1px solid var(--line);background:white;color:var(--brand);box-shadow:none}
+.portal-view{gap:14px}.view-heading{margin:0;padding:0;align-items:center;min-height:30px}.view-heading .eyebrow{display:none}.view-heading h2{font-size:21px;line-height:1.45}.portal-wordmark{font-size:10px;letter-spacing:1px;color:var(--muted);font-weight:800}
+.balance-card{background:#172b45!important;border-radius:20px!important;padding:22px!important;box-shadow:none!important;min-height:0;overflow:hidden}.balance-card:before,.balance-card:after{display:none!important}.balance-topline{margin:0 0 13px;gap:8px}.balance-topline>span:first-child{color:#d5e2ed;font-size:14px;opacity:1}.balance-status{font-size:11px;border:0;color:#c9d8e6;padding:0}#primaryRemaining{font-size:clamp(28px,8.6vw,46px)!important;letter-spacing:-.02em;direction:ltr;text-align:right;line-height:1.25;white-space:normal;overflow-wrap:anywhere;margin:0}
+.other-balances{display:grid;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid #ffffff29}.other-balances .metric-card{display:flex;justify-content:space-between;align-items:center;background:transparent;border:0;padding:0;box-shadow:none}.other-balances .metric-card span{color:#d5e2ed;font-size:12px;margin:0}.other-balances .metric-card strong{font-size:18px;color:white}
+.panel,.notification-card,.state-card,.period-statement-document,.account-hero,.receipt-summary-strip{border:1px solid var(--line)!important;border-radius:16px!important;box-shadow:none!important;background:white}.panel,.notification-card{padding:15px}.section-heading{margin-bottom:10px;gap:8px}.section-heading h2{font-size:16px}.section-heading .eyebrow{font-size:11px}
+.financial-details{padding:16px 18px!important}.financial-details h3{margin:0 0 6px;font-size:15px}.financial-details .summary-grid,.balance-details>div{display:grid;grid-template-columns:1fr;gap:0}.financial-details .metric-card{display:flex!important;align-items:center;justify-content:space-between;gap:12px;min-height:46px;padding:10px 0!important;border:0;border-bottom:1px solid var(--line);border-radius:0!important;box-shadow:none;background:transparent}.financial-details .metric-card:last-child{border-bottom:0}.financial-details .metric-card span{margin:0;font-size:13px;color:var(--muted);flex:1;min-width:0}.financial-details .metric-card strong{font-size:clamp(13px,3.9vw,17px);font-weight:800;direction:ltr;text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:0}
+.balance-details{border-top:1px solid var(--line);margin-top:4px;padding-top:8px}.balance-details>summary,.notification-settings>summary{cursor:pointer;min-height:40px;font-weight:750;color:var(--brand);display:flex;align-items:center;justify-content:space-between;gap:12px;list-style:none}.balance-details>summary:after,.notification-settings>summary:after{content:"+";font-size:20px}.balance-details[open]>summary:after,.notification-settings[open]>summary:after{content:"−"}.balance-details>summary::-webkit-details-marker,.notification-settings>summary::-webkit-details-marker{display:none}
+.vip-limit-track{height:7px;border-radius:8px;background:#e1e7ee;overflow:hidden;margin-top:12px}#debtLimitProgress{height:100%;width:0;background:var(--brand)}.debt-limit-panel.is-danger #debtLimitProgress{background:#b72f3d}.debt-limit-panel.is-warning #debtLimitProgress{background:#b98436}
+.portal-nav.app-tab-bar{position:fixed!important;top:auto!important;bottom:0!important;left:0!important;right:0!important;transform:none!important;max-width:100%!important;width:100%!important;margin:0!important;display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:2px!important;padding:7px 8px calc(7px + env(safe-area-inset-bottom))!important;border:0;border-top:1px solid var(--line)!important;border-radius:0!important;background:#fff!important;box-shadow:0 -4px 18px #172b450a;z-index:30}
+.app-tab-bar .nav-item,.app-tab-bar .nav-item-statement{min-width:0;min-height:54px!important;display:flex!important;flex-direction:column!important;justify-content:center;align-items:center;gap:4px;padding:5px 1px!important;border:0;border-radius:10px!important;background:transparent!important;color:#647487!important;box-shadow:none!important;transform:none!important}.app-tab-bar .nav-item .tab-icon,.app-tab-bar .nav-item .statement-tab-icon{display:grid;place-items:center;width:24px!important;height:24px!important;padding:0!important;box-shadow:none!important;background:transparent!important;color:inherit!important;border-radius:0!important;transform:none!important}.app-tab-bar .nav-item svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8}.app-tab-bar .nav-item .tab-label{font-size:10px!important;line-height:1.3;white-space:nowrap;overflow:visible;letter-spacing:0}.app-tab-bar .nav-item.is-active{background:var(--brand-soft)!important;color:var(--brand)!important}
+.header-notification-action.is-active{background:var(--brand-soft)!important;color:var(--brand)!important}.entry{border:1px solid var(--line);border-radius:12px;box-shadow:none}.text-action{color:var(--brand);font-size:12px}
+.statement-toolbar{display:grid!important;grid-template-columns:minmax(0,1fr) auto;gap:8px}.statement-print{min-height:44px;font-size:12px!important;padding-inline:12px;white-space:nowrap}.transaction-search-wrap input,.period-search-wrap input,.period-sort,.period-date-grid input{font-size:16px!important}.transaction-filters{display:flex;flex-wrap:wrap;gap:6px}.filter-chip{min-height:38px}.period-date-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.period-presets{flex-wrap:wrap;overflow:visible}.period-presets button{min-height:38px}
+.notification-settings{border:1px solid var(--line);border-radius:16px;background:#fff;padding:12px 15px}.notification-settings>summary{color:var(--text);font-size:15px}.notification-settings .notification-card,.notification-settings .panel{margin:10px 0 0;border-radius:12px!important}.account-hero{align-items:center}.account-identity .status-badge{display:inline-flex;width:fit-content;margin-top:6px;background:var(--brand-soft);color:var(--brand);font-size:11px;padding:4px 8px}.account-footnote{font-size:12px;line-height:1.7}.receipt-summary-strip{padding:12px}.account-row{gap:12px}.account-row strong{overflow-wrap:anywhere}
+@media(min-width:760px){body{padding:24px 32px 40px}.portal-nav.app-tab-bar{position:sticky!important;top:0!important;bottom:auto!important;left:auto!important;right:auto!important;width:100%!important;border:1px solid var(--line)!important;border-radius:14px!important;padding:6px!important;margin:0 0 20px!important}.app-tab-bar .nav-item{flex-direction:row!important;gap:8px}.app-tab-bar .nav-item .tab-label{font-size:13px!important}.portal-view{gap:16px}#homeView .balance-card{padding:28px!important}}
+@media(max-width:360px){body{padding-inline:10px}.header-actions{gap:5px}.header-actions .icon-action{width:38px;height:38px;min-height:38px}.app-tab-bar .nav-item .tab-label{font-size:9px!important}.financial-details{padding:13px!important}.statement-toolbar{grid-template-columns:1fr!important}}
+}
+
+/* 20261128-3: unified compact customer-first visual system. */
+@media screen{
+:root{--bg:#f4f6f8;--surface:#fff;--text:#182d42;--muted:#647386;--line:#e0e6ec;--brand:#126d69;--brand-soft:#e6f3ef;--shadow:none}
+body{background:var(--bg);color:var(--text);padding-inline:16px}
+#portalShell{max-width:880px}
+#portalShell .portal-header{position:static!important;grid-template-columns:minmax(0,1fr) auto!important;background:transparent!important;border-bottom:0!important;padding:14px 0 12px!important;margin:0 0 16px!important;gap:8px}
+#portalShell .brand-lockup{display:flex!important;align-items:center;gap:9px!important;min-width:0}
+#portalShell .brand-mark{flex:0 0 38px;width:38px!important;height:38px!important;border-radius:11px!important;background:#18354b!important}
+#portalShell .brand-copy h1{font-size:clamp(14px,3.9vw,23px)!important;font-weight:800;line-height:1.45;letter-spacing:0}
+#portalShell .brand-copy .eyebrow{font-size:10px!important;color:var(--muted);margin:0 0 2px}
+#portalShell #customerGreeting{font-size:12px!important;line-height:1.5;margin:2px 0 0}
+#portalShell .header-actions{gap:6px!important}
+#portalShell .header-actions .icon-action{width:40px!important;min-width:40px;height:40px!important;min-height:40px!important;border-radius:12px!important}
+#portalShell .header-notification-badge{background:#b43340!important;border:2px solid white!important;font-size:10px!important;min-width:20px!important;line-height:16px}
+#portalShell .view-heading{min-height:0!important;margin:0 0 2px!important}
+#portalShell .view-heading h2{font-size:20px!important;font-weight:800;line-height:1.5}
+#portalShell .portal-view{gap:12px!important;animation:none!important}
+#homeView .balance-card{background:#18354b!important;border:0!important;border-radius:18px!important;padding:22px!important}
+#homeView .balance-topline{margin-bottom:16px!important}
+#homeView .balance-topline>span:first-child{font-size:14px!important}
+#homeView #primaryRemaining{font-size:clamp(28px,8vw,46px)!important;font-weight:800;line-height:1.25!important;font-variant-numeric:tabular-nums}
+#homeView .balance-status{font-size:10px!important;white-space:nowrap}
+#homeView .financial-details{padding:16px!important}
+#homeView .financial-details h3{font-weight:750;color:#263e53;font-size:14px!important}
+#homeView .financial-details .metric-card{min-height:49px!important;gap:10px}
+#homeView .financial-details .metric-card strong{font-size:16px!important}
+#homeView .financial-details .metric-card span{font-size:13px!important}
+#homeView .balance-details>summary{font-size:12px;min-height:36px}
+#portalShell .portal-nav.app-tab-bar{gap:1px!important;padding:5px 8px calc(5px + env(safe-area-inset-bottom))!important;background:#fff!important}
+#portalShell .app-tab-bar .nav-item{min-height:54px!important;border-radius:12px!important;gap:3px!important}
+#portalShell .app-tab-bar .nav-item .tab-label{font-size:10px!important;letter-spacing:0!important}
+#portalShell .app-tab-bar .nav-item.is-active{background:#e6f3ef!important;color:#126d69!important}
+#portalShell .app-tab-bar .nav-item .tab-icon{background:transparent!important;box-shadow:none!important;color:inherit!important}
+#transactionsView .statement-tools-panel,#statementView .period-builder-panel{padding:14px!important}
+#transactionsView .statement-panel{padding:4px 12px!important}
+#transactionsView .transaction-filters{gap:4px!important;flex-wrap:wrap!important}
+#transactionsView .filter-chip{flex:1 1 auto;min-height:38px!important;font-size:12px!important;border-radius:9px!important;box-shadow:none!important}
+#portalShell .transaction-search-wrap,#portalShell .period-search-wrap{min-width:0}
+#portalShell .primary-action,#portalShell .secondary-action,#portalShell .statement-print{border-radius:11px!important;box-shadow:none!important}
+#portalShell .primary-action{background:#126d69!important;color:white!important}
+#portalShell .period-presets{gap:5px!important}
+#portalShell .period-presets button{min-height:36px!important;flex:1 1 auto;font-size:12px!important}
+#portalShell .period-statement-summary{gap:6px!important}
+#portalShell .period-statement-tools{gap:7px!important;flex-wrap:wrap}
+#portalShell .period-table-wrap{overflow-x:auto;max-width:100%}
+#portalShell .period-statement-table{font-size:12px!important}
+#portalShell .period-statement-actions .period-pdf-action{min-height:44px!important}
+#portalShell #periodPdfHint:empty{display:none}
+#receiptsView .receipt-summary-strip{padding:13px!important}
+#receiptsView .receipt-history-card{border-radius:12px!important;box-shadow:none!important}
+#notificationsView .notification-history-panel{padding:12px!important}
+#notificationsView .notification-history-panel .section-heading{display:none}
+#notificationsView .notification-history-item{border-radius:12px!important;box-shadow:none!important}
+#notificationsView .notification-settings{padding:10px 14px!important}
+#notificationsView .preference-row{min-height:48px!important}
+#accountView .account-hero{border-radius:16px!important;padding:16px!important}
+#accountView .account-avatar{background:#e6f3ef!important;color:#126d69!important;box-shadow:none!important}
+#accountView .account-row{min-height:44px}
+#lockedState{margin:clamp(35px,12vh,115px) auto 0!important;max-width:430px;padding:28px 22px!important;text-align:center;border-radius:20px!important}
+#lockedState .state-icon{display:grid;place-items:center;margin:0 auto 16px;width:56px;height:56px;background:#e6f3ef!important;color:#126d69!important;border-radius:18px}
+#lockedState .state-icon svg{width:28px;height:28px}
+#lockedState .state-copy{font-size:14px;line-height:1.9}
+#lockedState .access-guide{background:transparent!important;border:0!important;padding:0!important}
+#lockedState .access-retry{width:100%;min-height:44px;border-radius:12px;background:#126d69;color:#fff}
+@media(max-width:375px){body{padding-inline:12px}#portalShell .brand-mark{flex-basis:32px;width:32px!important;height:32px!important}#portalShell .header-actions .icon-action{min-width:36px!important;width:36px!important;height:36px!important;min-height:36px!important}#portalShell .app-tab-bar .nav-item .tab-label{font-size:9px!important}}
+@media(min-width:760px){#portalShell .portal-header{padding:12px 0 18px!important}#portalShell .portal-nav.app-tab-bar{padding:6px!important}#portalShell .app-tab-bar .nav-item .tab-label{font-size:13px!important}#homeView .financial-details .metric-card strong{font-size:18px!important}}
+@media(prefers-reduced-motion:reduce){#portalShell *{animation:none!important;transition:none!important}}
+}
+
+/* v4: dates and customer appearance, independent of report document colors. */
+@media screen{
+#ledger .ledger-day{font-size:12px;color:var(--muted);font-weight:700;margin:12px 0 0;padding:3px 4px}
+#ledger .ledger-day:first-child{margin-top:4px}
+#ledger .entry{padding:12px!important;box-shadow:none!important}
+#portalShell .appearance-panel label{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#portalTheme{font:inherit;font-size:16px;min-height:44px;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);max-width:52%}
+html[data-portal-theme=dark]{color-scheme:dark;--bg:#101923;--surface:#192633;--text:#edf3fa;--muted:#aebdcd;--line:#344555;--brand:#7dd4c6;--brand-soft:#23433f;--danger:#ff9ca8;--danger-soft:#482b36;--success:#7ce0b3;--success-soft:#23443a;--warning:#f3cf85;--warning-soft:#4b3b27}
+html[data-portal-theme=dark] #portalShell :is(.panel,.notification-card,.state-card,.account-hero,.receipt-summary-strip,.notification-settings,.entry,.receipt-history-card,.notification-history-item,.metric-card,.filter-chip,.schedule-stat,.payment-timeline-item){background:var(--surface)!important;color:var(--text);border-color:var(--line)!important}
+html[data-portal-theme=dark] #portalShell :is(.portal-nav.app-tab-bar,.header-actions .icon-action,.secondary-action,.statement-print,.transaction-search-wrap,.transaction-search-wrap input,.date-picker-control,.period-presets button){background:var(--surface)!important;color:var(--text)!important;border-color:var(--line)!important}
+html[data-portal-theme=dark] #portalShell .app-tab-bar .nav-item{color:var(--muted)!important;background:transparent!important}
+html[data-portal-theme=dark] #portalShell :is(.app-tab-bar .nav-item.is-active,.filter-chip.is-active,.header-notification-action.is-active){color:var(--brand)!important;background:var(--brand-soft)!important}
+html[data-portal-theme=dark] #portalShell :is(.financial-details h3,.balance-details>summary,.notification-settings>summary,.account-row strong,.account-identity strong,.receipt-history-copy strong,.entry-head strong){color:var(--text)}
+html[data-portal-theme=dark] #portalShell :is(.muted,.eyebrow,.entry-meta,.account-footnote,.receipt-history-copy small,.preference-row small){color:var(--muted)}
+html[data-portal-theme=dark] #portalShell .other-balances .metric-card{background:transparent!important;color:white}
+html[data-portal-theme=dark] #portalShell .primary-action{background:#176f71!important;color:white!important}
+html[data-portal-theme=dark] #portalShell :is(.period-statement-document,.period-statement-document .metric-card){color:#172b45!important;background:#fff!important;border-color:#e1e7ee!important;color-scheme:light;--text:#172b45;--muted:#596a7b;--line:#e1e7ee;--surface:#fff;--brand:#176f71}
+html[data-portal-theme=dark] #portalShell .period-statement-document :is(input,select,button.secondary-action){background:#fff!important;color:#172b45!important}
+}
+@media print{#ledger .ledger-day{color:#111827;font-size:11px;break-after:avoid;page-break-after:avoid}}
+
+/* v5: transaction detail and compact ledger. */
+@media screen{
+#ledger .ledger-print-date{display:none}
+#ledger .entry-detail-trigger{width:100%;min-height:44px;border:0;background:transparent;color:inherit;text-align:start;padding:0;gap:8px;cursor:pointer;font:inherit}
+#ledger .entry-detail-trigger>strong:last-child{direction:ltr;unicode-bidi:isolate;display:flex;align-items:center;gap:8px;font-size:15px;white-space:nowrap}
+#ledger .entry-detail-trigger>strong:last-child:before{content:"";width:7px;height:7px;border-top:1.5px solid var(--muted);border-left:1.5px solid var(--muted);transform:rotate(-45deg)}
+#ledger .entry-note-preview{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.transaction-detail-dialog{width:min(440px,calc(100% - 28px));max-height:85dvh;overflow:auto;padding:0;border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--text)}
+.transaction-detail-dialog::backdrop{background:#0c1c2b80}
+.transaction-detail-sheet{padding:22px;display:grid;gap:16px}
+.transaction-detail-sheet h2{font-size:19px}
+.transaction-detail-amount{border-radius:14px;background:#18354b;color:white;padding:18px;display:grid;gap:8px}
+.transaction-detail-amount span{font-size:13px;color:#d5e2ed}
+.transaction-detail-amount strong{font-size:28px;direction:ltr;text-align:right;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.transaction-detail-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);align-items:start;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.transaction-detail-row span{color:var(--muted);font-size:13px}
+.transaction-detail-row strong{font-size:14px;overflow-wrap:anywhere;white-space:pre-wrap;text-align:end;unicode-bidi:plaintext}
+.transaction-close{width:100%;min-height:44px;background:var(--surface);color:var(--text);border-color:var(--line)}
+}
+@media print{#transactionDetailDialog{display:none!important}#ledger .entry-detail-trigger{border:0!important;padding:0!important;background:none!important;min-height:0!important;width:100%;text-align:start;color:#111827!important}#ledger .entry-detail-trigger>strong:last-child:before{display:none!important}}
+
+/* v6: consistent A4 statement and receipt visual identity. */
+.pdf-a4-page{background:#fff!important;color:#18354b!important;padding:40px 42px 48px!important}
+.pdf-a4-head{border-bottom:2px solid #176f71!important;min-height:0!important;gap:18px!important;padding-bottom:16px!important}
+.pdf-a4-kicker{color:#176f71!important;letter-spacing:0;font-size:13px!important}
+.pdf-a4-market h1{font-size:24px!important;color:#18354b!important;line-height:1.45!important}
+.pdf-a4-market p,.pdf-a4-meta span{color:#536578!important;font-size:11px!important}
+.pdf-a4-meta strong{font-size:12px!important;line-height:1.55!important}
+.pdf-a4-table{width:100%!important;table-layout:fixed!important;margin-top:18px!important}
+.pdf-a4-table th{background:#18354b!important;color:#fff!important;height:36px!important;font-size:11px!important}
+.pdf-a4-table td{height:34px!important;line-height:1.5!important;font-size:12px!important;padding:7px 8px!important;overflow-wrap:anywhere}
+.pdf-a4-table :is(th,td):nth-child(1){width:9%!important}
+.pdf-a4-table :is(th,td):nth-child(2){width:48%!important}
+.pdf-a4-table :is(th,td):nth-child(3){width:24%!important}
+.pdf-a4-table :is(th,td):nth-child(4){width:19%!important}
+.pdf-a4-totals{gap:6px!important;margin-top:14px!important}
+.pdf-a4-totals>div{background:#edf6f4!important;border:1px solid #c9dfd9!important;min-height:42px!important;padding:8px 12px!important}
+.pdf-a4-totals strong{font-size:19px!important;color:#18354b!important}
+.pdf-a4-page-number{bottom:18px!important;border-top:1px solid #dce4eb;padding-top:9px;font-size:10px!important;color:#536578!important}
+@media screen{
+#periodStatementDocument .period-statement-head{border-bottom:2px solid #176f71!important;gap:12px!important}
+#periodStatementDocument .period-statement-head h2{font-size:19px!important;line-height:1.5!important}
+#periodStatementDocument .period-statement-table thead th{background:#18354b!important;color:white!important}
+#periodStatementDocument .period-statement-table td{font-size:12px!important}
+#periodStatementDocument .period-statement-totals .period-total-row{background:#edf6f4!important;color:#18354b!important}
+#receiptDialog{background:#fff!important;color:#18354b!important;--text:#18354b;--muted:#536578;--brand:#176f71;--surface:#fff;--line:#dce4eb}
+#receiptDialog .receipt-brand-mark{background:#18354b!important;box-shadow:none!important}
+#receiptDialog .receipt-meta-grid>div{border:1px solid #e0e6ec;background:#f6f8fa!important}
+#receiptDialog .receipt-amount-card{border-radius:14px;background:#18354b!important;box-shadow:none!important}
+#receiptDialog .receipt-amount-card strong{direction:ltr;text-align:right;overflow-wrap:anywhere}
+#receiptDialog .receipt-item{break-inside:avoid;border-bottom:1px solid #dce4eb}
+}
+@media print{
+body.printing-receipt .receipt-dialog{border:0!important;color:#18354b!important}
+body.printing-receipt .digital-receipt-head{border-bottom:2px solid #176f71;padding-bottom:12px}
+body.printing-receipt .receipt-amount-card{break-inside:avoid}
+body.printing-receipt .receipt-item{break-inside:avoid;page-break-inside:avoid}
+}
+
+/* v7: reconciled repayment and actual recorded monthly activity */
+@media screen{
+#repaymentProgress{padding:10px 0 2px;border-top:1px solid var(--line);margin-top:4px;display:grid;gap:10px}
+.repayment-progress-row{display:grid;gap:6px}.repayment-label{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}.repayment-label strong{font-size:13px;color:var(--text);direction:ltr}
+.repayment-progress-row progress{appearance:none;-webkit-appearance:none;width:100%;height:7px;border:0;border-radius:99px;overflow:hidden;background:var(--line);accent-color:#176f71}
+.repayment-progress-row progress::-webkit-progress-bar{background:var(--line);border-radius:99px}.repayment-progress-row progress::-webkit-progress-value{background:#176f71;border-radius:99px}.repayment-progress-row progress::-moz-progress-bar{background:#176f71;border-radius:99px}
+#monthlyActivity h3{font-size:15px;margin:0 0 14px}.activity-currency{display:grid;gap:10px}.activity-currency+.activity-currency{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}.activity-currency h4{margin:0;font-size:12px;color:var(--muted);direction:ltr;text-align:right}
+.activity-legend{display:flex;gap:16px;font-size:11px;color:var(--muted)}.activity-legend span:before{content:"";display:inline-block;width:9px;height:9px;border-radius:2px;margin-inline-end:5px}.activity-debt:before{background:#52708c}.activity-paid:before{background:#24947f}
+.activity-month{display:grid;grid-template-columns:57px minmax(0,1fr);gap:8px;align-items:center}.activity-month-label{direction:ltr;text-align:right;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}.activity-bars{display:grid;gap:4px}.activity-line{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:7px}.activity-line span{font-size:10px;white-space:nowrap;direction:ltr;text-align:left;font-variant-numeric:tabular-nums}
+.activity-line meter{appearance:none;-webkit-appearance:none;width:100%;height:8px;background:var(--line);border:0;border-radius:5px;direction:rtl}.activity-line meter::-webkit-meter-bar{background:var(--line);border:0;border-radius:5px}.activity-line.debt meter::-webkit-meter-optimum-value{background:#52708c}.activity-line.payment meter::-webkit-meter-optimum-value{background:#24947f}.activity-line.debt meter::-moz-meter-bar{background:#52708c}.activity-line.payment meter::-moz-meter-bar{background:#24947f}
+html[data-portal-theme=dark] .repayment-progress-row progress::-webkit-progress-value{background:#7dd4c6}html[data-portal-theme=dark] .repayment-progress-row progress::-moz-progress-bar{background:#7dd4c6}
+}
+
+/* v9: never show a restored financial page before revalidation. */
+html.portal-restoring body{visibility:hidden!important}
