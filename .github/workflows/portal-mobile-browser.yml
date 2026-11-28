@@ -1,0 +1,38 @@
+name: Portal mobile browser and PDF
+on:
+  pull_request:
+    paths:
+      - 'customer-portal/**'
+      - '.github/workflows/portal-mobile-browser.yml'
+  push:
+    branches:
+      - 'test/portal-mobile-browser-pdf-20261128'
+    paths:
+      - 'customer-portal/**'
+      - '.github/workflows/portal-mobile-browser.yml'
+permissions:
+  contents: read
+jobs:
+  browser:
+    name: Portal browser (${{ matrix.engine }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate and stage public files
+        working-directory: customer-portal
+        run: node scripts/release-gate.cjs
+      - name: Install pinned Playwright
+        run: npm install --prefix "$RUNNER_TEMP/portal-browser" --no-audit --no-fund --ignore-scripts playwright@1.58.2
+      - name: Install browser and system libraries
+        run: '"$RUNNER_TEMP/portal-browser/node_modules/.bin/playwright" install --with-deps ${{ matrix.engine }}'
+      - name: Exercise mobile UI and generate PDF from synthetic data
+        env:
+          NODE_PATH: ${{ runner.temp }}/portal-browser/node_modules
+        run: node customer-portal/tests/mobile-browser.cjs ${{ matrix.engine }}
